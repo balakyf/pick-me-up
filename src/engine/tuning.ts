@@ -209,6 +209,29 @@ export const TUNING = {
       /** First-clear bonus: both chances are multiplied by this on a never-cleared floor. */
       firstClearMult: 2,
     },
+    /** Daily Dungeons — the primary, targeted material faucet (Layer 3 §3.5). Non-lethal. */
+    daily: {
+      /** Free attempts per world-day (reset on the world-day boundary in advanceTime). */
+      freeAttempts: 3,
+      /** Gems charged per attempt beyond the free allotment (the canon refill). */
+      extraAttemptGemCost: 30,
+      /** Light gate: dailies unlock once the player has cleared this tower floor. */
+      unlockHighestCleared: 1,
+      /** Win rewards per weekday (dayIndex % 7 → Mon…Sun). First-pass, all tunable. */
+      rewards: {
+        goldVault: 600, // Mon — Gold Vault
+        attrStones: 2, // Tue — Elemental Trial (element rotates by day)
+        promotionStones: 2, // Wed — Promotion Grounds
+        rankMaterials: 1, // Wed — rank material alongside stones
+        heroXp: 120, // Thu — Proving Hall (to deployed survivors)
+        gemsBundle: 20, // Fri — Soulforge
+        armoryStones: 1, // Sat — Armory (a stone of each kind)
+        convergenceGold: 250, // Sun — Convergence (reduced mix)
+        convergenceStones: 1, // Sun — small stone trickle
+      },
+      /** Elements the Tue Elemental Trial rotates through (by day index). */
+      elementRotation: ['fire', 'water', 'earth', 'wind', 'light', 'dark'] as const,
+    },
   },
 
   account: {

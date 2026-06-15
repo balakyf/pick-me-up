@@ -220,7 +220,7 @@ function buildAnchorEncounter(
  * best-fit, and on floors whose budget can hold ≥1 enemy within tolerance it lands
  * inside the band.
  */
-function buildFillerEncounter(
+export function buildFillerEncounter(
   floor: number,
   worldMult: number,
   rng: Rng,
