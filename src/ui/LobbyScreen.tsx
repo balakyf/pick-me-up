@@ -3,6 +3,8 @@ import type { GameState, OwnedHero, FacilityId } from '../engine/types'
 import type { Store } from '../engine/store'
 import { TUNING } from '../engine/tuning'
 import { banquetWouldHelp } from '../engine/kitchen'
+import { canPromote, canAfford, promotionCost, promotionTargetStar } from '../engine/promotion'
+import { toWorldTime } from '../engine/time'
 import { Portrait } from './bits'
 
 /**
@@ -74,7 +76,10 @@ function Room({
   action?: React.ReactNode
 }) {
   const vis = FACILITY_VIS[id]
-  const locked = level === 0
+  // A level-0 room with no actions is "locked" (needs building); the Promotion
+  // Chamber is usable at Lv 0 (promotion gates on the hero, not the build), so it
+  // ships actions and reads as operational at base speed.
+  const locked = level === 0 && action == null
   return (
     <div className={`lobby-room ${locked ? 'locked' : ''}`}>
       <div className="lr-head">
@@ -131,6 +136,78 @@ function BanquetAction({ state, store }: { state: GameState; store: Store }) {
   )
 }
 
+const SKIP_GEMS = TUNING.lobby.promotion.skipGemCost
+
+/** Human-readable "time left" for a promotion countdown (cosmetic; whole units). */
+function timeLeft(ms: number): string {
+  if (ms <= 0) return 'finishing…'
+  const mins = Math.ceil(ms / 60_000)
+  if (mins < 60) return `${mins}m left`
+  return `${Math.floor(mins / 60)}h ${mins % 60}m left`
+}
+
+/** The Promotion Chamber's actions: promote at-cap heroes, or skip a running timer. */
+function PromotionAction({ state, store }: { state: GameState; store: Store }) {
+  const [err, setErr] = useState<string | null>(null)
+  const nowWorld = toWorldTime(Date.now())
+  const living = (Object.values(state.heroes) as OwnedHero[]).filter((h) => h.alive)
+  const promoting = living.filter((h) => h.promotion !== null)
+  const ready = living.filter(canPromote)
+
+  function dispatch(cmd: Parameters<Store['dispatch']>[0]) {
+    setErr(null)
+    try {
+      store.dispatch(cmd, Date.now())
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'Action failed')
+    }
+  }
+
+  if (promoting.length === 0 && ready.length === 0) {
+    return <div className="lr-action-note">No heroes are at their star cap yet — keep climbing.</div>
+  }
+
+  return (
+    <div className="lr-action promo-action">
+      {promoting.map((h) => (
+        <div key={h.id} className="promo-row">
+          <span className="promo-name">{h.name.split(/\s+/)[0]} → {promotionTargetStar(h)}★</span>
+          <span className="muted">{timeLeft(h.promotion!.completesAtWorld - nowWorld)}</span>
+          <button
+            className="btn gem sm"
+            onClick={() => dispatch({ type: 'SKIP_TIMER', kind: 'promotion', id: h.id })}
+            disabled={state.gems < SKIP_GEMS}
+            title={`Finish now for ${SKIP_GEMS} gems`}
+          >
+            ⏩ {SKIP_GEMS} 💎
+          </button>
+        </div>
+      ))}
+      {ready.map((h) => {
+        const cost = promotionCost(h)
+        const affordable = canAfford(state, h)
+        return (
+          <div key={h.id} className="promo-row">
+            <span className="promo-name">{h.name.split(/\s+/)[0]} → {promotionTargetStar(h)}★</span>
+            <span className="muted">
+              {cost.promotionStone}🪨 {cost[`attrStone_${h.element}`]}🔹
+            </span>
+            <button
+              className="btn sm"
+              onClick={() => dispatch({ type: 'PROMOTE_HERO', heroId: h.id })}
+              disabled={!affordable}
+              title={affordable ? 'Begin promotion' : 'Not enough materials'}
+            >
+              ⬆ Promote
+            </button>
+          </div>
+        )
+      })}
+      {err && <div className="lr-action-note" style={{ color: 'var(--bad)' }}>{err}</div>}
+    </div>
+  )
+}
+
 export function LobbyScreen({ state, store }: { state: GameState; store: Store }) {
   const living = (Object.values(state.heroes) as OwnedHero[]).filter((h) => h.alive)
   const partyIds = new Set(state.party.slots.filter(Boolean) as string[])
@@ -181,7 +258,13 @@ export function LobbyScreen({ state, store }: { state: GameState; store: Store }
             level={state.facilities[id].level}
             build={state.facilities[id].build}
             heroes={byRoom[id]}
-            action={id === 'kitchen' ? <BanquetAction state={state} store={store} /> : undefined}
+            action={
+              id === 'kitchen' ? (
+                <BanquetAction state={state} store={store} />
+              ) : id === 'promotionChamber' ? (
+                <PromotionAction state={state} store={store} />
+              ) : undefined
+            }
           />
         ))}
       </div>

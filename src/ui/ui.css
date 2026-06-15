@@ -263,8 +263,19 @@ body {
 .lr-empty { color: var(--ink-faint); font-size: 12px; font-style: italic; }
 
 .btn.sm { padding: 6px 12px; font-size: 13px; }
+.btn.gem { color: #7fd0ff; border-color: #1c3a4a; background: #0f1c22; }
+.btn.gem:hover { border-color: #7fd0ff; }
 .lr-action { margin: 2px 0 8px; }
 .lr-action-note { color: var(--ink-faint); font-size: 11px; margin-top: 4px; }
+
+.promo-action { display: flex; flex-direction: column; gap: 6px; }
+.promo-row {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 12px; justify-content: space-between;
+}
+.promo-name { font-weight: 600; }
+.promo-row .muted { margin-left: auto; }
+.promo-row .btn { flex: none; }
 
 .lobby-courtyard {
   margin-top: 14px; background: var(--bg-2);

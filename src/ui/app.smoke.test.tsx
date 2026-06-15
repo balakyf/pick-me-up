@@ -70,6 +70,10 @@ describe('App smoke', () => {
     )
     expect(banquetBtn).toBeDefined()
     expect((banquetBtn as HTMLButtonElement).disabled).toBe(true)
+
+    // Promotion Chamber renders; the fresh 1★ starter is not at cap, so it prompts to climb.
+    expect(container.textContent).toContain('Promotion Chamber')
+    expect(container.textContent).toContain('star cap')
   })
 
   it('summoning reveals a hero and spends gold', () => {
