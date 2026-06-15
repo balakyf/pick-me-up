@@ -4,7 +4,7 @@
  * Vitest globals are enabled (describe/it/expect available without import).
  */
 
-import { floorPower, mobLevel, buildEncounter, playFloor } from './tower'
+import { floorPower, mobLevel, buildEncounter, playFloor, sanityDrain } from './tower'
 import { TUNING } from '../tuning'
 import { ANCHORS, ENEMY_TEMPLATES } from '../content'
 import { combatPower, deriveStatsForHero } from '../stats'
@@ -562,5 +562,64 @@ describe('hero CP sanity', () => {
     const heroInit = result.result.log.unitsInit.find((u) => u.id === 'h_crush')!
     const expectedCp = combatPower(deriveStatsForHero(crusher, 25))
     expect(heroInit.cp).toBe(expectedCp)
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Sanity drain (Layer 3 §3.2)
+// ─────────────────────────────────────────────────────────────────────────────
+
+const SAN = TUNING.lobby.sanity
+
+describe('sanityDrain (pure curve)', () => {
+  it('is base when the party hugely outpowers the floor (ratio→0)', () => {
+    expect(sanityDrain(10, 1_000_000, true, false)).toBe(SAN.driftBase)
+  })
+
+  it('caps the ratio term at driftMax before penalties', () => {
+    // A wildly outmatched party (tiny CP) would exceed driftMax; it is clamped.
+    expect(sanityDrain(1_000_000, 1, true, false)).toBe(SAN.driftMax)
+  })
+
+  it('adds the wipe penalty when the attempt fails', () => {
+    const won = sanityDrain(100, 100, true, false)
+    const lost = sanityDrain(100, 100, false, false)
+    expect(lost).toBe(won + SAN.wipePenalty)
+  })
+
+  it('adds the witness penalty when an ally permadied', () => {
+    const clean = sanityDrain(100, 100, true, false)
+    const witnessed = sanityDrain(100, 100, true, true)
+    expect(witnessed).toBe(clean + SAN.witnessPenalty)
+  })
+
+  it('treats a non-positive partyCP as ratio 0 (no divide blow-up)', () => {
+    expect(sanityDrain(500, 0, true, false)).toBe(SAN.driftBase)
+  })
+})
+
+describe('playFloor — Sanity drain on deployed survivors', () => {
+  it('drains a surviving deployed hero below full Sanity on a clear', () => {
+    const crusher = makeCrusher('h_crush')
+    const state = makeState({ heroes: [crusher], currentFloor: 1 })
+    const { state: next } = playFloor(state)
+    const hero = next.heroes['h_crush' as HeroId]!
+    expect(hero.alive).toBe(true)
+    expect(hero.sanity).toBeLessThan(100)
+    expect(hero.sanity).toBeGreaterThanOrEqual(0)
+  })
+
+  it('leaves a non-deployed hero’s Sanity untouched', () => {
+    const crusher = makeCrusher('h_crush')
+    const bench = makeCrusher('h_bench')
+    // Only h_crush is deployed (single slot); h_bench sits in the roster.
+    const state = makeState({
+      heroes: [crusher, bench],
+      slots: ['h_crush' as HeroId, null, null, null, null],
+      currentFloor: 1,
+    })
+    const { state: next } = playFloor(state)
+    expect(next.heroes['h_bench' as HeroId]!.sanity).toBe(100)
+    expect(next.heroes['h_crush' as HeroId]!.sanity).toBeLessThan(100)
   })
 })

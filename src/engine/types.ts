@@ -436,5 +436,7 @@ export type Command =
   | { type: 'ATTEMPT_FLOOR'; focus?: FocusDirective }
   /** Explicit world-time catch-up; advances the clock with no other state change. */
   | { type: 'TICK' }
+  /** Kitchen Banquet: spend gold to restore Sanity across the living roster. */
+  | { type: 'BANQUET' }
   /** Testing-only: grant free gold. Not part of the real economy. */
   | { type: 'ADD_GOLD'; amount: number }

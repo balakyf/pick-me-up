@@ -30,6 +30,7 @@ import type {
 import { createAccount, persist, hydrate, DEFAULT_SAVE_KEY } from '../account'
 import { summon } from '../gacha'
 import { playFloor } from '../tower'
+import { banquet } from '../kitchen'
 import { advanceTime, toWorldTime } from '../time'
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -105,6 +106,9 @@ export function reduce(state: GameState | null, cmd: Command, nowWorld: number =
 
     case 'TICK':
       return current
+
+    case 'BANQUET':
+      return banquet(current)
 
     case 'ADD_GOLD':
       // Testing-only cheat: grant free gold. Not part of the real economy.

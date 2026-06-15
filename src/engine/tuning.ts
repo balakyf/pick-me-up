@@ -137,6 +137,26 @@ export const TUNING = {
     sanityMax: 100,
     /** Facilities present at account creation. 0 = locked / not yet built. */
     facilityStartLevels: { kitchen: 1, promotionChamber: 0, tacticalCenter: 1 },
+    /** Sanity drain on a floor attempt (Layer 3 §3.2). Applied to deployed survivors. */
+    sanity: {
+      /** Baseline Sanity each deployed hero loses per floor attempt. */
+      driftBase: 6,
+      /** Extra drain scaled by how outmatched the party is: k × (floorPower / partyCP). */
+      driftPerPowerRatio: 6,
+      /** Cap on the pre-wipe/witness drain so one brutal floor can't zero a hero. */
+      driftMax: 35,
+      /** Added when the party WIPES — a defeat is hard on morale. */
+      wipePenalty: 12,
+      /** Added to every survivor when an ally PERMADIES this battle (canon: bad for morale). */
+      witnessPenalty: 20,
+    },
+    /** Kitchen Banquet: spend gold → roster-wide Sanity bump. */
+    banquet: {
+      /** Gold cost of one Banquet. */
+      gold: 500,
+      /** Sanity restored to every LIVING hero per Banquet (clamped to sanityMax). */
+      restore: 40,
+    },
   },
 
   account: {

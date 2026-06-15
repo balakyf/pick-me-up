@@ -35,10 +35,12 @@ import { buildCombatUnit, buildEnemyUnit } from '../unit'
 import { runBattle } from '../combat'
 import { ENEMY_TEMPLATES, ANCHORS, SKILLS } from '../content'
 import { applyXp } from '../stats'
+import { clampSanity } from '../kitchen'
 import { hash, rngFor, nextInt, type Rng } from '../rng/rng'
 
 const T = TUNING.tower
 const ECON = TUNING.economy
+const SAN = TUNING.lobby.sanity
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Floor power budget + enemy level
@@ -64,6 +66,27 @@ export function floorPower(f: number, worldMult: number): number {
 /** The enemy level for filler/anchor mobs on a floor: round(f * perFloor * worldMult). */
 export function mobLevel(f: number, worldMult: number): number {
   return Math.round(f * T.mobLevelPerFloor * worldMult)
+}
+
+/**
+ * Sanity lost by each DEPLOYED SURVIVOR on a floor attempt (Layer 3 §3.2):
+ *   base + k × (floorPower / partyCP), capped at driftMax, then
+ *   + wipePenalty    when the attempt fails (a defeat is hard on morale),
+ *   + witnessPenalty when an ally permadied this battle (canon: bad for morale).
+ * A non-positive partyCP collapses the ratio term to 0. Returns a rounded, non-negative int.
+ * Pure — no state, just the tuning curve.
+ */
+export function sanityDrain(
+  floorPwr: number,
+  partyCp: number,
+  cleared: boolean,
+  anyAllyDeath: boolean,
+): number {
+  const ratio = partyCp > 0 ? floorPwr / partyCp : 0
+  let drain = Math.min(SAN.driftBase + SAN.driftPerPowerRatio * ratio, SAN.driftMax)
+  if (!cleared) drain += SAN.wipePenalty
+  if (anyAllyDeath) drain += SAN.witnessPenalty
+  return Math.round(drain)
 }
 
 /** worldMult for a state's worldGrade. */
@@ -292,9 +315,13 @@ export function playFloor(
     : 0
   const xpAwarded = cleared ? ECON.xpPerFloor : 0
 
-  // ── 5. Build the next heroes map (permadeath + XP), never mutating inputs. ──
+  // ── 5. Build the next heroes map (permadeath + XP + Sanity), never mutating inputs. ──
   const fallenSet = new Set<string>(res.fallenHeroIds as string[])
   const survivorSet = new Set<string>(res.survivorHeroIds as string[])
+
+  // Sanity drain hits only DEPLOYED SURVIVORS (heroes left in the lobby don't fight).
+  const partyCp = heroUnits.reduce((sum, u) => sum + u.cp, 0)
+  const drain = sanityDrain(floorPower(floor, worldMult), partyCp, cleared, fallenSet.size > 0)
 
   const nextHeroes: Record<HeroId, OwnedHero> = {}
   for (const key of Object.keys(state.heroes) as HeroId[]) {
@@ -302,9 +329,10 @@ export function playFloor(
     if (fallenSet.has(key as string)) {
       // PERMADEATH: a hero that fell this battle is gone.
       nextHeroes[key] = { ...hero, alive: false }
-    } else if (xpAwarded > 0 && survivorSet.has(key as string)) {
-      // XP only to SURVIVING deployed heroes on a clear.
-      nextHeroes[key] = { ...hero, xp: applyXp(hero.xp, xpAwarded, hero.star) }
+    } else if (survivorSet.has(key as string)) {
+      // Deployed survivor: drain Sanity, and grant XP on a clear.
+      const xp = xpAwarded > 0 ? applyXp(hero.xp, xpAwarded, hero.star) : hero.xp
+      nextHeroes[key] = { ...hero, xp, sanity: clampSanity(hero.sanity - drain) }
     } else {
       nextHeroes[key] = hero
     }
