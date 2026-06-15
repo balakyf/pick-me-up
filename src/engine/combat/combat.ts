@@ -25,6 +25,7 @@ import type {
 } from '../types'
 import { TUNING, ELEMENT_ADVANTAGE } from '../tuning'
 import { createRng, makeSeed, nextFloat, chance, type Rng } from '../rng'
+import { panicChance } from '../kitchen'
 
 const C = TUNING.combat
 
@@ -306,6 +307,25 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
   // One unit takes its action.
   const act = (actor: MutUnit): void => {
     if (!actor.alive || outcome !== null) return
+
+    // PANIC (low Sanity): a hero below the panic threshold may lose its turn. The
+    // draw is GATED on a positive chance, so a healthy hero never touches the rng —
+    // existing full-Sanity replays keep their exact draw order. The action gauge was
+    // already spent by the caller, so a panic naturally costs the whole turn; SP is
+    // retained since no skill is chosen.
+    if (actor.side === 'hero' && actor.ref.sanity !== undefined) {
+      const p = panicChance(actor.ref.sanity, actor.ref.stats.statusRes)
+      if (p > 0) {
+        const draw = chance(rng, p)
+        rng = draw.rng
+        rngDraws++
+        if (draw.value) {
+          emit({ kind: 'panic', unitId: actor.id })
+          return
+        }
+      }
+    }
+
     const skill = chooseSkill(actor)
 
     if (skill.target === 'all-enemies') {

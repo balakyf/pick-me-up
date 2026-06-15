@@ -63,6 +63,10 @@ export function CombatView({ log, onDone }: { log: CombatLog; onDone: () => void
         case 'miss':
           next.line = { text: `${nameOf(e.actorId)} misses ${nameOf(e.targetId)}`, cls: 'dim' }
           break
+        case 'panic':
+          next.actor = e.unitId
+          next.line = { text: `${nameOf(e.unitId)} panics and freezes!`, cls: 'l-death' }
+          break
         case 'death':
           next.dead[e.unitId] = true
           next.line = { text: `${nameOf(e.unitId)} falls!`, cls: 'l-death' }

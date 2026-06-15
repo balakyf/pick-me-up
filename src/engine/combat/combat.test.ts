@@ -14,7 +14,9 @@ import type {
   Line,
   CombatSide,
   HeroId,
+  BattleResult,
 } from '../types'
+import { panicChance } from '../kitchen'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Hand-built CombatUnit fixtures (the unit module is not in scope here).
@@ -52,6 +54,7 @@ interface UnitOpts {
   keywords?: KeywordTag[]
   cp?: number
   sourceHeroId?: HeroId
+  sanity?: number
   targetTag?: string
 }
 
@@ -75,6 +78,7 @@ function makeUnit(o: UnitOpts): CombatUnit {
     keywords: o.keywords ?? [],
     cp: o.cp ?? 100,
     ...(o.sourceHeroId !== undefined ? { sourceHeroId: o.sourceHeroId } : {}),
+    ...(o.sanity !== undefined ? { sanity: o.sanity } : {}),
     ...(o.targetTag !== undefined ? { targetTag: o.targetTag } : {}),
   }
 }
@@ -134,6 +138,72 @@ describe('determinism', () => {
     const b = f(2)
     // Crit outcomes differ across seeds, so the event streams should not be identical.
     expect(a.log.events).not.toEqual(b.log.events)
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Panic (low Sanity) — Layer 3 §3.2. A hero below the panic threshold may lose
+// its turn. The draw is GATED so a healthy hero adds zero RNG draws.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('panic (low Sanity)', () => {
+  // Tanky, fast hero vs a high-HP weak enemy → many ticks, many action (and thus
+  // panic-roll) opportunities; the enemy barely scratches the hero.
+  const buildBattle = (seed: number, opts: { sanity?: number; statusRes?: number } = {}) =>
+    runBattle(
+      [hero({ id: 'h1', stats: { pAtk: 40, spd: 60, statusRes: opts.statusRes ?? 0 }, sanity: opts.sanity })],
+      encounter([[enemy({ id: 'e1', stats: { maxHP: 800, pDef: 20, spd: 30, pAtk: 5 } })]], mission(annihilate)),
+      seed,
+    )
+
+  const hasPanic = (r: BattleResult) => r.log.events.some((e) => e.kind === 'panic')
+
+  it('panicChance gates correctly (pure): 0 at/above threshold, positive below', () => {
+    expect(panicChance(30, 0)).toBe(0)
+    expect(panicChance(100, 0)).toBe(0)
+    expect(panicChance(10, 0)).toBeCloseTo(0.2, 6)
+    expect(panicChance(0, 50)).toBeCloseTo(0.15, 6) // statusRes halves it
+    expect(panicChance(0, 100)).toBe(0) // fully mitigated
+  })
+
+  it('a healthy hero never panics and consumes the SAME draws as a no-Sanity control', () => {
+    const control = buildBattle(123, { sanity: undefined })
+    const healthy = buildBattle(123, { sanity: 100 })
+    expect(hasPanic(healthy)).toBe(false)
+    expect(healthy.log.rngDraws).toBe(control.log.rngDraws)
+    expect(healthy.log.events).toEqual(control.log.events)
+  })
+
+  it('a near-zero-Sanity hero panics in at least some battles', () => {
+    let saw = false
+    for (let seed = 1; seed <= 40 && !saw; seed++) saw = hasPanic(buildBattle(seed, { sanity: 1 }))
+    expect(saw).toBe(true)
+  })
+
+  it('every panic event names the panicking hero', () => {
+    let panicRes: BattleResult | null = null
+    for (let seed = 1; seed <= 40 && !panicRes; seed++) {
+      const r = buildBattle(seed, { sanity: 1 })
+      if (hasPanic(r)) panicRes = r
+    }
+    expect(panicRes).not.toBeNull()
+    for (const e of panicRes!.log.events.filter((e) => e.kind === 'panic')) {
+      expect((e as { unitId: string }).unitId).toBe('h1')
+    }
+  })
+
+  it('is deterministic — same seed + Sanity reproduces the event stream', () => {
+    const a = buildBattle(7, { sanity: 1 })
+    const b = buildBattle(7, { sanity: 1 })
+    expect(a.log.events).toEqual(b.log.events)
+    expect(a.log.rngDraws).toBe(b.log.rngDraws)
+  })
+
+  it('statusRes ≥ 100 fully mitigates — no panic, no extra draw', () => {
+    const control = buildBattle(7, { sanity: undefined, statusRes: 100 })
+    const immune = buildBattle(7, { sanity: 1, statusRes: 100 })
+    expect(hasPanic(immune)).toBe(false)
+    expect(immune.log.rngDraws).toBe(control.log.rngDraws)
   })
 })
 

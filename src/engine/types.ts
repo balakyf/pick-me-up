@@ -333,6 +333,8 @@ export type CombatEvent = { seq: number; tick: number } & (
   | { kind: 'act'; actorId: string; skillId: string; targetId: string }
   | { kind: 'hit'; actorId: string; targetId: string; amount: number; crit: boolean; hpAfter: number }
   | { kind: 'miss'; actorId: string; targetId: string }
+  /** A low-Sanity hero panicked and lost its turn (Layer 3 §3.2). */
+  | { kind: 'panic'; unitId: string }
   | { kind: 'death'; unitId: string }
   | { kind: 'mission'; note: string }
   | { kind: 'end'; outcome: CombatOutcome }
