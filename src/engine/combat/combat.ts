@@ -190,6 +190,16 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
 
     let damage = atk * skill.skillMult * eMult * critMult * mitig * variance
 
+    // TACTICAL CENTER focus: a hero concentrating fire on the marked enemy deals
+    // a level-scaled damage bonus (the strength rides on the Encounter; no RNG).
+    if (
+      actor.side === 'hero' &&
+      encounter.focusBonus !== undefined &&
+      encounter.focus?.focusEnemyId === target.id
+    ) {
+      damage *= 1 + encounter.focusBonus
+    }
+
     // ENRAGE: actor stat-spike past its timer.
     for (const kw of actor.ref.keywords) {
       if (kw.kind === 'enrage' && tick >= kw.afterTick) {
@@ -224,7 +234,7 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
     cands.reduce((best, c) => (c.spawnIndex < best.spawnIndex ? c : best))
 
   const pickSingleTarget = (actor: MutUnit): MutUnit | null => {
-    const cands = targetableFoes(actor)
+    let cands = targetableFoes(actor)
     if (cands.length === 0) return null
 
     // FOCUS: hero attackers force-prioritize a living, targetable focus enemy.
@@ -233,6 +243,17 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
       if (focusId !== undefined) {
         const focused = cands.find((e) => e.id === focusId)
         if (focused) return focused
+      }
+    }
+
+    // OVERLOOK (Tactical Center): enemy targeting is steered off marked allies while
+    // any non-overlooked ally lives (deterministic; no RNG). Falls back to the full
+    // pool if every candidate is overlooked.
+    if (actor.side === 'enemy') {
+      const overlooked = encounter.focus?.overlookedAllyIds
+      if (overlooked !== undefined && overlooked.length > 0) {
+        const visible = cands.filter((c) => !overlooked.includes(c.id))
+        if (visible.length > 0) cands = visible
       }
     }
 

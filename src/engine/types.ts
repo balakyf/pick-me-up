@@ -306,6 +306,9 @@ export interface Encounter {
   mission: Mission
   waves: EnemyWave[]
   focus?: FocusDirective
+  /** Tactical Center concentrate-fire bonus: extra damage fraction vs the focused
+   *  enemy (e.g. 0.06 = +6%). Absent/0 = no bonus. */
+  focusBonus?: number
   /** Decides permadeath policy; combat only flags it. */
   encounterContext: 'tower'
 }

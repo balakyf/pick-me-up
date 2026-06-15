@@ -40,6 +40,7 @@ import { ENEMY_TEMPLATES, ANCHORS, SKILLS } from '../content'
 import { applyXp } from '../stats'
 import { clampSanity } from '../kitchen'
 import { attrStoneId } from '../promotion'
+import { tacticalFocusBonus } from '../tactical'
 import { hash, rngFor, nextInt, chance, pick, type Rng } from '../rng/rng'
 
 const T = TUNING.tower
@@ -296,7 +297,11 @@ export function buildEncounter(state: GameState, floor: number, focus?: FocusDir
     waves: built.waves,
     encounterContext: 'tower',
   }
-  if (focus !== undefined) enc.focus = focus
+  if (focus !== undefined) {
+    enc.focus = focus
+    // Tactical Center amplifies the focus lever: a concentrate-fire bonus by level.
+    enc.focusBonus = tacticalFocusBonus(state.facilities.tacticalCenter.level)
+  }
   return enc
 }
 

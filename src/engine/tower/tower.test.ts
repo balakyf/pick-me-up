@@ -5,6 +5,7 @@
  */
 
 import { floorPower, mobLevel, buildEncounter, playFloor, sanityDrain, rollMaterialDrops } from './tower'
+import { tacticalFocusBonus } from '../tactical'
 import { TUNING } from '../tuning'
 import { ANCHORS, ENEMY_TEMPLATES } from '../content'
 import { combatPower, deriveStatsForHero } from '../stats'
@@ -247,6 +248,15 @@ describe('buildEncounter determinism', () => {
   it('attaches a focus directive when provided', () => {
     const enc = buildEncounter(makeState({ seed: 5 }), 4, { focusEnemyId: 'e4_w0_0' })
     expect(enc.focus).toEqual({ focusEnemyId: 'e4_w0_0' })
+  })
+
+  it('injects the Tactical Center focus bonus when a focus is provided', () => {
+    const enc = buildEncounter(makeState({ seed: 5 }), 4, { focusEnemyId: 'e4_w0_0' })
+    expect(enc.focusBonus).toBeCloseTo(tacticalFocusBonus(1), 6) // default center is Lv 1
+  })
+
+  it('omits the focus bonus when no focus is provided', () => {
+    expect(buildEncounter(makeState({ seed: 5 }), 4).focusBonus).toBeUndefined()
   })
 })
 

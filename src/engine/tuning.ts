@@ -209,6 +209,13 @@ export const TUNING = {
       /** First-clear bonus: both chances are multiplied by this on a never-cleared floor. */
       firstClearMult: 2,
     },
+    /** Tactical Center — amplifies the existing focus/overlook combat levers (Layer 3 §3.4). */
+    tactical: {
+      /** Concentrate-fire damage bonus on the FOCUSED enemy, per Tactical Center level (~+6%/lvl). */
+      focusBonusPerLevel: 0.06,
+      /** Overlook slots = base + floor(level/2): how many allies enemies are steered off. */
+      overlookBaseSlots: 1,
+    },
     /** Daily Dungeons — the primary, targeted material faucet (Layer 3 §3.5). Non-lethal. */
     daily: {
       /** Free attempts per world-day (reset on the world-day boundary in advanceTime). */

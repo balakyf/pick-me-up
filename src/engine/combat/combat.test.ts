@@ -551,6 +551,70 @@ describe('targeting', () => {
 })
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Tactical Center — focus concentrate-fire bonus + overlook steering
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('focus concentrate-fire bonus', () => {
+  // A practically unkillable enemy → battle always runs the full tick budget, so the
+  // total draw count is independent of the (non-RNG) damage bonus.
+  const runFocus = (focusBonus?: number) =>
+    runBattle(
+      [hero({ id: 'h1', stats: { pAtk: 60, spd: 1000, critPct: 0 } })],
+      encounter(
+        [[enemy({ id: 'e1', stats: { maxHP: 1_000_000_000, pDef: 20, spd: 1, pAtk: 1 } })]],
+        mission(annihilate),
+        { focus: { focusEnemyId: 'e1' }, focusBonus },
+      ),
+      99,
+    )
+  const firstHit = (focusBonus?: number) =>
+    runFocus(focusBonus).log.events.find((e) => e.kind === 'hit')! as { amount: number }
+
+  it('increases damage dealt to the focused enemy', () => {
+    expect(firstHit(0.5).amount).toBeGreaterThan(firstHit(undefined).amount)
+  })
+
+  it('a zero/absent bonus is identical to no bonus (no behavior change)', () => {
+    expect(firstHit(0).amount).toBe(firstHit(undefined).amount)
+  })
+
+  it('does not consume any extra RNG draws (determinism preserved)', () => {
+    expect(runFocus(0.5).log.rngDraws).toBe(runFocus(undefined).log.rngDraws)
+  })
+})
+
+describe('overlook steering', () => {
+  const enemyFirstTarget = (overlookedAllyIds?: string[]) => {
+    const res = runBattle(
+      [
+        hero({ id: 'tank', stats: { maxHP: 5000, spd: 1, pAtk: 1 } }),
+        hero({ id: 'squishy', stats: { maxHP: 5000, spd: 1, pAtk: 1 } }),
+      ],
+      encounter(
+        [[enemy({ id: 'e1', stats: { pAtk: 50, spd: 1000, pDef: 0 } })]],
+        mission([{ kind: 'survive', ticks: 3 }], 3),
+        overlookedAllyIds ? { focus: { overlookedAllyIds } } : {},
+      ),
+      7,
+    )
+    return res.log.events.find((e) => e.kind === 'act' && (e as { actorId: string }).actorId === 'e1') as {
+      targetId: string
+    }
+  }
+
+  it('an enemy avoids an overlooked ally while a non-overlooked ally lives', () => {
+    const baseline = enemyFirstTarget()!.targetId // front-most = 'tank'
+    expect(baseline).toBe('tank')
+    expect(enemyFirstTarget(['tank'])!.targetId).toBe('squishy')
+  })
+
+  it('falls back to attacking someone when every ally is overlooked', () => {
+    const t = enemyFirstTarget(['tank', 'squishy'])!.targetId
+    expect(['tank', 'squishy']).toContain(t)
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Skills / SP
 // ─────────────────────────────────────────────────────────────────────────────
 
