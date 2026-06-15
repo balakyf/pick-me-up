@@ -71,6 +71,8 @@ function makeHero(o: HeroOpts): OwnedHero {
     origin: 'procedural',
     xp: { level, xpIntoLevel: 0, heldXp: 0, atCap: false },
     alive: o.alive ?? true,
+    sanity: 100,
+    promotion: null,
   }
 }
 
@@ -99,6 +101,15 @@ function makeState(o: StateOpts = {}): GameState {
     worldGrade: o.worldGrade ?? 'C',
     createdAt: 0,
     gold: o.gold ?? 0,
+    gems: 0,
+    materials: {},
+    meta: { masterLevel: 1, masterXp: 0, lastSeenAtWorld: 0 },
+    facilities: {
+      kitchen: { level: 1, build: null },
+      promotionChamber: { level: 0, build: null },
+      tacticalCenter: { level: 1, build: null },
+    },
+    dailies: { attemptsUsed: 0, lastResetWorldDay: 0 },
     heroes,
     consumedHeroIds: heroIds as string[],
     usedNames: [],

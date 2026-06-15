@@ -125,8 +125,22 @@ export const TUNING = {
     startingGold: 3000,
   },
 
+  time: {
+    /** Real→world-time dilation (canon: 1 Earth day = 3 world days). */
+    worldTimeFactor: 3,
+  },
+
+  lobby: {
+    /** Fresh-account premium currency. */
+    startingGems: 0,
+    /** Sanity is per-hero, 0..100; heroes summon at full. */
+    sanityMax: 100,
+    /** Facilities present at account creation. 0 = locked / not yet built. */
+    facilityStartLevels: { kitchen: 1, promotionChamber: 0, tacticalCenter: 1 },
+  },
+
   account: {
-    schemaVersion: 1,
+    schemaVersion: 2,
     /** Canon protagonist account id (display only). */
     defaultAccountId: '46631913',
     partySize: 5,

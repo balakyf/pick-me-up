@@ -141,6 +141,8 @@ function midGameOf(acct: GameState): GameState {
     origin: 'procedural',
     xp: { level: 5, xpIntoLevel: 40, heldXp: 0, atCap: false },
     alive: true,
+    sanity: 100,
+    promotion: null,
   }
   copy.heroes[fakeId] = fakeHero
   copy.tower.currentFloor = 7
@@ -306,5 +308,66 @@ describe('storage — createStorage / MemoryStorage / persist / hydrate', () => 
     persist(storage, createAccount(1), DEFAULT_SAVE_KEY, 9000)
     const envelope = JSON.parse(storage.read(DEFAULT_SAVE_KEY) as string) as SaveEnvelope
     expect(envelope.savedAt).toBe(9000)
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// v2 schema — lobby/meta/economy fields + migration
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('createAccount — v2 fields', () => {
+  it('grants the v2 lobby/meta defaults', () => {
+    const acct = createAccount(123, { now: 1000 })
+    expect(acct.schemaVersion).toBe(2)
+    expect(acct.gems).toBe(TUNING.lobby.startingGems)
+    expect(acct.materials).toEqual({})
+    expect(acct.meta.masterLevel).toBe(1)
+    expect(acct.meta.masterXp).toBe(0)
+    // lastSeenAtWorld is the creation time in world-time (3x dilation of now=1000).
+    expect(acct.meta.lastSeenAtWorld).toBe(3000)
+    expect(acct.facilities.kitchen.level).toBe(1)
+    expect(acct.facilities.tacticalCenter.level).toBe(1)
+    expect(acct.facilities.promotionChamber.level).toBe(0) // locked until ML3 (Phase 4)
+    expect(acct.facilities.kitchen.build).toBeNull()
+    expect(acct.dailies).toEqual({ attemptsUsed: 0, lastResetWorldDay: 0 })
+  })
+
+  it('gives the starter hero full Sanity and no in-progress promotion', () => {
+    const acct = createAccount(123)
+    const hero = Object.values(acct.heroes)[0]!
+    expect(hero.sanity).toBe(TUNING.lobby.sanityMax)
+    expect(hero.promotion).toBeNull()
+  })
+})
+
+describe('migrate — v1 → v2', () => {
+  it('upgrades a v1 save with safe defaults', () => {
+    const v2 = createAccount(777, { now: 1000 })
+    // Synthesize an OLD v1 save by stripping the v2-only fields and stamping v1.
+    const heroesV1 = Object.fromEntries(
+      Object.entries(v2.heroes).map(([id, h]) => {
+        const { sanity, promotion, ...rest } = h as unknown as Record<string, unknown>
+        return [id, rest]
+      }),
+    )
+    const { gems, materials, meta, facilities, dailies, ...stateV1 } =
+      v2 as unknown as Record<string, unknown>
+    const v1Json = JSON.stringify({
+      schemaVersion: 1,
+      savedAt: 0,
+      state: { ...stateV1, schemaVersion: 1, heroes: heroesV1 },
+    })
+
+    const restored = loadState(v1Json)
+
+    expect(restored.schemaVersion).toBe(2)
+    expect(restored.gems).toBe(TUNING.lobby.startingGems)
+    expect(restored.facilities.promotionChamber.level).toBe(0)
+    expect(restored.meta.masterLevel).toBe(1)
+    expect(restored.meta.lastSeenAtWorld).toBe(3000) // toWorldTime(createdAt=1000)
+    expect(restored.dailies.attemptsUsed).toBe(0)
+    const hero = Object.values(restored.heroes)[0]!
+    expect(hero.sanity).toBe(TUNING.lobby.sanityMax)
+    expect(hero.promotion).toBeNull()
   })
 })

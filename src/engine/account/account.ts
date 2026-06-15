@@ -31,6 +31,7 @@ import type {
 import { makeSeed } from '../rng/rng'
 import { buildOwnedHeroFromTemplate } from '../gacha'
 import { CAMEO_HEROES } from '../content'
+import { toWorldTime } from '../time'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Constants
@@ -101,6 +102,15 @@ export function createAccount(entropySeed: number, opts?: CreateAccountOpts): Ga
     worldGrade: opts?.worldGrade ?? 'C',
     createdAt: opts?.now ?? 0,
     gold: TUNING.economy.startingGold,
+    gems: TUNING.lobby.startingGems,
+    materials: {},
+    meta: { masterLevel: 1, masterXp: 0, lastSeenAtWorld: toWorldTime(opts?.now ?? 0) },
+    facilities: {
+      kitchen: { level: TUNING.lobby.facilityStartLevels.kitchen, build: null },
+      promotionChamber: { level: TUNING.lobby.facilityStartLevels.promotionChamber, build: null },
+      tacticalCenter: { level: TUNING.lobby.facilityStartLevels.tacticalCenter, build: null },
+    },
+    dailies: { attemptsUsed: 0, lastResetWorldDay: 0 },
     heroes: { [STARTER_HERO_ID]: starter },
     consumedHeroIds: [STARTER_HERO_ID],
     usedNames: [],
@@ -126,10 +136,39 @@ export function saveState(state: GameState, now?: number): string {
   return JSON.stringify(envelope)
 }
 
+/** v1 → v2: introduce the lobby/meta/economy fields with safe defaults. */
+function migrateV1toV2(envelope: SaveEnvelope): SaveEnvelope {
+  const s = envelope.state as unknown as Record<string, unknown>
+  const oldHeroes = s.heroes as Record<string, OwnedHero>
+  const heroes: Record<string, OwnedHero> = {}
+  for (const [id, hero] of Object.entries(oldHeroes)) {
+    heroes[id] = { ...hero, sanity: TUNING.lobby.sanityMax, promotion: null }
+  }
+  const createdAt = typeof s.createdAt === 'number' ? s.createdAt : 0
+  return {
+    schemaVersion: 2,
+    savedAt: envelope.savedAt,
+    state: {
+      ...(s as unknown as GameState),
+      schemaVersion: 2,
+      heroes,
+      gems: TUNING.lobby.startingGems,
+      materials: {},
+      meta: { masterLevel: 1, masterXp: 0, lastSeenAtWorld: toWorldTime(createdAt) },
+      facilities: {
+        kitchen: { level: TUNING.lobby.facilityStartLevels.kitchen, build: null },
+        promotionChamber: { level: TUNING.lobby.facilityStartLevels.promotionChamber, build: null },
+        tacticalCenter: { level: TUNING.lobby.facilityStartLevels.tacticalCenter, build: null },
+      },
+      dailies: { attemptsUsed: 0, lastResetWorldDay: 0 },
+    },
+  }
+}
+
 /**
  * Migrate a SaveEnvelope from `fromVersion` up to the current schema version.
- * Identity when already current; the v1 chain is empty (no prior versions to
- * upgrade). Future versions register steps here.
+ * Identity when already current; otherwise apply each version's upgrade step in
+ * sequence (v1 → v2 → …). An older version with no registered path is rejected.
  */
 export function migrate(envelope: SaveEnvelope, fromVersion: number): SaveEnvelope {
   const current = TUNING.account.schemaVersion
@@ -139,8 +178,16 @@ export function migrate(envelope: SaveEnvelope, fromVersion: number): SaveEnvelo
       `migrate: save schemaVersion ${fromVersion} is newer than engine ${current}`,
     )
   }
-  // No migration steps exist in v1 — any non-current older version is unknown.
-  throw new SaveLoadError(`migrate: no migration path from version ${fromVersion}`)
+  let env = envelope
+  let v = fromVersion
+  if (v === 1) {
+    env = migrateV1toV2(env)
+    v = 2
+  }
+  if (v !== current) {
+    throw new SaveLoadError(`migrate: no migration path from version ${fromVersion}`)
+  }
+  return env
 }
 
 /** Shape-check the minimum fields a GameState must carry to be load-safe. */
@@ -159,6 +206,11 @@ function assertGameStateShape(state: unknown): asserts state is GameState {
     'worldGrade',
     'createdAt',
     'gold',
+    'gems',
+    'materials',
+    'meta',
+    'facilities',
+    'dailies',
     'heroes',
     'consumedHeroIds',
     'usedNames',

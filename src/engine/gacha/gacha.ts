@@ -236,6 +236,8 @@ export function buildOwnedHeroFromTemplate(template: HeroTemplate, id: HeroId): 
     ...hero,
     xp: { level: 1, xpIntoLevel: 0, heldXp: 0, atCap: false },
     alive: true,
+    sanity: TUNING.lobby.sanityMax,
+    promotion: null,
   }
 }
 
@@ -245,6 +247,8 @@ function buildOwnedHero(hero: Hero): OwnedHero {
     ...hero,
     xp: { level: 1, xpIntoLevel: 0, heldXp: 0, atCap: false },
     alive: true,
+    sanity: TUNING.lobby.sanityMax,
+    promotion: null,
   }
 }
 

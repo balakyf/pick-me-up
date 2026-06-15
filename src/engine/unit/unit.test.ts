@@ -48,6 +48,8 @@ function ownedFromTemplate(t: HeroTemplate, level = 1): OwnedHero {
     origin: 'cameo',
     xp: { level, xpIntoLevel: 0, heldXp: 0, atCap: false },
     alive: true,
+    sanity: 100,
+    promotion: null,
   }
 }
 
@@ -66,6 +68,8 @@ function makeWarrior(overrides: Partial<OwnedHero> = {}): OwnedHero {
     origin: 'procedural',
     xp: { level: 7, xpIntoLevel: 0, heldXp: 0, atCap: false },
     alive: true,
+    sanity: 100,
+    promotion: null,
     ...overrides,
   }
 }

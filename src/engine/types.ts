@@ -41,6 +41,11 @@ export type WorldGrade = 'C' | 'B' | 'A' | 'S'
 
 export type HeroOrigin = 'procedural' | 'cameo'
 
+export type FacilityId = 'kitchen' | 'promotionChamber' | 'tacticalCenter'
+
+/** Material bucket key, e.g. 'promotionStone', 'attrStone_fire', 'rankMaterial'. */
+export type MaterialId = string
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Stat model (Layer 0)
 // ─────────────────────────────────────────────────────────────────────────────
@@ -135,6 +140,10 @@ export interface Hero {
 export interface OwnedHero extends Hero {
   xp: XpProgress
   alive: boolean
+  /** 0..100; drains in the tower, regens in the lobby (Phase 3). */
+  sanity: number
+  /** In-progress promotion timer; null when not promoting (Phase 4). */
+  promotion: { completesAtWorld: number } | null
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -170,6 +179,26 @@ export interface RngCursors {
   combatCounter: number
 }
 
+export interface FacilityState {
+  /** 0 = locked / not yet built. */
+  level: number
+  /** An in-progress upgrade; null when idle. completesAtWorld is world-time ms. */
+  build: { toLevel: number; completesAtWorld: number } | null
+}
+
+export interface MetaState {
+  masterLevel: number
+  masterXp: number
+  /** World-time ms of the last advanceTime() catch-up. */
+  lastSeenAtWorld: number
+}
+
+export interface DailiesState {
+  attemptsUsed: number
+  /** World-day index of the last reset (floor(worldMs / worldDayMs)). */
+  lastResetWorldDay: number
+}
+
 /** THE canonical game state. Every module imports this; none redeclare it.
  *  All set-like fields are persisted as SORTED arrays for stable round-trips. */
 export interface GameState {
@@ -180,6 +209,11 @@ export interface GameState {
   /** Bootstrap-supplied; display only, never feeds RNG. */
   createdAt: number
   gold: number
+  gems: number
+  materials: Record<MaterialId, number>
+  meta: MetaState
+  facilities: Record<FacilityId, FacilityState>
+  dailies: DailiesState
   heroes: Record<HeroId, OwnedHero>
   /** Every HeroId ever issued on this account — enforces no-dupe sampling. */
   consumedHeroIds: string[]
