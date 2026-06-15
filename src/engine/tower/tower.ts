@@ -41,6 +41,7 @@ import { applyXp } from '../stats'
 import { clampSanity } from '../kitchen'
 import { attrStoneId } from '../promotion'
 import { tacticalFocusBonus } from '../tactical'
+import { addMasterXp } from '../master'
 import { hash, rngFor, nextInt, chance, pick, type Rng } from '../rng/rng'
 
 const T = TUNING.tower
@@ -411,12 +412,18 @@ export function playFloor(
         highestCleared: state.tower.highestCleared,
       }
 
+  // ── 6b. Master XP: floor clears feed the Master-Level spine (+first-clear bonus). ──
+  const MASTER = TUNING.lobby.master
+  const masterXpGain = cleared ? MASTER.xpPerFloorClear + (firstClear ? MASTER.xpPerFirstClear : 0) : 0
+  const nextMeta = masterXpGain > 0 ? addMasterXp(state.meta, masterXpGain) : state.meta
+
   const nextState: GameState = {
     ...state,
     gold: state.gold + goldAwarded,
     materials: nextMaterials,
     heroes: nextHeroes,
     tower: nextTower,
+    meta: nextMeta,
   }
 
   const result: FloorResult = {

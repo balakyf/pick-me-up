@@ -6,6 +6,7 @@
 
 import { floorPower, mobLevel, buildEncounter, playFloor, sanityDrain, rollMaterialDrops } from './tower'
 import { tacticalFocusBonus } from '../tactical'
+import { addMasterXp } from '../master'
 import { TUNING } from '../tuning'
 import { ANCHORS, ENEMY_TEMPLATES } from '../content'
 import { combatPower, deriveStatsForHero } from '../stats'
@@ -713,6 +714,34 @@ describe('playFloor — material drops fold into state', () => {
       sawDrop = Object.keys(playFloor(state).result.materialsAwarded).length > 0
     }
     expect(sawDrop).toBe(true)
+  })
+})
+
+describe('playFloor — Master XP', () => {
+  const M = TUNING.lobby.master
+
+  it('awards floor-clear + first-clear Master XP on a first clear', () => {
+    const crusher = makeCrusher('h_crush')
+    const state = makeState({ heroes: [crusher], currentFloor: 1, highestCleared: 0 })
+    const { state: next, result } = playFloor(state)
+    expect(result.firstClear).toBe(true)
+    expect(next.meta).toEqual(addMasterXp(state.meta, M.xpPerFloorClear + M.xpPerFirstClear))
+  })
+
+  it('awards only floor-clear Master XP on a repeat clear', () => {
+    const crusher = makeCrusher('h_crush')
+    const state = makeState({ heroes: [crusher], currentFloor: 1, highestCleared: 5 })
+    const { state: next, result } = playFloor(state)
+    expect(result.firstClear).toBe(false)
+    expect(next.meta).toEqual(addMasterXp(state.meta, M.xpPerFloorClear))
+  })
+
+  it('awards no Master XP on a wipe', () => {
+    const glass = makeGlass('h_glass')
+    const state = makeState({ heroes: [glass], slots: ['h_glass' as HeroId, null, null, null, null], currentFloor: 10 })
+    const { state: next, result } = playFloor(state)
+    expect(result.cleared).toBe(false)
+    expect(next.meta).toEqual(state.meta)
   })
 })
 

@@ -9,6 +9,7 @@ import { TUNING } from '../tuning'
 import { clampSanity } from '../kitchen'
 import { completePromotion } from '../promotion'
 import { worldDayIndex } from '../daily'
+import { addMasterXp } from '../master'
 import type { GameState, OwnedHero, HeroId, DailiesState } from '../types'
 
 /** 1 world-hour in world-time ms. World-time is plain ms, only dilated at the edge. */
@@ -44,6 +45,7 @@ export function advanceTime(state: GameState, nowWorld: number): GameState {
   const regen = sanityRegenRate(state.facilities.kitchen.level) * hours
 
   const nextHeroes: Record<HeroId, OwnedHero> = {}
+  let promotionsCompleted = 0
   for (const key of Object.keys(state.heroes) as HeroId[]) {
     const hero = state.heroes[key]!
     if (!hero.alive) {
@@ -53,6 +55,7 @@ export function advanceTime(state: GameState, nowWorld: number): GameState {
     let next: OwnedHero = { ...hero, sanity: clampSanity(hero.sanity + regen) }
     if (next.promotion !== null && next.promotion.completesAtWorld <= nowWorld) {
       next = completePromotion(next, state.seed)
+      promotionsCompleted++
     }
     nextHeroes[key] = next
   }
@@ -64,5 +67,11 @@ export function advanceTime(state: GameState, nowWorld: number): GameState {
       ? { attemptsUsed: 0, lastResetWorldDay: today }
       : state.dailies
 
-  return { ...state, heroes: nextHeroes, dailies, meta: { ...state.meta, lastSeenAtWorld: nowWorld } }
+  // Completed promotions feed the Master-Level spine.
+  let meta = { ...state.meta, lastSeenAtWorld: nowWorld }
+  if (promotionsCompleted > 0) {
+    meta = addMasterXp(meta, promotionsCompleted * TUNING.lobby.master.xpPerPromotion)
+  }
+
+  return { ...state, heroes: nextHeroes, dailies, meta }
 }

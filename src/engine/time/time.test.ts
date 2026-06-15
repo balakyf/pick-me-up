@@ -163,4 +163,16 @@ describe('advanceTime — promotion completion', () => {
     const b = advanceTime(promotingState(5_000), 6_000).heroes['h_promo' as HeroId]!
     expect(a).toEqual(b)
   })
+
+  it('awards Master XP when a promotion completes', () => {
+    const before = promotingState(5_000)
+    const next = advanceTime(before, 6_000)
+    expect(next.meta.masterXp).toBe(before.meta.masterXp + TUNING.lobby.master.xpPerPromotion)
+  })
+
+  it('awards no promotion Master XP when nothing completes', () => {
+    const before = promotingState(10_000)
+    const next = advanceTime(before, 6_000) // timer still in the future
+    expect(next.meta.masterXp).toBe(before.meta.masterXp)
+  })
 })
