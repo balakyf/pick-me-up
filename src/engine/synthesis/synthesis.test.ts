@@ -193,3 +193,87 @@ describe('synthesisPreview', () => {
     expect(JSON.stringify(state)).toBe(before) // pure: no mutation
   })
 })
+
+describe('multi-sacrifice accumulation', () => {
+  it('transfer charges survivor Sanity once per sacrifice and accumulates grade nudges', () => {
+    const surv = makeHero('surv', { growthGrades: { str: 1, agi: 1, vit: 1, int: 1, wil: 1 } })
+    const s1 = makeHero('s1', { growthGrades: { str: 9, agi: 1, vit: 1, int: 1, wil: 1 } })
+    const s2 = makeHero('s2', { growthGrades: { str: 9, agi: 1, vit: 1, int: 1, wil: 1 } })
+    const state = accountWith([surv, s1, s2])
+    const after = synthesize(state, { mode: 'transfer', survivorId: surv.id, sacrificeIds: [s1.id, s2.id] })
+    // Two sacrifices, each +1 to str (upward-only, re-evaluated): 1 → 2 → 3.
+    expect(after.heroes['surv' as HeroId]!.growthGrades.str).toBe(3)
+    expect(after.heroes['surv' as HeroId]!.sanity).toBe(100 - 2 * S.survivorSanityCost)
+    expect(after.heroes['s1' as HeroId]!.alive).toBe(false)
+    expect(after.heroes['s2' as HeroId]!.alive).toBe(false)
+  })
+
+  it('salvage sums material yield across multiple sacrifices', () => {
+    const keeper = makeHero('keeper')
+    const a = makeHero('a', { star: 4, element: 'fire' })
+    const b = makeHero('b', { star: 4, element: 'fire' })
+    const state = accountWith([keeper, a, b])
+    const after = synthesize(state, { mode: 'salvage', survivorId: null, sacrificeIds: [a.id, b.id] })
+    expect(after.materials['promotionStone']).toBe(2 * S.salvageYield[4]!.promotionStone)
+    expect(after.materials['attrStone_fire']).toBe(2 * S.salvageYield[4]!.attrStone)
+  })
+})
+
+describe('Sanity clamping', () => {
+  it('clamps the witness hit at 0 (never negative)', () => {
+    const surv = makeHero('surv')
+    const sac = makeHero('sac')
+    const frail = makeHero('frail', { sanity: 2 }) // witness cost (5) would push below 0
+    const state = accountWith([surv, sac, frail])
+    const after = synthesize(state, { mode: 'transfer', survivorId: surv.id, sacrificeIds: [sac.id] })
+    expect(after.heroes['frail' as HeroId]!.sanity).toBe(0)
+  })
+
+  it('preview reports the clamped survivor cost, matching apply', () => {
+    const surv = makeHero('surv', { sanity: 20, growthGrades: { str: 1, agi: 1, vit: 1, int: 1, wil: 1 } })
+    const s1 = makeHero('s1'); const s2 = makeHero('s2')
+    const state = accountWith([surv, s1, s2])
+    const input: SynthesisInput = { mode: 'transfer', survivorId: surv.id, sacrificeIds: [s1.id, s2.id] }
+    const p = synthesisPreview(state, input)
+    const after = synthesize(state, input)
+    const actualLost = surv.sanity - after.heroes['surv' as HeroId]!.sanity
+    expect(p.survivorSanityCost).toBe(actualLost) // 20 → 5 → 0, so 20 lost, not 30
+  })
+})
+
+describe('salvage preview + no-survivor', () => {
+  it('previews salvage material yield and a null rescue with no survivor', () => {
+    const keeper = makeHero('keeper')
+    const sac = makeHero('sac', { star: 5, element: 'water' })
+    const state = accountWith([keeper, sac])
+    const p = synthesisPreview(state, { mode: 'salvage', survivorId: null, sacrificeIds: [sac.id] })
+    expect(p.materialYield['promotionStone']).toBe(S.salvageYield[5]!.promotionStone)
+    expect(p.materialYield['attrStone_water']).toBe(S.salvageYield[5]!.attrStone)
+    expect(p.rescue).toBeNull()
+    expect(p.skillCopyChance).toBe(0)
+    expect(p.survivorSanityCost).toBe(0)
+  })
+
+  it('salvage with no survivor leaves the keeper untouched and renders materials', () => {
+    const keeper = makeHero('keeper')
+    const sac = makeHero('sac', { star: 3 })
+    const state = accountWith([keeper, sac])
+    const after = synthesize(state, { mode: 'salvage', survivorId: null, sacrificeIds: [sac.id] })
+    expect(after.heroes['keeper' as HeroId]!.skillIds).toEqual(keeper.skillIds)
+    expect((after.materials['promotionStone'] ?? 0)).toBeGreaterThan(0)
+  })
+})
+
+describe('guards — duplicates + unknown', () => {
+  it('throws on a duplicate sacrifice', () => {
+    const a = makeHero('a'); const b = makeHero('b')
+    const state = accountWith([a, b])
+    expect(() => synthesize(state, { mode: 'salvage', survivorId: null, sacrificeIds: [b.id, b.id] })).toThrow()
+  })
+
+  it('throws on an unknown sacrifice id', () => {
+    const a = makeHero('a'); const b = makeHero('b')
+    const state = accountWith([a, b])
+    expect(() => synthesize(state, { mode: 'salvage', survivorId: null, sacrificeIds: ['ghost' as HeroId] })).toThrow()
+  })
+})

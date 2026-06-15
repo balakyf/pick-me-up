@@ -226,7 +226,9 @@ export function synthesisPreview(state: GameState, input: SynthesisInput): Synth
       const d = g[k] - survivor.growthGrades[k]
       if (d !== 0) gradeDeltas[k] = d
     }
-    survivorSanityCost = sacrifices.length * S.survivorSanityCost
+    let sanity = survivor.sanity
+    for (let i = 0; i < sacrifices.length; i++) sanity = Math.max(0, sanity - S.survivorSanityCost)
+    survivorSanityCost = survivor.sanity - sanity
   } else if (input.mode === 'salvage') {
     for (const sac of sacrifices) {
       const y = salvageYield(sac)
@@ -238,7 +240,7 @@ export function synthesisPreview(state: GameState, input: SynthesisInput): Synth
         sacrifices,
       )
       rescue = r.desc
-      if (r.applied) survivorSanityCost = S.survivorSanityCost
+      if (r.applied) survivorSanityCost = Math.min(S.survivorSanityCost, survivor.sanity)
     }
   }
 
