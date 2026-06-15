@@ -122,4 +122,15 @@ describe('App smoke', () => {
     expect(after.gold).toBe(before - 3000)
     expect(Object.keys(after.heroes).length).toBe(heroesBefore + 1)
   })
+
+  it('the Synthesis Chamber renders, gated by Master Level', () => {
+    mount()
+    act(() => {
+      getStore().dispatch({ type: 'NEW_ACCOUNT', seed: 2024, now: 0 })
+    })
+    // Chamber heading is always present…
+    expect(container.textContent).toContain('Synthesis Chamber')
+    // …but a fresh ML1 account sees it locked.
+    expect(container.textContent).toContain('Unlocks at Master Lv 3')
+  })
 })

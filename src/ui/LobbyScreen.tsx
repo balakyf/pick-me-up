@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import type { GameState, OwnedHero, FacilityId } from '../engine/types'
+import type { GameState, OwnedHero, FacilityId, HeroId } from '../engine/types'
 import type { Store } from '../engine/store'
 import { TUNING } from '../engine/tuning'
 import { banquetWouldHelp } from '../engine/kitchen'
@@ -11,6 +11,7 @@ import { worldDayIndex, dailyDungeonFor, dailyUnlocked, dailyAttemptsLeft } from
 import type { DailyReward } from '../engine/daily'
 import { attemptDailyWithResult } from '../engine/store'
 import { toWorldTime } from '../engine/time'
+import { canSynthesize, synthesisPreview, synthesisUnlocked, type SynthesisInput } from '../engine/synthesis'
 import { Portrait } from './bits'
 
 /**
@@ -354,6 +355,160 @@ function DailyPortal({ state, store }: { state: GameState; store: Store }) {
   )
 }
 
+const SYN = TUNING.lobby.synthesis
+
+/** A clickable hero chip used by the synthesis pickers. */
+function HeroChip({
+  hero,
+  selected,
+  onClick,
+  label,
+}: {
+  hero: OwnedHero
+  selected: boolean
+  onClick: () => void
+  label?: string
+}) {
+  return (
+    <button
+      type="button"
+      className={`syn-chip ${selected ? 'sel' : ''}`}
+      onClick={onClick}
+      title={`${hero.name} · ${hero.star}★ · Sanity ${hero.sanity}`}
+    >
+      <Portrait hero={hero} size="sm" />
+      <span className="syn-chip-name">{hero.name.split(/\s+/)[0]}</span>
+      {label && <span className="muted"> {label}</span>}
+    </button>
+  )
+}
+
+/** The Synthesis Chamber — closed-door, ML-gated. Transfer or Salvage heroes. */
+function SynthesisChamber({ state, store }: { state: GameState; store: Store }) {
+  const [mode, setMode] = useState<'transfer' | 'salvage'>('salvage')
+  const [survivorId, setSurvivorId] = useState<HeroId | null>(null)
+  const [sacrificeIds, setSacrificeIds] = useState<HeroId[]>([])
+  const [confirming, setConfirming] = useState(false)
+  const [err, setErr] = useState<string | null>(null)
+
+  const unlocked = synthesisUnlocked(state)
+  const living = (Object.values(state.heroes) as OwnedHero[]).filter((h) => h.alive)
+
+  if (!unlocked) {
+    return (
+      <div className="lobby-portal synth-portal locked">
+        <div className="lp-head">
+          <span className="lp-glyph">🧪</span>
+          <span className="lp-name">Synthesis Chamber</span>
+          <span className="muted">— the door stays shut</span>
+        </div>
+        <div className="lr-blurb">Unlocks at Master Lv {SYN.unlockMasterLevel}.</div>
+      </div>
+    )
+  }
+
+  const reset = () => { setSacrificeIds([]); setSurvivorId(null); setConfirming(false); setErr(null) }
+  const toggleSac = (id: HeroId) => {
+    setConfirming(false)
+    setSacrificeIds((cur) => (cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]))
+  }
+  const chooseSurvivor = (id: HeroId) => {
+    setConfirming(false)
+    setSurvivorId((cur) => (cur === id ? null : id))
+    setSacrificeIds((cur) => cur.filter((x) => x !== id)) // a survivor can't also be a sacrifice
+  }
+
+  const input: SynthesisInput = { mode, survivorId, sacrificeIds }
+  const valid = canSynthesize(state, input)
+  const preview = valid ? synthesisPreview(state, input) : null
+
+  function run() {
+    setErr(null)
+    try {
+      store.dispatch({ type: 'SYNTHESIZE', mode, survivorId, sacrificeIds }, Date.now())
+      reset()
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'Synthesis failed')
+    }
+  }
+
+  const sacrificeable = living.filter((h) => h.id !== survivorId && h.promotion === null)
+
+  return (
+    <div className="lobby-portal synth-portal">
+      <div className="lp-head">
+        <span className="lp-glyph">🧪</span>
+        <span className="lp-name">Synthesis Chamber</span>
+        <span className="muted">— the Master can’t watch</span>
+      </div>
+
+      <div className="syn-modes">
+        <button className={`btn sm ${mode === 'salvage' ? 'primary' : ''}`} onClick={() => { setMode('salvage'); setConfirming(false) }}>
+          ♻ Salvage
+        </button>
+        <button className={`btn sm ${mode === 'transfer' ? 'primary' : ''}`} onClick={() => { setMode('transfer'); setConfirming(false) }}>
+          ⇄ Transfer
+        </button>
+      </div>
+
+      <div className="syn-section">
+        <div className="syn-label">
+          {mode === 'transfer' ? 'Survivor (required)' : 'Rescue onto (optional)'}
+        </div>
+        <div className="syn-row">
+          {living.map((h) => (
+            <HeroChip key={h.id} hero={h} selected={survivorId === h.id} onClick={() => chooseSurvivor(h.id)} />
+          ))}
+        </div>
+      </div>
+
+      <div className="syn-section">
+        <div className="syn-label">Sacrifices (permanently destroyed)</div>
+        <div className="syn-row">
+          {sacrificeable.map((h) => (
+            <HeroChip key={h.id} hero={h} selected={sacrificeIds.includes(h.id)} onClick={() => toggleSac(h.id)} />
+          ))}
+        </div>
+      </div>
+
+      {preview && (
+        <div className="syn-preview">
+          {mode === 'transfer' ? (
+            <span>
+              {Object.keys(preview.gradeDeltas).length > 0
+                ? 'Grades ' + Object.entries(preview.gradeDeltas).map(([k, v]) => `${k} +${v}`).join(', ')
+                : 'No grade gain'}
+              {' · '}{Math.round(preview.skillCopyChance * 100)}% skill copy/sac
+            </span>
+          ) : (
+            <span>
+              Yields {Object.entries(preview.materialYield).map(([k, v]) => `${v} ${k.replace('attrStone_', '🔹').replace('promotionStone', '🪨')}`).join(', ') || '—'}
+              {preview.rescue ? ` · rescue ${preview.rescue}` : ''}
+            </span>
+          )}
+          <span className="muted"> · −{preview.survivorSanityCost} survivor / −{preview.witnessSanityCost} witness Sanity</span>
+        </div>
+      )}
+
+      <div className="syn-actions">
+        {!confirming ? (
+          <button className="btn sm" disabled={!valid} onClick={() => setConfirming(true)}>
+            {mode === 'transfer' ? '⇄ Synthesize' : '♻ Render'}
+          </button>
+        ) : (
+          <>
+            <button className="btn sm" style={{ background: 'var(--bad)' }} onClick={run}>
+              Permanently destroy {sacrificeIds.length} hero{sacrificeIds.length === 1 ? '' : 'es'}
+            </button>
+            <button className="btn sm" onClick={() => setConfirming(false)}>Cancel</button>
+          </>
+        )}
+      </div>
+      {err && <div className="lr-action-note" style={{ color: 'var(--bad)' }}>{err}</div>}
+    </div>
+  )
+}
+
 export function LobbyScreen({ state, store }: { state: GameState; store: Store }) {
   // Live tick: while the lobby is open, pump the world clock once a second. This
   // both refreshes the cosmetic countdowns (a re-render with a fresh Date.now())
@@ -427,6 +582,9 @@ export function LobbyScreen({ state, store }: { state: GameState; store: Store }
 
       {/* Daily Dungeon portal — an access point, not a leveled facility */}
       <DailyPortal state={state} store={store} />
+
+      {/* Synthesis Chamber — a closed-door access point, not a leveled facility */}
+      <SynthesisChamber state={state} store={store} />
 
       {/* Courtyard — everyone off-duty */}
       <div className="lobby-courtyard">
