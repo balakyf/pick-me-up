@@ -30,17 +30,22 @@ import type {
   Line,
   AnchorDef,
   EnemyTemplate,
+  Element,
+  MaterialId,
+  Seed,
 } from '../types'
 import { buildCombatUnit, buildEnemyUnit } from '../unit'
 import { runBattle } from '../combat'
 import { ENEMY_TEMPLATES, ANCHORS, SKILLS } from '../content'
 import { applyXp } from '../stats'
 import { clampSanity } from '../kitchen'
-import { hash, rngFor, nextInt, type Rng } from '../rng/rng'
+import { attrStoneId } from '../promotion'
+import { hash, rngFor, nextInt, chance, pick, type Rng } from '../rng/rng'
 
 const T = TUNING.tower
 const ECON = TUNING.economy
 const SAN = TUNING.lobby.sanity
+const MD = TUNING.lobby.materialDrops
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Floor power budget + enemy level
@@ -87,6 +92,40 @@ export function sanityDrain(
   if (!cleared) drain += SAN.wipePenalty
   if (anyAllyDeath) drain += SAN.witnessPenalty
   return Math.round(drain)
+}
+
+/**
+ * The thin tower material trickle (Layer 3 §3.5/§3.6). On a clear, roll up to one
+ * Promotion Stone and one element-matched Attribute Stone, with both chances
+ * boosted on a first clear. The Attribute Stone's element is seeded-picked from the
+ * DEPLOYED party's elements (no deployed heroes → no Attribute Stone). PURE and
+ * deterministic in (accountSeed, floor, attemptIndex, firstClear, deployedElements).
+ * Daily Dungeons are the primary, targeted source (Phase 5); this is a faucet trickle.
+ */
+export function rollMaterialDrops(
+  accountSeed: Seed,
+  floor: number,
+  attemptIndex: number,
+  firstClear: boolean,
+  deployedElements: Element[],
+): Record<MaterialId, number> {
+  const drops: Record<MaterialId, number> = {}
+  const mult = firstClear ? MD.firstClearMult : 1
+  let r = rngFor(accountSeed, 'loot', floor, attemptIndex)
+
+  const stone = chance(r, Math.min(1, MD.promotionStoneChance * mult))
+  r = stone.rng
+  if (stone.value) drops.promotionStone = 1
+
+  const attr = chance(r, Math.min(1, MD.attrStoneChance * mult))
+  r = attr.rng
+  if (attr.value && deployedElements.length > 0) {
+    const el = pick(r, deployedElements)
+    r = el.rng
+    drops[attrStoneId(el.value)] = 1
+  }
+
+  return drops
 }
 
 /** worldMult for a state's worldGrade. */
@@ -339,6 +378,21 @@ export function playFloor(
     }
   }
 
+  // ── 5b. Material drops (thin trickle, deployed-element-matched, clear-only). ──
+  const materialsAwarded: Record<MaterialId, number> = cleared
+    ? rollMaterialDrops(
+        state.seed,
+        floor,
+        state.tower.attemptIndex,
+        firstClear,
+        heroUnits.map((u) => u.element),
+      )
+    : {}
+  const nextMaterials: Record<MaterialId, number> = { ...state.materials }
+  for (const id of Object.keys(materialsAwarded)) {
+    nextMaterials[id] = (nextMaterials[id] ?? 0) + materialsAwarded[id]!
+  }
+
   // ── 6. Advance tower position. ──────────────────────────────────────────────
   const nextTower = cleared
     ? {
@@ -355,6 +409,7 @@ export function playFloor(
   const nextState: GameState = {
     ...state,
     gold: state.gold + goldAwarded,
+    materials: nextMaterials,
     heroes: nextHeroes,
     tower: nextTower,
   }
@@ -365,6 +420,7 @@ export function playFloor(
     firstClear,
     goldAwarded,
     xpAwarded,
+    materialsAwarded,
     fallenHeroIds: res.fallenHeroIds,
     result: res,
   }

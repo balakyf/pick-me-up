@@ -4,7 +4,7 @@
  * Vitest globals are enabled (describe/it/expect available without import).
  */
 
-import { floorPower, mobLevel, buildEncounter, playFloor, sanityDrain } from './tower'
+import { floorPower, mobLevel, buildEncounter, playFloor, sanityDrain, rollMaterialDrops } from './tower'
 import { TUNING } from '../tuning'
 import { ANCHORS, ENEMY_TEMPLATES } from '../content'
 import { combatPower, deriveStatsForHero } from '../stats'
@@ -622,6 +622,87 @@ describe('playFloor — Sanity drain on deployed survivors', () => {
     const { state: next } = playFloor(state)
     expect(next.heroes['h_bench' as HeroId]!.sanity).toBe(100)
     expect(next.heroes['h_crush' as HeroId]!.sanity).toBeLessThan(100)
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Material drops (Layer 3 §3.5/§3.6 — thin tower trickle)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('rollMaterialDrops (pure)', () => {
+  const fire: Element[] = ['fire']
+
+  it('is deterministic in (seed, floor, attempt, firstClear, elements)', () => {
+    const a = rollMaterialDrops(makeSeed(5), 3, 0, false, fire)
+    const b = rollMaterialDrops(makeSeed(5), 3, 0, false, fire)
+    expect(a).toEqual(b)
+  })
+
+  it('drops at most one of each stone (a thin trickle)', () => {
+    for (let f = 1; f <= 30; f++) {
+      const drop = rollMaterialDrops(makeSeed(f), f, 0, f % 2 === 0, fire)
+      for (const id of Object.keys(drop)) expect(drop[id]).toBeLessThanOrEqual(1)
+    }
+  })
+
+  it('only ever drops an Attribute Stone matched to a DEPLOYED element', () => {
+    const els: Element[] = ['water', 'dark']
+    for (let f = 1; f <= 40; f++) {
+      const drop = rollMaterialDrops(makeSeed(f * 13), f, 0, false, els)
+      for (const id of Object.keys(drop)) {
+        if (id.startsWith('attrStone_')) {
+          expect(['attrStone_water', 'attrStone_dark']).toContain(id)
+        }
+      }
+    }
+  })
+
+  it('first-clear drops more in aggregate than a repeat clear (boosted rates)', () => {
+    const count = (firstClear: boolean) => {
+      let total = 0
+      for (let f = 1; f <= 60; f++) {
+        const drop = rollMaterialDrops(makeSeed(f), f, 0, firstClear, fire)
+        for (const id of Object.keys(drop)) total += drop[id]!
+      }
+      return total
+    }
+    expect(count(true)).toBeGreaterThan(count(false))
+  })
+
+  it('drops nothing when no heroes were deployed (no element to match) beyond promotion stones', () => {
+    const drop = rollMaterialDrops(makeSeed(9), 4, 0, true, [])
+    for (const id of Object.keys(drop)) expect(id).toBe('promotionStone')
+  })
+})
+
+describe('playFloor — material drops fold into state', () => {
+  it('a clear folds materialsAwarded into state.materials exactly', () => {
+    const crusher = makeCrusher('h_crush')
+    const state = makeState({ heroes: [crusher], currentFloor: 1 })
+    const { state: next, result } = playFloor(state)
+    expect(result.cleared).toBe(true)
+    for (const id of Object.keys(result.materialsAwarded)) {
+      expect(next.materials[id] ?? 0).toBe((state.materials[id] ?? 0) + result.materialsAwarded[id]!)
+    }
+  })
+
+  it('a wipe drops no materials', () => {
+    const glass = makeGlass('h_glass')
+    const state = makeState({ heroes: [glass], slots: ['h_glass' as HeroId, null, null, null, null], currentFloor: 10 })
+    const { state: next, result } = playFloor(state)
+    expect(result.cleared).toBe(false)
+    expect(result.materialsAwarded).toEqual({})
+    expect(next.materials).toEqual(state.materials)
+  })
+
+  it('some seed yields a real drop on an early floor (the faucet actually flows)', () => {
+    let sawDrop = false
+    for (let seed = 1; seed <= 30 && !sawDrop; seed++) {
+      const crusher = makeCrusher('h_crush')
+      const state = makeState({ heroes: [crusher], currentFloor: 1, seed })
+      sawDrop = Object.keys(playFloor(state).result.materialsAwarded).length > 0
+    }
+    expect(sawDrop).toBe(true)
   })
 })
 

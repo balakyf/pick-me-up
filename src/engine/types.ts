@@ -369,6 +369,8 @@ export interface FloorResult {
   firstClear: boolean
   goldAwarded: number
   xpAwarded: number
+  /** Materials the clear dropped this attempt (empty on a wipe). */
+  materialsAwarded: Record<MaterialId, number>
   fallenHeroIds: HeroId[]
   result: BattleResult
 }
