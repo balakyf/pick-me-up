@@ -30,6 +30,7 @@ import type {
 import { createAccount, persist, hydrate, DEFAULT_SAVE_KEY } from '../account'
 import { summon } from '../gacha'
 import { playFloor } from '../tower'
+import { advanceTime, toWorldTime } from '../time'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Guards
@@ -68,39 +69,46 @@ function validateParty(slots: readonly unknown[], lines: readonly unknown[]): vo
  * input `state` is never mutated; a fresh GameState is always returned (delegated
  * to the engine modules, which themselves return fresh objects).
  *
+ * `nowWorld` is the current world-time (real epoch-ms × dilation), supplied by the
+ * store edge. Before every command except NEW_ACCOUNT we run a pure advanceTime()
+ * catch-up so the clock is current; it defaults to 0, which is always a no-op (a
+ * fresh account's lastSeenAtWorld is 0), keeping legacy 2-arg calls identical.
+ *
  *   NEW_ACCOUNT   → a brand-new account (state may be null here).
  *   SUMMON        → one Mobius Summon (throws via gacha if gold is insufficient).
  *   SET_PARTY     → replace party.slots / party.lines (validated to length 5).
  *   ATTEMPT_FLOOR → resolve one attempt at the current floor (with optional focus).
+ *   TICK          → no-op beyond the advanceTime() catch-up (the explicit clock pump).
  *
  * Every command but NEW_ACCOUNT requires a non-null state; a clear Error is
  * thrown otherwise.
  */
-export function reduce(state: GameState | null, cmd: Command): GameState {
-  switch (cmd.type) {
-    case 'NEW_ACCOUNT':
-      return createAccount(cmd.seed, { now: cmd.now })
+export function reduce(state: GameState | null, cmd: Command, nowWorld: number = 0): GameState {
+  if (cmd.type === 'NEW_ACCOUNT') {
+    return createAccount(cmd.seed, { now: cmd.now })
+  }
 
+  // Every other command acts on an existing account, with world-time advanced first.
+  const current = advanceTime(requireState(state, cmd.type), nowWorld)
+
+  switch (cmd.type) {
     case 'SUMMON':
-      return summon(requireState(state, cmd.type)).state
+      return summon(current).state
 
     case 'SET_PARTY': {
-      const current = requireState(state, cmd.type)
       validateParty(cmd.slots, cmd.lines)
-      return {
-        ...current,
-        party: { slots: [...cmd.slots], lines: [...cmd.lines] },
-      }
+      return { ...current, party: { slots: [...cmd.slots], lines: [...cmd.lines] } }
     }
 
     case 'ATTEMPT_FLOOR':
-      return playFloor(requireState(state, cmd.type), cmd.focus).state
+      return playFloor(current, cmd.focus).state
 
-    case 'ADD_GOLD': {
+    case 'TICK':
+      return current
+
+    case 'ADD_GOLD':
       // Testing-only cheat: grant free gold. Not part of the real economy.
-      const current = requireState(state, cmd.type)
       return { ...current, gold: current.gold + cmd.amount }
-    }
 
     default: {
       // Exhaustiveness guard: a new Command variant must be handled here.
@@ -149,8 +157,9 @@ export interface StoreOpts {
 export interface Store {
   /** The current state, or null before the first dispatch / load. */
   getState(): GameState | null
-  /** Apply a command via `reduce`, store + persist + notify, return the new state. */
-  dispatch(cmd: Command): GameState
+  /** Apply a command via reduce, store + persist + notify, return the new state.
+   *  `nowReal` is real epoch-ms supplied by the caller (the UI); defaults to 0. */
+  dispatch(cmd: Command, nowReal?: number): GameState
   /** Register a listener; returns an unsubscribe function. */
   subscribe(fn: () => void): () => void
   /** Hydrate the current state from storage (null if nothing stored). */
@@ -179,8 +188,8 @@ export function createStore(opts: StoreOpts = {}): Store {
       return current
     },
 
-    dispatch(cmd: Command): GameState {
-      const next = reduce(current, cmd)
+    dispatch(cmd: Command, nowReal: number = 0): GameState {
+      const next = reduce(current, cmd, toWorldTime(nowReal))
       current = next
       if (storage !== undefined) {
         persist(storage, next, saveKey)

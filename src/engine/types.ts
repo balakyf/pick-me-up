@@ -434,5 +434,7 @@ export type Command =
   | { type: 'SUMMON' }
   | { type: 'SET_PARTY'; slots: (HeroId | null)[]; lines: Line[] }
   | { type: 'ATTEMPT_FLOOR'; focus?: FocusDirective }
+  /** Explicit world-time catch-up; advances the clock with no other state change. */
+  | { type: 'TICK' }
   /** Testing-only: grant free gold. Not part of the real economy. */
   | { type: 'ADD_GOLD'; amount: number }

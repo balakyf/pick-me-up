@@ -458,3 +458,45 @@ describe('createStore', () => {
     expect(store.getState()).toEqual(pure)
   })
 })
+
+// ─────────────────────────────────────────────────────────────────────────────
+// World-time clock threading + TICK
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('reduce — clock + TICK', () => {
+  it('TICK advances lastSeenAtWorld to nowWorld', () => {
+    const before = createAccount(1) // lastSeenAtWorld = 0
+    const after = reduce(before, { type: 'TICK' }, 5000)
+    expect(after.meta.lastSeenAtWorld).toBe(5000)
+  })
+
+  it('TICK is monotonic — a stale nowWorld does not move the clock back', () => {
+    const a = reduce(createAccount(1), { type: 'TICK' }, 5000)
+    const b = reduce(a, { type: 'TICK' }, 3000)
+    expect(b.meta.lastSeenAtWorld).toBe(5000)
+  })
+
+  it('runs advanceTime before other commands (SET_PARTY carries the new clock)', () => {
+    const before = createAccount(1)
+    const after = reduce(
+      before,
+      { type: 'SET_PARTY', slots: [...before.party.slots], lines: [...before.party.lines] },
+      8000,
+    )
+    expect(after.meta.lastSeenAtWorld).toBe(8000)
+  })
+
+  it('defaults nowWorld to 0 — existing 2-arg calls are unchanged (no-op advance)', () => {
+    const before = createAccount(1)
+    expect(reduce(before, { type: 'TICK' })).toBe(before) // referential no-op
+  })
+})
+
+describe('createStore — clock threading', () => {
+  it('dispatch converts real ms to world-time and advances the clock', () => {
+    const store = createStore({ storage: new MemoryStorage() })
+    store.dispatch({ type: 'NEW_ACCOUNT', seed: 1, now: 0 })
+    store.dispatch({ type: 'TICK' }, 1000) // real 1000 → world 3000
+    expect(store.getState()!.meta.lastSeenAtWorld).toBe(3000)
+  })
+})
