@@ -230,6 +230,28 @@ export const TUNING = {
       /** Gems to skip a promotion (or facility) timer outright. */
       skipGemCost: 50,
     },
+    /** Synthesis: the second permadeath path (Layer 1 §4). Pure; instant (no timer). */
+    synthesis: {
+      /** Master Level that unlocks the Synthesis Chamber. */
+      unlockMasterLevel: 3,
+      /** Transfer efficiency η — the upward-only grade-nudge magnitude (canon ≈10%). */
+      transferEfficiency: 0.1,
+      /** Per-sacrifice chance (Transfer) to copy one skill the survivor lacks. */
+      skillCopyChance: 0.25,
+      /** Sanity drained from the survivor per sacrifice (Transfer) or per rescue (Salvage). */
+      survivorSanityCost: 15,
+      /** Sanity hit to each OTHER living hero — the roster witnesses the loss. */
+      witnessSanityCost: 5,
+      /** Salvage render payout by sacrificed star: a lossy fraction of reach-cost. */
+      salvageYield: {
+        1: { promotionStone: 1, attrStone: 0 },
+        2: { promotionStone: 1, attrStone: 0 },
+        3: { promotionStone: 6, attrStone: 3 },
+        4: { promotionStone: 14, attrStone: 7 },
+        5: { promotionStone: 30, attrStone: 15 },
+        6: { promotionStone: 62, attrStone: 31 },
+      } as Record<number, { promotionStone: number; attrStone: number }>,
+    },
     /** Tower material faucet (thin trickle; Daily Dungeons are the primary source, Phase 5). */
     materialDrops: {
       /** Chance a cleared floor drops a Promotion Stone. */
