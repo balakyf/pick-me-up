@@ -662,3 +662,32 @@ describe('reduce — SKIP_TIMER facility', () => {
     expect(() => reduce(upgradableState(), { type: 'SKIP_TIMER', kind: 'facility', id: 'kitchen' }, 0)).toThrow()
   })
 })
+
+describe('reduce — SYNTHESIZE', () => {
+  /** Two-hero account at the synthesis unlock Master Level. */
+  function synthState(): GameState {
+    const base = createAccount(42)
+    const [starter] = Object.values(base.heroes) as OwnedHero[]
+    const second: OwnedHero = { ...starter!, id: 'h_second' as HeroId, name: 'Second' }
+    return {
+      ...base,
+      heroes: { [starter!.id]: starter!, [second.id]: second },
+      meta: { ...base.meta, masterLevel: TUNING.lobby.synthesis.unlockMasterLevel },
+    }
+  }
+
+  it('salvage renders a sacrifice into materials and permadeaths it', () => {
+    const state = synthState()
+    const sacId = 'h_second' as HeroId
+    const after = reduce(state, { type: 'SYNTHESIZE', mode: 'salvage', survivorId: null, sacrificeIds: [sacId] })
+    expect(after.heroes[sacId]!.alive).toBe(false)
+    expect((after.materials['promotionStone'] ?? 0)).toBeGreaterThan(0)
+  })
+
+  it('throws when the chamber is locked (Master Level too low)', () => {
+    const locked = { ...synthState(), meta: { ...synthState().meta, masterLevel: 1 } }
+    expect(() =>
+      reduce(locked, { type: 'SYNTHESIZE', mode: 'salvage', survivorId: null, sacrificeIds: ['h_second' as HeroId] }),
+    ).toThrow()
+  })
+})

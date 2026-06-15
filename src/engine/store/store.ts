@@ -34,6 +34,7 @@ import { summon } from '../gacha'
 import { playFloor } from '../tower'
 import { banquet } from '../kitchen'
 import { startPromotion, skipPromotion } from '../promotion'
+import { synthesize } from '../synthesis'
 import { startUpgrade, skipFacility } from '../facilities'
 import { attemptDaily, type DailyResult } from '../daily'
 import { advanceTime, toWorldTime } from '../time'
@@ -128,6 +129,9 @@ export function reduce(state: GameState | null, cmd: Command, nowWorld: number =
 
     case 'ATTEMPT_DAILY':
       return attemptDaily(current, nowWorld).state
+
+    case 'SYNTHESIZE':
+      return synthesize(current, cmd, nowWorld)
 
     case 'ADD_GOLD':
       // Testing-only cheat: grant free gold. Not part of the real economy.
