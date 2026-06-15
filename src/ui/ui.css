@@ -329,4 +329,5 @@ body {
 .syn-chip-name { font-size: 12px; }
 .synth-portal .syn-preview { font-size: 12px; margin: 6px 0; }
 .synth-portal .syn-actions { display: flex; gap: 8px; margin-top: 6px; }
+.syn-destroy { background: var(--bad); }
 .synth-portal.locked { opacity: 0.7; }

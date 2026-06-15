@@ -482,7 +482,7 @@ function SynthesisChamber({ state, store }: { state: GameState; store: Store }) 
             </span>
           ) : (
             <span>
-              Yields {Object.entries(preview.materialYield).map(([k, v]) => `${v} ${k.replace('attrStone_', '🔹').replace('promotionStone', '🪨')}`).join(', ') || '—'}
+              Yields {Object.entries(preview.materialYield).map(([k, v]) => `${v} × ${matLabel(k)}`).join(', ') || '—'}
               {preview.rescue ? ` · rescue ${preview.rescue}` : ''}
             </span>
           )}
@@ -497,7 +497,7 @@ function SynthesisChamber({ state, store }: { state: GameState; store: Store }) 
           </button>
         ) : (
           <>
-            <button className="btn sm" style={{ background: 'var(--bad)' }} onClick={run}>
+            <button className="btn sm syn-destroy" onClick={run}>
               Permanently destroy {sacrificeIds.length} hero{sacrificeIds.length === 1 ? '' : 'es'}
             </button>
             <button className="btn sm" onClick={() => setConfirming(false)}>Cancel</button>
