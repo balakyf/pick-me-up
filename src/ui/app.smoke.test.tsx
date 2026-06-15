@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 
@@ -83,6 +83,24 @@ describe('App smoke', () => {
     expect(container.textContent).toContain('Tactical Center')
     expect(container.textContent).toContain('Focus damage')
     expect(container.textContent).toContain('Overlook slots')
+  })
+
+  it('the lobby pumps the world clock on an interval (timers advance while watching)', () => {
+    vi.useFakeTimers({ now: 1000 })
+    try {
+      mount()
+      act(() => {
+        getStore().dispatch({ type: 'NEW_ACCOUNT', seed: 1, now: 0 })
+      })
+      expect(getStore().getState()!.meta.lastSeenAtWorld).toBe(0)
+      act(() => {
+        vi.advanceTimersByTime(2500) // a couple of interval ticks
+      })
+      // A TICK fired → advanceTime ran → the world clock moved forward.
+      expect(getStore().getState()!.meta.lastSeenAtWorld).toBeGreaterThan(0)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('summoning reveals a hero and spends gold', () => {

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import type { GameState, OwnedHero, FacilityId } from '../engine/types'
 import type { Store } from '../engine/store'
 import { TUNING } from '../engine/tuning'
@@ -295,6 +295,15 @@ function DailyPortal({ state, store }: { state: GameState; store: Store }) {
 }
 
 export function LobbyScreen({ state, store }: { state: GameState; store: Store }) {
+  // Live tick: while the lobby is open, pump the world clock once a second. This
+  // both refreshes the cosmetic countdowns (a re-render with a fresh Date.now())
+  // and lets advanceTime actually COMPLETE due timers — promotions finishing, the
+  // daily attempt counter resetting, Sanity regenerating — without a manual action.
+  useEffect(() => {
+    const id = setInterval(() => store.dispatch({ type: 'TICK' }, Date.now()), 1000)
+    return () => clearInterval(id)
+  }, [store])
+
   const living = (Object.values(state.heroes) as OwnedHero[]).filter((h) => h.alive)
   const partyIds = new Set(state.party.slots.filter(Boolean) as string[])
 
