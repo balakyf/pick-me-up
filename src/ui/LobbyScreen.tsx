@@ -6,12 +6,14 @@ import { banquetWouldHelp } from '../engine/kitchen'
 import { Portrait } from './bits'
 
 /**
- * The Lobby (waiting room) — a single-screen diorama. This is the Phase 2 "Scene"
- * slice: a READ-ONLY view of the v2 lobby state already in the save (facilities,
- * Master Level, gems, per-hero Sanity). Heroes are placed into rooms by their
- * current state; placement + motion are purely cosmetic, so no game state rides on
- * them and determinism/saves stay clean. Interactive facility actions (Banquet,
- * upgrades, promotion) arrive in their own later phases.
+ * The Lobby (waiting room) — a single-screen diorama over the v2 lobby state
+ * (facilities, Master Level, gems, per-hero Sanity). Heroes are placed into rooms
+ * by their current state; placement + motion are purely cosmetic, so no game state
+ * rides on them and determinism/saves stay clean.
+ *
+ * The Kitchen surfaces the live Banquet action (Phase 3 — spend gold to restore
+ * roster Sanity). Remaining facility actions (upgrades, promotion, Daily Dungeon)
+ * arrive in their own later phases.
  */
 
 const SANITY_MAX = TUNING.lobby.sanityMax

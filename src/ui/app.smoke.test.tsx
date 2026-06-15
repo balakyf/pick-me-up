@@ -52,6 +52,26 @@ describe('App smoke', () => {
     expect(container.textContent).toContain('Heroes')
   })
 
+  it('the Lobby scene renders the Master-Level spine, Kitchen, and Banquet control', () => {
+    mount()
+    act(() => {
+      getStore().dispatch({ type: 'NEW_ACCOUNT', seed: 777, now: 0 })
+    })
+    // Master-Level spine + currencies (Phase 2 scene).
+    expect(container.textContent).toContain('Master Lv')
+    expect(container.textContent).toContain('XP')
+    // Kitchen room + its interactive Banquet action (Phase 3).
+    expect(container.textContent).toContain('Kitchen')
+    expect(container.textContent).toContain('Banquet')
+    // Fresh starter is at full Sanity → Banquet is offered but reads as not-needed.
+    expect(container.textContent).toContain('full morale')
+    const banquetBtn = Array.from(container.querySelectorAll('button')).find((b) =>
+      b.textContent?.includes('Banquet'),
+    )
+    expect(banquetBtn).toBeDefined()
+    expect((banquetBtn as HTMLButtonElement).disabled).toBe(true)
+  })
+
   it('summoning reveals a hero and spends gold', () => {
     mount()
     act(() => {
