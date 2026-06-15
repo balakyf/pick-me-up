@@ -42,9 +42,10 @@ describe('App smoke', () => {
     act(() => {
       getStore().dispatch({ type: 'NEW_ACCOUNT', seed: 12345, now: 0 })
     })
-    // Top bar + tower screen now present.
+    // Top bar + nav shell now present; app opens on the Lobby (the home base).
     expect(container.textContent).toContain('Master #')
-    expect(container.textContent).toContain('The Tower')
+    expect(container.textContent).toContain('🗼 Tower') // nav tab, always rendered
+    expect(container.textContent).toContain('Waiting Room') // default Lobby view
     // Starting gold (3000) renders in the gold pill.
     expect(container.textContent).toContain('3,000')
     // Exactly one living hero (the starter).

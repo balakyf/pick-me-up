@@ -2,24 +2,26 @@ import { useEffect, useState } from 'react'
 import './ui.css'
 import { useGame, getStore } from './useGame'
 import { TitleScreen, SummonScreen, RosterScreen, PartyScreen } from './screens'
+import { LobbyScreen } from './LobbyScreen'
 import { TowerScreen } from './TowerScreen'
 import { CombatView } from './CombatView'
 import { attemptFloorWithResult } from '../engine/store'
 import type { CombatLog } from '../engine/types'
 
-type View = 'tower' | 'summon' | 'roster' | 'party'
+type View = 'lobby' | 'tower' | 'summon' | 'roster' | 'party'
 
 /** Optional URL bootstrap (handy for demos/sharing): ?seed=N starts a fresh
  *  account deterministically when none exists; ?view= picks the opening tab. */
 function urlParams() {
-  if (typeof window === 'undefined') return { seed: null as number | null, view: 'tower' as View }
+  if (typeof window === 'undefined') return { seed: null as number | null, view: 'lobby' as View }
   const p = new URLSearchParams(window.location.search)
   const seedRaw = p.get('seed')
-  const view = (p.get('view') as View) || 'tower'
+  const view = (p.get('view') as View) || 'lobby'
   return { seed: seedRaw !== null ? Number(seedRaw) : null, view }
 }
 
 const TABS: { id: View; label: string }[] = [
+  { id: 'lobby', label: '🏠 Lobby' },
   { id: 'tower', label: '🗼 Tower' },
   { id: 'summon', label: '🔮 Summon' },
   { id: 'party', label: '🛡 Party' },
@@ -102,6 +104,7 @@ export function App() {
         </button>
       </div>
 
+      {view === 'lobby' && <LobbyScreen state={state} store={store} />}
       {view === 'tower' && <TowerScreen state={state} store={store} />}
       {view === 'summon' && <SummonScreen state={state} store={store} />}
       {view === 'party' && <PartyScreen state={state} store={store} />}
