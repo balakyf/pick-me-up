@@ -277,6 +277,18 @@ body {
 .promo-row .muted { margin-left: auto; }
 .promo-row .btn { flex: none; }
 
+.lobby-portal {
+  margin-top: 14px; padding: 14px;
+  background: linear-gradient(135deg, var(--bg-2), #181a2a);
+  border: 1px solid var(--line); border-radius: 14px;
+}
+.lp-head { display: flex; align-items: center; gap: 8px; }
+.lp-glyph { font-size: 20px; }
+.lp-name { font-weight: 700; }
+.lp-today { margin-left: auto; color: var(--ink-faint); font-size: 12px; }
+.lp-body { display: flex; align-items: center; gap: 10px; margin-top: 8px; justify-content: space-between; }
+.lp-result { margin-top: 8px; font-size: 13px; font-weight: 600; }
+
 .lobby-courtyard {
   margin-top: 14px; background: var(--bg-2);
   border: 1px solid var(--line); border-radius: 14px; padding: 14px;

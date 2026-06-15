@@ -74,6 +74,10 @@ describe('App smoke', () => {
     // Promotion Chamber renders; the fresh 1★ starter is not at cap, so it prompts to climb.
     expect(container.textContent).toContain('Promotion Chamber')
     expect(container.textContent).toContain('star cap')
+
+    // Daily Dungeon portal renders; locked until the player clears the unlock floor.
+    expect(container.textContent).toContain('Daily Dungeon')
+    expect(container.textContent).toContain('to unlock')
   })
 
   it('summoning reveals a hero and spends gold', () => {

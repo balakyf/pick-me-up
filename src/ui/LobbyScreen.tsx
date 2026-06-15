@@ -4,6 +4,9 @@ import type { Store } from '../engine/store'
 import { TUNING } from '../engine/tuning'
 import { banquetWouldHelp } from '../engine/kitchen'
 import { canPromote, canAfford, promotionCost, promotionTargetStar } from '../engine/promotion'
+import { worldDayIndex, dailyDungeonFor, dailyUnlocked, dailyAttemptsLeft } from '../engine/daily'
+import type { DailyReward } from '../engine/daily'
+import { attemptDailyWithResult } from '../engine/store'
 import { toWorldTime } from '../engine/time'
 import { Portrait } from './bits'
 
@@ -208,6 +211,74 @@ function PromotionAction({ state, store }: { state: GameState; store: Store }) {
   )
 }
 
+const DAILY = TUNING.lobby.daily
+const MAT_LABEL: Record<string, string> = { promotionStone: '🪨 Stone', rankMaterial: '📦 Rank Mat' }
+const matLabel = (id: string): string =>
+  MAT_LABEL[id] ?? (id.startsWith('attrStone_') ? `🔹 ${id.slice('attrStone_'.length)}` : id)
+
+/** One-line summary of a daily reward bundle. */
+function rewardSummary(r: DailyReward): string {
+  const parts: string[] = []
+  if (r.gold) parts.push(`+${r.gold.toLocaleString()} ◆`)
+  if (r.gems) parts.push(`+${r.gems} 💎`)
+  if (r.heroXp) parts.push(`+${r.heroXp} XP`)
+  for (const id of Object.keys(r.materials ?? {})) parts.push(`+${r.materials![id]} ${matLabel(id)}`)
+  return parts.join(' · ') || 'a reward'
+}
+
+/** The Daily Dungeon portal: an access point (not a leveled facility). */
+function DailyPortal({ state, store }: { state: GameState; store: Store }) {
+  const [last, setLast] = useState<{ cleared: boolean; text: string } | null>(null)
+  const [err, setErr] = useState<string | null>(null)
+
+  const dayIndex = worldDayIndex(toWorldTime(Date.now()))
+  const dungeon = dailyDungeonFor(dayIndex)
+  const unlocked = dailyUnlocked(state)
+  const free = dailyAttemptsLeft(state)
+  const paid = free === 0
+  const canPay = !paid || state.gems >= DAILY.extraAttemptGemCost
+  const disabled = !unlocked || !canPay
+
+  function enter() {
+    setErr(null)
+    try {
+      const now = Date.now() // one timestamp for preview + dispatch (results must match)
+      const { result } = attemptDailyWithResult(state, now)
+      store.dispatch({ type: 'ATTEMPT_DAILY' }, now)
+      setLast({
+        cleared: result.cleared,
+        text: result.cleared ? `Cleared! ${rewardSummary(result.rewards)}` : 'Failed — no reward this run.',
+      })
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'Run failed')
+    }
+  }
+
+  return (
+    <div className="lobby-portal">
+      <div className="lp-head">
+        <span className="lp-glyph">🌀</span>
+        <span className="lp-name">Daily Dungeon</span>
+        <span className="lp-today">{dungeon.weekday} · {dungeon.name}</span>
+      </div>
+      <div className="lp-body">
+        <span className="muted">
+          {unlocked ? `${free} free attempt${free === 1 ? '' : 's'} left` : `Clear floor ${DAILY.unlockHighestCleared} to unlock`}
+        </span>
+        <button className={`btn ${paid ? 'gem' : 'primary'} sm`} onClick={enter} disabled={disabled}>
+          {!unlocked ? '🔒 Locked' : paid ? `Enter · ${DAILY.extraAttemptGemCost} 💎` : '⚔ Enter today’s run'}
+        </button>
+      </div>
+      {last && (
+        <div className="lp-result" style={{ color: last.cleared ? 'var(--good)' : 'var(--ink-faint)' }}>
+          {last.text}
+        </div>
+      )}
+      {err && <div className="lr-action-note" style={{ color: 'var(--bad)' }}>{err}</div>}
+    </div>
+  )
+}
+
 export function LobbyScreen({ state, store }: { state: GameState; store: Store }) {
   const living = (Object.values(state.heroes) as OwnedHero[]).filter((h) => h.alive)
   const partyIds = new Set(state.party.slots.filter(Boolean) as string[])
@@ -268,6 +339,9 @@ export function LobbyScreen({ state, store }: { state: GameState; store: Store }
           />
         ))}
       </div>
+
+      {/* Daily Dungeon portal — an access point, not a leveled facility */}
+      <DailyPortal state={state} store={store} />
 
       {/* Courtyard — everyone off-duty */}
       <div className="lobby-courtyard">
