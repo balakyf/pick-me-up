@@ -177,6 +177,38 @@ export const TUNING = {
       /** Sanity restored to every LIVING hero per Banquet (clamped to sanityMax). */
       restore: 40,
     },
+    /** Promotion: the "raise, don't roll" engine (Layer 1 §3, lobby §3.3). */
+    promotion: {
+      /** Slice star ceiling — 6★→7★ needs the out-of-slice Book of Reverse Heaven. */
+      maxStar: 6,
+      /** Promotion Stones required per TARGET star (canon doubling curve). */
+      stoneCost: { 2: 10, 3: 20, 4: 40, 5: 80, 6: 160 } as Record<number, number>,
+      /** Element-matched Attribute Stones = stoneCost ÷ this (the canon ½). */
+      attrStoneDivisor: 2,
+      /** Base world-time duration per TARGET star (ms): ~10 world-min (→2★) … ~6 world-hr (→6★). */
+      durationMs: {
+        2: 10 * 60_000,
+        3: 30 * 60_000,
+        4: 60 * 60_000,
+        5: 3 * 3_600_000,
+        6: 6 * 3_600_000,
+      } as Record<number, number>,
+      /** Each Promotion Chamber level cuts the timer by this fraction… */
+      chamberSpeedupPerLevel: 0.1,
+      /** …down to no less than this fraction of the base (a floor on the speed-up). */
+      minDurationFactor: 0.4,
+      /** Gems to skip a promotion (or facility) timer outright. */
+      skipGemCost: 50,
+    },
+    /** Tower material faucet (thin trickle; Daily Dungeons are the primary source, Phase 5). */
+    materialDrops: {
+      /** Chance a cleared floor drops a Promotion Stone. */
+      promotionStoneChance: 0.25,
+      /** Chance a cleared floor drops an element-matched Attribute Stone. */
+      attrStoneChance: 0.2,
+      /** First-clear bonus: both chances are multiplied by this on a never-cleared floor. */
+      firstClearMult: 2,
+    },
   },
 
   account: {
