@@ -150,6 +150,26 @@ export const TUNING = {
       /** Added to every survivor when an ally PERMADIES this battle (canon: bad for morale). */
       witnessPenalty: 20,
     },
+    /** Passive Sanity recovery over world-time (in `time.advanceTime`). */
+    regen: {
+      /** Sanity restored per WORLD-hour at Kitchen level 1. */
+      perWorldHour: 2,
+      /** Added to the per-world-hour rate for each Kitchen level above 1. */
+      perKitchenLevel: 1,
+    },
+    /** Low-Sanity combat effects (Layer 3 §3.2), read in `unit`/`combat`. */
+    combat: {
+      /** At/above this, no penalty. Below it (down to `majorThreshold`), the minor penalty. */
+      minorThreshold: 60,
+      /** Below this, the major penalty AND panic risk apply. */
+      majorThreshold: 30,
+      /** Stat multiplier in the minor band [majorThreshold, minorThreshold). */
+      minorMult: 0.95,
+      /** Stat multiplier in the major band [0, majorThreshold). */
+      majorMult: 0.85,
+      /** Panic chance below majorThreshold = (majorThreshold − sanity)/100, mitigated by statusRes. */
+      panicThreshold: 30,
+    },
     /** Kitchen Banquet: spend gold → roster-wide Sanity bump. */
     banquet: {
       /** Gold cost of one Banquet. */

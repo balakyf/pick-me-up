@@ -1,1 +1,1 @@
-export { toWorldTime, advanceTime } from './time'
+export { toWorldTime, advanceTime, sanityRegenRate } from './time'

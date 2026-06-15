@@ -6,19 +6,44 @@
  * completion / Sanity regen / daily resets off it.
  */
 import { TUNING } from '../tuning'
-import type { GameState } from '../types'
+import { clampSanity } from '../kitchen'
+import type { GameState, OwnedHero, HeroId } from '../types'
+
+/** 1 world-hour in world-time ms. World-time is plain ms, only dilated at the edge. */
+const WORLD_HOUR_MS = 3_600_000
+const REGEN = TUNING.lobby.regen
 
 /** Convert real epoch-ms to world-time ms (canon 3× dilation). Pure. */
 export function toWorldTime(realMs: number): number {
   return realMs * TUNING.time.worldTimeFactor
 }
 
+/** Sanity recovered per WORLD-hour at a given Kitchen level (level 1 = base rate). */
+export function sanityRegenRate(kitchenLevel: number): number {
+  return REGEN.perWorldHour + REGEN.perKitchenLevel * Math.max(0, kitchenLevel - 1)
+}
+
 /**
  * Fast-forward the account to world-time `nowWorld`. Monotonic: never moves the
  * clock backward (a stale/smaller nowWorld is a no-op). Pure — returns the same
  * reference when nothing changes so existing reducers stay referentially stable.
+ *
+ * While catching up it regenerates each LIVING hero's Sanity by
+ * `sanityRegenRate(kitchenLevel) × elapsedWorldHours`, clamped to the max. Dead
+ * heroes are left untouched (no morale for the fallen). Deterministic in
+ * (state, elapsed): the wall clock only enters via the caller-supplied nowWorld.
  */
 export function advanceTime(state: GameState, nowWorld: number): GameState {
   if (nowWorld <= state.meta.lastSeenAtWorld) return state
-  return { ...state, meta: { ...state.meta, lastSeenAtWorld: nowWorld } }
+
+  const hours = (nowWorld - state.meta.lastSeenAtWorld) / WORLD_HOUR_MS
+  const regen = sanityRegenRate(state.facilities.kitchen.level) * hours
+
+  const nextHeroes: Record<HeroId, OwnedHero> = {}
+  for (const key of Object.keys(state.heroes) as HeroId[]) {
+    const hero = state.heroes[key]!
+    nextHeroes[key] = hero.alive ? { ...hero, sanity: clampSanity(hero.sanity + regen) } : hero
+  }
+
+  return { ...state, heroes: nextHeroes, meta: { ...state.meta, lastSeenAtWorld: nowWorld } }
 }
