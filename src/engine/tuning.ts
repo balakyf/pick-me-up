@@ -130,6 +130,10 @@ export const TUNING = {
     worldTimeFactor: 3,
   },
 
+  // ⚠ BALANCE PASS PENDING — every constant in `lobby` below (Sanity pressure/regen,
+  // promotion costs & timers, daily reward amounts, tactical bonuses, gem costs) is a
+  // FIRST-PASS value chosen for structure, not tuned for pacing. Treat as the primary
+  // dials for a dedicated balance pass against a target session length / F2P curve.
   lobby: {
     /** Fresh-account premium currency. */
     startingGems: 0,

@@ -2,8 +2,10 @@ import { describe, it, expect } from 'vitest'
 import { createAccount } from '../account'
 import { summon } from '../gacha'
 import { playFloor } from '../tower'
-import { combatPowerForHero } from '../stats'
-import type { GameState, HeroId, Line, OwnedHero } from '../types'
+import { startPromotion } from '../promotion'
+import { advanceTime } from '../time'
+import { combatPowerForHero, levelCapForStar } from '../stats'
+import type { GameState, HeroId, Line, OwnedHero, Star } from '../types'
 
 /**
  * End-to-end integration: exercise the full core loop across every engine module
@@ -114,6 +116,59 @@ describe('core loop — end to end', () => {
       if (result.fallenHeroIds.length > 0) s = bestParty(s)
       if ((Object.values(s.heroes) as OwnedHero[]).every((h) => !h.alive)) break
     }
+  })
+
+  it('Sanity drains as a party climbs the tower (lobby ↔ tower)', () => {
+    let s = bestParty(summonMany(createAccount(99), 40))
+    let drained = false
+    for (let i = 0; i < 5 && s.tower.currentFloor <= 10 && !drained; i++) {
+      const deployed = s.party.slots.filter(Boolean) as HeroId[]
+      const { state, result } = playFloor(s)
+      s = state
+      for (const id of deployed) {
+        const h = s.heroes[id]
+        if (h && h.alive && h.sanity < 100) drained = true // a survivor lost morale
+      }
+      if (result.fallenHeroIds.length > 0) s = bestParty(s)
+      if ((Object.values(s.heroes) as OwnedHero[]).every((h) => !h.alive)) break
+    }
+    expect(drained).toBe(true)
+  })
+
+  it('a promotion completes "offline" when world-time advances past its timer (lobby ↔ time)', () => {
+    const acct = createAccount(7)
+    const star = 3 as Star
+    const hero: OwnedHero = {
+      id: 'h_promo' as HeroId,
+      name: 'Promo',
+      star,
+      heroClass: 'warrior',
+      element: 'fire',
+      baseAttrs: { str: 20, agi: 20, vit: 20, int: 20, wil: 20 },
+      growthGrades: { str: 4, agi: 4, vit: 4, int: 4, wil: 4 },
+      skillIds: [],
+      portraitToken: '#fff',
+      origin: 'procedural',
+      xp: { level: levelCapForStar(star), xpIntoLevel: 0, heldXp: 0, atCap: true },
+      alive: true,
+      sanity: 100,
+      promotion: null,
+    }
+    const state: GameState = {
+      ...acct,
+      heroes: { [hero.id]: hero },
+      materials: { promotionStone: 999, attrStone_fire: 999 },
+    }
+
+    const started = startPromotion(state, hero.id, 0)
+    const promo = started.heroes[hero.id]!.promotion
+    expect(promo).not.toBeNull()
+
+    // Fast-forward world-time past the timer: advanceTime resolves it deterministically.
+    const after = advanceTime(started, promo!.completesAtWorld + 1)
+    expect(after.heroes[hero.id]!.star).toBe(4)
+    expect(after.heroes[hero.id]!.promotion).toBeNull()
+    expect(after.heroes[hero.id]!.xp.atCap).toBe(false) // level cap lifted
   })
 
   it('the whole scripted playthrough is deterministic for a fixed seed', () => {
