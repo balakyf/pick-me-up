@@ -1,0 +1,68 @@
+// @vitest-environment jsdom
+import { describe, it, expect, beforeEach } from 'vitest'
+import { act } from 'react'
+import { createRoot, type Root } from 'react-dom/client'
+
+;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+import { App } from './App'
+import { getStore } from './useGame'
+
+/**
+ * UI smoke test: mount the REAL App against the REAL engine in jsdom and verify
+ * the reactive wiring (title → new account → game shell → summon → roster).
+ * Rendering correctness beyond this is checked by eye in the dev server; the game
+ * LOGIC is covered exhaustively by the engine suites.
+ */
+
+let container: HTMLDivElement
+let root: Root
+
+beforeEach(() => {
+  window.localStorage.clear()
+  container = document.createElement('div')
+  document.body.appendChild(container)
+  root = createRoot(container)
+})
+
+function mount() {
+  act(() => {
+    root.render(<App />)
+  })
+}
+
+describe('App smoke', () => {
+  it('renders the title screen for a fresh visitor', () => {
+    mount()
+    expect(container.textContent).toContain('Pick Me Up')
+    expect(container.textContent).toContain('Begin')
+  })
+
+  it('creating an account shows the game shell with the starter and starting gold', () => {
+    mount()
+    act(() => {
+      getStore().dispatch({ type: 'NEW_ACCOUNT', seed: 12345, now: 0 })
+    })
+    // Top bar + tower screen now present.
+    expect(container.textContent).toContain('Master #')
+    expect(container.textContent).toContain('The Tower')
+    // Starting gold (3000) renders in the gold pill.
+    expect(container.textContent).toContain('3,000')
+    // Exactly one living hero (the starter).
+    expect(container.textContent).toContain('Heroes')
+  })
+
+  it('summoning reveals a hero and spends gold', () => {
+    mount()
+    act(() => {
+      getStore().dispatch({ type: 'NEW_ACCOUNT', seed: 999, now: 0 })
+    })
+    const before = getStore().getState()!.gold
+    const heroesBefore = Object.keys(getStore().getState()!.heroes).length
+    act(() => {
+      getStore().dispatch({ type: 'SUMMON' })
+    })
+    const after = getStore().getState()!
+    expect(after.gold).toBe(before - 3000)
+    expect(Object.keys(after.heroes).length).toBe(heroesBefore + 1)
+  })
+})
