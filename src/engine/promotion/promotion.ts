@@ -1,0 +1,167 @@
+/**
+ * Layer 1 §3 — Promotion: the "raise, don't roll" engine.
+ *
+ * The Normal gacha pool only yields 1–3★, so promotion is the main path upward.
+ * A hero sitting at its star's level cap can be promoted: pay materials, wait out
+ * a world-time timer, and on completion the hero's star rises one band — its level
+ * cap lifts, its base attributes/grades re-roll UPWARD-ONLY (a promotion never
+ * weakens a hero), and it gains a skill it didn't have.
+ *
+ * Everything here is PURE and DETERMINISTIC. The on-complete re-roll is seeded by
+ * (accountSeed, heroId, oldStar) so an "offline" promotion that finishes inside
+ * `time.advanceTime` replays identically. Slice ceiling is 6★ — 6★→7★ needs the
+ * out-of-slice Book of Reverse Heaven.
+ */
+
+import { TUNING } from '../tuning'
+import { envelopeForStar, levelCapForStar, applyXp } from '../stats'
+import { rollAttributes } from '../gacha'
+import { SKILLS } from '../content'
+import { rngFor, pick } from '../rng'
+import type {
+  GameState,
+  OwnedHero,
+  HeroId,
+  Star,
+  Element,
+  MaterialId,
+  PrimaryAttrs,
+  GrowthGrades,
+  Seed,
+} from '../types'
+
+const P = TUNING.lobby.promotion
+
+/** The star a hero would reach by promoting (one above its current). */
+export function promotionTargetStar(hero: OwnedHero): Star {
+  return (hero.star + 1) as Star
+}
+
+/** Material-bucket key for an element's Attribute Stones. */
+export function attrStoneId(element: Element): MaterialId {
+  return `attrStone_${element}`
+}
+
+/** Material cost to promote a hero: Promotion Stones + element Attribute Stones. */
+export function promotionCost(hero: OwnedHero): Record<MaterialId, number> {
+  const target = promotionTargetStar(hero)
+  const stones = P.stoneCost[target] ?? 0
+  return {
+    promotionStone: stones,
+    [attrStoneId(hero.element)]: Math.round(stones / P.attrStoneDivisor),
+  }
+}
+
+/** Gate: a living hero at its level cap, below the ceiling, with no promotion in flight. */
+export function canPromote(hero: OwnedHero): boolean {
+  return hero.alive && hero.xp.atCap && hero.star < P.maxStar && hero.promotion === null
+}
+
+/** True when the account holds enough of every material the promotion costs. */
+export function canAfford(state: GameState, hero: OwnedHero): boolean {
+  const cost = promotionCost(hero)
+  return Object.keys(cost).every((id) => (state.materials[id] ?? 0) >= cost[id]!)
+}
+
+/**
+ * World-time a promotion to `targetStar` takes, shortened by the Promotion
+ * Chamber level (each level cuts a fixed fraction, floored at `minDurationFactor`).
+ * A level-0 (un-built) chamber gives the full base duration.
+ */
+export function promotionDuration(targetStar: number, chamberLevel: number): number {
+  const base = P.durationMs[targetStar] ?? 0
+  const factor = Math.max(P.minDurationFactor, 1 - P.chamberSpeedupPerLevel * chamberLevel)
+  return Math.round(base * factor)
+}
+
+/**
+ * Begin a promotion: validate the gate + affordability, deduct materials, and set
+ * the hero's `promotion.completesAtWorld`. PURE — returns a fresh GameState.
+ * Throws on a closed gate or insufficient materials (the same contract gacha uses).
+ */
+export function startPromotion(state: GameState, heroId: HeroId, nowWorld: number): GameState {
+  const hero = state.heroes[heroId]
+  if (hero === undefined) throw new Error(`startPromotion: unknown hero ${heroId}`)
+  if (!canPromote(hero)) {
+    throw new Error(`startPromotion: hero ${heroId} cannot be promoted (cap/ceiling/in-flight)`)
+  }
+  if (!canAfford(state, hero)) {
+    throw new Error(`startPromotion: insufficient materials for ${heroId}`)
+  }
+
+  const cost = promotionCost(hero)
+  const materials: Record<MaterialId, number> = { ...state.materials }
+  for (const id of Object.keys(cost)) materials[id] = (materials[id] ?? 0) - cost[id]!
+
+  const completesAtWorld =
+    nowWorld + promotionDuration(promotionTargetStar(hero), state.facilities.promotionChamber.level)
+
+  return {
+    ...state,
+    materials,
+    heroes: { ...state.heroes, [heroId]: { ...hero, promotion: { completesAtWorld } } },
+  }
+}
+
+const ATTR_KEYS = ['str', 'agi', 'vit', 'int', 'wil'] as const
+
+/** Per-attribute max(old, new) — the upward-only rule for both bases and grades. */
+function mergeUpward<T extends PrimaryAttrs | GrowthGrades>(old: T, rolled: T): T {
+  const out = {} as T
+  for (const k of ATTR_KEYS) out[k] = Math.max(old[k], rolled[k]) as T[typeof k]
+  return out
+}
+
+/**
+ * Resolve a completed promotion (deterministic, seeded). Raises the star one band,
+ * lifts the level cap (releasing any held XP into new levels), merges a fresh roll
+ * in the new envelope UPWARD-ONLY into the hero's bases/grades, and grants one skill
+ * the hero lacked. Clears the in-flight timer. PURE — returns a fresh OwnedHero.
+ */
+export function completePromotion(hero: OwnedHero, accountSeed: Seed): OwnedHero {
+  const newStar = promotionTargetStar(hero)
+  let rng = rngFor(accountSeed, 'promotion', hero.id, hero.star)
+
+  const rolled = rollAttributes(rng, envelopeForStar(newStar))
+  rng = rolled.rng
+  const baseAttrs = mergeUpward(hero.baseAttrs, rolled.baseAttrs)
+  const growthGrades = mergeUpward(hero.growthGrades, rolled.grades)
+
+  // Grant one skill the hero does not already know (no-op if it knows them all).
+  let skillIds = hero.skillIds
+  const missing = Object.keys(SKILLS).filter((id) => !hero.skillIds.includes(id))
+  if (missing.length > 0) {
+    const drew = pick(rng, missing)
+    rng = drew.rng
+    skillIds = [...hero.skillIds, drew.value]
+  }
+
+  // Lift the cap and release held XP into the newly available levels.
+  const xp = applyXp(
+    { level: hero.xp.level, xpIntoLevel: hero.xp.xpIntoLevel, heldXp: 0, atCap: false },
+    hero.xp.heldXp,
+    newStar,
+  )
+
+  return { ...hero, star: newStar, baseAttrs, growthGrades, skillIds, xp, promotion: null }
+}
+
+/**
+ * Gem pay-to-skip: spend `skipGemCost` to resolve an in-flight promotion NOW
+ * instead of waiting out the timer. PURE — returns a fresh GameState. Throws when
+ * the hero has no promotion in flight or the account can't afford the gems.
+ */
+export function skipPromotion(state: GameState, heroId: HeroId): GameState {
+  const hero = state.heroes[heroId]
+  if (hero === undefined) throw new Error(`skipPromotion: unknown hero ${heroId}`)
+  if (hero.promotion === null) throw new Error(`skipPromotion: hero ${heroId} has no promotion in flight`)
+  if (state.gems < P.skipGemCost) {
+    throw new Error(`skipPromotion: insufficient gems (have ${state.gems}, need ${P.skipGemCost})`)
+  }
+
+  return {
+    ...state,
+    gems: state.gems - P.skipGemCost,
+    heroes: { ...state.heroes, [heroId]: completePromotion(hero, state.seed) },
+  }
+}
