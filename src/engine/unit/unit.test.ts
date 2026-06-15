@@ -21,6 +21,8 @@ import {
   combatPower,
 } from '../stats'
 import { CAMEO_HEROES, ENEMY_TEMPLATES, SKILLS } from '../content'
+import { sanityStatMult } from '../kitchen'
+import { TUNING } from '../tuning'
 import type {
   OwnedHero,
   HeroId,
@@ -222,6 +224,72 @@ describe('buildCombatUnit', () => {
     expect(unit.skills[0].damageType).toBe('physical')
     expect(unit.skills.map((s) => s.id)).toContain('power_strike')
     expect(unit.sourceHeroId).toBe(islat.id)
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Low-Sanity stat penalty (Layer 3 §3.2) — applied at unit assembly so the
+// frozen snapshot combat reads is already weakened.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const SC = TUNING.lobby.combat
+
+describe('sanityStatMult', () => {
+  it('is 1 at/above the minor threshold', () => {
+    expect(sanityStatMult(100)).toBe(1)
+    expect(sanityStatMult(SC.minorThreshold)).toBe(1)
+  })
+  it('is the minor multiplier in [majorThreshold, minorThreshold)', () => {
+    expect(sanityStatMult(SC.minorThreshold - 1)).toBe(SC.minorMult)
+    expect(sanityStatMult(SC.majorThreshold)).toBe(SC.minorMult)
+  })
+  it('is the major multiplier below the major threshold', () => {
+    expect(sanityStatMult(SC.majorThreshold - 1)).toBe(SC.majorMult)
+    expect(sanityStatMult(0)).toBe(SC.majorMult)
+  })
+})
+
+describe('buildCombatUnit — Sanity penalty', () => {
+  it('full Sanity → stats identical to the un-penalized derivation', () => {
+    const hero = makeWarrior({ sanity: 100 })
+    const unit = buildCombatUnit(hero, 'front', SKILLS)
+    expect(unit.stats).toEqual(deriveStatsForHero(hero, hero.xp.level))
+  })
+
+  it('scales magnitude stats by the minor multiplier in the minor band', () => {
+    const hero = makeWarrior({ sanity: 45 })
+    const base = deriveStatsForHero(hero, hero.xp.level)
+    const unit = buildCombatUnit(hero, 'front', SKILLS)
+    expect(unit.stats.pAtk).toBe(Math.round(base.pAtk * SC.minorMult))
+    expect(unit.stats.maxHP).toBe(Math.round(base.maxHP * SC.minorMult))
+    expect(unit.stats.spd).toBe(Math.round(base.spd * SC.minorMult))
+  })
+
+  it('scales by the major multiplier below the major threshold', () => {
+    const hero = makeWarrior({ sanity: 10 })
+    const base = deriveStatsForHero(hero, hero.xp.level)
+    const unit = buildCombatUnit(hero, 'front', SKILLS)
+    expect(unit.stats.mDef).toBe(Math.round(base.mDef * SC.majorMult))
+  })
+
+  it('leaves percentage stats (crit/eva/acc/statusRes) untouched', () => {
+    const hero = makeWarrior({ sanity: 10 })
+    const base = deriveStatsForHero(hero, hero.xp.level)
+    const unit = buildCombatUnit(hero, 'front', SKILLS)
+    expect(unit.stats.critPct).toBe(base.critPct)
+    expect(unit.stats.evaPct).toBe(base.evaPct)
+    expect(unit.stats.accPct).toBe(base.accPct)
+    expect(unit.stats.statusRes).toBe(base.statusRes)
+  })
+
+  it('stamps the hero Sanity onto the combat unit (for the panic check)', () => {
+    expect(buildCombatUnit(makeWarrior({ sanity: 22 }), 'front', SKILLS).sanity).toBe(22)
+  })
+
+  it('lowers CP when Sanity is low (penalized stats flow into CP)', () => {
+    const full = buildCombatUnit(makeWarrior({ sanity: 100 }), 'front', SKILLS)
+    const low = buildCombatUnit(makeWarrior({ sanity: 10 }), 'front', SKILLS)
+    expect(low.cp).toBeLessThan(full.cp)
   })
 })
 

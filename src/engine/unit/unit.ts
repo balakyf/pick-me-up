@@ -32,6 +32,7 @@ import {
   leveledAttrs,
   combatPower,
 } from '../stats'
+import { applySanityPenalty } from '../kitchen'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Basic attack & skill resolution
@@ -90,7 +91,8 @@ export function buildCombatUnit(
   registry: SkillRegistry = {},
 ): CombatUnit {
   const level = hero.xp.level
-  const stats = deriveStatsForHero(hero, level)
+  // Low Sanity weakens the hero BEFORE the snapshot freezes (combat never recomputes).
+  const stats = applySanityPenalty(deriveStatsForHero(hero, level), hero.sanity)
   const leveled = leveledAttrs(hero.baseAttrs, hero.growthGrades, level)
   const maxSP = deriveMaxSP(leveled.wil)
 
@@ -112,6 +114,8 @@ export function buildCombatUnit(
     keywords: [],
     cp: combatPower(stats),
     sourceHeroId: hero.id,
+    // Carried for the combat panic check; enemies have no Sanity (field absent).
+    sanity: hero.sanity,
   }
 }
 

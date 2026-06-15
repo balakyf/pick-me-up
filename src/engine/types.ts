@@ -267,6 +267,8 @@ export interface CombatUnit {
   cp: number
   /** Present for heroes (links back to OwnedHero for XP/permadeath); absent for enemies. */
   sourceHeroId?: HeroId
+  /** Hero Sanity (0..100) carried in for the low-Sanity panic check; absent for enemies. */
+  sanity?: number
   /** Stable enemy template id for Defeat(target) missions; absent for heroes. */
   targetTag?: string
 }
