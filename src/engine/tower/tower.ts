@@ -286,7 +286,7 @@ export function playFloor(
   const floor = state.tower.currentFloor
   const worldMult = worldMultFor(state)
 
-  // ── 1. Build deployed hero units (skip empty slots and dead heroes). ────────
+  // ── 1. Build deployed hero units (skip empty slots, dead, and Sanity-0). ────
   const heroUnits: CombatUnit[] = []
   const deployedIds: HeroId[] = []
   const { slots, lines } = state.party
@@ -294,7 +294,8 @@ export function playFloor(
     const heroId = slots[s]
     if (heroId === null || heroId === undefined) continue
     const hero = state.heroes[heroId]
-    if (hero === undefined || !hero.alive) continue
+    // Skip empty slots, the dead, and the broken-down (Sanity 0 = cannot deploy).
+    if (hero === undefined || !hero.alive || hero.sanity <= 0) continue
     const line: Line = lines[s] ?? 'front'
     heroUnits.push(buildCombatUnit(hero, line, SKILLS))
     deployedIds.push(heroId)

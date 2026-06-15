@@ -39,6 +39,7 @@ interface HeroOpts {
   baseAttrs?: Partial<PrimaryAttrs>
   growthGrades?: Partial<GrowthGrades>
   alive?: boolean
+  sanity?: number
   skillIds?: string[]
 }
 
@@ -71,7 +72,7 @@ function makeHero(o: HeroOpts): OwnedHero {
     origin: 'procedural',
     xp: { level, xpIntoLevel: 0, heldXp: 0, atCap: false },
     alive: o.alive ?? true,
-    sanity: 100,
+    sanity: o.sanity ?? 100,
     promotion: null,
   }
 }
@@ -621,5 +622,32 @@ describe('playFloor — Sanity drain on deployed survivors', () => {
     const { state: next } = playFloor(state)
     expect(next.heroes['h_bench' as HeroId]!.sanity).toBe(100)
     expect(next.heroes['h_crush' as HeroId]!.sanity).toBeLessThan(100)
+  })
+})
+
+describe('playFloor — breakdown (Sanity 0) cannot deploy', () => {
+  it('skips a slotted hero whose Sanity is 0', () => {
+    const ready = makeCrusher('h_ready')
+    const brokenDown = makeCrusher('h_broken', { sanity: 0 })
+    const state = makeState({
+      heroes: [ready, brokenDown],
+      slots: ['h_broken' as HeroId, 'h_ready' as HeroId, null, null, null],
+      currentFloor: 1,
+    })
+    const heroInits = playFloor(state).result.result.log.unitsInit
+      .filter((u) => u.side === 'hero')
+      .map((u) => u.id)
+    expect(heroInits).toContain('h_ready')
+    expect(heroInits).not.toContain('h_broken')
+  })
+
+  it('leaves the broken-down hero’s Sanity at 0 (not deployed → not drained)', () => {
+    const broken = makeCrusher('h_broken', { sanity: 0 })
+    const state = makeState({
+      heroes: [makeCrusher('h_ready'), broken],
+      slots: ['h_ready' as HeroId, 'h_broken' as HeroId, null, null, null],
+      currentFloor: 1,
+    })
+    expect(playFloor(state).state.heroes['h_broken' as HeroId]!.sanity).toBe(0)
   })
 })
