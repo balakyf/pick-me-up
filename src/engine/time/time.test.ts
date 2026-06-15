@@ -1,8 +1,9 @@
 import { describe, it, expect } from 'vitest'
 import { toWorldTime, advanceTime } from './time'
 import { createAccount } from '../account'
+import { levelCapForStar } from '../stats'
 import { TUNING } from '../tuning'
-import type { GameState, OwnedHero, HeroId } from '../types'
+import type { GameState, OwnedHero, HeroId, Star } from '../types'
 
 const MAX = TUNING.lobby.sanityMax
 const R = TUNING.lobby.regen
@@ -91,5 +92,51 @@ describe('advanceTime — Sanity regen', () => {
     advanceTime(s, WORLD_HOUR_MS)
     expect((Object.values(s.heroes)[0]! as OwnedHero).sanity).toBe(40)
     expect(s.meta.lastSeenAtWorld).toBe(0)
+  })
+})
+
+describe('advanceTime — promotion completion', () => {
+  /** A capped, mid-promotion hero whose timer completes at `completesAtWorld`. */
+  function promotingState(completesAtWorld: number, lastSeenAtWorld = 0): GameState {
+    const acct = createAccount(77, { now: 0 })
+    const star: Star = 3
+    const hero: OwnedHero = {
+      id: 'h_promo' as HeroId,
+      name: 'Promo',
+      star,
+      heroClass: 'warrior',
+      element: 'fire',
+      baseAttrs: { str: 12, agi: 12, vit: 12, int: 12, wil: 12 },
+      growthGrades: { str: 2, agi: 2, vit: 2, int: 2, wil: 2 },
+      skillIds: [],
+      portraitToken: '#fff',
+      origin: 'procedural',
+      xp: { level: levelCapForStar(star), xpIntoLevel: 0, heldXp: 0, atCap: true },
+      alive: true,
+      sanity: 100,
+      promotion: { completesAtWorld },
+    }
+    return { ...acct, heroes: { [hero.id]: hero }, meta: { ...acct.meta, lastSeenAtWorld } }
+  }
+
+  it('completes a promotion whose timer has elapsed (star up, timer cleared)', () => {
+    const next = advanceTime(promotingState(5_000), 6_000)
+    const hero = next.heroes['h_promo' as HeroId]!
+    expect(hero.star).toBe(4)
+    expect(hero.promotion).toBeNull()
+    expect(hero.xp.atCap).toBe(false)
+  })
+
+  it('leaves a promotion whose timer is still in the future untouched', () => {
+    const next = advanceTime(promotingState(10_000), 6_000)
+    const hero = next.heroes['h_promo' as HeroId]!
+    expect(hero.star).toBe(3)
+    expect(hero.promotion).toEqual({ completesAtWorld: 10_000 })
+  })
+
+  it('is deterministic — same state + now reproduces the promoted hero', () => {
+    const a = advanceTime(promotingState(5_000), 6_000).heroes['h_promo' as HeroId]!
+    const b = advanceTime(promotingState(5_000), 6_000).heroes['h_promo' as HeroId]!
+    expect(a).toEqual(b)
   })
 })

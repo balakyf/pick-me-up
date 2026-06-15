@@ -7,6 +7,7 @@
  */
 import { TUNING } from '../tuning'
 import { clampSanity } from '../kitchen'
+import { completePromotion } from '../promotion'
 import type { GameState, OwnedHero, HeroId } from '../types'
 
 /** 1 world-hour in world-time ms. World-time is plain ms, only dilated at the edge. */
@@ -28,10 +29,12 @@ export function sanityRegenRate(kitchenLevel: number): number {
  * clock backward (a stale/smaller nowWorld is a no-op). Pure — returns the same
  * reference when nothing changes so existing reducers stay referentially stable.
  *
- * While catching up it regenerates each LIVING hero's Sanity by
- * `sanityRegenRate(kitchenLevel) × elapsedWorldHours`, clamped to the max. Dead
- * heroes are left untouched (no morale for the fallen). Deterministic in
- * (state, elapsed): the wall clock only enters via the caller-supplied nowWorld.
+ * While catching up it (a) regenerates each LIVING hero's Sanity by
+ * `sanityRegenRate(kitchenLevel) × elapsedWorldHours`, clamped to the max, and
+ * (b) resolves any in-flight promotion whose `completesAtWorld` has elapsed —
+ * seeded by the account seed, so an "offline" promotion replays identically. Dead
+ * heroes are left untouched (no morale, no promotion, for the fallen). Deterministic
+ * in (state, elapsed): the wall clock only enters via the caller-supplied nowWorld.
  */
 export function advanceTime(state: GameState, nowWorld: number): GameState {
   if (nowWorld <= state.meta.lastSeenAtWorld) return state
@@ -42,7 +45,15 @@ export function advanceTime(state: GameState, nowWorld: number): GameState {
   const nextHeroes: Record<HeroId, OwnedHero> = {}
   for (const key of Object.keys(state.heroes) as HeroId[]) {
     const hero = state.heroes[key]!
-    nextHeroes[key] = hero.alive ? { ...hero, sanity: clampSanity(hero.sanity + regen) } : hero
+    if (!hero.alive) {
+      nextHeroes[key] = hero
+      continue
+    }
+    let next: OwnedHero = { ...hero, sanity: clampSanity(hero.sanity + regen) }
+    if (next.promotion !== null && next.promotion.completesAtWorld <= nowWorld) {
+      next = completePromotion(next, state.seed)
+    }
+    nextHeroes[key] = next
   }
 
   return { ...state, heroes: nextHeroes, meta: { ...state.meta, lastSeenAtWorld: nowWorld } }
