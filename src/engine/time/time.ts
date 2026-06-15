@@ -10,7 +10,7 @@ import { clampSanity } from '../kitchen'
 import { completePromotion } from '../promotion'
 import { worldDayIndex } from '../daily'
 import { addMasterXp } from '../master'
-import type { GameState, OwnedHero, HeroId, DailiesState } from '../types'
+import type { GameState, OwnedHero, HeroId, DailiesState, FacilityId } from '../types'
 
 /** 1 world-hour in world-time ms. World-time is plain ms, only dilated at the edge. */
 const WORLD_HOUR_MS = 3_600_000
@@ -60,6 +60,17 @@ export function advanceTime(state: GameState, nowWorld: number): GameState {
     nextHeroes[key] = next
   }
 
+  // Facility builds whose timer has elapsed complete now (level up, timer cleared).
+  const nextFacilities = { ...state.facilities }
+  let facilitiesCompleted = 0
+  for (const fid of Object.keys(state.facilities) as FacilityId[]) {
+    const f = state.facilities[fid]
+    if (f.build !== null && f.build.completesAtWorld <= nowWorld) {
+      nextFacilities[fid] = { level: f.build.toLevel, build: null }
+      facilitiesCompleted++
+    }
+  }
+
   // Daily-Dungeon attempt counter resets on each world-day boundary.
   const today = worldDayIndex(nowWorld)
   const dailies: DailiesState =
@@ -67,11 +78,12 @@ export function advanceTime(state: GameState, nowWorld: number): GameState {
       ? { attemptsUsed: 0, lastResetWorldDay: today }
       : state.dailies
 
-  // Completed promotions feed the Master-Level spine.
+  // Completed promotions AND facility upgrades feed the Master-Level spine.
   let meta = { ...state.meta, lastSeenAtWorld: nowWorld }
-  if (promotionsCompleted > 0) {
-    meta = addMasterXp(meta, promotionsCompleted * TUNING.lobby.master.xpPerPromotion)
-  }
+  const masterGain =
+    promotionsCompleted * TUNING.lobby.master.xpPerPromotion +
+    facilitiesCompleted * TUNING.lobby.master.xpPerFacilityUpgrade
+  if (masterGain > 0) meta = addMasterXp(meta, masterGain)
 
-  return { ...state, heroes: nextHeroes, dailies, meta }
+  return { ...state, heroes: nextHeroes, facilities: nextFacilities, dailies, meta }
 }

@@ -24,6 +24,7 @@ import type {
   Command,
   OwnedHero,
   HeroId,
+  FacilityId,
   FloorResult,
   FocusDirective,
   StoragePort,
@@ -33,6 +34,7 @@ import { summon } from '../gacha'
 import { playFloor } from '../tower'
 import { banquet } from '../kitchen'
 import { startPromotion, skipPromotion } from '../promotion'
+import { startUpgrade, skipFacility } from '../facilities'
 import { attemptDaily, type DailyResult } from '../daily'
 import { advanceTime, toWorldTime } from '../time'
 
@@ -116,10 +118,13 @@ export function reduce(state: GameState | null, cmd: Command, nowWorld: number =
     case 'PROMOTE_HERO':
       return startPromotion(current, cmd.heroId, nowWorld)
 
+    case 'UPGRADE_FACILITY':
+      return startUpgrade(current, cmd.facility, nowWorld)
+
     case 'SKIP_TIMER':
-      if (cmd.kind === 'promotion') return skipPromotion(current, cmd.id as HeroId)
-      // Facility build/skip arrives with the facilities-upgrade phase.
-      throw new Error(`reduce: SKIP_TIMER kind '${cmd.kind}' is not available in this slice`)
+      return cmd.kind === 'promotion'
+        ? skipPromotion(current, cmd.id as HeroId)
+        : skipFacility(current, cmd.id as FacilityId)
 
     case 'ATTEMPT_DAILY':
       return attemptDaily(current, nowWorld).state

@@ -20,6 +20,7 @@ import { summon } from '../gacha'
 import { playFloor } from '../tower'
 import { startPromotion, skipPromotion } from '../promotion'
 import { attemptDaily } from '../daily'
+import { startUpgrade, skipFacility } from '../facilities'
 import { advanceTime } from '../time'
 import { levelCapForStar } from '../stats'
 import type { Command, GameState, HeroId, Line, OwnedHero, SaveEnvelope, Star } from '../types'
@@ -621,5 +622,43 @@ describe('attemptDailyWithResult', () => {
     expect(state).toEqual(reduce(before, { type: 'ATTEMPT_DAILY' }, 3000)) // real 1000 → world 3000
     expect(result.dungeon.id).toBeTruthy()
     expect(typeof result.cleared).toBe('boolean')
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Facility upgrades (UPGRADE_FACILITY / SKIP_TIMER facility)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** An account with Master Level high enough to upgrade the Kitchen, well-funded. */
+function upgradableState(): GameState {
+  const acct = createAccount(5)
+  return { ...acct, gold: 1_000_000, gems: 200, meta: { ...acct.meta, masterLevel: 5 } }
+}
+
+describe('reduce — UPGRADE_FACILITY', () => {
+  it('starts the build (delegates to startUpgrade at the world clock)', () => {
+    const before = upgradableState()
+    const after = reduce(before, { type: 'UPGRADE_FACILITY', facility: 'kitchen' }, 0)
+    expect(after).toEqual(startUpgrade(before, 'kitchen', 0))
+    expect(after.facilities.kitchen.build).not.toBeNull()
+  })
+
+  it('throws when the facility is gated (level already at Master Level)', () => {
+    const acct = createAccount(1) // ML 1, kitchen level 1 → gated
+    expect(() => reduce(acct, { type: 'UPGRADE_FACILITY', facility: 'kitchen' }, 0)).toThrow()
+  })
+})
+
+describe('reduce — SKIP_TIMER facility', () => {
+  it('gem-skips an in-flight facility build (delegates to skipFacility)', () => {
+    const building = startUpgrade(upgradableState(), 'kitchen', 0)
+    const after = reduce(building, { type: 'SKIP_TIMER', kind: 'facility', id: 'kitchen' }, 0)
+    expect(after).toEqual(skipFacility(building, 'kitchen'))
+    expect(after.facilities.kitchen.level).toBe(2)
+    expect(after.facilities.kitchen.build).toBeNull()
+  })
+
+  it('throws when skipping a facility with no build in flight', () => {
+    expect(() => reduce(upgradableState(), { type: 'SKIP_TIMER', kind: 'facility', id: 'kitchen' }, 0)).toThrow()
   })
 })

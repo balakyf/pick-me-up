@@ -449,7 +449,9 @@ export type Command =
   | { type: 'BANQUET' }
   /** Start a promotion for an at-cap hero: pay materials, begin the world-time timer. */
   | { type: 'PROMOTE_HERO'; heroId: HeroId }
-  /** Gem pay-to-skip a running timer. `kind: 'promotion'` → id is the HeroId. */
+  /** Start a facility upgrade: pay gold, begin the world-time build timer. */
+  | { type: 'UPGRADE_FACILITY'; facility: FacilityId }
+  /** Gem pay-to-skip a running timer. `kind: 'promotion'` → HeroId; `'facility'` → FacilityId. */
   | { type: 'SKIP_TIMER'; kind: 'facility' | 'promotion'; id: string }
   /** Run today's Daily Dungeon (seeded combat; free attempts then gem-paid). */
   | { type: 'ATTEMPT_DAILY' }

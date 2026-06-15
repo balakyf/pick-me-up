@@ -119,6 +119,31 @@ describe('advanceTime — daily attempt reset', () => {
   })
 })
 
+describe('advanceTime — facility build completion', () => {
+  function buildingState(completesAtWorld: number, lastSeenAtWorld = 0): GameState {
+    const acct = createAccount(4, { now: 0 })
+    return {
+      ...acct,
+      meta: { ...acct.meta, lastSeenAtWorld },
+      facilities: { ...acct.facilities, kitchen: { level: 1, build: { toLevel: 2, completesAtWorld } } },
+    }
+  }
+
+  it('completes a build whose timer elapsed (level up, timer cleared, Master XP)', () => {
+    const before = buildingState(5_000)
+    const next = advanceTime(before, 6_000)
+    expect(next.facilities.kitchen).toEqual({ level: 2, build: null })
+    expect(next.meta.masterXp).toBe(before.meta.masterXp + TUNING.lobby.master.xpPerFacilityUpgrade)
+  })
+
+  it('leaves a build whose timer is still in the future untouched', () => {
+    const before = buildingState(10_000)
+    const next = advanceTime(before, 6_000)
+    expect(next.facilities.kitchen.build).toEqual({ toLevel: 2, completesAtWorld: 10_000 })
+    expect(next.facilities.kitchen.level).toBe(1)
+  })
+})
+
 describe('advanceTime — promotion completion', () => {
   /** A capped, mid-promotion hero whose timer completes at `completesAtWorld`. */
   function promotingState(completesAtWorld: number, lastSeenAtWorld = 0): GameState {
