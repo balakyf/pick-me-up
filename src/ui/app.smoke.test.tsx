@@ -83,6 +83,11 @@ describe('App smoke', () => {
     expect(container.textContent).toContain('Tactical Center')
     expect(container.textContent).toContain('Focus damage')
     expect(container.textContent).toContain('Overlook slots')
+
+    // Facility upgrades surface; a fresh ML1 account is gated (Kitchen at the ML
+    // ceiling; Promotion Chamber locked until ML3).
+    expect(container.textContent).toContain('Raise Master Level to upgrade')
+    expect(container.textContent).toContain(`Unlocks at Master Lv ${3}`)
   })
 
   it('the lobby pumps the world clock on an interval (timers advance while watching)', () => {

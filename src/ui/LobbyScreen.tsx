@@ -6,6 +6,7 @@ import { banquetWouldHelp } from '../engine/kitchen'
 import { canPromote, canAfford, promotionCost, promotionTargetStar } from '../engine/promotion'
 import { tacticalFocusBonus, tacticalOverlookSlots } from '../engine/tactical'
 import { masterXpToNext } from '../engine/master'
+import { upgradeCost, canUpgrade } from '../engine/facilities'
 import { worldDayIndex, dailyDungeonFor, dailyUnlocked, dailyAttemptsLeft } from '../engine/daily'
 import type { DailyReward } from '../engine/daily'
 import { attemptDailyWithResult } from '../engine/store'
@@ -208,6 +209,69 @@ function PromotionAction({ state, store }: { state: GameState; store: Store }) {
   )
 }
 
+const FAC = TUNING.lobby.facilities
+
+/** Upgrade control shared by every facility room: build/skip + Master-Level gating. */
+function UpgradeControl({ state, store, facility }: { state: GameState; store: Store; facility: FacilityId }) {
+  const [err, setErr] = useState<string | null>(null)
+  const f = state.facilities[facility]
+  const nowWorld = toWorldTime(Date.now())
+
+  function dispatch(cmd: Parameters<Store['dispatch']>[0]) {
+    setErr(null)
+    try {
+      store.dispatch(cmd, Date.now())
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'Action failed')
+    }
+  }
+
+  // Build in progress → countdown + gem skip.
+  if (f.build !== null) {
+    return (
+      <div className="lr-upgrade">
+        <span className="muted">⏳ Lv {f.build.toLevel} · {timeLeft(f.build.completesAtWorld - nowWorld)}</span>
+        <button
+          className="btn gem sm"
+          onClick={() => dispatch({ type: 'SKIP_TIMER', kind: 'facility', id: facility })}
+          disabled={state.gems < FAC.skipGemCost}
+        >
+          ⏩ {FAC.skipGemCost} 💎
+        </button>
+      </div>
+    )
+  }
+
+  const maxed = f.level >= FAC.maxLevel
+  const chamberLocked = facility === 'promotionChamber' && f.level === 0 && state.meta.masterLevel < FAC.chamberUnlockMasterLevel
+  const mlCapped = !maxed && f.level >= state.meta.masterLevel
+  const cost = upgradeCost(facility, f.level)
+  const ok = canUpgrade(state, facility)
+  const isBuild = facility === 'promotionChamber' && f.level === 0
+
+  const note = maxed
+    ? 'Max level reached.'
+    : chamberLocked
+      ? `Unlocks at Master Lv ${FAC.chamberUnlockMasterLevel}.`
+      : mlCapped
+        ? 'Raise Master Level to upgrade.'
+        : state.gold < cost
+          ? 'Not enough gold.'
+          : `Lv ${f.level + 1}: faster/stronger effects.`
+
+  return (
+    <div className="lr-upgrade">
+      <span className="lr-action-note">{note}</span>
+      {!maxed && (
+        <button className="btn sm" onClick={() => dispatch({ type: 'UPGRADE_FACILITY', facility })} disabled={!ok}>
+          {isBuild ? '🔨 Build' : '⬆ Upgrade'} · {cost.toLocaleString()} ◆
+        </button>
+      )}
+      {err && <div className="lr-action-note" style={{ color: 'var(--bad)' }}>{err}</div>}
+    </div>
+  )
+}
+
 /** The Tactical Center's current combat levers (read-only; upgrades deferred). */
 function TacticalAction({ state }: { state: GameState }) {
   const level = state.facilities.tacticalCenter.level
@@ -350,13 +414,12 @@ export function LobbyScreen({ state, store }: { state: GameState; store: Store }
             build={state.facilities[id].build}
             heroes={byRoom[id]}
             action={
-              id === 'kitchen' ? (
-                <BanquetAction state={state} store={store} />
-              ) : id === 'promotionChamber' ? (
-                <PromotionAction state={state} store={store} />
-              ) : id === 'tacticalCenter' ? (
-                <TacticalAction state={state} />
-              ) : undefined
+              <>
+                {id === 'kitchen' && <BanquetAction state={state} store={store} />}
+                {id === 'promotionChamber' && <PromotionAction state={state} store={store} />}
+                {id === 'tacticalCenter' && <TacticalAction state={state} />}
+                <UpgradeControl state={state} store={store} facility={id} />
+              </>
             }
           />
         ))}
