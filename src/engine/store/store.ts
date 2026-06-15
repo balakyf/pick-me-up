@@ -96,6 +96,12 @@ export function reduce(state: GameState | null, cmd: Command): GameState {
     case 'ATTEMPT_FLOOR':
       return playFloor(requireState(state, cmd.type), cmd.focus).state
 
+    case 'ADD_GOLD': {
+      // Testing-only cheat: grant free gold. Not part of the real economy.
+      const current = requireState(state, cmd.type)
+      return { ...current, gold: current.gold + cmd.amount }
+    }
+
     default: {
       // Exhaustiveness guard: a new Command variant must be handled here.
       const exhaustive: never = cmd

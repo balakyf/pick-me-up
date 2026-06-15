@@ -52,6 +52,15 @@ body {
 .pill .lab { color: var(--ink-dim); font-weight: 600; }
 .pill.gold { color: var(--gold); border-color: #4a3c1c; background: #221c0f; }
 
+/* Testing-only cheat button — dashed to read as a debug affordance, not real UI. */
+.cheat-gold {
+  margin-left: 8px; padding: 5px 10px; border-radius: 999px;
+  background: #221c0f; color: var(--gold);
+  border: 1px dashed #4a3c1c; cursor: pointer;
+  font-weight: 700; font-size: 12px; font-variant-numeric: tabular-nums;
+}
+.cheat-gold:hover { background: #2c2412; }
+
 /* ── Nav ─────────────────────────────────────────────────────────────────── */
 .nav { display: flex; gap: 4px; padding: 10px 16px; border-bottom: 1px solid var(--line); background: var(--bg-2); }
 .nav button {

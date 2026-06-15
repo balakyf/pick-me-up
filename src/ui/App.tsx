@@ -73,6 +73,13 @@ export function App() {
           <span className="lab">Floor</span> {Math.min(state.tower.currentFloor, 10)}
         </span>
         <span className="pill gold">◆ {state.gold.toLocaleString()}</span>
+        <button
+          className="cheat-gold"
+          onClick={() => store.dispatch({ type: 'ADD_GOLD', amount: 10000 })}
+          title="Testing only: add 10,000 free gold"
+        >
+          +10k ◆
+        </button>
       </div>
 
       <div className="nav">

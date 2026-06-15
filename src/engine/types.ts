@@ -400,3 +400,5 @@ export type Command =
   | { type: 'SUMMON' }
   | { type: 'SET_PARTY'; slots: (HeroId | null)[]; lines: Line[] }
   | { type: 'ATTEMPT_FLOOR'; focus?: FocusDirective }
+  /** Testing-only: grant free gold. Not part of the real economy. */
+  | { type: 'ADD_GOLD'; amount: number }
