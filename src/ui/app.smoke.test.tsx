@@ -78,6 +78,11 @@ describe('App smoke', () => {
     // Daily Dungeon portal renders; locked until the player clears the unlock floor.
     expect(container.textContent).toContain('Daily Dungeon')
     expect(container.textContent).toContain('to unlock')
+
+    // Tactical Center shows its current combat levers (focus bonus + overlook slots).
+    expect(container.textContent).toContain('Tactical Center')
+    expect(container.textContent).toContain('Focus damage')
+    expect(container.textContent).toContain('Overlook slots')
   })
 
   it('summoning reveals a hero and spends gold', () => {

@@ -277,6 +277,10 @@ body {
 .promo-row .muted { margin-left: auto; }
 .promo-row .btn { flex: none; }
 
+.tactical-action { display: flex; flex-direction: column; gap: 4px; }
+.ta-row { display: flex; justify-content: space-between; font-size: 12px; }
+.ta-val { font-weight: 700; color: var(--accent-2); }
+
 .lobby-portal {
   margin-top: 14px; padding: 14px;
   background: linear-gradient(135deg, var(--bg-2), #181a2a);

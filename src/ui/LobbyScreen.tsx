@@ -4,6 +4,7 @@ import type { Store } from '../engine/store'
 import { TUNING } from '../engine/tuning'
 import { banquetWouldHelp } from '../engine/kitchen'
 import { canPromote, canAfford, promotionCost, promotionTargetStar } from '../engine/promotion'
+import { tacticalFocusBonus, tacticalOverlookSlots } from '../engine/tactical'
 import { worldDayIndex, dailyDungeonFor, dailyUnlocked, dailyAttemptsLeft } from '../engine/daily'
 import type { DailyReward } from '../engine/daily'
 import { attemptDailyWithResult } from '../engine/store'
@@ -211,6 +212,20 @@ function PromotionAction({ state, store }: { state: GameState; store: Store }) {
   )
 }
 
+/** The Tactical Center's current combat levers (read-only; upgrades deferred). */
+function TacticalAction({ state }: { state: GameState }) {
+  const level = state.facilities.tacticalCenter.level
+  const bonusPct = Math.round(tacticalFocusBonus(level) * 100)
+  const slots = tacticalOverlookSlots(level)
+  return (
+    <div className="lr-action tactical-action">
+      <div className="ta-row"><span>🎯 Focus damage</span><span className="ta-val">+{bonusPct}%</span></div>
+      <div className="ta-row"><span>🛡 Overlook slots</span><span className="ta-val">{slots}</span></div>
+      <div className="lr-action-note">Mark a target in the Tower to concentrate fire.</div>
+    </div>
+  )
+}
+
 const DAILY = TUNING.lobby.daily
 const MAT_LABEL: Record<string, string> = { promotionStone: '🪨 Stone', rankMaterial: '📦 Rank Mat' }
 const matLabel = (id: string): string =>
@@ -334,6 +349,8 @@ export function LobbyScreen({ state, store }: { state: GameState; store: Store }
                 <BanquetAction state={state} store={store} />
               ) : id === 'promotionChamber' ? (
                 <PromotionAction state={state} store={store} />
+              ) : id === 'tacticalCenter' ? (
+                <TacticalAction state={state} />
               ) : undefined
             }
           />
