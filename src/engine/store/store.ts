@@ -23,6 +23,7 @@ import type {
   GameState,
   Command,
   OwnedHero,
+  HeroId,
   FloorResult,
   FocusDirective,
   StoragePort,
@@ -31,6 +32,7 @@ import { createAccount, persist, hydrate, DEFAULT_SAVE_KEY } from '../account'
 import { summon } from '../gacha'
 import { playFloor } from '../tower'
 import { banquet } from '../kitchen'
+import { startPromotion, skipPromotion } from '../promotion'
 import { advanceTime, toWorldTime } from '../time'
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -109,6 +111,14 @@ export function reduce(state: GameState | null, cmd: Command, nowWorld: number =
 
     case 'BANQUET':
       return banquet(current)
+
+    case 'PROMOTE_HERO':
+      return startPromotion(current, cmd.heroId, nowWorld)
+
+    case 'SKIP_TIMER':
+      if (cmd.kind === 'promotion') return skipPromotion(current, cmd.id as HeroId)
+      // Facility build/skip arrives with the facilities-upgrade phase.
+      throw new Error(`reduce: SKIP_TIMER kind '${cmd.kind}' is not available in this slice`)
 
     case 'ADD_GOLD':
       // Testing-only cheat: grant free gold. Not part of the real economy.

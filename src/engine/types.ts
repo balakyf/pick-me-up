@@ -442,5 +442,9 @@ export type Command =
   | { type: 'TICK' }
   /** Kitchen Banquet: spend gold to restore Sanity across the living roster. */
   | { type: 'BANQUET' }
+  /** Start a promotion for an at-cap hero: pay materials, begin the world-time timer. */
+  | { type: 'PROMOTE_HERO'; heroId: HeroId }
+  /** Gem pay-to-skip a running timer. `kind: 'promotion'` → id is the HeroId. */
+  | { type: 'SKIP_TIMER'; kind: 'facility' | 'promotion'; id: string }
   /** Testing-only: grant free gold. Not part of the real economy. */
   | { type: 'ADD_GOLD'; amount: number }

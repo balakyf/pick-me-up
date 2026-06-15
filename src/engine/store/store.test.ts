@@ -17,7 +17,9 @@ import { TUNING } from '../tuning'
 import { createAccount, MemoryStorage, hydrate, DEFAULT_SAVE_KEY } from '../account'
 import { summon } from '../gacha'
 import { playFloor } from '../tower'
-import type { Command, GameState, HeroId, Line, OwnedHero, SaveEnvelope } from '../types'
+import { startPromotion, skipPromotion } from '../promotion'
+import { levelCapForStar } from '../stats'
+import type { Command, GameState, HeroId, Line, OwnedHero, SaveEnvelope, Star } from '../types'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers
@@ -498,5 +500,67 @@ describe('createStore — clock threading', () => {
     store.dispatch({ type: 'NEW_ACCOUNT', seed: 1, now: 0 })
     store.dispatch({ type: 'TICK' }, 1000) // real 1000 → world 3000
     expect(store.getState()!.meta.lastSeenAtWorld).toBe(3000)
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Promotion commands (PROMOTE_HERO / SKIP_TIMER)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** A funded account holding one at-cap, promotable hero with ample materials. */
+function promotableState(seed = 5): GameState {
+  const acct = createAccount(seed)
+  const star: Star = 3
+  const hero: OwnedHero = {
+    id: 'h_promo' as HeroId,
+    name: 'Promo',
+    star,
+    heroClass: 'warrior',
+    element: 'fire',
+    baseAttrs: { str: 12, agi: 12, vit: 12, int: 12, wil: 12 },
+    growthGrades: { str: 2, agi: 2, vit: 2, int: 2, wil: 2 },
+    skillIds: [],
+    portraitToken: '#fff',
+    origin: 'procedural',
+    xp: { level: levelCapForStar(star), xpIntoLevel: 0, heldXp: 0, atCap: true },
+    alive: true,
+    sanity: 100,
+    promotion: null,
+  }
+  return { ...acct, heroes: { [hero.id]: hero }, materials: { promotionStone: 999, attrStone_fire: 999 }, gems: 200 }
+}
+
+describe('reduce — PROMOTE_HERO', () => {
+  it('starts the promotion (delegates to startPromotion at the world clock)', () => {
+    const before = promotableState()
+    const after = reduce(before, { type: 'PROMOTE_HERO', heroId: 'h_promo' as HeroId }, 0)
+    expect(after).toEqual(startPromotion(before, 'h_promo' as HeroId, 0))
+    expect(after.heroes['h_promo' as HeroId]!.promotion).not.toBeNull()
+  })
+
+  it('throws when the hero cannot be promoted', () => {
+    const before = createAccount(1) // starter is a 1★ not at cap
+    const starterId = Object.keys(before.heroes)[0] as HeroId
+    expect(() => reduce(before, { type: 'PROMOTE_HERO', heroId: starterId }, 0)).toThrow()
+  })
+})
+
+describe('reduce — SKIP_TIMER', () => {
+  it('gem-skips an in-flight promotion (delegates to skipPromotion)', () => {
+    const promoting = startPromotion(promotableState(), 'h_promo' as HeroId, 0)
+    const after = reduce(promoting, { type: 'SKIP_TIMER', kind: 'promotion', id: 'h_promo' }, 0)
+    expect(after).toEqual(skipPromotion(promoting, 'h_promo' as HeroId))
+    expect(after.heroes['h_promo' as HeroId]!.star).toBe(4)
+    expect(after.heroes['h_promo' as HeroId]!.promotion).toBeNull()
+  })
+
+  it('throws when skipping a promotion that is not in flight', () => {
+    const before = promotableState() // promotable but not yet promoting
+    expect(() => reduce(before, { type: 'SKIP_TIMER', kind: 'promotion', id: 'h_promo' }, 0)).toThrow()
+  })
+
+  it('throws on the facility kind (facility timers are not in this slice)', () => {
+    const before = promotableState()
+    expect(() => reduce(before, { type: 'SKIP_TIMER', kind: 'facility', id: 'kitchen' }, 0)).toThrow()
   })
 })

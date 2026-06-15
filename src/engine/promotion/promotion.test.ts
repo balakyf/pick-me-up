@@ -8,6 +8,7 @@ import {
   promotionDuration,
   startPromotion,
   completePromotion,
+  skipPromotion,
 } from './promotion'
 import { createAccount } from '../account'
 import { levelCapForStar } from '../stats'
@@ -202,5 +203,38 @@ describe('completePromotion', () => {
     const snapshot = JSON.parse(JSON.stringify(hero))
     completePromotion(hero, makeSeed(9))
     expect(hero).toEqual(snapshot)
+  })
+})
+
+describe('skipPromotion', () => {
+  /** A hero mid-promotion (timer set), in a state with `gems`. */
+  function promotingState(gems: number): GameState {
+    const hero = cappedHero({ star: 3 as Star, promotion: { completesAtWorld: 999_999 } })
+    return { ...stateWith(hero, { gems }), gems }
+  }
+
+  it('charges the gem skip cost and completes the promotion immediately', () => {
+    const state = promotingState(100)
+    const next = skipPromotion(state, 'h_p' as HeroId)
+    expect(next.gems).toBe(100 - P.skipGemCost)
+    const hero = next.heroes['h_p' as HeroId]!
+    expect(hero.star).toBe(4)
+    expect(hero.promotion).toBeNull()
+  })
+
+  it('throws when no promotion is in flight', () => {
+    const idle = stateWith(cappedHero({ star: 3 as Star }), { gems: 100 })
+    expect(() => skipPromotion(idle, 'h_p' as HeroId)).toThrow(/no promotion|in flight/i)
+  })
+
+  it('throws when gems are insufficient', () => {
+    expect(() => skipPromotion(promotingState(P.skipGemCost - 1), 'h_p' as HeroId)).toThrow(/gem/i)
+  })
+
+  it('is pure — the input state is not mutated', () => {
+    const state = promotingState(100)
+    skipPromotion(state, 'h_p' as HeroId)
+    expect(state.gems).toBe(100)
+    expect(state.heroes['h_p' as HeroId]!.promotion).not.toBeNull()
   })
 })

@@ -145,3 +145,23 @@ export function completePromotion(hero: OwnedHero, accountSeed: Seed): OwnedHero
 
   return { ...hero, star: newStar, baseAttrs, growthGrades, skillIds, xp, promotion: null }
 }
+
+/**
+ * Gem pay-to-skip: spend `skipGemCost` to resolve an in-flight promotion NOW
+ * instead of waiting out the timer. PURE — returns a fresh GameState. Throws when
+ * the hero has no promotion in flight or the account can't afford the gems.
+ */
+export function skipPromotion(state: GameState, heroId: HeroId): GameState {
+  const hero = state.heroes[heroId]
+  if (hero === undefined) throw new Error(`skipPromotion: unknown hero ${heroId}`)
+  if (hero.promotion === null) throw new Error(`skipPromotion: hero ${heroId} has no promotion in flight`)
+  if (state.gems < P.skipGemCost) {
+    throw new Error(`skipPromotion: insufficient gems (have ${state.gems}, need ${P.skipGemCost})`)
+  }
+
+  return {
+    ...state,
+    gems: state.gems - P.skipGemCost,
+    heroes: { ...state.heroes, [heroId]: completePromotion(hero, state.seed) },
+  }
+}
