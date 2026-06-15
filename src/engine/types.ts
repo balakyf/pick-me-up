@@ -455,5 +455,7 @@ export type Command =
   | { type: 'SKIP_TIMER'; kind: 'facility' | 'promotion'; id: string }
   /** Run today's Daily Dungeon (seeded combat; free attempts then gem-paid). */
   | { type: 'ATTEMPT_DAILY' }
+  /** Synthesis (Layer 1 §4): destroy heroes to transfer traits or render materials. */
+  | { type: 'SYNTHESIZE'; mode: 'transfer' | 'salvage'; survivorId: HeroId | null; sacrificeIds: HeroId[] }
   /** Testing-only: grant free gold. Not part of the real economy. */
   | { type: 'ADD_GOLD'; amount: number }
