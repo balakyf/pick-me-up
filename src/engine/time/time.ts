@@ -8,7 +8,8 @@
 import { TUNING } from '../tuning'
 import { clampSanity } from '../kitchen'
 import { completePromotion } from '../promotion'
-import type { GameState, OwnedHero, HeroId } from '../types'
+import { worldDayIndex } from '../daily'
+import type { GameState, OwnedHero, HeroId, DailiesState } from '../types'
 
 /** 1 world-hour in world-time ms. World-time is plain ms, only dilated at the edge. */
 const WORLD_HOUR_MS = 3_600_000
@@ -56,5 +57,12 @@ export function advanceTime(state: GameState, nowWorld: number): GameState {
     nextHeroes[key] = next
   }
 
-  return { ...state, heroes: nextHeroes, meta: { ...state.meta, lastSeenAtWorld: nowWorld } }
+  // Daily-Dungeon attempt counter resets on each world-day boundary.
+  const today = worldDayIndex(nowWorld)
+  const dailies: DailiesState =
+    today > state.dailies.lastResetWorldDay
+      ? { attemptsUsed: 0, lastResetWorldDay: today }
+      : state.dailies
+
+  return { ...state, heroes: nextHeroes, dailies, meta: { ...state.meta, lastSeenAtWorld: nowWorld } }
 }

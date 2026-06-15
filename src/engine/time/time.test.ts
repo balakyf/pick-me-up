@@ -95,6 +95,30 @@ describe('advanceTime — Sanity regen', () => {
   })
 })
 
+describe('advanceTime — daily attempt reset', () => {
+  const WORLD_DAY_MS = 24 * 3_600_000
+  function dailyState(attemptsUsed: number, lastResetWorldDay: number, lastSeenAtWorld = 0): GameState {
+    const acct = createAccount(3, { now: 0 })
+    return {
+      ...acct,
+      meta: { ...acct.meta, lastSeenAtWorld },
+      dailies: { attemptsUsed, lastResetWorldDay },
+    }
+  }
+
+  it('resets attemptsUsed and bumps lastResetWorldDay when the world-day advances', () => {
+    const next = advanceTime(dailyState(3, 0), WORLD_DAY_MS + 1000) // into day 1
+    expect(next.dailies.attemptsUsed).toBe(0)
+    expect(next.dailies.lastResetWorldDay).toBe(1)
+  })
+
+  it('does not reset within the same world-day', () => {
+    const next = advanceTime(dailyState(2, 0, 1000), WORLD_DAY_MS - 1) // still day 0
+    expect(next.dailies.attemptsUsed).toBe(2)
+    expect(next.dailies.lastResetWorldDay).toBe(0)
+  })
+})
+
 describe('advanceTime — promotion completion', () => {
   /** A capped, mid-promotion hero whose timer completes at `completesAtWorld`. */
   function promotingState(completesAtWorld: number, lastSeenAtWorld = 0): GameState {
