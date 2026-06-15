@@ -11,6 +11,7 @@ import {
   reduce,
   summonWithResult,
   attemptFloorWithResult,
+  attemptDailyWithResult,
   createStore,
 } from './store'
 import { TUNING } from '../tuning'
@@ -18,6 +19,8 @@ import { createAccount, MemoryStorage, hydrate, DEFAULT_SAVE_KEY } from '../acco
 import { summon } from '../gacha'
 import { playFloor } from '../tower'
 import { startPromotion, skipPromotion } from '../promotion'
+import { attemptDaily } from '../daily'
+import { advanceTime } from '../time'
 import { levelCapForStar } from '../stats'
 import type { Command, GameState, HeroId, Line, OwnedHero, SaveEnvelope, Star } from '../types'
 
@@ -562,5 +565,61 @@ describe('reduce — SKIP_TIMER', () => {
   it('throws on the facility kind (facility timers are not in this slice)', () => {
     const before = promotableState()
     expect(() => reduce(before, { type: 'SKIP_TIMER', kind: 'facility', id: 'kitchen' }, 0)).toThrow()
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Daily Dungeon command (ATTEMPT_DAILY)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** A daily-unlocked account with a strong hero deployed (clears the floor-1 daily). */
+function dailyReadyState(seed = 5): GameState {
+  const acct = createAccount(seed)
+  const hero: OwnedHero = {
+    id: 'h_str' as HeroId,
+    name: 'Crusher',
+    star: 6 as Star,
+    heroClass: 'warrior',
+    element: 'fire',
+    baseAttrs: { str: 100, agi: 100, vit: 100, int: 100, wil: 100 },
+    growthGrades: { str: 10, agi: 10, vit: 10, int: 10, wil: 10 },
+    skillIds: [],
+    portraitToken: '#fff',
+    origin: 'procedural',
+    xp: { level: 80, xpIntoLevel: 0, heldXp: 0, atCap: false },
+    alive: true,
+    sanity: 100,
+    promotion: null,
+  }
+  return {
+    ...acct,
+    heroes: { [hero.id]: hero },
+    party: { slots: [hero.id, null, null, null, null], lines: ['front', 'front', 'mid', 'back', 'back'] },
+    tower: { currentFloor: 2, highestCleared: 1, attemptIndex: 0 },
+  }
+}
+
+describe('reduce — ATTEMPT_DAILY', () => {
+  it('delegates to attemptDaily at the advanced world clock', () => {
+    const before = dailyReadyState()
+    const nowWorld = 1000
+    const after = reduce(before, { type: 'ATTEMPT_DAILY' }, nowWorld)
+    expect(after).toEqual(attemptDaily(advanceTime(before, nowWorld), nowWorld).state)
+    expect(after.dailies.attemptsUsed).toBe(1)
+  })
+
+  it('throws when dailies are still locked (no tower progress)', () => {
+    const locked = createAccount(1) // highestCleared 0
+    expect(() => reduce(locked, { type: 'ATTEMPT_DAILY' }, 1000)).toThrow()
+  })
+})
+
+describe('attemptDailyWithResult', () => {
+  it('matches the reduce state path and surfaces the result for the same timestamp', () => {
+    const before = dailyReadyState()
+    const { state, result } = attemptDailyWithResult(before, 1000)
+    expect(state).toEqual(reduce(before, { type: 'ATTEMPT_DAILY' }, 3000)) // real 1000 → world 3000
+    expect(result.dungeon.id).toBeTruthy()
+    expect(typeof result.cleared).toBe('boolean')
   })
 })

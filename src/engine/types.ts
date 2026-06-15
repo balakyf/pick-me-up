@@ -448,5 +448,7 @@ export type Command =
   | { type: 'PROMOTE_HERO'; heroId: HeroId }
   /** Gem pay-to-skip a running timer. `kind: 'promotion'` → id is the HeroId. */
   | { type: 'SKIP_TIMER'; kind: 'facility' | 'promotion'; id: string }
+  /** Run today's Daily Dungeon (seeded combat; free attempts then gem-paid). */
+  | { type: 'ATTEMPT_DAILY' }
   /** Testing-only: grant free gold. Not part of the real economy. */
   | { type: 'ADD_GOLD'; amount: number }

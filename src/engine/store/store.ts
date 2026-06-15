@@ -33,6 +33,7 @@ import { summon } from '../gacha'
 import { playFloor } from '../tower'
 import { banquet } from '../kitchen'
 import { startPromotion, skipPromotion } from '../promotion'
+import { attemptDaily, type DailyResult } from '../daily'
 import { advanceTime, toWorldTime } from '../time'
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -120,6 +121,9 @@ export function reduce(state: GameState | null, cmd: Command, nowWorld: number =
       // Facility build/skip arrives with the facilities-upgrade phase.
       throw new Error(`reduce: SKIP_TIMER kind '${cmd.kind}' is not available in this slice`)
 
+    case 'ATTEMPT_DAILY':
+      return attemptDaily(current, nowWorld).state
+
     case 'ADD_GOLD':
       // Testing-only cheat: grant free gold. Not part of the real economy.
       return { ...current, gold: current.gold + cmd.amount }
@@ -155,6 +159,20 @@ export function attemptFloorWithResult(
   focus?: FocusDirective,
 ): { state: GameState; result: FloorResult } {
   return playFloor(state, focus)
+}
+
+/**
+ * Like dispatching ATTEMPT_DAILY through `reduce`, but also returns the
+ * DailyResult (combat log + weekday rewards) for the UI. Runs the same
+ * advanceTime(nowWorld) catch-up `reduce` does, so calling this and dispatching
+ * ATTEMPT_DAILY with the SAME real timestamp yields identical results.
+ */
+export function attemptDailyWithResult(
+  state: GameState | null,
+  nowReal = 0,
+): { state: GameState; result: DailyResult } {
+  const nowWorld = toWorldTime(nowReal)
+  return attemptDaily(advanceTime(requireState(state, 'ATTEMPT_DAILY'), nowWorld), nowWorld)
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
