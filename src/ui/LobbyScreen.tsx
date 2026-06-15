@@ -5,6 +5,7 @@ import { TUNING } from '../engine/tuning'
 import { banquetWouldHelp } from '../engine/kitchen'
 import { canPromote, canAfford, promotionCost, promotionTargetStar } from '../engine/promotion'
 import { tacticalFocusBonus, tacticalOverlookSlots } from '../engine/tactical'
+import { masterXpToNext } from '../engine/master'
 import { worldDayIndex, dailyDungeonFor, dailyUnlocked, dailyAttemptsLeft } from '../engine/daily'
 import type { DailyReward } from '../engine/daily'
 import { attemptDailyWithResult } from '../engine/store'
@@ -23,11 +24,6 @@ import { Portrait } from './bits'
  */
 
 const SANITY_MAX = TUNING.lobby.sanityMax
-
-/** Display-only Master-XP curve (spec §3.1): round(60 × L^1.8). UI math only. */
-function masterXpToNext(level: number): number {
-  return Math.round(60 * level ** 1.8)
-}
 
 type RoomId = FacilityId | 'courtyard'
 

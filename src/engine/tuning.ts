@@ -141,6 +141,32 @@ export const TUNING = {
     sanityMax: 100,
     /** Facilities present at account creation. 0 = locked / not yet built. */
     facilityStartLevels: { kitchen: 1, promotionChamber: 0, tacticalCenter: 1 },
+    /** Master Level — the lobby progression spine (Layer 3 §3.1). */
+    master: {
+      /** masterXpToNext(L) = round(coeff × L^exp); levels stop at `cap`. */
+      xpCoeff: 60,
+      xpExp: 1.8,
+      cap: 100,
+      /** Master XP granted per source. */
+      xpPerFloorClear: 12,
+      xpPerFirstClear: 30,
+      xpPerPromotion: 40,
+      xpPerFacilityUpgrade: 25,
+    },
+    /** Facility upgrades — gold cost × growth^level, world-time timer, gem-skippable. */
+    facilities: {
+      /** Hard slice cap on any facility level (also bounded by `level ≤ masterLevel`). */
+      maxLevel: 10,
+      /** Master Level required to BUILD the Promotion Chamber (level 0 → 1). */
+      chamberUnlockMasterLevel: 3,
+      /** upgradeCost(level) = round(baseCost × costGrowth^level), in gold. */
+      baseCost: { kitchen: 800, promotionChamber: 1200, tacticalCenter: 1000 } as Record<string, number>,
+      costGrowth: 1.5,
+      /** Build timer per TARGET level (world-time ms): ~`durationPerLevel × toLevel`. */
+      durationPerLevel: 15 * 60_000,
+      /** Gems to skip a facility build outright. */
+      skipGemCost: 40,
+    },
     /** Sanity drain on a floor attempt (Layer 3 §3.2). Applied to deployed survivors. */
     sanity: {
       /** Baseline Sanity each deployed hero loses per floor attempt. */
