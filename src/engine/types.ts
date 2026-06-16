@@ -496,5 +496,11 @@ export type Command =
   | { type: 'ATTEMPT_DAILY' }
   /** Synthesis (Layer 1 §4): destroy heroes to transfer traits or render materials. */
   | { type: 'SYNTHESIZE'; mode: 'transfer' | 'salvage'; survivorId: HeroId | null; sacrificeIds: HeroId[] }
+  /** Equipment (Layer 1 §5): forge a graded item for a slot at the Smithy. */
+  | { type: 'CRAFT_EQUIPMENT'; slot: EquipmentSlot }
+  /** Equipment: equip an owned item onto a hero's matching slot. */
+  | { type: 'EQUIP_ITEM'; heroId: HeroId; itemId: EquipmentId }
+  /** Equipment: clear a hero's slot (the item returns to free inventory). */
+  | { type: 'UNEQUIP_ITEM'; heroId: HeroId; slot: EquipmentSlot }
   /** Testing-only: grant free gold. Not part of the real economy. */
   | { type: 'ADD_GOLD'; amount: number }

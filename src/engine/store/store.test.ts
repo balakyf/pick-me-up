@@ -21,9 +21,19 @@ import { playFloor } from '../tower'
 import { startPromotion, skipPromotion } from '../promotion'
 import { attemptDaily } from '../daily'
 import { startUpgrade, skipFacility } from '../facilities'
+import { craftEquipment, equipItem, unequipItem } from '../equipment'
 import { advanceTime } from '../time'
 import { levelCapForStar } from '../stats'
-import type { Command, GameState, HeroId, Line, OwnedHero, SaveEnvelope, Star } from '../types'
+import type {
+  Command,
+  EquipmentId,
+  GameState,
+  HeroId,
+  Line,
+  OwnedHero,
+  SaveEnvelope,
+  Star,
+} from '../types'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers
@@ -691,5 +701,87 @@ describe('reduce — SYNTHESIZE', () => {
     expect(() =>
       reduce(locked, { type: 'SYNTHESIZE', mode: 'salvage', survivorId: null, sacrificeIds: ['h_second' as HeroId] }),
     ).toThrow()
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Equipment commands (CRAFT_EQUIPMENT / EQUIP_ITEM / UNEQUIP_ITEM)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** A Smithy-unlocked, funded account (mirrors equipment.test.ts's smithAccount). */
+function smithReadyState(ml = 6): GameState {
+  const base = createAccount(1)
+  return {
+    ...base,
+    gold: 999_999,
+    materials: { promotionStone: 999 },
+    meta: { ...base.meta, masterLevel: ml },
+  }
+}
+
+describe('reduce — CRAFT_EQUIPMENT', () => {
+  it('forges an item into inventory (delegates to craftEquipment)', () => {
+    const before = smithReadyState(6)
+    const after = reduce(before, { type: 'CRAFT_EQUIPMENT', slot: 'weapon' })
+    expect(after).toEqual(craftEquipment(before, 'weapon'))
+    expect(after.inventory).toHaveLength(1)
+    expect(after.inventory[0]!.slot).toBe('weapon')
+  })
+
+  it('threads the command slot through (an armor command lands an armor item)', () => {
+    const before = smithReadyState(6)
+    const after = reduce(before, { type: 'CRAFT_EQUIPMENT', slot: 'armor' })
+    expect(after.inventory[0]!.slot).toBe('armor')
+  })
+
+  it('throws when the Smithy is locked (Master Level too low)', () => {
+    const locked = smithReadyState(TUNING.lobby.equipment.unlockMasterLevel - 1)
+    expect(() => reduce(locked, { type: 'CRAFT_EQUIPMENT', slot: 'weapon' })).toThrow(/Smithy/)
+  })
+
+  it('throws when state is null', () => {
+    expect(() => reduce(null, { type: 'CRAFT_EQUIPMENT', slot: 'weapon' })).toThrow(/existing account/)
+  })
+})
+
+describe('reduce — EQUIP_ITEM / UNEQUIP_ITEM', () => {
+  /** A smith-ready account holding exactly one forged weapon. */
+  function withForgedWeapon(): { state: GameState; hid: HeroId; itemId: EquipmentId } {
+    let state = smithReadyState(6)
+    state = reduce(state, { type: 'CRAFT_EQUIPMENT', slot: 'weapon' })
+    const hid = Object.keys(state.heroes)[0] as HeroId
+    const itemId = state.inventory[0]!.id
+    return { state, hid, itemId }
+  }
+
+  it('equips an owned item onto a hero (delegates to equipItem)', () => {
+    const { state, hid, itemId } = withForgedWeapon()
+    const after = reduce(state, { type: 'EQUIP_ITEM', heroId: hid, itemId })
+    expect(after).toEqual(equipItem(state, hid, itemId))
+    expect(after.heroes[hid]!.equipment.weapon).toBe(itemId)
+  })
+
+  it('unequips a slot back to null (delegates to unequipItem)', () => {
+    const { state, hid, itemId } = withForgedWeapon()
+    const equipped = reduce(state, { type: 'EQUIP_ITEM', heroId: hid, itemId })
+    const after = reduce(equipped, { type: 'UNEQUIP_ITEM', heroId: hid, slot: 'weapon' })
+    expect(after).toEqual(unequipItem(equipped, hid, 'weapon'))
+    expect(after.heroes[hid]!.equipment.weapon).toBeNull()
+  })
+
+  it('throws when equipping onto an unknown hero', () => {
+    const { state, itemId } = withForgedWeapon()
+    expect(() =>
+      reduce(state, { type: 'EQUIP_ITEM', heroId: 'nope' as HeroId, itemId }),
+    ).toThrow(/unknown hero/)
+  })
+
+  it('throws when state is null', () => {
+    expect(() =>
+      reduce(null, { type: 'EQUIP_ITEM', heroId: 'x' as HeroId, itemId: 'eq_1' as EquipmentId }),
+    ).toThrow(/existing account/)
+    expect(() =>
+      reduce(null, { type: 'UNEQUIP_ITEM', heroId: 'x' as HeroId, slot: 'weapon' }),
+    ).toThrow(/existing account/)
   })
 })
