@@ -331,3 +331,15 @@ body {
 .synth-portal .syn-actions { display: flex; gap: 8px; margin-top: 6px; }
 .syn-destroy { background: var(--bad); }
 .synth-portal.locked { opacity: 0.7; }
+
+/* Armory (Smithy forge + per-hero loadouts) — reuses the synth-portal layout primitives. */
+.armory-portal .syn-modes { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
+.armory-portal .syn-section { margin: 8px 0; }
+.armory-portal .syn-label { font-size: 12px; color: var(--ink-faint); margin-bottom: 4px; }
+.armory-portal .syn-row { display: flex; flex-wrap: wrap; gap: 6px; }
+.armory-portal.locked { opacity: 0.7; }
+.arm-item { display: inline-flex; align-items: center; gap: 4px; padding: 2px 6px; border: 1px solid var(--line); border-radius: 6px; font-size: 12px; }
+.arm-hero { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 4px 0; }
+.arm-hero-name { min-width: 64px; font-size: 12px; font-weight: 600; }
+.arm-slot { font-size: 12px; }
+span.arm-slot { padding: 2px 6px; border: 1px dashed var(--line); border-radius: 6px; color: var(--ink-faint); }

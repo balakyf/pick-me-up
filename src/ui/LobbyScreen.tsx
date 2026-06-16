@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import type { GameState, OwnedHero, FacilityId, HeroId } from '../engine/types'
+import type { GameState, OwnedHero, FacilityId, HeroId, EquipmentSlot, Command } from '../engine/types'
 import type { Store } from '../engine/store'
 import { TUNING } from '../engine/tuning'
 import { banquetWouldHelp } from '../engine/kitchen'
@@ -12,6 +12,7 @@ import type { DailyReward } from '../engine/daily'
 import { attemptDailyWithResult } from '../engine/store'
 import { toWorldTime } from '../engine/time'
 import { canSynthesize, synthesisPreview, synthesisUnlocked, type SynthesisInput } from '../engine/synthesis'
+import { smithyUnlocked, forgeGrade, forgeCost, canCraft, itemName, equippedItemIds } from '../engine/equipment'
 import { Portrait } from './bits'
 
 /**
@@ -509,6 +510,137 @@ function SynthesisChamber({ state, store }: { state: GameState; store: Store }) 
   )
 }
 
+const EQUIP = TUNING.lobby.equipment
+const EQUIP_SLOTS: EquipmentSlot[] = ['weapon', 'armor', 'accessory']
+const SLOT_GLYPH: Record<EquipmentSlot, string> = { weapon: '⚔', armor: '🛡', accessory: '💍' }
+
+/** The Armory — the ML-gated Smithy forge plus per-hero equip/unequip (Layer 1 §5). */
+function Armory({ state, store }: { state: GameState; store: Store }) {
+  const [err, setErr] = useState<string | null>(null)
+
+  if (!smithyUnlocked(state)) {
+    return (
+      <div className="lobby-portal armory-portal locked">
+        <div className="lp-head">
+          <span className="lp-glyph">🛠</span>
+          <span className="lp-name">Armory</span>
+          <span className="muted">— the forge is cold</span>
+        </div>
+        <div className="lr-blurb">Unlocks at Master Lv {EQUIP.unlockMasterLevel}.</div>
+      </div>
+    )
+  }
+
+  const grade = forgeGrade(state.meta.masterLevel)
+  const cost = forgeCost(grade)
+  const affordable = canCraft(state)
+  const living = (Object.values(state.heroes) as OwnedHero[]).filter((h) => h.alive)
+  const equipped = equippedItemIds(state)
+  const freeItems = state.inventory.filter((i) => !equipped.has(i.id))
+
+  const run = (cmd: Command, fail: string) => {
+    setErr(null)
+    try {
+      store.dispatch(cmd, Date.now())
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : fail)
+    }
+  }
+
+  return (
+    <div className="lobby-portal armory-portal">
+      <div className="lp-head">
+        <span className="lp-glyph">🛠</span>
+        <span className="lp-name">Armory</span>
+        <span className="muted">— forge &amp; equip</span>
+      </div>
+
+      {/* Forge — one button per slot, each forging the best grade the Master Level allows. */}
+      <div className="syn-section">
+        <div className="syn-label">
+          Forge · grade {grade} · ◆ {cost.gold.toLocaleString()} + {cost.promotionStone} stone{cost.promotionStone === 1 ? '' : 's'}
+        </div>
+        <div className="syn-modes">
+          {EQUIP_SLOTS.map((slot) => (
+            <button
+              key={slot}
+              className="btn sm"
+              disabled={!affordable}
+              onClick={() => run({ type: 'CRAFT_EQUIPMENT', slot }, 'Forge failed')}
+              title={`Forge a ${itemName(slot, grade)}`}
+            >
+              {SLOT_GLYPH[slot]} {itemName(slot, grade)}
+            </button>
+          ))}
+        </div>
+        {!affordable && <div className="lr-action-note muted">Not enough gold or Promotion Stones to forge.</div>}
+      </div>
+
+      {/* Forged items not currently worn by anyone. */}
+      <div className="syn-section">
+        <div className="syn-label">Forged &amp; free ({freeItems.length})</div>
+        <div className="syn-row">
+          {freeItems.length === 0 ? (
+            <span className="lr-empty">Nothing forged yet.</span>
+          ) : (
+            freeItems.map((it) => (
+              <span key={it.id} className="arm-item" title={`${it.name} · ${it.slot}`}>
+                {SLOT_GLYPH[it.slot]} {it.name}
+              </span>
+            ))
+          )}
+        </div>
+      </div>
+
+      {/* Per-hero loadout — one control per slot: unequip what's worn, else equip the first free fit. */}
+      <div className="syn-section">
+        <div className="syn-label">Loadouts</div>
+        {living.map((h) => (
+          <div key={h.id} className="arm-hero">
+            <span className="arm-hero-name">{h.name.split(/\s+/)[0]}</span>
+            {EQUIP_SLOTS.map((slot) => {
+              const wornId = h.equipment[slot]
+              const worn = wornId ? state.inventory.find((i) => i.id === wornId) ?? null : null
+              const candidate = freeItems.find((i) => i.slot === slot) ?? null
+              if (worn) {
+                return (
+                  <button
+                    key={slot}
+                    className="btn sm arm-slot"
+                    onClick={() => run({ type: 'UNEQUIP_ITEM', heroId: h.id, slot }, 'Unequip failed')}
+                    title={`Unequip ${worn.name}`}
+                  >
+                    {SLOT_GLYPH[slot]} {worn.name} ✕
+                  </button>
+                )
+              }
+              if (candidate) {
+                return (
+                  <button
+                    key={slot}
+                    className="btn sm arm-slot"
+                    onClick={() => run({ type: 'EQUIP_ITEM', heroId: h.id, itemId: candidate.id }, 'Equip failed')}
+                    title={`Equip ${candidate.name}`}
+                  >
+                    {SLOT_GLYPH[slot]} + {candidate.name}
+                  </button>
+                )
+              }
+              return (
+                <span key={slot} className="arm-slot muted">
+                  {SLOT_GLYPH[slot]} —
+                </span>
+              )
+            })}
+          </div>
+        ))}
+      </div>
+
+      {err && <div className="lr-action-note" style={{ color: 'var(--bad)' }}>{err}</div>}
+    </div>
+  )
+}
+
 export function LobbyScreen({ state, store }: { state: GameState; store: Store }) {
   // Live tick: while the lobby is open, pump the world clock once a second. This
   // both refreshes the cosmetic countdowns (a re-render with a fresh Date.now())
@@ -585,6 +717,9 @@ export function LobbyScreen({ state, store }: { state: GameState; store: Store }
 
       {/* Synthesis Chamber — a closed-door access point, not a leveled facility */}
       <SynthesisChamber state={state} store={store} />
+
+      {/* Armory — the Smithy forge + per-hero equip/unequip (an access point, not a leveled facility) */}
+      <Armory state={state} store={store} />
 
       {/* Courtyard — everyone off-duty */}
       <div className="lobby-courtyard">
