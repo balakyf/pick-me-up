@@ -29,6 +29,8 @@ import type {
   HeroTemplate,
   PrimaryAttrs,
   KeywordTag,
+  EquipmentItem,
+  EquipmentId,
 } from '../types'
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -226,6 +228,73 @@ describe('buildCombatUnit', () => {
     expect(unit.skills[0].damageType).toBe('physical')
     expect(unit.skills.map((s) => s.id)).toContain('power_strike')
     expect(unit.sourceHeroId).toBe(islat.id)
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// buildCombatUnit — equipment (Layer 1 §5.4 combat assembly)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('buildCombatUnit — equipment', () => {
+  /** A forged weapon fixture (override any field). */
+  function weapon(over: Partial<EquipmentItem> = {}): EquipmentItem {
+    return {
+      id: 'eq_w1' as EquipmentId,
+      slot: 'weapon',
+      grade: 'A',
+      name: 'A Blade',
+      statBonus: { pAtk: 50, mAtk: 50 },
+      ...over,
+    }
+  }
+
+  /** A fresh warrior with `item` worn in its matching slot. */
+  function gearedWarrior(item: EquipmentItem, over: Partial<OwnedHero> = {}): OwnedHero {
+    const equipment: OwnedHero['equipment'] = { weapon: null, armor: null, accessory: null }
+    equipment[item.slot] = item.id
+    return makeWarrior({ equipment, ...over })
+  }
+
+  it('adds the equipment flat block on top of the Sanity-adjusted base stats', () => {
+    const item = weapon({ statBonus: { pAtk: 40, maxHP: 200 } })
+    // Low Sanity reduces the base — gear must add flat ON TOP, unscaled by morale.
+    const bare = buildCombatUnit(makeWarrior({ sanity: 10 }), 'front', SKILLS)
+    const geared = buildCombatUnit(gearedWarrior(item, { sanity: 10 }), 'front', SKILLS, [item])
+    expect(geared.stats.pAtk).toBe(bare.stats.pAtk + 40)
+    expect(geared.stats.maxHP).toBe(bare.stats.maxHP + 200)
+    expect(geared.currentHP).toBe(geared.stats.maxHP) // full HP off the boosted pool
+  })
+
+  it('lets a weapon override the unit element and its basic attack element', () => {
+    const item = weapon({ element: 'water' }) // worn by a fire hero
+    const unit = buildCombatUnit(gearedWarrior(item), 'front', SKILLS, [item])
+    expect(unit.element).toBe('water')
+    const basic = unit.skills.find((s) => s.id === 'basic')
+    expect(basic?.element).toBe('water')
+  })
+
+  it('appends equipment keywords to the unit', () => {
+    const kw: KeywordTag = { kind: 'vulnerable', element: 'water' }
+    const item = weapon({ keywords: [kw] })
+    const unit = buildCombatUnit(gearedWarrior(item), 'front', SKILLS, [item])
+    expect(unit.keywords).toContainEqual(kw)
+  })
+
+  it('recomputes CP from the post-gear stats (gear raises CP)', () => {
+    const item = weapon({ statBonus: { pAtk: 100, mAtk: 100 } })
+    const bare = buildCombatUnit(makeWarrior(), 'front', SKILLS)
+    const geared = buildCombatUnit(gearedWarrior(item), 'front', SKILLS, [item])
+    expect(geared.cp).toBe(combatPower(geared.stats))
+    expect(geared.cp).toBeGreaterThan(bare.cp)
+  })
+
+  it('is unchanged when the hero has no equipment (empty inventory default)', () => {
+    const hero = makeWarrior()
+    const bare = buildCombatUnit(hero, 'front', SKILLS)
+    const withEmpty = buildCombatUnit(hero, 'front', SKILLS, [])
+    expect(withEmpty).toEqual(bare)
+    expect(bare.element).toBe('fire')
+    expect(bare.keywords).toEqual([])
   })
 })
 

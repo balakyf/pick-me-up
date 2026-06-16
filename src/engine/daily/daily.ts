@@ -156,7 +156,7 @@ export function attemptDaily(state: GameState, nowWorld: number): { state: GameS
     if (heroId === null || heroId === undefined) continue
     const hero = state.heroes[heroId]
     if (hero === undefined || !hero.alive || hero.sanity <= 0) continue
-    heroUnits.push(buildCombatUnit(hero, lines[s] ?? 'front', SKILLS))
+    heroUnits.push(buildCombatUnit(hero, lines[s] ?? 'front', SKILLS, state.inventory))
     deployedIds.push(heroId)
   }
   if (heroUnits.length === 0) throw new Error('attemptDaily: no deployable heroes')
