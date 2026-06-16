@@ -252,6 +252,31 @@ export const TUNING = {
         6: { promotionStone: 62, attrStone: 31 },
       } as Record<number, { promotionStone: number; attrStone: number }>,
     },
+    /** Equipment (Layer 1 §5). Pure; instant; deterministic forge (success rates → L3). */
+    equipment: {
+      /** Master Level that unlocks the Smithy (the forge). */
+      unlockMasterLevel: 2,
+      /** Per-grade magnitude `m` — the canon weapon-ATK ladder (§5.2). */
+      gradeMagnitude: { E: 5, D: 12, C: 25, B: 45, A: 75, S: 120, SS: 190, SSS: 300 } as Record<string, number>,
+      /** Slot stat blocks derived from `m` (weapon is m for both ATKs). */
+      slotMult: {
+        armorHpPerM: 4,
+        armorPDefPerM: 0.6,
+        accessoryCritPerM: 0.15,
+        accessorySpdPerM: 0.2,
+      },
+      /** Best grade unlocked at a Master Level (highest threshold ≤ ml wins). */
+      forgeGradeThresholds: { 1: 'E', 3: 'D', 6: 'C', 10: 'B', 15: 'A', 20: 'S' } as Record<number, string>,
+      /** Forge cost per grade: gold + Promotion Stones (existing faucet). */
+      forgeCost: {
+        E: { gold: 400, promotionStone: 1 },
+        D: { gold: 900, promotionStone: 2 },
+        C: { gold: 1800, promotionStone: 4 },
+        B: { gold: 3600, promotionStone: 8 },
+        A: { gold: 7200, promotionStone: 16 },
+        S: { gold: 14000, promotionStone: 32 },
+      } as Record<string, { gold: number; promotionStone: number }>,
+    },
     /** Tower material faucet (thin trickle; Daily Dungeons are the primary source, Phase 5). */
     materialDrops: {
       /** Chance a cleared floor drops a Promotion Stone. */
@@ -294,7 +319,7 @@ export const TUNING = {
   },
 
   account: {
-    schemaVersion: 2,
+    schemaVersion: 3,
     /** Canon protagonist account id (display only). */
     defaultAccountId: '46631913',
     partySize: 5,

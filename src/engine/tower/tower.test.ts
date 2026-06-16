@@ -76,6 +76,7 @@ function makeHero(o: HeroOpts): OwnedHero {
     alive: o.alive ?? true,
     sanity: o.sanity ?? 100,
     promotion: null,
+    equipment: { weapon: null, armor: null, accessory: null },
   }
 }
 
@@ -106,6 +107,7 @@ function makeState(o: StateOpts = {}): GameState {
     gold: o.gold ?? 0,
     gems: 0,
     materials: {},
+    inventory: [],
     meta: { masterLevel: 1, masterXp: 0, lastSeenAtWorld: 0 },
     facilities: {
       kitchen: { level: 1, build: null },

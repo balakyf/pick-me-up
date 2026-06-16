@@ -104,6 +104,7 @@ export function createAccount(entropySeed: number, opts?: CreateAccountOpts): Ga
     gold: TUNING.economy.startingGold,
     gems: TUNING.lobby.startingGems,
     materials: {},
+    inventory: [],
     meta: { masterLevel: 1, masterXp: 0, lastSeenAtWorld: toWorldTime(opts?.now ?? 0) },
     facilities: {
       kitchen: { level: TUNING.lobby.facilityStartLevels.kitchen, build: null },
@@ -165,6 +166,26 @@ function migrateV1toV2(envelope: SaveEnvelope): SaveEnvelope {
   }
 }
 
+/** v2 → v3: introduce equipment — account inventory + per-hero empty slots. */
+function migrateV2toV3(envelope: SaveEnvelope): SaveEnvelope {
+  const s = envelope.state as unknown as Record<string, unknown>
+  const oldHeroes = s.heroes as Record<string, OwnedHero>
+  const heroes: Record<string, OwnedHero> = {}
+  for (const [id, hero] of Object.entries(oldHeroes)) {
+    heroes[id] = { ...hero, equipment: { weapon: null, armor: null, accessory: null } }
+  }
+  return {
+    schemaVersion: 3,
+    savedAt: envelope.savedAt,
+    state: {
+      ...(s as unknown as GameState),
+      schemaVersion: 3,
+      heroes,
+      inventory: [],
+    },
+  }
+}
+
 /**
  * Migrate a SaveEnvelope from `fromVersion` up to the current schema version.
  * Identity when already current; otherwise apply each version's upgrade step in
@@ -183,6 +204,10 @@ export function migrate(envelope: SaveEnvelope, fromVersion: number): SaveEnvelo
   if (v === 1) {
     env = migrateV1toV2(env)
     v = 2
+  }
+  if (v === 2) {
+    env = migrateV2toV3(env)
+    v = 3
   }
   if (v !== current) {
     throw new SaveLoadError(`migrate: no migration path from version ${fromVersion}`)
@@ -208,6 +233,7 @@ function assertGameStateShape(state: unknown): asserts state is GameState {
     'gold',
     'gems',
     'materials',
+    'inventory',
     'meta',
     'facilities',
     'dailies',

@@ -35,6 +35,7 @@ function makeHero(id: string, overrides: Partial<OwnedHero> = {}): OwnedHero {
     alive: true,
     sanity: 100,
     promotion: null,
+    equipment: { weapon: null, armor: null, accessory: null },
     ...overrides,
   }
 }

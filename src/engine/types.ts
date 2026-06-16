@@ -46,6 +46,15 @@ export type FacilityId = 'kitchen' | 'promotionChamber' | 'tacticalCenter'
 /** Material bucket key, e.g. 'promotionStone', 'attrStone_fire', 'rankMaterial'. */
 export type MaterialId = string
 
+/** Equipment grade ladder (Layer 1 §5.1). Slice forges E…S; SS/SSS reserved. */
+export type EquipmentGrade = 'E' | 'D' | 'C' | 'B' | 'A' | 'S' | 'SS' | 'SSS'
+
+/** The three equipment slots (Layer 1 §5.2). */
+export type EquipmentSlot = 'weapon' | 'armor' | 'accessory'
+
+/** Account-unique equipment identity (e.g. 'eq_000007'). */
+export type EquipmentId = string & { readonly __brand: 'EquipmentId' }
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Stat model (Layer 0)
 // ─────────────────────────────────────────────────────────────────────────────
@@ -118,6 +127,32 @@ export interface SkillEffect {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Equipment (Layer 1 §5) — flat derived-stat blocks + tags; never touch attributes
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** An owned piece of equipment. Grants a flat DerivedStats block (Layer 0 §5.4);
+ *  a weapon may also override the wielder's element and/or carry keyword tags. */
+export interface EquipmentItem {
+  id: EquipmentId
+  slot: EquipmentSlot
+  grade: EquipmentGrade
+  name: string
+  /** Flat additions to the wielder's combat stats. */
+  statBonus: Partial<DerivedStats>
+  /** Weapon element override (combat uses this instead of the wielder's element). */
+  element?: Element
+  /** Conditional-effect tags fed through the Layer 0 keyword system. */
+  keywords?: KeywordTag[]
+}
+
+/** A hero's three equipment slots; each references an inventory item or is empty. */
+export interface HeroEquipment {
+  weapon: EquipmentId | null
+  armor: EquipmentId | null
+  accessory: EquipmentId | null
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Heroes: static identity (Hero) vs persisted runtime (OwnedHero)
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -144,6 +179,8 @@ export interface OwnedHero extends Hero {
   sanity: number
   /** In-progress promotion timer; null when not promoting (Phase 4). */
   promotion: { completesAtWorld: number } | null
+  /** Equipped item ids per slot (Layer 1 §5); each references GameState.inventory. */
+  equipment: HeroEquipment
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -211,6 +248,8 @@ export interface GameState {
   gold: number
   gems: number
   materials: Record<MaterialId, number>
+  /** Every equipment item the account owns (equipped or free). Layer 1 §5. */
+  inventory: EquipmentItem[]
   meta: MetaState
   facilities: Record<FacilityId, FacilityState>
   dailies: DailiesState
