@@ -24,6 +24,9 @@ import type {
   EnemyTemplate,
   PrimaryAttrs,
   KeywordTag,
+  DerivedStats,
+  EquipmentItem,
+  Element,
 } from '../types'
 import {
   deriveStats,
@@ -33,6 +36,7 @@ import {
   combatPower,
 } from '../stats'
 import { applySanityPenalty } from '../kitchen'
+import { equipmentBonus } from '../equipment'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Basic attack & skill resolution
@@ -41,17 +45,18 @@ import { applySanityPenalty } from '../kitchen'
 /**
  * The implicit basic attack synthesized for a hero. Every unit gets one, so a
  * hero's authored skillIds are purely additive (and may be empty). A mage's
- * basic attack deals magic damage; everyone else deals physical. The basic
- * attack always carries the hero's own element, costs no SP, and hits one target.
+ * basic attack deals magic damage; everyone else deals physical. It carries the
+ * hero's own element by default, costs no SP, and hits one target. `element`
+ * overrides the carried element (a wielded weapon's element override, §5.4).
  */
-export function basicAttackFor(hero: OwnedHero): SkillEffect {
+export function basicAttackFor(hero: OwnedHero, element: Element = hero.element): SkillEffect {
   const damageType: DamageType = hero.heroClass === 'mage' ? 'magic' : 'physical'
   return {
     id: 'basic',
     name: 'Attack',
     skillMult: 1.0,
     damageType,
-    element: hero.element,
+    element,
     target: 'single',
     spCost: 0,
   }
@@ -89,10 +94,21 @@ export function buildCombatUnit(
   hero: OwnedHero,
   line: Line,
   registry: SkillRegistry = {},
+  inventory: readonly EquipmentItem[] = [],
 ): CombatUnit {
   const level = hero.xp.level
   // Low Sanity weakens the hero BEFORE the snapshot freezes (combat never recomputes).
-  const stats = applySanityPenalty(deriveStatsForHero(hero, level), hero.sanity)
+  const base = applySanityPenalty(deriveStatsForHero(hero, level), hero.sanity)
+  // Equipment adds a flat block ON TOP of the morale-adjusted base (gear is unaffected
+  // by Sanity), and a weapon may override the wielder's element + carry keywords (§5.4).
+  const gear = equipmentBonus(hero, inventory)
+  const stats: DerivedStats = { ...base }
+  for (const key of Object.keys(gear.stats) as (keyof DerivedStats)[]) {
+    const v = gear.stats[key]
+    if (v !== undefined) stats[key] = stats[key] + v
+  }
+  const element = gear.element ?? hero.element
+
   const leveled = leveledAttrs(hero.baseAttrs, hero.growthGrades, level)
   const maxSP = deriveMaxSP(leveled.wil)
 
@@ -101,7 +117,7 @@ export function buildCombatUnit(
     name: hero.name,
     side: 'hero',
     unitClass: hero.heroClass,
-    element: hero.element,
+    element,
     line,
     level,
     stats,
@@ -110,8 +126,8 @@ export function buildCombatUnit(
     currentSP: maxSP,
     actionGauge: 0,
     alive: true,
-    skills: [basicAttackFor(hero), ...resolveSkills(hero.skillIds, registry)],
-    keywords: [],
+    skills: [basicAttackFor(hero, element), ...resolveSkills(hero.skillIds, registry)],
+    keywords: [...gear.keywords],
     cp: combatPower(stats),
     sourceHeroId: hero.id,
     // Carried for the combat panic check; enemies have no Sanity (field absent).

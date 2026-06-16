@@ -164,6 +164,7 @@ describe('advanceTime — promotion completion', () => {
       alive: true,
       sanity: 100,
       promotion: { completesAtWorld },
+      equipment: { weapon: null, armor: null, accessory: null },
     }
     return { ...acct, heroes: { [hero.id]: hero }, meta: { ...acct.meta, lastSeenAtWorld } }
   }

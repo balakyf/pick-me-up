@@ -238,6 +238,7 @@ export function buildOwnedHeroFromTemplate(template: HeroTemplate, id: HeroId): 
     alive: true,
     sanity: TUNING.lobby.sanityMax,
     promotion: null,
+    equipment: { weapon: null, armor: null, accessory: null },
   }
 }
 
@@ -249,6 +250,7 @@ function buildOwnedHero(hero: Hero): OwnedHero {
     alive: true,
     sanity: TUNING.lobby.sanityMax,
     promotion: null,
+    equipment: { weapon: null, armor: null, accessory: null },
   }
 }
 

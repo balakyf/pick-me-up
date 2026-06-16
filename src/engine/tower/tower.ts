@@ -342,7 +342,7 @@ export function playFloor(
     // Skip empty slots, the dead, and the broken-down (Sanity 0 = cannot deploy).
     if (hero === undefined || !hero.alive || hero.sanity <= 0) continue
     const line: Line = lines[s] ?? 'front'
-    heroUnits.push(buildCombatUnit(hero, line, SKILLS))
+    heroUnits.push(buildCombatUnit(hero, line, SKILLS, state.inventory))
     deployedIds.push(heroId)
   }
 

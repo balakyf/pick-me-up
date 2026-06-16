@@ -143,6 +143,7 @@ function midGameOf(acct: GameState): GameState {
     alive: true,
     sanity: 100,
     promotion: null,
+    equipment: { weapon: null, armor: null, accessory: null },
   }
   copy.heroes[fakeId] = fakeHero
   copy.tower.currentFloor = 7
@@ -318,7 +319,7 @@ describe('storage — createStorage / MemoryStorage / persist / hydrate', () => 
 describe('createAccount — v2 fields', () => {
   it('grants the v2 lobby/meta defaults', () => {
     const acct = createAccount(123, { now: 1000 })
-    expect(acct.schemaVersion).toBe(2)
+    expect(acct.schemaVersion).toBe(TUNING.account.schemaVersion)
     expect(acct.gems).toBe(TUNING.lobby.startingGems)
     expect(acct.materials).toEqual({})
     expect(acct.meta.masterLevel).toBe(1)
@@ -360,7 +361,7 @@ describe('migrate — v1 → v2', () => {
 
     const restored = loadState(v1Json)
 
-    expect(restored.schemaVersion).toBe(2)
+    expect(restored.schemaVersion).toBe(TUNING.account.schemaVersion) // chained v1→v2→v3
     expect(restored.gems).toBe(TUNING.lobby.startingGems)
     expect(restored.facilities.promotionChamber.level).toBe(0)
     expect(restored.meta.masterLevel).toBe(1)
@@ -369,5 +370,43 @@ describe('migrate — v1 → v2', () => {
     const hero = Object.values(restored.heroes)[0]!
     expect(hero.sanity).toBe(TUNING.lobby.sanityMax)
     expect(hero.promotion).toBeNull()
+  })
+})
+
+describe('createAccount — v3 equipment fields', () => {
+  it('grants an empty inventory and empty hero equipment slots', () => {
+    const acct = createAccount(123)
+    expect(acct.inventory).toEqual([])
+    const hero = Object.values(acct.heroes)[0]!
+    expect(hero.equipment).toEqual({ weapon: null, armor: null, accessory: null })
+  })
+})
+
+describe('migrate — v2 → v3', () => {
+  it('adds the inventory + per-hero equipment with safe defaults', () => {
+    const v3 = createAccount(555, { now: 1000 })
+    // Synthesize a v2 save by stripping the v3-only fields and stamping v2.
+    const heroesV2 = Object.fromEntries(
+      Object.entries(v3.heroes).map(([id, h]) => {
+        const { equipment, ...rest } = h as unknown as Record<string, unknown>
+        return [id, rest]
+      }),
+    )
+    const { inventory, ...stateV2 } = v3 as unknown as Record<string, unknown>
+    const v2Json = JSON.stringify({
+      schemaVersion: 2,
+      savedAt: 0,
+      state: { ...stateV2, schemaVersion: 2, heroes: heroesV2 },
+    })
+
+    const restored = loadState(v2Json)
+
+    expect(restored.schemaVersion).toBe(TUNING.account.schemaVersion)
+    expect(restored.inventory).toEqual([])
+    const hero = Object.values(restored.heroes)[0]!
+    expect(hero.equipment).toEqual({ weapon: null, armor: null, accessory: null })
+    // v2 fields survive the upgrade.
+    expect(hero.sanity).toBe(TUNING.lobby.sanityMax)
+    expect(restored.gems).toBe(TUNING.lobby.startingGems)
   })
 })

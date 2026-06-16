@@ -133,4 +133,15 @@ describe('App smoke', () => {
     // …but a fresh ML1 account sees it locked.
     expect(container.textContent).toContain('Unlocks at Master Lv 3')
   })
+
+  it('the Armory renders, gated by Master Level', () => {
+    mount()
+    act(() => {
+      getStore().dispatch({ type: 'NEW_ACCOUNT', seed: 4242, now: 0 })
+    })
+    // Armory heading is always present…
+    expect(container.textContent).toContain('Armory')
+    // …but a fresh ML1 account sees the forge locked (the Smithy opens at ML2).
+    expect(container.textContent).toContain('Unlocks at Master Lv 2')
+  })
 })

@@ -35,6 +35,7 @@ import { playFloor } from '../tower'
 import { banquet } from '../kitchen'
 import { startPromotion, skipPromotion } from '../promotion'
 import { synthesize } from '../synthesis'
+import { craftEquipment, equipItem, unequipItem } from '../equipment'
 import { startUpgrade, skipFacility } from '../facilities'
 import { attemptDaily, type DailyResult } from '../daily'
 import { advanceTime, toWorldTime } from '../time'
@@ -132,6 +133,15 @@ export function reduce(state: GameState | null, cmd: Command, nowWorld: number =
 
     case 'SYNTHESIZE':
       return synthesize(current, cmd, nowWorld)
+
+    case 'CRAFT_EQUIPMENT':
+      return craftEquipment(current, cmd.slot)
+
+    case 'EQUIP_ITEM':
+      return equipItem(current, cmd.heroId, cmd.itemId)
+
+    case 'UNEQUIP_ITEM':
+      return unequipItem(current, cmd.heroId, cmd.slot)
 
     case 'ADD_GOLD':
       // Testing-only cheat: grant free gold. Not part of the real economy.

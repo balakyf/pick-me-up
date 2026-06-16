@@ -34,6 +34,7 @@ function makeState(overrides: Partial<GameState> = {}): GameState {
     gold: TUNING.gacha.normalCostGold,
     gems: 0,
     materials: {},
+    inventory: [],
     meta: { masterLevel: 1, masterXp: 0, lastSeenAtWorld: 0 },
     facilities: {
       kitchen: { level: 1, build: null },
