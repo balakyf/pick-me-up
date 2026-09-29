@@ -173,6 +173,7 @@ describe('advanceTime — promotion completion', () => {
       gift: { last: null, streak: 0 },
       blessed: false,
       expedition: null,
+      captiveOf: null,
     }
     return { ...acct, heroes: { [hero.id]: hero }, meta: { ...acct.meta, lastSeenAtWorld } }
   }

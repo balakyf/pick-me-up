@@ -11,8 +11,9 @@ import { completePromotion } from '../promotion'
 import { worldDayIndex } from '../daily'
 import { addMasterXp } from '../master'
 import { completeTraining } from '../training'
-import { piAfterGap } from '../interference'
+import { piAfterGap, piZeroCrossing } from '../interference'
 import { expeditionHaul } from '../rift'
+import { resolveInvasions } from '../pvp'
 import type { GameState, OwnedHero, HeroId, DailiesState, FacilityId } from '../types'
 
 /** 1 world-hour in world-time ms. World-time is plain ms, only dilated at the edge. */
@@ -105,5 +106,19 @@ export function advanceTime(state: GameState, nowWorld: number): GameState {
     drillsCompleted * TUNING.lobby.master.xpPerTrainingDrill
   if (masterGain > 0) meta = addMasterXp(meta, masterGain)
 
-  return { ...state, gems, materials, heroes: nextHeroes, facilities: nextFacilities, dailies, meta }
+  // The account lifecycle (Layer 4 §5.2): a world at zero Probability Interference greys,
+  // and after six months (real) it is deleted — the canon grey towers.
+  const L = TUNING.lifecycle
+  const gap = nowWorld - state.meta.lastSeenAtWorld
+  const crossing = piZeroCrossing(state.meta.pi ?? 0, gap, state.facilities.hallOfMagic?.level ?? 0, L.piZero)
+  // The zero clock starts when PI FALLS to zero — a world that never had any isn't fading.
+  const wasAlive = (state.meta.pi ?? 0) >= L.piZero
+  const since =
+    meta.pi < L.piZero
+      ? (state.meta.piZeroSince ?? (wasAlive ? state.meta.lastSeenAtWorld + (crossing ?? 0) : null))
+      : null
+  meta = { ...meta, piZeroSince: since, deleted: state.meta.deleted || (since !== null && nowWorld - since >= L.deleteMs) }
+
+  // Offline invasions through the open crack, and captive deadlines (Layer 4 §2).
+  return resolveInvasions({ ...state, gems, materials, heroes: nextHeroes, facilities: nextFacilities, dailies, meta }, nowWorld)
 }

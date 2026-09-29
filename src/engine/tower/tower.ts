@@ -462,6 +462,7 @@ export function playFloor(
   state: GameState,
   focus?: FocusDirective,
   ballista?: number,
+  subvert?: boolean,
 ): { state: GameState; result: FloorResult } {
   const floor = state.tower.currentFloor
   const worldMult = worldMultFor(state)
@@ -469,6 +470,9 @@ export function playFloor(
     throw new Error(`playFloor: an event floor after F${state.tower.event.floor} is waiting to be resolved`)
   }
   if (floor > T.sliceTopFloor) throw new Error('playFloor: the summit has been reached')
+  if (subvert && (floor !== T.worldEndFloor || state.tower.hiddenFound.length < TUNING.lifecycle.subvertTruths)) {
+    throw new Error(`playFloor: only a Master who knows ${TUNING.lifecycle.subvertTruths} truths can subvert the ninetieth floor`)
+  }
 
   // ── 1. Build deployed hero units (skip empty slots, dead, and Sanity-0). ────
   const heroUnits: CombatUnit[] = []
@@ -481,7 +485,7 @@ export function playFloor(
     const hero = state.heroes[heroId]
     // Skip empty slots, the dead, and the broken-down (Sanity 0 = cannot deploy).
     // A hero in a Training Center drill is in the yard, one in the Ruins is away.
-    if (hero === undefined || !hero.alive || hero.sanity <= 0 || hero.training !== null || hero.expedition !== null) continue
+    if (hero === undefined || !hero.alive || hero.sanity <= 0 || hero.training !== null || hero.expedition !== null || hero.captiveOf) continue
     // REBELLION (Layer 3 §C1): a Wary, broken hero may refuse the order. The draw is
     // gated on a positive chance, so everyone else's replays are untouched.
     const rebel = rebellionChance(hero)
@@ -511,6 +515,15 @@ export function playFloor(
       ...enc,
       waves: enc.waves.map((w) => ({
         units: w.units.map((u) => (bossTag !== undefined && u.targetTag === bossTag.targetTag ? woundBoss(u, perf) : u)),
+      })),
+    }
+  }
+  // SUBVERSION (Layer 4 §5.3): the truths strip the Herald's aegis — and the clear spares the world.
+  if (subvert) {
+    enc = {
+      ...enc,
+      waves: enc.waves.map((w) => ({
+        units: w.units.map((u) => (u.targetTag === 'herald_of_end' ? { ...u, keywords: u.keywords.filter((k) => k.kind !== 'aegis') } : u)),
       })),
     }
   }
@@ -613,8 +626,11 @@ export function playFloor(
   nextTower.event = event
 
   // ── 6d. The world ends on the first clear of F90 (canon). ────────────────────
-  const worldEnded = cleared && floor === T.worldEndFloor && !state.tower.worldEnded
+  const atEnd = cleared && floor === T.worldEndFloor && !state.tower.worldEnded && !state.tower.worldSaved
+  const worldSaved = atEnd && subvert === true
+  const worldEnded = atEnd && !worldSaved
   if (worldEnded) nextTower.worldEnded = true
+  if (worldSaved) nextTower.worldSaved = true
 
   // ── 6e. Master XP: floor clears feed the Master-Level spine (+first-clear bonus);
   //        they also strengthen the world's Probability Interference (Layer 3 §D1). ──
@@ -647,6 +663,7 @@ export function playFloor(
     event,
     loopRollback: tower.rollback,
     worldEnded,
+    worldSaved,
     refusedHeroIds,
     result: res,
   }

@@ -237,11 +237,11 @@ export function TowerScreen({ state, store }: { state: GameState; store: Store }
     }
     fight(undefined)
   }
-  function fight(ballista: number | undefined) {
+  function fight(ballista: number | undefined, subvert?: boolean) {
     setAiming(false)
     const pre = store.getState()!
-    const { result } = attemptFloorWithResult(pre, undefined, ballista) // capture the log for playback
-    store.dispatch({ type: 'ATTEMPT_FLOOR', ballista }) // advance the store identically (deterministic)
+    const { result } = attemptFloorWithResult(pre, undefined, ballista, subvert) // capture the log for playback
+    store.dispatch({ type: 'ATTEMPT_FLOOR', ballista, subvert }) // advance the store identically (deterministic)
     setPending(result)
     setCombat(result.result.log)
   }
@@ -286,8 +286,11 @@ export function TowerScreen({ state, store }: { state: GameState; store: Store }
 
       {summit && (
         <div className="result-card" style={{ marginTop: 0, marginBottom: 20 }}>
-          <div className="big-outcome win">SUMMIT ✦</div>
-          <div className="muted">Tell, the Architect, has fallen. You conquered all {MAX_FLOOR} floors.</div>
+          <div className="big-outcome win">{state.tower.worldSaved ? 'TRUE END ✦' : 'SUMMIT ✦'}</div>
+          <div className="muted">
+            Tell, the Architect, has fallen. You conquered all {MAX_FLOOR} floors
+            {state.tower.worldSaved ? ' — and the world you climbed is still there.' : ' — for a world that is already gone.'}
+          </div>
         </div>
       )}
       {state.tower.worldEnded && !summit && (
@@ -358,7 +361,17 @@ export function TowerScreen({ state, store }: { state: GameState; store: Store }
               </div>
               {isCurrent && f <= MAX_FLOOR && (
                 <button className="btn primary" onClick={enter} disabled={!deployable || event !== null}>
-                  Enter ▸
+                  {f === TUNING.tower.worldEndFloor && !state.tower.worldSaved ? 'Clear it ▸' : 'Enter ▸'}
+                </button>
+              )}
+              {isCurrent && f === TUNING.tower.worldEndFloor && state.tower.hiddenFound.length >= TUNING.lifecycle.subvertTruths && (
+                <button
+                  className="btn gem"
+                  onClick={() => fight(undefined, true)}
+                  disabled={!deployable || event !== null}
+                  title="You know what clearing this floor does. Refuse the win condition."
+                >
+                  Subvert ✦
                 </button>
               )}
             </div>

@@ -41,6 +41,7 @@ export function HeroCard({ hero, onClick, selected, showStats, masterLevel = 1 }
         <ElementBadge element={hero.element} />
         {hero.alive && <span className="favor-chip" title={`Favorability ${hero.favor}/100`}>♥ {favorTierName(hero.favor)}</span>}
       </div>
+      {hero.captiveOf && <div className="goddess-lied">⛓ held by {hero.captiveOf.master} — ransom or rescue them</div>}
       {lied && <div className="goddess-lied">the goddess lied — shown {hero.displayStar}★, truly {hero.star}★</div>}
       <div className="row" style={{ marginTop: 10 }}>
         <span className="muted" title="Growth grades (STR/AGI/VIT/INT/WIL)">

@@ -39,6 +39,19 @@ import { intervene } from '../intervention'
 import { upgradeEquipment } from '../minigames'
 import { buyPackage, claimLogin, claimMonthly } from '../shop'
 import { openCrack, dispatchRuins } from '../rift'
+import {
+  raidRival,
+  ransomHero,
+  counterRaid,
+  releaseCaptive,
+  synthesizeCaptive,
+  setDefense,
+  joinGuild,
+  leaveGuild,
+  claimGuildAid,
+  guildRaid,
+  serverWar,
+} from '../pvp'
 import { playFloor } from '../tower'
 import { banquet } from '../kitchen'
 import { startPromotion, skipPromotion } from '../promotion'
@@ -107,6 +120,10 @@ export function reduce(state: GameState | null, cmd: Command, nowWorld: number =
 
   // Every other command acts on an existing account, with world-time advanced first.
   const current = advanceTime(requireState(state, cmd.type), nowWorld)
+  // A deleted account (six months at zero PI) only keeps its clock running.
+  if (current.meta.deleted && cmd.type !== 'TICK') {
+    throw new Error('reduce: this waiting room has greyed and been deleted — start a new Master')
+  }
 
   switch (cmd.type) {
     case 'SUMMON':
@@ -118,7 +135,7 @@ export function reduce(state: GameState | null, cmd: Command, nowWorld: number =
     }
 
     case 'ATTEMPT_FLOOR':
-      return playFloor(current, cmd.focus, cmd.ballista).state
+      return playFloor(current, cmd.focus, cmd.ballista, cmd.subvert).state
 
     case 'TICK':
       return current
@@ -185,10 +202,43 @@ export function reduce(state: GameState | null, cmd: Command, nowWorld: number =
       return claimMonthly(current, nowWorld)
 
     case 'OPEN_CRACK':
-      return openCrack(current)
+      return openCrack(current, nowWorld)
 
     case 'DISPATCH_RUINS':
       return dispatchRuins(current, cmd.heroIds, nowWorld)
+
+    case 'SET_DEFENSE':
+      return setDefense(current, cmd.slots)
+
+    case 'RAID_RIVAL':
+      return raidRival(current, cmd.rivalId, nowWorld).state
+
+    case 'RANSOM_HERO':
+      return ransomHero(current, cmd.heroId)
+
+    case 'COUNTER_RAID':
+      return counterRaid(current, cmd.heroId, nowWorld).state
+
+    case 'RELEASE_CAPTIVE':
+      return releaseCaptive(current, cmd.captiveId)
+
+    case 'SYNTHESIZE_CAPTIVE':
+      return synthesizeCaptive(current, cmd.captiveId, cmd.survivorId)
+
+    case 'JOIN_GUILD':
+      return joinGuild(current, cmd.guildId)
+
+    case 'LEAVE_GUILD':
+      return leaveGuild(current)
+
+    case 'CLAIM_GUILD_AID':
+      return claimGuildAid(current, nowWorld)
+
+    case 'GUILD_RAID':
+      return guildRaid(current, nowWorld).state
+
+    case 'SERVER_WAR':
+      return serverWar(current, nowWorld).state
 
     case 'ADD_GOLD':
       // Testing-only cheat: grant free gold. Not part of the real economy.
@@ -236,8 +286,25 @@ export function attemptFloorWithResult(
   state: GameState,
   focus?: FocusDirective,
   ballista?: number,
+  subvert?: boolean,
 ): { state: GameState; result: FloorResult } {
-  return playFloor(state, focus, ballista)
+  return playFloor(state, focus, ballista, subvert)
+}
+
+/** Like RAID_RIVAL, but also returns the raid's outcome (loot, captive, battle log). */
+export function raidWithResult(state: GameState | null, rivalId: string, nowReal = 0) {
+  const nowWorld = toWorldTime(nowReal)
+  return raidRival(advanceTime(requireState(state, 'RAID_RIVAL'), nowWorld), rivalId, nowWorld)
+}
+
+/** Like GUILD_RAID / SERVER_WAR, but also returns the outcome for the UI. */
+export function guildRaidWithResult(state: GameState | null, nowReal = 0) {
+  const nowWorld = toWorldTime(nowReal)
+  return guildRaid(advanceTime(requireState(state, 'GUILD_RAID'), nowWorld), nowWorld)
+}
+export function serverWarWithResult(state: GameState | null, nowReal = 0) {
+  const nowWorld = toWorldTime(nowReal)
+  return serverWar(advanceTime(requireState(state, 'SERVER_WAR'), nowWorld), nowWorld)
 }
 
 /**

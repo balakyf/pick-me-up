@@ -166,6 +166,7 @@ function validate(state: GameState, input: SynthesisInput): { survivor: OwnedHer
     if (!h.alive) throw new Error(`synthesize: ${id} is not alive`)
     if (h.promotion !== null) throw new Error(`synthesize: ${id} is mid-promotion`)
     if (h.expedition) throw new Error(`synthesize: ${id} is away in the Ruins`)
+    if (h.captiveOf) throw new Error(`synthesize: ${id} is held captive`)
     if (id === input.survivorId) throw new Error('synthesize: survivor cannot be a sacrifice')
     sacrifices.push(h)
   }

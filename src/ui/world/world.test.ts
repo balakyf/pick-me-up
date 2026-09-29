@@ -34,6 +34,7 @@ const PLACES: PlaceId[] = [
   'shop',
   'hallOfMagic',
   'rift',
+  'guild',
   'summon',
   'roster',
   'party',

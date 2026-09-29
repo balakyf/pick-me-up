@@ -321,6 +321,64 @@ export interface OwnedHero extends Omit<Hero, 'skillIds'> {
   blessed: boolean
   /** Away on a Ruins expedition until this world-time; null when home. */
   expedition: { completesAtWorld: number } | null
+  /** Kidnapped by a raiding Master (Layer 4 §2): held until ransomed, rescued or synthesized. */
+  captiveOf: CaptiveHold | null
+}
+
+/** Where a captured hero is held and what it costs to get them back. */
+export interface CaptiveHold {
+  master: string
+  rivalId: string
+  ransomGold: number
+  ransomGems: number
+  /** At this world-time the captor synthesizes the hero (permadeath). */
+  deadlineWorld: number
+}
+
+/** An enemy Master's hero we took in a raid (a ghost, not an OwnedHero). */
+export interface Captive {
+  id: string
+  name: string
+  star: Star
+  level: number
+  element: Element
+  growthGrades: GrowthGrades
+  fromMaster: string
+  /** What its Master will pay to get it back. */
+  ransomGold: number
+  ransomGems: number
+}
+
+/** One line of the invasion log ("while you were away…"). */
+export interface InvasionRecord {
+  worldDay: number
+  direction: 'in' | 'out'
+  rival: string
+  won: boolean
+  goldDelta: number
+  note: string
+}
+
+/** Everything PvP and social (Layer 4; schema v9). */
+export interface PvpState {
+  /** The preset defense roster (length 5); empty slots fall back to the party. */
+  defense: (HeroId | null)[]
+  /** No invasion can land before this world-time (anti-grief). */
+  shieldUntil: number
+  /** The last world-day an incoming invasion was rolled. */
+  lastInvasionDay: number
+  /** Sector rating (ELO-ish). */
+  rating: number
+  log: InvasionRecord[]
+  captives: Captive[]
+  /** Rival ids raided this world-week (one raid each per week). */
+  raided: string[]
+  raidWeek: number
+  guild: string | null
+  guildAidDay: number
+  guildRaidWeek: number
+  warWeek: number
+  war: { wins: number; losses: number }
 }
 
 /** A Training Center drill: refine an owned skill, or learn a trainable one. */
@@ -357,6 +415,8 @@ export interface TowerState {
   hiddenFound: string[]
   /** F90 has been cleared: the world is gone (Layer 2 §1.3). */
   worldEnded: boolean
+  /** F90 was cleared by subverting the win condition: the world was spared (Layer 4 §5.3). */
+  worldSaved: boolean
 }
 
 /** The looped mission (canon F36–40: 5 attempts; failing F40 drops the room to F31). */
@@ -442,6 +502,10 @@ export interface MetaState {
   peekedFloors: number[]
   /** Nudge probability: the next Normal summon rolls its star twice. */
   nudge: boolean
+  /** World-time PI fell below 1 (the waiting room starts to grey); null while alive. */
+  piZeroSince: number | null
+  /** Six months at zero: the account is deleted (canon grey towers). */
+  deleted: boolean
 }
 
 export interface DailiesState {
@@ -478,6 +542,8 @@ export interface GameState {
   tower: TowerState
   gacha: GachaState
   rng: RngCursors
+  /** PvP and social (Layer 4; schema v9). */
+  pvp: PvpState
 }
 
 export interface SaveEnvelope {
@@ -701,6 +767,8 @@ export interface FloorResult {
   worldEnded: boolean
   /** Heroes who refused to deploy (Wary and broken — Layer 3 rebellion). */
   refusedHeroIds: HeroId[]
+  /** F90 was cleared by subversion: the world was saved. */
+  worldSaved: boolean
   result: BattleResult
 }
 
@@ -797,7 +865,7 @@ export type Command =
   /** Mobius Summon: Normal (gold) or Advanced (gems); a 10-pull is discounted on Advanced. */
   | { type: 'SUMMON'; pool?: SummonPool; count?: 1 | 10 }
   | { type: 'SET_PARTY'; slots: (HeroId | null)[]; lines: Line[] }
-  | { type: 'ATTEMPT_FLOOR'; focus?: FocusDirective; ballista?: number }
+  | { type: 'ATTEMPT_FLOOR'; focus?: FocusDirective; ballista?: number; subvert?: boolean }
   /** Explicit world-time catch-up; advances the clock with no other state change. */
   | { type: 'TICK' }
   /** Kitchen Banquet: spend gold to restore Sanity across the living roster. */
@@ -841,6 +909,18 @@ export type Command =
   | { type: 'OPEN_CRACK' }
   /** Send 1–3 heroes on a Ruins expedition through the rift. */
   | { type: 'DISPATCH_RUINS'; heroIds: HeroId[] }
+  /** PvP (Layer 4): the preset defense roster. */
+  | { type: 'SET_DEFENSE'; slots: (HeroId | null)[] }
+  | { type: 'RAID_RIVAL'; rivalId: string }
+  | { type: 'RANSOM_HERO'; heroId: HeroId }
+  | { type: 'COUNTER_RAID'; heroId: HeroId }
+  | { type: 'RELEASE_CAPTIVE'; captiveId: string }
+  | { type: 'SYNTHESIZE_CAPTIVE'; captiveId: string; survivorId: HeroId }
+  | { type: 'JOIN_GUILD'; guildId: string }
+  | { type: 'LEAVE_GUILD' }
+  | { type: 'CLAIM_GUILD_AID' }
+  | { type: 'GUILD_RAID' }
+  | { type: 'SERVER_WAR' }
   /** Equipment (Layer 1 §5): forge a graded item for a slot at the Smithy. */
   | { type: 'CRAFT_EQUIPMENT'; slot: EquipmentSlot }
   /** Equipment: equip an owned item onto a hero's matching slot. */

@@ -60,7 +60,7 @@ export function promotionCost(hero: OwnedHero): Record<MaterialId, number> {
 
 /** Gate: a living hero at its level cap, below the ceiling, with no promotion in flight. */
 export function canPromote(hero: OwnedHero): boolean {
-  return hero.alive && hero.xp.atCap && hero.star < P.maxStar && hero.promotion === null && !hero.expedition
+  return hero.alive && hero.xp.atCap && hero.star < P.maxStar && hero.promotion === null && !hero.expedition && !hero.captiveOf
 }
 
 /** True when the account holds enough of every material the promotion costs. */

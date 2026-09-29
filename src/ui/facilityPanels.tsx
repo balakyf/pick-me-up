@@ -19,6 +19,7 @@ import { SKILLS } from '../engine/content'
 import { maxTrainableGrade, drillXp, trainingOptions } from '../engine/training'
 import { skillProgressLine } from './screens'
 import { HallOfMagicInfo, RiftPanel, ShopPanel, TimingGame } from './metaPanels'
+import { GuildPanel } from './pvpPanels'
 import { upgradeCost as forgeUpgradeCost, upgradeOdds, upgradeRefusal } from '../engine/minigames'
 import { upgradeEquipmentWithResult } from '../engine/store'
 
@@ -927,6 +928,7 @@ export type PanelPlace =
   | 'shop'
   | 'hallOfMagic'
   | 'rift'
+  | 'guild'
 
 const BLURB: Record<PanelPlace, string> = {
   kitchen: 'A warm hearth and a long table. Heroes with frayed nerves come here to recover.',
@@ -940,6 +942,7 @@ const BLURB: Record<PanelPlace, string> = {
   shop: "Isel's counter. Bright banners, limited offers, a smile that never reaches her eyes.",
   hallOfMagic: 'Brass orreries turn slowly. The world’s Probability Interference is measured — and strengthened — here.',
   rift: 'The air itself is cracked here. Beyond it: the Ruins, and other Masters’ worlds.',
+  guild: 'A tall standard and a notice board. Other Masters’ names, other Masters’ wars.',
 }
 
 /** The body of a facility window: rules UI for one place in the lobby. */
@@ -1008,6 +1011,7 @@ export function PlacePanel({ place, state, store }: { place: PanelPlace; state: 
       )}
       {place === 'rift' && <RiftPanel state={state} store={store} />}
       {place === 'shop' && <ShopPanel state={state} store={store} />}
+      {place === 'guild' && <GuildPanel state={state} store={store} />}
       {place === 'synthesis' && <SynthesisChamber state={state} store={store} />}
       {place === 'armory' && <Armory state={state} store={store} />}
       {place === 'daily' && <DailyPortal state={state} store={store} />}

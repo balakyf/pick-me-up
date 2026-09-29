@@ -89,6 +89,27 @@ function META_V8_DEFAULTS(): Omit<GameState['meta'], 'masterLevel' | 'masterXp' 
     revealedHidden: [],
     peekedFloors: [],
     nudge: false,
+    piZeroSince: null,
+    deleted: false,
+  }
+}
+
+/** A fresh (or v8-migrated) account's PvP/social state (Layer 4). */
+export function PVP_DEFAULTS(): GameState['pvp'] {
+  return {
+    defense: [null, null, null, null, null],
+    shieldUntil: 0,
+    lastInvasionDay: -1,
+    rating: TUNING.pvp.startRating,
+    log: [],
+    captives: [],
+    raided: [],
+    raidWeek: -1,
+    guild: null,
+    guildAidDay: -1,
+    guildRaidWeek: -1,
+    warWeek: -1,
+    war: { wins: 0, losses: 0 },
   }
 }
 
@@ -135,9 +156,19 @@ export function createAccount(entropySeed: number, opts?: CreateAccountOpts): Ga
     usedNames: [],
     consumedTemplateIds: [STARTER_TEMPLATE_ID],
     party: { slots, lines },
-    tower: { currentFloor: 1, highestCleared: 0, attemptIndex: 0, event: null, loop: null, hiddenFound: [], worldEnded: false },
+    tower: {
+      currentFloor: 1,
+      highestCleared: 0,
+      attemptIndex: 0,
+      event: null,
+      loop: null,
+      hiddenFound: [],
+      worldEnded: false,
+      worldSaved: false,
+    },
     gacha: { pity: 0, pullCount: 0, advPity4: 0, advPity5: 0, advPullCount: 0 },
     rng: { combatCounter: 0 },
+    pvp: PVP_DEFAULTS(),
   }
 }
 
@@ -283,7 +314,8 @@ function migrateV6toV7(envelope: SaveEnvelope): SaveEnvelope {
     state: {
       ...(s as unknown as GameState),
       schemaVersion: 7,
-      tower: { ...tower, event: null, loop: null, hiddenFound: [], worldEnded: false },
+      // v7 tower fields only; `worldSaved` is added by the v8 → v9 step.
+      tower: { ...tower, event: null, loop: null, hiddenFound: [], worldEnded: false } as unknown as GameState['tower'],
     },
   }
 }
@@ -305,6 +337,28 @@ function migrateV7toV8(envelope: SaveEnvelope): SaveEnvelope {
       heroes,
       meta: { masterLevel: meta.masterLevel, masterXp: meta.masterXp, lastSeenAtWorld: meta.lastSeenAtWorld, ...META_V8_DEFAULTS() },
       facilities: { ...facilities, hallOfMagic: { level: TUNING.lobby.facilityStartLevels.hallOfMagic, build: null } },
+    },
+  }
+}
+
+/** v8 → v9: PvP & social — the pvp state, captive holds, the lifecycle clock, F90's fork. */
+function migrateV8toV9(envelope: SaveEnvelope): SaveEnvelope {
+  const s = envelope.state as unknown as Record<string, unknown>
+  const oldHeroes = s.heroes as Record<string, OwnedHero>
+  const heroes: Record<string, OwnedHero> = {}
+  for (const [id, hero] of Object.entries(oldHeroes)) heroes[id] = { ...hero, captiveOf: null }
+  const meta = s.meta as GameState['meta']
+  const tower = s.tower as GameState['tower']
+  return {
+    schemaVersion: 9,
+    savedAt: envelope.savedAt,
+    state: {
+      ...(s as unknown as GameState),
+      schemaVersion: 9,
+      heroes,
+      meta: { ...meta, piZeroSince: null, deleted: false },
+      tower: { ...tower, worldSaved: false },
+      pvp: PVP_DEFAULTS(),
     },
   }
 }
@@ -351,6 +405,10 @@ export function migrate(envelope: SaveEnvelope, fromVersion: number): SaveEnvelo
   if (v === 7) {
     env = migrateV7toV8(env)
     v = 8
+  }
+  if (v === 8) {
+    env = migrateV8toV9(env)
+    v = 9
   }
   if (v !== current) {
     throw new SaveLoadError(`migrate: no migration path from version ${fromVersion}`)

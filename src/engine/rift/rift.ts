@@ -16,6 +16,7 @@ import { TUNING } from '../tuning'
 import { piUnlocked } from '../interference'
 import { rngFor, chance } from '../rng'
 import { combatPowerForHero } from '../stats'
+import { worldDayIndex } from '../daily'
 
 const R = TUNING.rift
 
@@ -31,8 +32,9 @@ export function crackRefusal(state: GameState): string | null {
   return null
 }
 
-/** Open the Crack of Time and Space. Throws when refused. PURE. */
-export function openCrack(state: GameState): GameState {
+/** Open the Crack of Time and Space. Throws when refused. PURE. The invasion clock
+ *  starts today — no backlog of raids for the days before the crack existed. */
+export function openCrack(state: GameState, nowWorld = 0): GameState {
   const refusal = crackRefusal(state)
   if (refusal !== null) throw new Error(`openCrack: ${refusal}`)
   return {
@@ -40,6 +42,7 @@ export function openCrack(state: GameState): GameState {
     gold: state.gold - R.gold,
     materials: { ...state.materials, promotionStone: (state.materials.promotionStone ?? 0) - R.stones },
     meta: { ...state.meta, crackOpen: true },
+    pvp: { ...state.pvp, lastInvasionDay: worldDayIndex(nowWorld), shieldUntil: nowWorld + TUNING.pvp.shieldMs },
   }
 }
 
@@ -49,6 +52,7 @@ function busy(h: OwnedHero): string | null {
   if (h.promotion !== null) return 'is being promoted'
   if (h.training !== null) return 'is training'
   if (h.expedition !== null) return 'is already away'
+  if (h.captiveOf) return 'is held captive'
   return null
 }
 

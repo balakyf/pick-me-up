@@ -172,6 +172,7 @@ describe('core loop — end to end', () => {
       gift: { last: null, streak: 0 },
       blessed: false,
       expedition: null,
+      captiveOf: null,
     }
     const state: GameState = {
       ...acct,

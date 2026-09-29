@@ -546,3 +546,9 @@ span.arm-slot { padding: 2px 8px; border: 2px dashed #3e3478; color: var(--ink-f
 .timing-game .tg-actions { display: flex; gap: 8px; justify-content: center; align-items: center; flex-wrap: wrap; }
 .timing-game .tg-score { font-weight: 600; color: var(--gold); }
 .peek-line { font-size: 13px; color: #9ae8ff; margin-top: 2px; }
+
+/* ── Layer 4: PvP & guilds ──────────────────────────────────────────────────── */
+.hud-grey { font-size: 12px; color: #b8b8c0; font-style: italic; }
+.captive-row { grid-template-columns: 30px 1fr auto auto auto; }
+.captive-select { font: inherit; font-size: 13px; background: #120e2c; color: var(--ink); border: 2px solid #3e3478; }
+.pvp-panel .drill-row { gap: 6px; }

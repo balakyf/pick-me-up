@@ -15,6 +15,7 @@ import {
   hydrate,
   SaveLoadError,
   DEFAULT_SAVE_KEY,
+  PVP_DEFAULTS,
 } from './account'
 import { TUNING } from '../tuning'
 import { makeSeed } from '../rng/rng'
@@ -152,6 +153,7 @@ function midGameOf(acct: GameState): GameState {
     gift: { last: null, streak: 0 },
     blessed: false,
     expedition: null,
+    captiveOf: null,
   }
   copy.heroes[fakeId] = fakeHero
   copy.tower.currentFloor = 7
@@ -546,6 +548,7 @@ describe('migrate — v6 → v7 (the full climb)', () => {
       loop: null,
       hiddenFound: [],
       worldEnded: false,
+      worldSaved: false,
     })
   })
 })
@@ -563,12 +566,31 @@ describe('migrate — v7 → v8 (the meta-economy)', () => {
     const meta = { masterLevel: 4, masterXp: 12, lastSeenAtWorld: 99 }
     const v7Json = JSON.stringify({ schemaVersion: 7, savedAt: 0, state: { ...v8, schemaVersion: 7, heroes: heroesV7, facilities: facilitiesV7, meta } })
     const restored = loadState(v7Json)
-    expect(restored.schemaVersion).toBe(8)
+    expect(restored.schemaVersion).toBe(TUNING.account.schemaVersion)
     const h = Object.values(restored.heroes)[0]!
     expect([h.favor, h.ip, h.blessed, h.expedition]).toEqual([TUNING.favor.start, 0, false, null])
     expect(restored.meta.masterLevel).toBe(4)
     expect(restored.meta.pi).toBe(0)
     expect(restored.meta.wallet).toEqual({ spentUsd: 0, purchases: {} })
     expect(restored.facilities.hallOfMagic).toEqual({ level: 0, build: null })
+  })
+})
+
+describe('migrate — v8 → v9 (PvP & social)', () => {
+  it('adds the pvp state, captive holds, the lifecycle clock and F90’s fork', () => {
+    const v9 = createAccount(563, { now: 1000 })
+    const { pvp, ...rest } = v9
+    const heroesV8 = Object.fromEntries(Object.entries(v9.heroes).map(([id, h]) => {
+      const { captiveOf, ...r } = h
+      return [id, r]
+    }))
+    const { piZeroSince, deleted, ...metaV8 } = v9.meta
+    const { worldSaved, ...towerV8 } = v9.tower
+    const v8Json = JSON.stringify({ schemaVersion: 8, savedAt: 0, state: { ...rest, schemaVersion: 8, heroes: heroesV8, meta: metaV8, tower: towerV8 } })
+    const restored = loadState(v8Json)
+    expect(restored.schemaVersion).toBe(9)
+    expect(restored.pvp).toEqual(PVP_DEFAULTS())
+    expect(Object.values(restored.heroes)[0]!.captiveOf).toBeNull()
+    expect([restored.meta.piZeroSince, restored.meta.deleted, restored.tower.worldSaved]).toEqual([null, false, false])
   })
 })

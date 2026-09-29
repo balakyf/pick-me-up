@@ -114,6 +114,7 @@ export type PlaceId =
   | 'shop'
   | 'hallOfMagic'
   | 'rift'
+  | 'guild'
   | 'summon'
   | 'roster'
   | 'party'
@@ -147,6 +148,7 @@ export type PropKind =
   | 'orrery'
   | 'rift'
   | 'stall'
+  | 'standard'
 
 export interface Prop {
   kind: PropKind
@@ -208,6 +210,8 @@ export const PROPS: Prop[] = [
   { kind: 'rift', x: 35, y: 15, w: 2, h: 1, place: 'rift' },
   // Isel's shop counter in the hall
   { kind: 'stall', x: 24, y: 8, w: 2, h: 1, place: 'shop' },
+  // The guild standard, for the Masters beyond the crack
+  { kind: 'standard', x: 20, y: 12, w: 1, h: 1, place: 'guild' },
   // Synthesis Chamber
   { kind: 'cauldron', x: 4, y: 15, w: 2, h: 1, place: 'synthesis' },
   { kind: 'shelves', x: 1, y: 14, w: 2, h: 1 },
@@ -233,6 +237,7 @@ export const PLACE_LABEL: Record<PlaceId, string> = {
   shop: 'Gem Shop',
   hallOfMagic: 'Hall of Magic',
   rift: 'Crack of Time',
+  guild: 'Guild Hall',
   summon: 'Mobius Summon',
   roster: 'Roster',
   party: 'Party',

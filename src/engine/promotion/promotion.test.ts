@@ -47,6 +47,7 @@ function cappedHero(overrides: Partial<OwnedHero> = {}): OwnedHero {
     gift: { last: null, streak: 0 },
     blessed: false,
     expedition: null,
+    captiveOf: null,
     ...overrides,
   }
 }

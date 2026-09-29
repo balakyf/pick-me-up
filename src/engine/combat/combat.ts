@@ -446,7 +446,9 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
     // existing full-Sanity replays keep their exact draw order. The action gauge was
     // already spent by the caller, so a panic naturally costs the whole turn; SP is
     // retained since no skill is chosen.
-    if (actor.side === 'hero' && actor.ref.sanity !== undefined) {
+    // Any unit carrying Sanity can panic — heroes always do; a whale Master's brittle
+    // PvP roster does too (enemies normally carry none, so their replays are unchanged).
+    if (actor.ref.sanity !== undefined) {
       const p = panicChance(actor.ref.sanity, actor.ref.stats.statusRes)
       if (p > 0) {
         const draw = chance(rng, p)

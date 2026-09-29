@@ -369,6 +369,12 @@ export function ResultsScreen({
           </div>
         )}
 
+        {result.worldSaved && (
+          <div className="world-ended pframe" style={{ borderColor: 'var(--good)', color: '#c8f0d0' }}>
+            You refused the win condition. The Herald falls, and the world beneath the tower is still there.
+          </div>
+        )}
+
         {result.worldEnded && (
           <div className="world-ended pframe">
             The ninetieth floor falls — and with it, the world beneath the tower. No one on its surface survives.

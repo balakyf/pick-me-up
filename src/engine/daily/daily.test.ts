@@ -40,6 +40,7 @@ function strongHero(id = 'h_str'): OwnedHero {
     gift: { last: null, streak: 0 },
     blessed: false,
     expedition: null,
+    captiveOf: null,
   }
 }
 
@@ -61,7 +62,7 @@ function dailyState(opts: {
     ...acct,
     heroes: { [hero.id]: hero },
     party: { slots: [hero.id, null, null, null, null], lines: ['front', 'front', 'mid', 'back', 'back'] },
-    tower: { currentFloor: highestCleared + 1, highestCleared, attemptIndex: 0, event: null, loop: null, hiddenFound: [], worldEnded: false },
+    tower: { currentFloor: highestCleared + 1, highestCleared, attemptIndex: 0, event: null, loop: null, hiddenFound: [], worldEnded: false, worldSaved: false },
     dailies: { attemptsUsed: opts.attemptsUsed ?? 0, lastResetWorldDay: 0 },
     gems: opts.gems ?? 0,
     materials: {},

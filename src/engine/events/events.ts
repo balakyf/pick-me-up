@@ -83,7 +83,7 @@ function deployable(state: GameState): { hero: OwnedHero; line: CombatUnit['line
   const out: { hero: OwnedHero; line: CombatUnit['line'] }[] = []
   state.party.slots.forEach((id, i) => {
     const h = id ? state.heroes[id] : undefined
-    if (h && h.alive && h.sanity > 0 && h.training === null && !h.expedition) out.push({ hero: h, line: state.party.lines[i] ?? 'front' })
+    if (h && h.alive && h.sanity > 0 && h.training === null && !h.expedition && !h.captiveOf) out.push({ hero: h, line: state.party.lines[i] ?? 'front' })
   })
   return out
 }
@@ -110,8 +110,9 @@ function addMaterials(state: GameState, mats: Record<MaterialId, number>): GameS
 const RIVAL_POOL = ['soldier', 'knight', 'dark_mage', 'assassin', 'order_soldier', 'order_mage', 'dark_knight', 'demon_marksman']
 const RIVAL_LINES: CombatUnit['line'][] = ['front', 'front', 'mid', 'back', 'back']
 
-/** A rival squad of `size` whose total CP is as close as possible to `targetCp`. */
-function rivalSquad(rng: Rng, size: number, targetCp: number, tag: string): { units: CombatUnit[]; rng: Rng } {
+/** A rival squad of `size` whose total CP is as close as possible to `targetCp`
+ *  (tournament rivals, and Layer 4's ghost Masters). */
+export function rivalSquad(rng: Rng, size: number, targetCp: number, tag: string): { units: CombatUnit[]; rng: Rng } {
   let r = rng
   const ids: string[] = []
   for (let i = 0; i < size; i++) {

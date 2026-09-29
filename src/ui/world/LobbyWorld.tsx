@@ -85,6 +85,7 @@ const PANEL_PLACES: PanelPlace[] = [
   'shop',
   'hallOfMagic',
   'rift',
+  'guild',
 ]
 export const PLACE_ICON: Record<PlaceId, string> = {
   kitchen: '🍲',
@@ -95,6 +96,7 @@ export const PLACE_ICON: Record<PlaceId, string> = {
   shop: '♦',
   hallOfMagic: '✶',
   rift: '⟡',
+  guild: '⚑',
   synthesis: '⚗',
   armory: '⚒',
   daily: '🌀',
@@ -120,6 +122,7 @@ export const MENU_PLACES: PlaceId[] = [
   'daily',
   'hallOfMagic',
   'rift',
+  'guild',
   'shop',
 ]
 
@@ -648,6 +651,9 @@ export function LobbyWorld({
         <div>
           <div className="hud-title">Master Lv {ml}</div>
           <Gauge pct={xpPct} color="var(--accent-2)" label={`${state.meta.masterXp} / ${masterXpToNext(ml)} XP`} />
+          {state.meta.piZeroSince !== null && toWorldTime(Date.now()) - state.meta.piZeroSince >= TUNING.lifecycle.greyMs && (
+            <div className="hud-grey">The waiting room is greying…</div>
+          )}
           <div className="hud-sub">
             {living} {living === 1 ? 'hero' : 'heroes'} · Floor {Math.min(state.tower.currentFloor, TUNING.tower.sliceTopFloor)} · PI{' '}
             {Math.floor(state.meta.pi)}

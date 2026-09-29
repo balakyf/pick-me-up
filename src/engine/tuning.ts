@@ -328,6 +328,78 @@ export const TUNING = {
     rareStones: 3,
   },
 
+  /** PvP and social (Layer 4). First-pass. */
+  pvp: {
+    /** A sector spans this many floors (canon: reassigned every 10 floors). */
+    sectorFloors: 10,
+    sectorSize: 100,
+    /** Rivals shown as raid targets each world-week. */
+    targetsPerWeek: 8,
+    startRating: 1000,
+    ratingWin: 18,
+    ratingLoss: 12,
+    /** The Lv40 Hero Protection line (canon). */
+    protectionLevel: 40,
+    /** Rival defense CP as a fraction of yours (min, max). */
+    rivalCpRange: [0.7, 1.3] as readonly number[],
+    /** Whale-guild raiders field this much more CP, but at low Sanity (they panic). */
+    whaleCpMult: 1.5,
+    whaleSanity: 15,
+    /** Storeroom loot a won raid takes: gold per rival floor, stones. */
+    lootGoldPerFloor: 120,
+    lootStones: 3,
+    /** Chance a defeated Lv40+ rival defender is kidnapped. */
+    kidnapChance: 0.35,
+    /** Sanity your raiders spend on a raid. */
+    raidSanity: 5,
+    /** Incoming invasions: chance per world-day while the crack is open. */
+    invasionChance: 0.3,
+    /** Only the last this-many world-days are rolled on a long absence. */
+    invasionLookbackDays: 7,
+    /** A defeat loses this fraction of the storeroom (gold and stones). */
+    storeLoss: 0.1,
+    /** Protection shield after any invasion (world-time). */
+    shieldMs: 24 * 3_600_000,
+    /** A captured hero is synthesized by its captor after this long (world-time). */
+    captiveMs: 3 * 24 * 3_600_000,
+    /** Ransom: gold per hero level, gems per star. */
+    ransomGoldPerLevel: 150,
+    ransomGemsPerStar: 10,
+    /** A counter-raid faces the captor's defense at this CP multiple. */
+    counterCpMult: 1.2,
+    /** A captive synthesized into your hero: transfer efficiency; roster favor loss. */
+    captiveEta: 0.15,
+    captiveFavorLoss: 8,
+  },
+
+  /** Guilds and server wars (Layer 4 §4). */
+  guild: {
+    /** Whale guilds only admit Masters whose simulated spend tops this (USD). */
+    whaleSpendUsd: 100,
+    aidStones: 2,
+    /** Guild raid: the boss's HP as a multiple of your party's CP; guildmates add damage. */
+    raidBossHpPerCp: 40,
+    raidTicks: 600,
+    mateDamageShare: [0.4, 0.8] as readonly number[],
+    raidGold: 5000,
+    raidGems: 40,
+    raidBookChance: 0.15,
+    /** Server war: rival squads at these CP ratios; reward by wins. */
+    warRatios: [0.9, 1.05, 1.2] as readonly number[],
+    warGems: [0, 20, 50, 120] as readonly number[],
+  },
+
+  /** Account lifecycle (Layer 4 §5.2). */
+  lifecycle: {
+    /** PI below this counts as zero. */
+    piZero: 1,
+    greyMs: 30 * 24 * 3_600_000,
+    /** Canon 6 months of inactivity (real) = 540 world-days at 3× dilation. */
+    deleteMs: 540 * 24 * 3_600_000,
+    /** Hidden truths needed to subvert the F90 win condition. */
+    subvertTruths: 7,
+  },
+
   economy: {
     /** floorGold(f) = goldPerFloor * f * worldMult; first clear ×firstClearMult. */
     goldPerFloor: 100,
@@ -596,7 +668,7 @@ export const TUNING = {
   },
 
   account: {
-    schemaVersion: 8,
+    schemaVersion: 9,
     /** Canon protagonist account id (display only). */
     defaultAccountId: '46631913',
     partySize: 5,

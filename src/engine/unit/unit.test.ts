@@ -66,6 +66,7 @@ function ownedFromTemplate(t: HeroTemplate, level = 1): OwnedHero {
     gift: { last: null, streak: 0 },
     blessed: false,
     expedition: null,
+    captiveOf: null,
   }
 }
 
@@ -95,6 +96,7 @@ function makeWarrior(overrides: Partial<OwnedHero> = {}): OwnedHero {
     gift: { last: null, streak: 0 },
     blessed: false,
     expedition: null,
+    captiveOf: null,
     ...overrides,
   }
 }

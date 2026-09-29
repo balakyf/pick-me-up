@@ -292,3 +292,56 @@ describe('App smoke — the meta-economy', () => {
     expect(Object.values(getStore().getState()!.heroes)[0]!.gift.last).toBe('honey_cake')
   })
 })
+
+describe('App smoke — PvP & social', () => {
+  it('the Guild Hall lists guilds; the whale guilds turn away a Master who has not spent', () => {
+    mount()
+    act(() => {
+      getStore().dispatch({ type: 'NEW_ACCOUNT', seed: 39, now: 0 })
+    })
+    openPlace('Guild Hall')
+    expect(container.textContent).toContain('Unity Society')
+    expect(container.textContent).toContain('Morning Star')
+    const rows = Array.from(container.querySelectorAll('.guild-panel .drill-row'))
+    const whaleJoin = rows.find((r) => r.textContent?.includes('Unity Society'))!.querySelector('button') as HTMLButtonElement
+    expect(whaleJoin.disabled).toBe(true)
+    const join = rows.find((r) => r.textContent?.includes('Morning Star'))!.querySelector('button') as HTMLButtonElement
+    act(() => {
+      join.click()
+    })
+    expect(getStore().getState()!.pvp.guild).toBe('morning_star')
+  })
+
+  it('with the crack open, the rift window shows raid targets, the defense and captives', () => {
+    mount()
+    act(() => {
+      getStore().dispatch({ type: 'NEW_ACCOUNT', seed: 40, now: 0 })
+    })
+    const s = getStore().getState()!
+    const open = { ...s, meta: { ...s.meta, crackOpen: true, pi: 300 } }
+    window.localStorage.setItem('pmu.save.v1', JSON.stringify({ schemaVersion: open.schemaVersion, savedAt: 0, state: open }))
+    act(() => {
+      getStore().load()
+    })
+    openPlace('Crack of Time')
+    expect(container.textContent).toContain('Other Masters')
+    expect(container.textContent).toContain('Sector 1')
+    expect(container.querySelectorAll('.pvp-panel .drill-row').length).toBeGreaterThan(0)
+    clickButton('Captives')
+    expect(container.textContent).toContain('No one has been taken')
+  })
+
+  it('a deleted (greyed) account offers only a new Master', () => {
+    mount()
+    act(() => {
+      getStore().dispatch({ type: 'NEW_ACCOUNT', seed: 41, now: 0 })
+    })
+    const s = getStore().getState()!
+    const gone = { ...s, meta: { ...s.meta, deleted: true } }
+    window.localStorage.setItem('pmu.save.v1', JSON.stringify({ schemaVersion: gone.schemaVersion, savedAt: 0, state: gone }))
+    act(() => {
+      getStore().load()
+    })
+    expect(container.textContent).toContain('The waiting room has greyed')
+  })
+})

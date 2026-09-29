@@ -17,6 +17,7 @@ import { toWorldTime } from '../engine/time'
 import { hallRate } from '../engine/interference'
 import { crackRefusal, dispatchRefusal } from '../engine/rift'
 import { Portrait } from './bits'
+import { PvpPanel } from './pvpPanels'
 
 const SHOP = TUNING.shop
 const PI = TUNING.interference
@@ -316,7 +317,7 @@ export function RiftPanel({ state, store }: { state: GameState; store: Store }) 
       </div>
     )
   }
-  const free = living.filter((h) => !h.expedition && h.training === null && h.promotion === null)
+  const free = living.filter((h) => !h.expedition && !h.captiveOf && h.training === null && h.promotion === null)
   const why = dispatchRefusal(state, team)
   return (
     <div className="lr-action">
@@ -356,6 +357,8 @@ export function RiftPanel({ state, store }: { state: GameState; store: Store }) 
         Dispatch {team.length || ''}
       </button>
       {err && <div className="lr-action-note" style={{ color: 'var(--bad)' }}>{err}</div>}
+      <h4 className="panel-sub">Other Masters</h4>
+      <PvpPanel state={state} store={store} />
     </div>
   )
 }

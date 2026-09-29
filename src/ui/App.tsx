@@ -158,6 +158,27 @@ export function App() {
     )
   }
 
+  // Six months at zero Probability Interference: the canon grey towers.
+  if (state.meta.deleted) {
+    return (
+      <div className="app">
+        <div className="screen" style={{ textAlign: 'center', marginTop: '12vh' }}>
+          <h2>The waiting room has greyed</h2>
+          <p className="sub">No Master tended this world for six months. Its tower stands grey and empty; the account is gone.</p>
+          <button
+            className="btn primary big"
+            onClick={() => {
+              window.localStorage.removeItem('pmu.save.v1')
+              location.reload()
+            }}
+          >
+            Begin again as a new Master
+          </button>
+        </div>
+      </div>
+    )
+  }
+
   function go(place: PlaceId) {
     setMenuOpen(false)
     if (place === 'tower' || place === 'summon' || place === 'party' || place === 'roster') {

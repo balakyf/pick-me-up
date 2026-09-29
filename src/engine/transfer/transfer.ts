@@ -57,6 +57,7 @@ function busyReason(hero: OwnedHero | undefined, who: string): string | null {
   if (hero.promotion !== null) return `The ${who} is being promoted.`
   if (hero.training !== null) return `The ${who} is training.`
   if (hero.expedition) return `The ${who} is away in the Ruins.`
+  if (hero.captiveOf) return `The ${who} is held captive.`
   return null
 }
 

@@ -53,6 +53,7 @@ export const PROP_FRAMES: Record<PropKind, number> = {
   orrery: 4,
   rift: 4,
   stall: 1,
+  standard: 2,
 }
 
 const STONE = ramp('#4a4452', '#6e6678', '#8e869a')
@@ -532,6 +533,21 @@ function stall(): PropSprite {
   return { bmp: outline(b, INK), dx: 0, dy: -10 }
 }
 
+/** A standing guild banner on a pole. */
+function standard(f: number): PropSprite {
+  const b = createBitmap(16, 34)
+  vline(b, 3, 2, 30, WOOD.d)
+  vline(b, 4, 2, 30, WOOD.m)
+  rect(b, 1, 31, 7, 3, WOOD.d)
+  set(b, 4, 1, GOLD.l)
+  const sway = f % 2
+  rect(b, 5, 4, 9, 13, hex('#2a4a8a'))
+  hline(b, 5, 4, 9, GOLD.m)
+  for (let i = 0; i < 3; i++) set(b, 13 - i + sway, 17 + i, hex('#2a4a8a')) // tail
+  rect(b, 8, 8, 3, 3, GOLD.l) // sigil
+  return { bmp: outline(b, INK), dx: 0, dy: -18 }
+}
+
 const DRAW: Record<PropKind, (f: number) => PropSprite> = {
   hearth,
   table,
@@ -559,6 +575,7 @@ const DRAW: Record<PropKind, (f: number) => PropSprite> = {
   orrery,
   rift,
   stall,
+  standard,
 }
 
 export function drawProp(kind: PropKind, frame = 0): PropSprite {
