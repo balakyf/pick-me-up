@@ -14,6 +14,7 @@ import { createAccount } from '../account'
 import { levelCapForStar } from '../stats'
 import { makeSeed } from '../rng'
 import { SKILLS } from '../content'
+import { learnableSkillIds } from '../skills'
 import { TUNING } from '../tuning'
 import type { GameState, OwnedHero, HeroId, Star, Element, MaterialId } from '../types'
 
@@ -30,7 +31,7 @@ function cappedHero(overrides: Partial<OwnedHero> = {}): OwnedHero {
     element: 'fire',
     baseAttrs: { str: 12, agi: 11, vit: 13, int: 10, wil: 12 },
     growthGrades: { str: 2, agi: 1, vit: 3, int: 0, wil: 2 },
-    skillIds: [],
+    skills: [],
     portraitToken: '#fff',
     origin: 'procedural',
     xp: { level: levelCapForStar(star), xpIntoLevel: 0, heldXp: 0, atCap: true },
@@ -181,17 +182,25 @@ describe('completePromotion', () => {
     }
   })
 
-  it('grants a promotion skill the hero did not already have', () => {
-    const hero = cappedHero({ skillIds: [] })
+  it('grants a learnable promotion skill the hero did not already have, at Lv1', () => {
+    const hero = cappedHero({ skills: [] })
     const done = completePromotion(hero, makeSeed(7))
-    expect(done.skillIds.length).toBe(1)
-    expect(Object.keys(SKILLS)).toContain(done.skillIds[0])
+    expect(done.skills.length).toBe(1)
+    expect(learnableSkillIds()).toContain(done.skills[0]!.id)
+    expect(done.skills[0]).toMatchObject({ level: 1, xp: 0 })
   })
 
-  it('no-ops the skill grant when the hero already knows every skill', () => {
-    const all = Object.keys(SKILLS)
-    const done = completePromotion(cappedHero({ skillIds: all }), makeSeed(7))
-    expect(done.skillIds.sort()).toEqual(all.sort())
+  it('never grants a merge-only skill', () => {
+    for (let seed = 1; seed <= 40; seed++) {
+      const done = completePromotion(cappedHero({ skills: [] }), makeSeed(seed))
+      expect(SKILLS[done.skills[0]!.id]!.learnable).toBe(true)
+    }
+  })
+
+  it('no-ops the skill grant when the hero already knows every learnable skill', () => {
+    const all = learnableSkillIds().map((id) => ({ id, level: 2, xp: 1 }))
+    const done = completePromotion(cappedHero({ skills: all }), makeSeed(7))
+    expect(done.skills).toEqual(all)
   })
 
   it('is deterministic in (hero, accountSeed)', () => {

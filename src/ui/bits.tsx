@@ -1,5 +1,8 @@
 import type { Element, HeroClass, Star, OwnedHero } from '../engine/types'
 import { combatPowerForHero, gradeValueToLetter } from '../engine/stats'
+import { heroBustUrl } from './pixel/sprites'
+import { SKILLS } from '../engine/content'
+import { maxLevelFor, skillCp } from '../engine/skills'
 
 /** Visual tokens for elements. */
 export const ELEMENT_VIS: Record<Element, { glyph: string; color: string; label: string }> = {
@@ -37,8 +40,33 @@ export function classGlyph(c: HeroClass | null): string {
   return c === null ? '—' : CLASS_VIS[c].glyph
 }
 
+/** Display CP — the same number the combat unit carries (stats + skills term). */
 export function cpOf(hero: OwnedHero): number {
-  return combatPowerForHero(hero, hero.xp.level)
+  return combatPowerForHero(hero, hero.xp.level, skillCp(hero.skills))
+}
+
+/** A hero's skills as `name · grade · Lv N` chips (read-only, Layer 1 §2). */
+export function SkillList({ hero, max }: { hero: OwnedHero; max?: number }) {
+  const shown = max !== undefined ? hero.skills.slice(0, max) : hero.skills
+  if (hero.skills.length === 0) return <div className="skill-list empty-skills">No skills yet</div>
+  return (
+    <div className="skill-list">
+      {shown.map((s) => {
+        const def = SKILLS[s.id]
+        if (!def) return null
+        const cap = maxLevelFor(def.grade)
+        return (
+          <div key={s.id} className={`skill-chip grade-${def.grade}`} title={`${def.name} · grade ${def.grade} · Lv ${s.level}/${cap}`}>
+            <span className="skill-grade">{def.grade}</span>
+            <span className="skill-name">{def.name}</span>
+            <span className="skill-lv">Lv {s.level}</span>
+            {def.hpCost !== undefined && <span className="skill-hp" title="Costs HP to cast">♥</span>}
+          </div>
+        )
+      })}
+      {max !== undefined && hero.skills.length > max && <div className="skill-more">+{hero.skills.length - max} more</div>}
+    </div>
+  )
 }
 
 /** Deterministic display color from a hero's portrait token (hex) or id. */
@@ -95,18 +123,25 @@ export function hpColor(pct: number): string {
   return '#ef5d6b'
 }
 
+/** Element-tinted backdrop behind a hero's pixel bust. */
+function portraitBg(hero: OwnedHero): string {
+  const c = ELEMENT_VIS[hero.element].color
+  return `linear-gradient(180deg, ${c}55 0%, #120e2c 85%)`
+}
+
 export function Portrait({ hero, size = 'card' }: { hero: OwnedHero; size?: 'card' | 'sm' }) {
-  const bg = portraitColor(hero)
+  const src = heroBustUrl(hero)
   if (size === 'sm') {
     return (
-      <div className="cp-dot" style={{ background: bg }}>
-        {initials(hero.name)}
+      <div className="cp-dot" style={{ background: portraitBg(hero) }} title={hero.name}>
+        {src ? <img className="px" src={src} alt="" /> : initials(hero.name)}
       </div>
     )
   }
   return (
-    <div className="portrait" style={{ background: `linear-gradient(150deg, ${bg}, ${bg}aa)` }}>
-      {ELEMENT_VIS[hero.element].glyph}
+    <div className="portrait" style={{ background: portraitBg(hero) }}>
+      {src ? <img className="px" src={src} alt={hero.name} /> : <span>{initials(hero.name)}</span>}
+      <span className="p-el">{ELEMENT_VIS[hero.element].glyph}</span>
     </div>
   )
 }

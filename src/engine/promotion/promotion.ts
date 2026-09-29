@@ -16,7 +16,7 @@
 import { TUNING } from '../tuning'
 import { envelopeForStar, levelCapForStar, applyXp } from '../stats'
 import { rollAttributes } from '../gacha'
-import { SKILLS } from '../content'
+import { learnableSkillIds } from '../skills'
 import { rngFor, pick } from '../rng'
 import type {
   GameState,
@@ -127,13 +127,15 @@ export function completePromotion(hero: OwnedHero, accountSeed: Seed): OwnedHero
   const baseAttrs = mergeUpward(hero.baseAttrs, rolled.baseAttrs)
   const growthGrades = mergeUpward(hero.growthGrades, rolled.grades)
 
-  // Grant one skill the hero does not already know (no-op if it knows them all).
-  let skillIds = hero.skillIds
-  const missing = Object.keys(SKILLS).filter((id) => !hero.skillIds.includes(id))
+  // Grant one learnable skill the hero does not already know, at Lv1 (no-op if it
+  // knows them all). Merge-only skills are never handed out by promotion.
+  let skills = hero.skills
+  const known = new Set(hero.skills.map((s) => s.id))
+  const missing = learnableSkillIds().filter((id) => !known.has(id))
   if (missing.length > 0) {
     const drew = pick(rng, missing)
     rng = drew.rng
-    skillIds = [...hero.skillIds, drew.value]
+    skills = [...hero.skills, { id: drew.value, level: 1, xp: 0 }]
   }
 
   // Lift the cap and release held XP into the newly available levels.
@@ -143,7 +145,7 @@ export function completePromotion(hero: OwnedHero, accountSeed: Seed): OwnedHero
     newStar,
   )
 
-  return { ...hero, star: newStar, baseAttrs, growthGrades, skillIds, xp, promotion: null }
+  return { ...hero, star: newStar, baseAttrs, growthGrades, skills, xp, promotion: null }
 }
 
 /**

@@ -146,7 +146,7 @@ describe('core loop — end to end', () => {
       element: 'fire',
       baseAttrs: { str: 20, agi: 20, vit: 20, int: 20, wil: 20 },
       growthGrades: { str: 4, agi: 4, vit: 4, int: 4, wil: 4 },
-      skillIds: [],
+      skills: [],
       portraitToken: '#fff',
       origin: 'procedural',
       xp: { level: levelCapForStar(star), xpIntoLevel: 0, heldXp: 0, atCap: true },

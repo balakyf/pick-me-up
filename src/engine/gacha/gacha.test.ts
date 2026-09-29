@@ -404,7 +404,7 @@ describe('summon', () => {
     const proc = heroes.filter((h) => h.origin === 'procedural')
     expect(proc.length).toBeGreaterThan(0)
     for (const h of proc) {
-      expect(h.skillIds).toEqual([])
+      expect(h.skills).toEqual([])
       expect(h.portraitToken).toMatch(/^#[0-9a-f]{6}$/)
     }
   })

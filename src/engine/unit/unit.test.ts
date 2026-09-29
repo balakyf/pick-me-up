@@ -21,6 +21,9 @@ import {
   combatPower,
 } from '../stats'
 import { CAMEO_HEROES, ENEMY_TEMPLATES, SKILLS } from '../content'
+import { resolveSkillEffect, skillCp } from '../skills'
+
+const lv1 = (id: string) => resolveSkillEffect({ id, level: 1, xp: 0 })!
 import { sanityStatMult } from '../kitchen'
 import { TUNING } from '../tuning'
 import type {
@@ -47,7 +50,7 @@ function ownedFromTemplate(t: HeroTemplate, level = 1): OwnedHero {
     element: t.element,
     baseAttrs: t.baseAttrs,
     growthGrades: t.growthGrades,
-    skillIds: t.skillIds,
+    skills: t.skillIds.map((id) => ({ id, level: 1, xp: 0 })),
     portraitToken: t.portraitToken,
     origin: 'cameo',
     xp: { level, xpIntoLevel: 0, heldXp: 0, atCap: false },
@@ -68,7 +71,7 @@ function makeWarrior(overrides: Partial<OwnedHero> = {}): OwnedHero {
     element: 'fire',
     baseAttrs: { str: 20, agi: 15, vit: 18, int: 8, wil: 12 },
     growthGrades: { str: 5, agi: 4, vit: 5, int: 2, wil: 3 },
-    skillIds: ['power_strike'],
+    skills: [{ id: 'power_strike', level: 1, xp: 0 }],
     portraitToken: '#ffffff',
     origin: 'procedural',
     xp: { level: 7, xpIntoLevel: 0, heldXp: 0, atCap: false },
@@ -129,14 +132,20 @@ describe('basicAttackFor', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('resolveSkills', () => {
-  it('maps present ids to their effects in order', () => {
+  it('maps present ids to their Lv1 effects in order', () => {
     const effects = resolveSkills(['power_strike', 'arcane_burst'], SKILLS)
-    expect(effects).toEqual([SKILLS.power_strike, SKILLS.arcane_burst])
+    expect(effects).toEqual([lv1('power_strike'), lv1('arcane_burst')])
+  })
+
+  it('a Lv1 skill keeps its pre-leveling numbers (baseMult = old skillMult)', () => {
+    const [ps] = resolveSkills(['power_strike'], SKILLS)
+    expect(ps!.skillMult).toBe(1.6)
+    expect(ps!.spCost).toBe(30)
   })
 
   it('skips unknown ids', () => {
     const effects = resolveSkills(['power_strike', 'does_not_exist', 'shadow_flurry'], SKILLS)
-    expect(effects).toEqual([SKILLS.power_strike, SKILLS.shadow_flurry])
+    expect(effects).toEqual([lv1('power_strike'), lv1('shadow_flurry')])
   })
 
   it('returns [] for an empty id list', () => {
@@ -169,7 +178,8 @@ describe('buildCombatUnit', () => {
     expect(unit.currentSP).toBe(expectedMaxSP)
     expect(unit.actionGauge).toBe(0)
     expect(unit.alive).toBe(true)
-    expect(unit.cp).toBe(combatPower(stats))
+    // CP = stat CP + the skills' CP term (Layer 1 §2.5).
+    expect(unit.cp).toBe(combatPower(stats, skillCp(hero.skills)))
     expect(unit.side).toBe('hero')
     expect(unit.unitClass).toBe('warrior')
     expect(unit.line).toBe('front')
@@ -186,11 +196,18 @@ describe('buildCombatUnit', () => {
     const unit = buildCombatUnit(hero, 'mid', SKILLS)
     expect(unit.skills[0].id).toBe('basic')
     expect(unit.skills.some((s) => s.id === 'basic')).toBe(true)
-    expect(unit.skills).toEqual([basicAttackFor(hero), SKILLS.power_strike])
+    expect(unit.skills).toEqual([basicAttackFor(hero), lv1('power_strike')])
+  })
+
+  it('resolves leveled skills: a higher skill level raises the multiplier and the CP', () => {
+    const lo = buildCombatUnit(makeWarrior({ skills: [{ id: 'power_strike', level: 1, xp: 0 }] }), 'front', SKILLS)
+    const hi = buildCombatUnit(makeWarrior({ skills: [{ id: 'power_strike', level: 4, xp: 0 }] }), 'front', SKILLS)
+    expect(hi.skills[1]!.skillMult).toBeGreaterThan(lo.skills[1]!.skillMult)
+    expect(hi.cp).toBeGreaterThan(lo.cp)
   })
 
   it("a mage hero's synthesized basic attack is magic", () => {
-    const mage = makeWarrior({ heroClass: 'mage', skillIds: ['arcane_burst'] })
+    const mage = makeWarrior({ heroClass: 'mage', skills: [{ id: 'arcane_burst', level: 1, xp: 0 }] })
     const unit = buildCombatUnit(mage, 'back', SKILLS)
     const basic = unit.skills.find((s) => s.id === 'basic')
     expect(basic).toBeDefined()
@@ -198,7 +215,7 @@ describe('buildCombatUnit', () => {
   })
 
   it('defaults to an empty registry (only the basic attack survives)', () => {
-    const hero = makeWarrior({ skillIds: ['power_strike'] })
+    const hero = makeWarrior({ skills: [{ id: 'power_strike', level: 1, xp: 0 }] })
     const unit = buildCombatUnit(hero, 'front')
     expect(unit.skills.map((s) => s.id)).toEqual(['basic'])
   })
@@ -284,7 +301,7 @@ describe('buildCombatUnit — equipment', () => {
     const item = weapon({ statBonus: { pAtk: 100, mAtk: 100 } })
     const bare = buildCombatUnit(makeWarrior(), 'front', SKILLS)
     const geared = buildCombatUnit(gearedWarrior(item), 'front', SKILLS, [item])
-    expect(geared.cp).toBe(combatPower(geared.stats))
+    expect(geared.cp).toBe(combatPower(geared.stats, skillCp(gearedWarrior(item).skills)))
     expect(geared.cp).toBeGreaterThan(bare.cp)
   })
 

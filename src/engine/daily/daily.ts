@@ -21,6 +21,7 @@ import { buildCombatUnit } from '../unit'
 import { runBattle } from '../combat'
 import { SKILLS } from '../content'
 import { applyXp } from '../stats'
+import { foldBattleSkills } from '../skills'
 import { hash, rngFor } from '../rng/rng'
 import type {
   GameState,
@@ -32,6 +33,7 @@ import type {
   BattleResult,
   MaterialId,
   Element,
+  SkillProgress,
 } from '../types'
 
 const D = TUNING.lobby.daily
@@ -59,6 +61,8 @@ export interface DailyResult {
   /** True when this attempt was paid for with gems (beyond the free allotment). */
   paid: boolean
   rewards: DailyReward
+  /** Skill level-ups and merges earned by the survivors this run. */
+  skillProgress: SkillProgress[]
   result: BattleResult
 }
 
@@ -131,7 +135,7 @@ function dailyFloor(state: GameState): number {
  * Gates on the tower-progress unlock and attempt budget (free, then gem-paid). Builds
  * the party from alive, non-broken-down slots, runs a seeded battle reusing the tower
  * filler generator, and on a WIN folds the weekday reward into the account (and hero
- * XP into deployed survivors). NON-LETHAL: fallen heroes are not killed and Sanity is
+ * XP into deployed survivors; survivors also auto-learn skills from their casts). NON-LETHAL: fallen heroes are not killed and Sanity is
  * untouched. Always consumes the attempt. Throws when locked or unaffordable.
  */
 export function attemptDaily(state: GameState, nowWorld: number): { state: GameState; result: DailyResult } {
@@ -173,14 +177,16 @@ export function attemptDaily(state: GameState, nowWorld: number): { state: GameS
 
   // ── Fold rewards into the account (NON-LETHAL: no permadeath, no Sanity change). ──
   const survivorSet = new Set<string>(res.survivorHeroIds as string[])
-  let heroes = state.heroes
-  if (cleared && rewards.heroXp) {
-    heroes = { ...state.heroes }
-    for (const id of deployedIds) {
-      if (!survivorSet.has(id as string)) continue
-      const h = heroes[id]!
-      heroes[id] = { ...h, xp: applyXp(h.xp, rewards.heroXp, h.star) }
-    }
+  const heroes = { ...state.heroes }
+  const skillProgress: SkillProgress[] = []
+  for (const id of deployedIds) {
+    if (!survivorSet.has(id as string)) continue
+    const h = heroes[id]!
+    // Survivors auto-learn from their casts win or lose (Layer 1 §2.4); XP only on a win.
+    const learned = foldBattleSkills(id, h.skills, res.skillCasts[id as string])
+    skillProgress.push(...learned.progress)
+    const xp = cleared && rewards.heroXp ? applyXp(h.xp, rewards.heroXp, h.star) : h.xp
+    heroes[id] = { ...h, xp, skills: learned.skills }
   }
 
   const materials: Record<MaterialId, number> = { ...state.materials }
@@ -199,6 +205,6 @@ export function attemptDaily(state: GameState, nowWorld: number): { state: GameS
 
   return {
     state: nextState,
-    result: { dayIndex, dungeon: dailyDungeonFor(dayIndex), cleared, paid, rewards, result: res },
+    result: { dayIndex, dungeon: dailyDungeonFor(dayIndex), cleared, paid, rewards, skillProgress, result: res },
   }
 }

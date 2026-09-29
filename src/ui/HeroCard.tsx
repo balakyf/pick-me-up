@@ -1,6 +1,6 @@
 import type { OwnedHero } from '../engine/types'
 import { deriveStatsForHero, levelCapForStar } from '../engine/stats'
-import { Stars, ElementBadge, ClassBadge, Portrait, STAR_COLOR, cpOf, gradeLetters } from './bits'
+import { Stars, ElementBadge, ClassBadge, Portrait, STAR_COLOR, cpOf, gradeLetters, SkillList } from './bits'
 
 interface Props {
   hero: OwnedHero
@@ -43,6 +43,7 @@ export function HeroCard({ hero, onClick, selected, showStats }: Props) {
           {cpOf(hero)}
         </span>
       </div>
+      <SkillList hero={hero} max={showStats ? undefined : 3} />
       {dead && <div className="muted" style={{ color: 'var(--bad)', marginTop: 6, fontWeight: 700 }}>☠ Fallen</div>}
       {stats && (
         <div className="statgrid">

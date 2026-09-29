@@ -24,7 +24,7 @@ function strongHero(id = 'h_str'): OwnedHero {
     element: 'fire',
     baseAttrs: { str: 100, agi: 100, vit: 100, int: 100, wil: 100 },
     growthGrades: { str: 10, agi: 10, vit: 10, int: 10, wil: 10 },
-    skillIds: [],
+    skills: [],
     portraitToken: '#fff',
     origin: 'procedural',
     xp: { level: 80, xpIntoLevel: 0, heldXp: 0, atCap: false },
@@ -151,6 +151,14 @@ describe('attemptDaily', () => {
     const afterXp = after.heroes['h_str' as HeroId]!.xp
     expect(afterXp.level >= beforeXp.level && afterXp.xpIntoLevel >= beforeXp.xpIntoLevel).toBe(true)
     expect(afterXp).not.toEqual(beforeXp)
+  })
+
+  it('survivors auto-learn skills from their casts (reported on the result)', () => {
+    const xpToLv2 = TUNING.skills.xpToNext[1]!
+    const hero = { ...strongHero(), skills: [{ id: 'power_strike', level: 1, xp: xpToLv2 - 1 }] }
+    const { state: after, result } = attemptDaily(dailyState({ hero }), inDay(0))
+    expect(after.heroes['h_str' as HeroId]!.skills[0]!.level).toBe(2)
+    expect(result.skillProgress).toContainEqual({ kind: 'level-up', heroId: 'h_str', skillId: 'power_strike', level: 2 })
   })
 
   it('is deterministic in (state, nowWorld)', () => {

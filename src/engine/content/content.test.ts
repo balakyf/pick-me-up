@@ -152,7 +152,9 @@ describe('SKILLS', () => {
     for (const [key, skill] of Object.entries(SKILLS)) {
       expect(skill.id).toBe(key)
       expect(skill.name.length).toBeGreaterThan(0)
-      expect(skill.skillMult).toBeGreaterThan(0)
+      expect(skill.baseMult).toBeGreaterThan(0)
+      expect(skill.perLevel).toBeGreaterThanOrEqual(0)
+      expect(['F', 'E', 'D', 'C', 'B', 'A', 'S', 'U']).toContain(skill.grade)
       expect(['physical', 'magic']).toContain(skill.damageType)
       expect(['single', 'all-enemies']).toContain(skill.target)
       expect(skill.spCost).toBeGreaterThanOrEqual(0)

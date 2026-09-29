@@ -157,7 +157,7 @@ describe('advanceTime — promotion completion', () => {
       element: 'fire',
       baseAttrs: { str: 12, agi: 12, vit: 12, int: 12, wil: 12 },
       growthGrades: { str: 2, agi: 2, vit: 2, int: 2, wil: 2 },
-      skillIds: [],
+      skills: [],
       portraitToken: '#fff',
       origin: 'procedural',
       xp: { level: levelCapForStar(star), xpIntoLevel: 0, heldXp: 0, atCap: true },

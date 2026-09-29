@@ -113,9 +113,13 @@ export interface XpProgress {
 
 export type SkillTarget = 'single' | 'all-enemies'
 
+/** Skill grade ladder (Layer 1 §2.1). Grade sets the level cap and the CP weight. */
+export type SkillGrade = 'F' | 'E' | 'D' | 'C' | 'B' | 'A' | 'S' | 'U'
+
 /** The effect block the combat sim reads. `element: null` means "inherit the
  *  unit's element". Every unit also has an implicit basic attack synthesized at
- *  build time, so skillIds may be empty. */
+ *  build time, so a hero's skill list may be empty. `skillMult` is the already
+ *  leveled multiplier; `hpCost` (when present) is paid from current HP on cast. */
 export interface SkillEffect {
   id: string
   name: string
@@ -124,6 +128,44 @@ export interface SkillEffect {
   element: Element | null
   target: SkillTarget
   spCost: number
+  /** HP spent per cast (the canon "consumes vitality" ultimates). Absent = none. */
+  hpCost?: number
+}
+
+/** Authored, static skill definition (the registry entry). Levels resolve it into a SkillEffect. */
+export interface SkillDef {
+  id: string
+  name: string
+  grade: SkillGrade
+  damageType: DamageType
+  element: Element | null
+  target: SkillTarget
+  spCost: number
+  /** skillMult at level 1. */
+  baseMult: number
+  /** skillMult added per level above 1. */
+  perLevel: number
+  /** HP cost at level 1 (HP-cost ultimates only). */
+  hpCost?: number
+  /** HP cost added per level above 1 — strong enough ultimates price themselves out. */
+  hpCostPerLevel?: number
+  /** Can a promotion grant this skill? (Merge-only / achievement skills cannot.) */
+  learnable: boolean
+}
+
+/** A hero's copy of a skill: it levels by being cast (auto-learn, Layer 1 §2.4). */
+export interface HeroSkill {
+  id: string
+  level: number
+  /** Use-XP banked toward the next level. */
+  xp: number
+}
+
+/** Auto-merge recipe: holding both inputs at ≥ minLevel fuses them into `result` (Lv1). */
+export interface MergeRecipe {
+  inputs: readonly [string, string]
+  minLevel: number
+  result: string
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -171,8 +213,11 @@ export interface Hero {
   origin: HeroOrigin
 }
 
-/** What the account persists: a Hero plus mutable runtime state. */
-export interface OwnedHero extends Hero {
+/** What the account persists: a Hero plus mutable runtime state. The innate
+ *  `skillIds` become leveled `skills` once the hero is owned (schema v4). */
+export interface OwnedHero extends Omit<Hero, 'skillIds'> {
+  /** The hero's skills with their levels (Layer 1 §2). */
+  skills: HeroSkill[]
   xp: XpProgress
   alive: boolean
   /** 0..100; drains in the tower, regens in the lobby (Phase 3). */
@@ -375,6 +420,8 @@ export type CombatEvent = { seq: number; tick: number } & (
   | { kind: 'act'; actorId: string; skillId: string; targetId: string }
   | { kind: 'hit'; actorId: string; targetId: string; amount: number; crit: boolean; hpAfter: number }
   | { kind: 'miss'; actorId: string; targetId: string }
+  /** An HP-cost ultimate drained its caster (never lethal: casts are gated on HP). */
+  | { kind: 'hp-cost'; unitId: string; amount: number; hpAfter: number }
   /** A low-Sanity hero panicked and lost its turn (Layer 3 §3.2). */
   | { kind: 'panic'; unitId: string }
   | { kind: 'death'; unitId: string }
@@ -400,8 +447,16 @@ export interface BattleResult {
   defeatedTargetTags: string[]
   survivorHeroIds: HeroId[]
   fallenHeroIds: HeroId[]
+  /** Authored-skill casts per hero (heroId → skillId → count). Basic attacks and
+   *  enemies are not tallied. Feeds the post-combat auto-learn fold. */
+  skillCasts: Record<string, Record<string, number>>
   log: CombatLog
 }
+
+/** A skill milestone reached in the post-combat fold (for the results screen). */
+export type SkillProgress =
+  | { kind: 'level-up'; heroId: HeroId; skillId: string; level: number }
+  | { kind: 'merge'; heroId: HeroId; skillId: string; from: readonly [string, string] }
 
 // ── Floor resolution (tower → account) ───────────────────────────────────────
 
@@ -414,6 +469,8 @@ export interface FloorResult {
   /** Materials the clear dropped this attempt (empty on a wipe). */
   materialsAwarded: Record<MaterialId, number>
   fallenHeroIds: HeroId[]
+  /** Skill level-ups and merges earned by the survivors this attempt. */
+  skillProgress: SkillProgress[]
   result: BattleResult
 }
 
@@ -465,7 +522,7 @@ export interface AnchorDef {
   waves: AnchorWaveSpec[][]
 }
 
-export type SkillRegistry = Record<string, SkillEffect>
+export type SkillRegistry = Record<string, SkillDef>
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Persistence + store command surface

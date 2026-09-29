@@ -27,6 +27,7 @@ import type {
   DerivedStats,
   EquipmentItem,
   Element,
+  HeroSkill,
 } from '../types'
 import {
   deriveStats,
@@ -37,6 +38,7 @@ import {
 } from '../stats'
 import { applySanityPenalty } from '../kitchen'
 import { equipmentBonus } from '../equipment'
+import { resolveSkillEffect, skillCp } from '../skills'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Basic attack & skill resolution
@@ -63,16 +65,24 @@ export function basicAttackFor(hero: OwnedHero, element: Element = hero.element)
 }
 
 /**
- * Resolve a list of skill ids against a registry into their SkillEffect blocks.
- * Unknown ids are silently skipped (an authored cameo may reference a skill not
- * present in the slice's small registry, and a cameo may have none at all).
+ * Resolve a list of skill ids against a registry into their Lv1 SkillEffect
+ * blocks. Unknown ids are silently skipped (an authored cameo may reference a
+ * skill not present in the registry, and a cameo may have none at all).
  * Order is preserved.
  */
 export function resolveSkills(skillIds: string[], registry: SkillRegistry): SkillEffect[] {
+  return resolveHeroSkills(
+    skillIds.map((id) => ({ id, level: 1, xp: 0 })),
+    registry,
+  )
+}
+
+/** Resolve a hero's leveled skills into the SkillEffects the sim reads (order kept). */
+export function resolveHeroSkills(skills: readonly HeroSkill[], registry: SkillRegistry): SkillEffect[] {
   const out: SkillEffect[] = []
-  for (const id of skillIds) {
-    const effect = registry[id]
-    if (effect !== undefined) out.push(effect)
+  for (const s of skills) {
+    const effect = resolveSkillEffect(s, registry)
+    if (effect !== null) out.push(effect)
   }
   return out
 }
@@ -86,8 +96,8 @@ export function resolveSkills(skillIds: string[], registry: SkillRegistry): Skil
  *
  * Level is the hero's current level. Stats/SP are derived once from the leveled
  * attributes and frozen onto the unit. The skill list is the implicit basic
- * attack followed by the hero's resolved authored skills. CP is the display CP
- * of the derived stats. sourceHeroId links back to the OwnedHero for XP and
+ * attack followed by the hero's leveled skills. CP is the display CP of the
+ * derived stats plus the skills' CP term. sourceHeroId links back to the OwnedHero for XP and
  * permadeath bookkeeping after the battle.
  */
 export function buildCombatUnit(
@@ -126,9 +136,10 @@ export function buildCombatUnit(
     currentSP: maxSP,
     actionGauge: 0,
     alive: true,
-    skills: [basicAttackFor(hero, element), ...resolveSkills(hero.skillIds, registry)],
+    skills: [basicAttackFor(hero, element), ...resolveHeroSkills(hero.skills, registry)],
     keywords: [...gear.keywords],
-    cp: combatPower(stats),
+    // Skills add a CP term (Layer 1 §2.5): Σ gradeValue × level, weighted.
+    cp: combatPower(stats, skillCp(hero.skills, registry)),
     sourceHeroId: hero.id,
     // Carried for the combat panic check; enemies have no Sanity (field absent).
     sanity: hero.sanity,
