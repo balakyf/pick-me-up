@@ -72,7 +72,7 @@ describe('createAccount — defaults', () => {
     expect(acct.accountId).toBe('46631913')
     expect(acct.accountId).toBe(TUNING.account.defaultAccountId)
     expect(acct.worldGrade).toBe('C')
-    expect(acct.gold).toBe(3000)
+    expect(acct.gold).toBe(TUNING.economy.startingGold)
     expect(acct.gold).toBe(TUNING.economy.startingGold)
     expect(acct.tower.currentFloor).toBe(1)
     expect(acct.tower.highestCleared).toBe(0)

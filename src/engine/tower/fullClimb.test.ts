@@ -93,7 +93,8 @@ describe('acts and bands', () => {
     }
   })
 
-  it('the mob-level curve steepens past F70 and stays near canon (F80 ≈ Lv108)', () => {
+  it('the mob-level curve steepens past F70 and explodes at the Wailing Wall (F80 ≈ Lv103)', () => {
+    expect(mobLevel(80, 1) - mobLevel(79, 1)).toBeGreaterThanOrEqual(T.wallLevelBonus)
     expect(mobLevel(70, 1)).toBe(Math.round(70 * T.mobLevelPerFloor))
     expect(mobLevel(80, 1) - mobLevel(79, 1)).toBeGreaterThan(mobLevel(60, 1) - mobLevel(59, 1))
     expect(mobLevel(80, 1)).toBeGreaterThan(100)

@@ -520,12 +520,25 @@ function advancedPull(state: GameState): { state: GameState; hero: OwnedHero } {
  * Perform `count` pulls from a pool, paying up front (the Advanced 10-pull at its
  * discount). PURE. Throws when the account cannot afford the whole batch.
  */
+/**
+ * The mercy pull: a Master with no living hero and not enough gold for a Normal pull
+ * gets one for free, so a wiped roster can never lock the game.
+ */
+export function mercySummonAvailable(state: GameState): boolean {
+  const anyone = (Object.values(state.heroes) as OwnedHero[]).some((h) => h.alive && !h.captiveOf)
+  return !anyone && state.gold < TUNING.gacha.normalCostGold
+}
+
 export function summonMany(
   state: GameState,
   pool: SummonPool = 'normal',
   count: number = 1,
 ): { state: GameState; heroes: OwnedHero[] } {
   if (!Number.isInteger(count) || count < 1) throw new Error(`summon: invalid count ${count}`)
+  if (pool === 'normal' && count === 1 && mercySummonAvailable(state)) {
+    const res = summon({ ...state, gold: state.gold + TUNING.gacha.normalCostGold })
+    return { state: res.state, heroes: [res.hero] }
+  }
   const cost = summonCost(pool, count)
   if (state.gold < cost.gold) throw new Error(`summon: insufficient gold (have ${state.gold}, need ${cost.gold})`)
   if (state.gems < cost.gems) throw new Error(`summon: insufficient gems (have ${state.gems}, need ${cost.gems})`)

@@ -16,6 +16,7 @@ import {
   rollAdvancedStar,
   summonMany,
   summonCost,
+  mercySummonAvailable,
 } from './gacha'
 import { PVP_DEFAULTS } from '../account'
 import { TUNING, STAR_ENVELOPES } from '../tuning'
@@ -577,5 +578,23 @@ describe('Advanced pool', () => {
   it('normal pulls never carry an engraving', () => {
     const { heroes } = runSummons(77, 60)
     for (const h of heroes) expect(h.engraving).toBeNull()
+  })
+})
+
+describe('the mercy pull (no softlock)', () => {
+  it('a Master with no living hero and too little gold gets one free Normal pull', () => {
+    const broke = makeState({ gold: 100 })
+    expect(mercySummonAvailable(broke)).toBe(true)
+    const { state, heroes } = summonMany(broke, 'normal', 1)
+    expect(heroes).toHaveLength(1)
+    expect(state.gold).toBe(100) // nothing charged
+    expect(mercySummonAvailable(state)).toBe(false) // one living hero now
+  })
+
+  it('is not offered while any hero lives, or when a pull is affordable', () => {
+    expect(mercySummonAvailable(makeState({ gold: TUNING.gacha.normalCostGold }))).toBe(false)
+    const one = summon(makeState()).state
+    expect(mercySummonAvailable({ ...one, gold: 0 })).toBe(false)
+    expect(() => summonMany({ ...one, gold: 0 }, 'normal', 1)).toThrow(/insufficient gold/)
   })
 })

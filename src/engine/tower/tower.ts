@@ -38,7 +38,7 @@ import type {
 import { buildCombatUnit, buildEnemyUnit, buildAllyUnit } from '../unit'
 import { runBattle } from '../combat'
 import { ENEMY_TEMPLATES, ALLY_TEMPLATES, ANCHORS, SKILLS, HIDDEN_OBJECTIVES, actForFloor } from '../content'
-import { applyXp } from '../stats'
+import { applyXp, xpToNext } from '../stats'
 import { clampSanity } from '../kitchen'
 import { attrStoneId } from '../promotion'
 import { tacticalFocusBonus } from '../tactical'
@@ -66,6 +66,12 @@ function powLoop(base: number, exp: number): number {
   return acc
 }
 
+/** XP each surviving hero earns for clearing a floor (see TUNING.economy.xpFloorShare). */
+export function floorXp(floor: number): number {
+  const lvl = Math.max(1, Math.min(floor, TUNING.xp.maxLevel))
+  return Math.max(ECON.xpPerFloor, Math.round(xpToNext(lvl) * ECON.xpFloorShare))
+}
+
 /**
  * The floor's target combat-power budget (Layer 2 §3):
  *   floorPower(f) = base * powerBase^f * (1 + stepBonus*floor(f/5)) * worldMult.
@@ -75,11 +81,15 @@ function powLoop(base: number, exp: number): number {
 export function floorPower(f: number, worldMult: number): number {
   const early = Math.min(f, T.inflectionFloor)
   const late = Math.max(0, f - T.inflectionFloor)
+  // The early climb is budgeted up (tapering to nothing at the inflection), so the first
+  // acts ask for a real party instead of falling in an afternoon.
+  const boost = 1 + (T.earlyBudgetBoost * Math.max(0, T.inflectionFloor - f)) / T.inflectionFloor
   return (
     T.base *
     powLoop(T.powerBase, early) *
     powLoop(T.latePowerBase, late) *
     (1 + T.stepBonus * Math.floor(f / 5)) *
+    boost *
     worldMult
   )
 }
@@ -90,7 +100,9 @@ export function floorPower(f: number, worldMult: number): number {
  */
 export function mobLevel(f: number, worldMult: number): number {
   const inflection = Math.max(0, f - T.inflectionFloor) * T.inflectionLevelPerFloor
-  return Math.round((f * T.mobLevelPerFloor + inflection) * worldMult)
+  // Canon: the difficulty "explodes" at the Wailing Wall (F80) and never comes back down.
+  const wall = f >= T.wallFloor ? T.wallLevelBonus : 0
+  return Math.round((f * T.mobLevelPerFloor + inflection + wall) * worldMult)
 }
 
 /**
@@ -135,14 +147,14 @@ export function rollMaterialDrops(
 
   const stone = chance(r, Math.min(1, MD.promotionStoneChance * mult))
   r = stone.rng
-  if (stone.value) drops.promotionStone = 1
+  if (stone.value) drops.promotionStone = 1 + Math.floor(floor / MD.stonesPerTen)
 
   const attr = chance(r, Math.min(1, MD.attrStoneChance * mult))
   r = attr.rng
   if (attr.value && deployedElements.length > 0) {
     const el = pick(r, deployedElements)
     r = el.rng
-    drops[attrStoneId(el.value)] = 1
+    drops[attrStoneId(el.value)] = 1 + Math.floor(floor / MD.attrStonesEvery)
   }
 
   return drops
@@ -535,7 +547,7 @@ export function playFloor(
   const goldAwarded = cleared
     ? Math.round(ECON.goldPerFloor * floor * worldMult) * (firstClear ? ECON.firstClearMult : 1)
     : 0
-  const xpAwarded = cleared ? ECON.xpPerFloor : 0
+  const xpAwarded = cleared ? floorXp(floor) : 0
 
   // ── 5. Build the next heroes map (permadeath + XP + Sanity), never mutating inputs. ──
   const fallenSet = new Set<string>(res.fallenHeroIds as string[])
@@ -572,6 +584,11 @@ export function playFloor(
         { ...hero, xp, sanity: clampSanity(hero.sanity - drain), skills: learned.skills, blessed: false },
         hero.favor + favorDelta,
       )
+    } else if (xpAwarded > 0 && hero.alive && !hero.captiveOf) {
+      // The bench studies the battle reports: waiting-room heroes earn a share of the
+      // clear's XP, so losing a party never leaves a roster of Lv1 recruits.
+      const share = Math.round(xpAwarded * ECON.benchXpShare)
+      nextHeroes[key] = share > 0 ? { ...hero, xp: applyXp(hero.xp, share, hero.star) } : hero
     } else {
       nextHeroes[key] = hero
     }

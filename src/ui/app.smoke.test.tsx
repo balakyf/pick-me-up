@@ -70,7 +70,7 @@ describe('App smoke', () => {
     })
     // The world HUD: Master Level, currencies, menu, controls help.
     expect(container.textContent).toContain('Master Lv 1')
-    expect(container.textContent).toContain('3,000') // starting gold
+    expect(container.textContent).toContain('15,000') // starting gold
     expect(container.textContent).toContain('1 hero')
     expect(container.textContent).toContain('Menu')
     expect(container.querySelector('canvas.world-canvas')).not.toBeNull()

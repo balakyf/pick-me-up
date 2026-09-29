@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { sfx } from './audio/sound'
 import { drawSummonCircle } from './pixel/summonFx'
 import { shownStar } from '../engine/shop'
+import { mercySummonAvailable } from '../engine/gacha'
 import type { GameState, HeroId, Line, OwnedHero, FloorResult } from '../engine/types'
 import type { Store } from '../engine/store'
 import { TUNING } from '../engine/tuning'
@@ -131,7 +132,8 @@ export function SummonScreen({ state, store }: { state: GameState; store: Store 
     }
   }
 
-  const canOne = pool === 'normal' ? state.gold >= SUMMON_COST : state.gems >= ADV.costGems
+  const mercy = pool === 'normal' && mercySummonAvailable(state)
+  const canOne = pool === 'normal' ? state.gold >= SUMMON_COST || mercy : state.gems >= ADV.costGems
   const canTen = state.gems >= ADV.tenPullGems
 
   return (
@@ -181,7 +183,7 @@ export function SummonScreen({ state, store }: { state: GameState; store: Store 
         <div className="summon-buttons">
           {pool === 'normal' ? (
             <button className="btn gold big" onClick={() => pull(1)} disabled={!canOne}>
-              {t('Summon · {SUMMON_COST} Gold', { SUMMON_COST: SUMMON_COST.toLocaleString() })}
+              {mercy ? t('Summon · free (the crystal takes pity)') : t('Summon · {SUMMON_COST} Gold', { SUMMON_COST: SUMMON_COST.toLocaleString() })}
             </button>
           ) : (
             <>

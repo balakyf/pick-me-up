@@ -9,6 +9,7 @@ import {
   startPromotion,
   completePromotion,
   skipPromotion,
+  promotionPayment,
 } from './promotion'
 import { createAccount } from '../account'
 import { levelCapForStar } from '../stats'
@@ -292,5 +293,44 @@ describe('6★ → 7★ — the Book of Reverse Heaven', () => {
     const done = completePromotion(cappedHero({ star: 6 as Star }), makeSeed(3))
     expect(done.star).toBe(7)
     expect(canPromote({ ...done, xp: { ...done.xp, atCap: true } })).toBe(false)
+  })
+})
+
+describe('class change (canon: a Novice becomes a Warrior)', () => {
+  it('a classless hero reaching 3★ takes up a common class — never mage', () => {
+    for (let i = 0; i < 40; i++) {
+      const h = cappedHero({ id: `h_cc${i}` as HeroId, star: 2, heroClass: null })
+      const out = completePromotion(h, makeSeed(i))
+      expect(out.star).toBe(3)
+      expect(['warrior', 'spearman', 'thief', 'archer']).toContain(out.heroClass)
+    }
+  })
+
+  it('below the class-change star, and for a hero with a class, the class is unchanged', () => {
+    expect(completePromotion(cappedHero({ star: 1, heroClass: null }), makeSeed(1)).heroClass).toBeNull()
+    expect(completePromotion(cappedHero({ star: 3, heroClass: 'mage' }), makeSeed(1)).heroClass).toBe('mage')
+  })
+})
+
+describe('rank materials stand in for missing Attribute Stones', () => {
+  it('covers the element shortfall 1:1 and is spent on promotion', () => {
+    const hero = cappedHero({ star: 3 }) // → 4★: 40 stones + 20 fire stones
+    const cost = promotionCost(hero)
+    const need = cost.attrStone_fire!
+    const state = stateWith(hero, { materials: { promotionStone: cost.promotionStone!, attrStone_fire: need - 5, rankMaterial: 5 } })
+    expect(canAfford(state, hero)).toBe(true)
+    expect(promotionPayment(state, hero)).toEqual({ promotionStone: cost.promotionStone, attrStone_fire: need - 5, rankMaterial: 5 })
+    const next = startPromotion(state, hero.id, 0)
+    expect(next.materials.rankMaterial).toBe(0)
+    expect(next.materials.attrStone_fire).toBe(0)
+  })
+
+  it('never covers Promotion Stones, and refuses when rank materials run short', () => {
+    const hero = cappedHero({ star: 3 })
+    const cost = promotionCost(hero)
+    const noStones = stateWith(hero, { materials: { promotionStone: cost.promotionStone! - 1, attrStone_fire: 999, rankMaterial: 999 } })
+    expect(canAfford(noStones, hero)).toBe(false)
+    const short = stateWith(hero, { materials: { promotionStone: 999, attrStone_fire: 0, rankMaterial: cost.attrStone_fire! - 1 } })
+    expect(promotionPayment(short, hero)).toBeNull()
   })
 })

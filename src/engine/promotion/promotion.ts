@@ -32,6 +32,7 @@ import type {
   PrimaryAttrs,
   GrowthGrades,
   Seed,
+  HeroClass,
 } from '../types'
 
 const P = TUNING.lobby.promotion
@@ -65,8 +66,35 @@ export function canPromote(hero: OwnedHero): boolean {
 
 /** True when the account holds enough of every material the promotion costs. */
 export function canAfford(state: GameState, hero: OwnedHero): boolean {
+  return promotionPayment(state, hero) !== null
+}
+
+/**
+ * What a promotion actually takes from the storeroom: its cost, with any shortfall of
+ * the element-matched Attribute Stones made up 1:1 by Rank Materials (the canon
+ * "upgrade stones" — they fit any element). Null when even that can't cover it.
+ */
+export function promotionPayment(state: GameState, hero: OwnedHero): Record<MaterialId, number> | null {
   const cost = promotionCost(hero)
-  return Object.keys(cost).every((id) => (state.materials[id] ?? 0) >= cost[id]!)
+  const pay: Record<MaterialId, number> = {}
+  let rankNeeded = 0
+  for (const id of Object.keys(cost)) {
+    const need = cost[id]!
+    const have = state.materials[id] ?? 0
+    if (id.startsWith('attrStone_') && have < need) {
+      pay[id] = have
+      rankNeeded += need - have
+    } else if (have < need) {
+      return null
+    } else {
+      pay[id] = need
+    }
+  }
+  if (rankNeeded > 0) {
+    if ((state.materials.rankMaterial ?? 0) < rankNeeded) return null
+    pay.rankMaterial = rankNeeded
+  }
+  return pay
 }
 
 /**
@@ -95,9 +123,9 @@ export function startPromotion(state: GameState, heroId: HeroId, nowWorld: numbe
     throw new Error(`startPromotion: insufficient materials for ${heroId}`)
   }
 
-  const cost = promotionCost(hero)
+  const pay = promotionPayment(state, hero)!
   const materials: Record<MaterialId, number> = { ...state.materials }
-  for (const id of Object.keys(cost)) materials[id] = (materials[id] ?? 0) - cost[id]!
+  for (const id of Object.keys(pay)) materials[id] = (materials[id] ?? 0) - pay[id]!
 
   const completesAtWorld =
     nowWorld + promotionDuration(promotionTargetStar(hero), state.facilities.promotionChamber.level)
@@ -124,6 +152,9 @@ function mergeUpward<T extends PrimaryAttrs | GrowthGrades>(old: T, rolled: T): 
  * in the new envelope UPWARD-ONLY into the hero's bases/grades, and grants one skill
  * the hero lacked. Clears the in-flight timer. PURE — returns a fresh OwnedHero.
  */
+/** The classes a classless hero can grow into (mage is gacha-only, canon). */
+const CLASS_CHANGE_OPTIONS: readonly HeroClass[] = ['warrior', 'spearman', 'thief', 'archer']
+
 export function completePromotion(hero: OwnedHero, accountSeed: Seed, highestCleared = 0): OwnedHero {
   const newStar = promotionTargetStar(hero)
   let rng = rngFor(accountSeed, 'promotion', hero.id, hero.star)
@@ -133,12 +164,20 @@ export function completePromotion(hero: OwnedHero, accountSeed: Seed, highestCle
   const baseAttrs = mergeUpward(hero.baseAttrs, rolled.baseAttrs)
   const growthGrades = mergeUpward(hero.growthGrades, rolled.grades)
 
+  // Class change (canon: Islat Han, "Warrior class (formerly Novice)"): a classless hero
+  // reaching 3★ takes up a common class. Never mage — mages come only from the gacha.
+  // Its own rng stream, so every other promotion draw is unchanged.
+  let heroClass = hero.heroClass
+  if (heroClass === null && newStar >= TUNING.lobby.promotion.classChangeStar) {
+    heroClass = pick(rngFor(accountSeed, 'class-change', hero.id), CLASS_CHANGE_OPTIONS).value
+  }
+
   // Grant one skill the hero does not already know, at Lv1: its class's signature skill
   // first, else a learnable skill (no-op if it knows them all). Merge-only skills are
   // never handed out by promotion.
   let skills = hero.skills
   const known = new Set(hero.skills.map((s) => s.id))
-  const missing = promotionSkillPool(hero.heroClass, known)
+  const missing = promotionSkillPool(heroClass, known)
   if (missing.length > 0) {
     const drew = pick(rng, missing)
     rng = drew.rng
@@ -173,7 +212,7 @@ export function completePromotion(hero: OwnedHero, accountSeed: Seed, highestCle
 
   // Rank deepens the hero's connection with the Master: Intervention Points (Layer 3 §D2).
   const ip = (hero.ip ?? 0) + TUNING.intervention.perPromotion
-  return { ...hero, star: newStar, baseAttrs, growthGrades, skills, xp, engraving, ip, promotion: null }
+  return { ...hero, heroClass, star: newStar, baseAttrs, growthGrades, skills, xp, engraving, ip, promotion: null }
 }
 
 /**

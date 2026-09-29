@@ -59,14 +59,13 @@ export const ANCHORS: Record<number, AnchorDef> = {
     waves: [
       // Wave 1 — the city's outer line: goblin raiders + undead vanguard.
       [
-        { templateId: 'goblin', count: 5 },
-        { templateId: 'skeleton', count: 2 },
+        { templateId: 'goblin', count: 3 },
+        { templateId: 'skeleton', count: 1 },
       ],
-      // Wave 2 — heavier push: brute + dark casters.
+      // Wave 2 — heavier push: brute + a dark caster.
       [
         { templateId: 'ogre_brute', count: 1 },
-        { templateId: 'dark_mage', count: 2 },
-        { templateId: 'skeleton', count: 2 },
+        { templateId: 'dark_mage', count: 1 },
       ],
       // Wave 3 — the finale: the unkillable Lv999 creature (Enrage puzzle) AND the
       // phased Black Priest (the Defeat target). Slay the Priest; do NOT chase the
@@ -76,8 +75,10 @@ export const ANCHORS: Record<number, AnchorDef> = {
           templateId: 'lv999_creature',
           count: 1,
           levelBonus: 50,
-          keywords: [{ kind: 'enrage', afterTick: 300, multiplier: 5 }],
+          keywords: [{ kind: 'enrage', afterTick: 300, multiplier: 5 }, { kind: 'looming' }],
         },
+        // The Priest's acolyte shields him (he is phased until it falls).
+        { templateId: 'skeleton', count: 1 },
         {
           templateId: 'black_priest',
           count: 1,
@@ -130,12 +131,12 @@ export const ANCHORS: Record<number, AnchorDef> = {
     minigame: 'ballista',
     waves: [
       [
-        { templateId: 'soldier', count: 3 },
-        { templateId: 'skeleton', count: 3 },
+        { templateId: 'soldier', count: 2 },
+        { templateId: 'skeleton', count: 1 },
       ],
       [
         { templateId: 'halgiraf', count: 1, levelBonus: 8, targetTag: 'halgiraf' },
-        { templateId: 'dark_mage', count: 2 },
+        { templateId: 'dark_mage', count: 1 },
       ],
     ],
   },

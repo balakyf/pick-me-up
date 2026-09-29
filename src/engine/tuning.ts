@@ -131,10 +131,13 @@ export const TUNING = {
     base: 60,
     powerBase: 1.06,
     stepBonus: 0.15,
+    /** Early-climb budget boost: ×(1 + this × (inflectionFloor − f) / inflectionFloor) below F70. */
+    earlyBudgetBoost: 4,
     /** Filler power-budget tolerance: fill enemies until ΣCP within ±this of budget. */
     budgetTolerance: 0.1,
-    /** mobLevel(f) = round(f * mobLevelPerFloor * worldMult). */
-    mobLevelPerFloor: 1.25,
+    /** mobLevel(f) = round(f * mobLevelPerFloor * worldMult). At 1.0 the star caps line up with
+     *  the acts: 1★ (cap 10) → F10, 2★ → F20, 3★ → F40, 4★ → F60, 5★ → F80, 6★ → F99. */
+    mobLevelPerFloor: 1.0,
     worldMult: { C: 1.0, B: 1.8, A: 2.6, S: 3.5 } as Record<string, number>,
     /** F5 Survive anchor: 30 min of canon → tick budget (1 tick ≈ a fast beat). */
     f5SurviveTicks: 1200,
@@ -146,7 +149,10 @@ export const TUNING = {
     worldEndFloor: 90,
     /** Past F70 (the inflection) mobs gain this many extra levels per floor. */
     inflectionFloor: 70,
-    inflectionLevelPerFloor: 0.9,
+    inflectionLevelPerFloor: 0.3,
+    /** The Wailing Wall (canon: difficulty explodes at F80): mobs from here on gain this many levels. */
+    wallFloor: 80,
+    wallLevelBonus: 20,
     /** Past the inflection the budget exponent eases to this (the LEVEL curve steepens
      *  instead), so a maxed party can reach the summit. */
     latePowerBase: 1.04,
@@ -404,10 +410,15 @@ export const TUNING = {
     /** floorGold(f) = goldPerFloor * f * worldMult; first clear ×firstClearMult. */
     goldPerFloor: 100,
     firstClearMult: 3,
-    /** floorXP(f) tuned so ~3–4 at-tier clears ≈ one level on the Layer 0 curve. */
+    /** floorXp(f) = max(xpPerFloor, xpToNext(f) × xpFloorShare): a clear is worth about one
+     *  level at the floor's depth, so a party that keeps climbing keeps pace with mob levels
+     *  (star caps still gate it), and a fresh recruit catches up in a few clears. */
     xpPerFloor: 90,
-    /** Fresh account grant so the loop can start: enough for exactly one Normal pull. */
-    startingGold: 3000,
+    xpFloorShare: 0.5,
+    /** Living heroes left in the waiting room earn this share of a clear's XP (catch-up). */
+    benchXpShare: 0.5,
+    /** Fresh account grant: enough to recruit a first party of five (5 Normal pulls). */
+    startingGold: 15000,
   },
 
   time: {
@@ -513,6 +524,8 @@ export const TUNING = {
     promotion: {
       /** Star ceiling. 6★→7★ is paid with a Book of Reverse Heaven, not stones (§3.4). */
       maxStar: 7,
+      /** A classless hero promoted to this star takes up a common class (canon class change). */
+      classChangeStar: 3,
       /** The one item a 6★→7★ promotion consumes. */
       bookId: 'bookOfReverseHeaven',
       /** Promotion Stones required per TARGET star (canon doubling curve). */
@@ -586,10 +599,12 @@ export const TUNING = {
     },
     /** Tower material faucet (thin trickle; Daily Dungeons are the primary source, Phase 5). */
     materialDrops: {
-      /** Chance a cleared floor drops a Promotion Stone. */
-      promotionStoneChance: 0.25,
-      /** Chance a cleared floor drops an element-matched Attribute Stone. */
-      attrStoneChance: 0.2,
+      /** Chance a cleared floor drops Promotion Stones: 1 + floor(f / stonesPerTen) of them. */
+      promotionStoneChance: 0.35,
+      stonesPerTen: 10,
+      /** Chance a cleared floor drops element-matched Attribute Stones: 1 + floor(f / attrStonesEvery). */
+      attrStoneChance: 0.3,
+      attrStonesEvery: 20,
       /** First-clear bonus: both chances are multiplied by this on a never-cleared floor. */
       firstClearMult: 2,
     },
@@ -613,15 +628,21 @@ export const TUNING = {
         goldVault: 600, // Mon — Gold Vault
         attrStones: 2, // Tue — Elemental Trial (element rotates by day)
         promotionStones: 2, // Wed — Promotion Grounds
-        rankMaterials: 1, // Wed — rank material alongside stones
+        rankMaterials: 2, // Wed — rank materials (stand in for any missing Attribute Stone)
         heroXp: 120, // Thu — Proving Hall (to deployed survivors)
         gemsBundle: 20, // Fri — Soulforge
         armoryStones: 1, // Sat — Armory (a stone of each kind)
         convergenceGold: 250, // Sun — Convergence (reduced mix)
         convergenceStones: 1, // Sun — small stone trickle
       },
+      /** Rewards scale ×(1 + highestCleared × this) so dailies keep pace with the climb. */
+      depthScalePerFloor: 0.1,
+      /** Proving Hall XP = xpToNext(highestCleared) × this (half a level at the Master's depth). */
+      provingHallXpShare: 0.5,
+      /** Every other daily win grants xpToNext(highestCleared) × this (the catch-up faucet). */
+      dailyXpShare: 0.25,
       /** Elements the Tue Elemental Trial rotates through (by day index). */
-      elementRotation: ['fire', 'water', 'earth', 'wind', 'light', 'dark'] as const,
+      elementRotation: ['fire', 'water', 'earth', 'wind', 'light', 'dark', 'physical'] as const,
     },
   },
 

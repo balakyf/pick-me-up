@@ -375,6 +375,7 @@ const FR_UI: Record<string, string> = {
   'Quality floor:': 'Seuil de qualité :',
   'dry pulls → guaranteed ★★★': 'tirages à sec → ★★★ garanti',
   'Summon · {SUMMON_COST} Gold': 'Invoquer · {SUMMON_COST} or',
+  'Summon · free (the crystal takes pity)': 'Invoquer · gratuit (le cristal a pitié)',
   'Summon · {costGems} ♦': 'Invoquer · {costGems} ♦',
   'Summon ×10 · {tenPullGems} ♦': 'Invoquer ×10 · {tenPullGems} ♦',
   'Not enough Gold — clear tower floors to earn more.': 'Pas assez d’or — terminez des étages de la tour pour en gagner.',
@@ -474,6 +475,9 @@ const FR_UI: Record<string, string> = {
 
   '{name}: weak to {what}': '{name} : vulnérable — {what}',
   '{name}: immune to {what}': '{name} : immunisé — {what}',
+  '{name}: resists {what}': '{name} : résiste — {what}',
+  '{name}: too strong to fight — finish before it wakes': '{name} : trop puissant — finissez avant son réveil',
+  '{n} Rank Mat cover the missing stones': '{n} mat. de rang comblent les pierres manquantes',
   '{name}: shielded until its guard falls': '{name} : protégé tant que son garde tient',
   '{name}: enrages after {n} ticks': '{name} : entre en rage après {n} tours',
   'No special weakness — just steel and nerve.': 'Aucune faiblesse particulière — juste de l’acier et du cran.',

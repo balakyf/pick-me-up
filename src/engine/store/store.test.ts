@@ -390,8 +390,8 @@ describe('createStore', () => {
     const store = createStore()
     store.dispatch({ type: 'NEW_ACCOUNT', seed: 1 })
     const after = store.dispatch({ type: 'SUMMON' })
-    // Account starts with exactly enough for one pull.
-    expect(after.gold).toBe(0)
+    // The pull is paid out of the starting grant.
+    expect(after.gold).toBe(TUNING.economy.startingGold - TUNING.gacha.normalCostGold)
     expect(Object.keys(after.heroes)).toHaveLength(2)
   })
 

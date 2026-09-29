@@ -200,6 +200,8 @@ function PeekLine({ preview }: { preview: ReturnType<typeof buildEncounter> }) {
         const name = t(u.name)
         if (k.kind === 'vulnerable') notes.add(t('{name}: weak to {what}', { name, what: t(ELEMENT_VIS[k.element].label) }))
         if (k.kind === 'immune') notes.add(t('{name}: immune to {what}', { name, what: t(k.damageType) }))
+        if (k.kind === 'resist') notes.add(t('{name}: resists {what}', { name, what: t(k.damageType) }))
+        if (k.kind === 'looming') notes.add(t('{name}: too strong to fight — finish before it wakes', { name }))
         if (k.kind === 'phased') notes.add(t('{name}: shielded until its guard falls', { name }))
         if (k.kind === 'enrage') notes.add(t('{name}: enrages after {n} ticks', { name, n: k.afterTick }))
       }

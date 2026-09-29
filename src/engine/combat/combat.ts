@@ -166,6 +166,7 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
   const allyAlive = (tag: string): boolean => heroes.some((h) => h.ref.targetTag === tag && h.alive)
   const livingEnemiesInWave = (w: number): MutUnit[] => enemies.filter((e) => e.alive && e.wave === w)
   const livingEnemies = (): MutUnit[] => enemies.filter((e) => e.alive)
+  const isLooming = (e: MutUnit): boolean => e.ref.keywords.some((k) => k.kind === 'looming')
   const moreWavesToSpawn = (): boolean => currentWave < encounter.waves.length - 1
 
   /** A unit with a 'phased' keyword is untargetable while any non-phased unit in
@@ -175,7 +176,7 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
     const phased = e.ref.keywords.some((k) => k.kind === 'phased')
     if (!phased) return true
     const wavemates = enemies.filter((o) => o.alive && o.wave === e.wave && o.id !== e.id)
-    const anyNonPhasedAlive = wavemates.some((o) => !o.ref.keywords.some((k) => k.kind === 'phased'))
+    const anyNonPhasedAlive = wavemates.some((o) => !isLooming(o) && !o.ref.keywords.some((k) => k.kind === 'phased'))
     return !anyNonPhasedAlive
   }
 
@@ -244,6 +245,8 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
     for (const kw of target.ref.keywords) {
       if (kw.kind === 'immune' && kw.damageType === skill.damageType) {
         damage = 0
+      } else if (kw.kind === 'resist' && kw.damageType === skill.damageType) {
+        guardMult *= 1 - kw.reduction
       } else if (kw.kind === 'vulnerable' && kw.element === el) {
         damage *= C.vulnerableMult
       } else if (kw.kind === 'guard' && (kw.vs === undefined || (kw.vs === 'ranged' ? ranged : kw.vs === el))) {
@@ -310,6 +313,12 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
         const focused = cands.find((e) => e.id === focusId)
         if (focused) return focused
       }
+    }
+
+    // Heroes don't chase a looming unit while anything else can be hit.
+    if (actor.side === 'hero') {
+      const lesser = cands.filter((c) => !isLooming(c))
+      if (lesser.length > 0) cands = lesser
     }
 
     // OVERLOOK (Tactical Center): enemy targeting is steered off marked allies while
@@ -425,7 +434,8 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
   /** After the current wave is fully dead, advance/spawn the next wave. */
   const maybeAdvanceWave = (): void => {
     if (outcome !== null) return
-    if (livingEnemiesInWave(currentWave).length === 0) {
+    // A looming unit is outlasted, not killed: the wave counts as cleared without it.
+    if (livingEnemiesInWave(currentWave).filter((e) => !isLooming(e)).length === 0) {
       wavesCleared++
       if (moreWavesToSpawn()) {
         currentWave++
@@ -440,6 +450,11 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
     if (!actor.alive || outcome !== null) return
     // Mission NPCs (escort targets) never act — they only need protecting.
     if (actor.ref.isNpc) return
+    // A looming unit sleeps until its enrage tick: it wakes, and then it is too late.
+    if (isLooming(actor)) {
+      const wake = actor.ref.keywords.find((k) => k.kind === 'enrage')
+      if (wake !== undefined && wake.kind === 'enrage' && tick < wake.afterTick) return
+    }
 
     // PANIC (low Sanity): a hero below the panic threshold may lose its turn. The
     // draw is GATED on a positive chance, so a healthy hero never touches the rng —

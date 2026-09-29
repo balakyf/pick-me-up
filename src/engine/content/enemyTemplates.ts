@@ -133,7 +133,7 @@ export const ENEMY_TEMPLATES: Record<string, EnemyTemplate> = {
     element: 'dark',
     // Catastrophically high everything.
     attrMult: { str: 3.0, agi: 2.5, vit: 4.0, int: 2.5, wil: 3.0 },
-    keywords: [{ kind: 'enrage', afterTick: 300, multiplier: 5 }],
+    keywords: [{ kind: 'enrage', afterTick: 300, multiplier: 5 }, { kind: 'looming' }],
   },
   // Halgiraf, the half black dragon (canon F20 boss: "scale immunity … Goddess'
   // Blessing (holy power on weapons) breaks it"). Light is the canon counter; he
@@ -410,7 +410,9 @@ export const ENEMY_TEMPLATES: Record<string, EnemyTemplate> = {
     element: 'dark',
     attrMult: { str: 0.6, agi: 1.4, vit: 0.9, int: 1.7, wil: 1.4 },
     unitClass: 'mage',
-    keywords: [{ kind: 'immune', damageType: 'physical' }, { kind: 'vulnerable', element: 'light' }],
+    // Steel passes half-through a wraith: mages (or Light) are the answer, but a party
+    // without one is slowed, not locked out of a whole act.
+    keywords: [{ kind: 'resist', damageType: 'physical', reduction: 0.75 }, { kind: 'vulnerable', element: 'light' }],
   },
   chimera_matriarch: {
     id: 'chimera_matriarch',

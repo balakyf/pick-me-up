@@ -3,7 +3,7 @@ import type { GameState, OwnedHero, FacilityId, HeroId, EquipmentSlot, Command, 
 import type { Store } from '../engine/store'
 import { TUNING } from '../engine/tuning'
 import { banquetWouldHelp } from '../engine/kitchen'
-import { canPromote, canAfford, promotionCost, promotionTargetStar } from '../engine/promotion'
+import { canPromote, canAfford, promotionCost, promotionPayment, promotionTargetStar } from '../engine/promotion'
 import { tacticalFocusBonus, tacticalOverlookSlots } from '../engine/tactical'
 import { masterXpToNext } from '../engine/master'
 import { upgradeCost, canUpgrade, unlockMasterLevel } from '../engine/facilities'
@@ -153,6 +153,7 @@ function PromotionAction({ state, store }: { state: GameState; store: Store }) {
       {ready.map((h) => {
         const cost = promotionCost(h)
         const affordable = canAfford(state, h)
+        const rankCover = promotionPayment(state, h)?.rankMaterial ?? 0
         return (
           <div key={h.id} className="promo-row">
             <span className="promo-name">{h.name.split(/\s+/)[0]} → {promotionTargetStar(h)}★</span>
@@ -160,6 +161,7 @@ function PromotionAction({ state, store }: { state: GameState; store: Store }) {
               {Object.entries(cost)
                 .map(([k, v]) => `${v} ${matLabel(k)}`)
                 .join(' · ')}
+              {rankCover > 0 && ` · ${t('{n} Rank Mat cover the missing stones', { n: rankCover })}`}
             </span>
             <button
               className="btn sm"

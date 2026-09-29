@@ -489,6 +489,60 @@ describe('phased', () => {
   })
 })
 
+describe('looming (outlast, not kill)', () => {
+  const giant = () =>
+    enemy({
+      id: 'giant',
+      keywords: [{ kind: 'enrage', afterTick: 10_000, multiplier: 5 }, { kind: 'looming' }],
+      stats: { maxHP: 1_000_000, pAtk: 10_000, pDef: 0, spd: 200 },
+    })
+
+  it('never shields a phased wavemate, and the wave clears without it', () => {
+    const res = runBattle(
+      [hero({ id: 'h1', unitClass: 'warrior', stats: { pAtk: 500, spd: 100 } })],
+      encounter(
+        [[giant(), enemy({ id: 'priest', targetTag: 'priest', keywords: [{ kind: 'phased' }], stats: { maxHP: 200, pDef: 0, spd: 1 } })]],
+        mission([{ kind: 'defend', waves: 1 }, { kind: 'defeat', targetTag: 'priest' }]),
+      ),
+      5,
+    )
+    expect(res.outcome).toBe('win')
+    expect(res.defeatedTargetTags).toContain('priest')
+    // The giant was never needed: it is still standing, and the hero never chased it.
+    const hitsOnGiant = res.log.events.filter((e) => e.kind === 'hit' && (e as { targetId: string }).targetId === 'giant')
+    expect(hitsOnGiant.length).toBe(0)
+  })
+
+  it('sleeps until its enrage tick (it deals nothing before it wakes)', () => {
+    const res = runBattle(
+      [hero({ id: 'h1', unitClass: 'warrior', stats: { pAtk: 1, maxHP: 10_000, spd: 100 } })],
+      encounter([[giant(), enemy({ id: 'imp', stats: { maxHP: 300, pAtk: 1, pDef: 0, spd: 1 } })]], mission([{ kind: 'survive', ticks: 200 }], 200)),
+      5,
+    )
+    const giantHits = res.log.events.filter((e) => e.kind === 'hit' && (e as { actorId: string }).actorId === 'giant')
+    expect(giantHits.length).toBe(0)
+  })
+})
+
+describe('resist (a softer immune)', () => {
+  it('cuts damage of its type by the reduction, and leaves the other type untouched', () => {
+    const bolt: SkillEffect = { id: 'bolt', name: 'Bolt', skillMult: 1, damageType: 'magic', element: 'physical', target: 'single', spCost: 0 }
+    const hitOn = (kw: KeywordTag[], cls: HeroClass) => {
+      const res = runBattle(
+        [hero({ id: 'h1', unitClass: cls, skills: cls === 'mage' ? [bolt] : [], stats: { pAtk: 100, mAtk: 100, spd: 100, critPct: 0 } })],
+        encounter([[enemy({ id: 'w', keywords: kw, stats: { maxHP: 1_000_000, pDef: 0, mDef: 0, spd: 1, pAtk: 0, mAtk: 0 } })]], mission([{ kind: 'survive', ticks: 30 }], 30)),
+        9,
+      )
+      return (res.log.events.find((e) => e.kind === 'hit') as { amount: number }).amount
+    }
+    const resist: KeywordTag[] = [{ kind: 'resist', damageType: 'physical', reduction: 0.75 }]
+    const plainSteel = hitOn([], 'warrior')
+    expect(hitOn(resist, 'warrior')).toBeLessThan(plainSteel * 0.3)
+    expect(hitOn(resist, 'warrior')).toBeGreaterThan(0) // never a hard lock
+    expect(hitOn(resist, 'mage')).toBe(hitOn([], 'mage'))
+  })
+})
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Targeting priorities
 // ─────────────────────────────────────────────────────────────────────────────

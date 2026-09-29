@@ -568,10 +568,15 @@ export type EnemyFamily = 'dragon' | 'undead' | 'beast' | 'humanoid' | 'construc
 export type KeywordTag =
   /** Takes no damage of this type. */
   | { kind: 'immune'; damageType: DamageType }
+  /** Takes ×(1 − reduction) damage of this type (a softer immune: slow, but never a hard lock). */
+  | { kind: 'resist'; damageType: DamageType; reduction: number }
   /** Takes ×vulnerableMult damage from this element. */
   | { kind: 'vulnerable'; element: Element }
   | { kind: 'phased' } // untargetable until all non-phased enemies in the wave are down
   | { kind: 'enrage'; afterTick: number; multiplier: number }
+  /** An overwhelming presence to outlast, not kill: never shields a phased wavemate, is not
+   *  needed to clear its wave, and heroes only target it when nothing else is left. */
+  | { kind: 'looming' }
   /** Negates the first `charges` hits taken (True Black Dragon's Blood). */
   | { kind: 'aegis'; charges: number }
   /** Deals ×multiplier while own HP is below `belowHpPct`% (Beast King's Heir). */
