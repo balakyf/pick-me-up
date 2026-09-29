@@ -47,10 +47,13 @@ export function iselLines(state: GameState): string[] {
   const deployed = state.party.slots.some((id) => id && state.heroes[id]?.alive)
   let tip: string
   if (living.length === 0) tip = 'You have no heroes left… The Mobius crystal in the hall can call new ones.'
-  else if (!deployed) tip = 'No one climbs without orders. The party board hangs in the Tactical Center.'
+  else if (!deployed) tip = 'No one climbs without orders. The party board hangs in the Tactical Center, on the north road.'
   else if (living.some((h) => h.sanity < 60)) tip = 'Some of your heroes look pale. A banquet in the Kitchen would do them good.'
-  else if (state.tower.highestCleared === 0) tip = 'The Tower Gate is at the east end of the hall. Floor 1 is waiting.'
-  else if (living.some((h) => h.xp.atCap)) tip = 'A hero has reached their star cap. The Promotion Chamber is north-east.'
+  else if (state.tower.highestCleared === 0) tip = 'The Tower Gate stands in the north wall, up the avenue from the hall. Floor 1 is waiting.'
+  else if (living.some((h) => h.xp.atCap)) tip = 'A hero has reached their star cap. The Promotion Chamber is on the north road.'
+  else if (!living.some((h) => h.life?.job)) tip = 'Idle hands, Master. Give someone a job — a cook in the Kitchen, a smith at the Forge. Open their Profile.'
+  else if (state.life.memorial.length > 0 && living.some((h) => (h.life?.grief ?? 0) > 50))
+    tip = 'Some of them still visit the Memorial every day. Grief passes faster with a healer in the Infirmary.'
   else if (state.gold >= 3000) tip = 'The Mobius crystal hums. You could afford another summon.'
   else tip = t('Floor {n} is next. Every hero who falls there is gone for good — remember that.', { n: state.tower.currentFloor })
   return [t('Welcome back, Master. I am Isel — I keep this waiting room in order.'), t(tip)]

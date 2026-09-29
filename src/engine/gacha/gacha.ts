@@ -535,6 +535,20 @@ export function summonMany(
   count: number = 1,
 ): { state: GameState; heroes: OwnedHero[] } {
   if (!Number.isInteger(count) || count < 1) throw new Error(`summon: invalid count ${count}`)
+  // The canon tutorial draw: a new Master's first Normal ten-pull is free.
+  if (pool === 'normal' && count === 10 && tutorialPullAvailable(state)) {
+    const funded: GameState = {
+      ...state,
+      gold: state.gold + summonCost('normal', 10).gold,
+      life: { ...state.life, guide: { ...state.life.guide, tutorialPull: true } },
+    }
+    return summonMany(funded, 'normal', 10)
+  }
+  // The Mobius crystal holds a limited charge of Advanced pulls per world-day.
+  if (pool === 'advanced') {
+    const left = crystalChargeLeft(state)
+    if (count > left) throw new Error(`summon: the Mobius crystal needs to recharge (${left} Advanced pulls left today)`)
+  }
   if (pool === 'normal' && count === 1 && mercySummonAvailable(state)) {
     const res = summon({ ...state, gold: state.gold + TUNING.gacha.normalCostGold })
     return { state: res.state, heroes: [res.hero] }
@@ -558,7 +572,26 @@ export function summonMany(
     heroes.push(res.hero)
     cur = res.state
   }
+  const day = worldDayOf(state)
+  const used = state.life.crystal.day === day ? state.life.crystal.advancedPulls : 0
+  cur = { ...cur, life: { ...cur.life, crystal: { day, advancedPulls: used + count } } }
   return { state: cur, heroes }
+}
+
+/** The free tutorial ten-pull is still waiting. */
+export function tutorialPullAvailable(state: GameState): boolean {
+  return TUNING.gacha.tutorialTenPull && !state.life.guide.tutorialPull
+}
+
+function worldDayOf(state: GameState): number {
+  return Math.floor(state.meta.lastSeenAtWorld / (TUNING.life.slotMs * TUNING.life.slotsPerDay))
+}
+
+/** Advanced pulls the crystal can still give this world-day (whale pacing). */
+export function crystalChargeLeft(state: GameState): number {
+  const cap = TUNING.gacha.advanced.dailyCharge
+  const c = state.life.crystal
+  return c.day === worldDayOf(state) ? Math.max(0, cap - c.advancedPulls) : cap
 }
 
 /**

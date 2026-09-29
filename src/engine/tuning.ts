@@ -89,6 +89,8 @@ export const TUNING = {
   gacha: {
     /** Normal pool only in the slice. */
     normalCostGold: 3000,
+    /** The canon tutorial draw: a new Master's first Normal ten-pull is free. */
+    tutorialTenPull: true,
     /** Star weights for the Normal pool (1★/2★/3★). */
     normalRates: { 1: 70, 2: 25, 3: 5 } as Record<number, number>,
     /** Rising quality FLOOR: a dry streak raises the minimum star. Normal pool
@@ -104,6 +106,9 @@ export const TUNING = {
       costGems: 150,
       /** A 10-pull is discounted (canon 1,350). */
       tenPullGems: 1350,
+      /** The crystal's charge: Advanced pulls per world-day (8 real hours). Whale pacing —
+       *  the balance pass saw paying bots at the Wailing Wall by day three. */
+      dailyCharge: 10,
       rates: { 3: 80, 4: 18, 5: 2 } as Record<number, number>,
       /** The Nth consecutive pull without a 4★+ is lifted to 4★+. */
       pityFloor4At: 30,

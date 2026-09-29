@@ -39,6 +39,7 @@ import { iselLines } from './lines'
 import { activityKey, isOffsite, spotFor, type Spot } from './heroAgent'
 import { accountDay, conversation, pairLines, speak, statusLine } from '../life/speech'
 import { HeroProfile, HeroTracker, LetterWindow, letterReady } from '../life/lifeWindows'
+import { FirstSteps } from '../life/FirstSteps'
 import { PlacePanel, type PanelPlace } from '../facilityPanels'
 import { DialogBox, Gauge, PixelWindow, type DialogScript } from '../kit'
 import { canvasAvailable, cachedCanvas } from '../pixel/render'
@@ -416,9 +417,23 @@ export function LobbyWorld({
     return () => clearInterval(id)
   }, [store])
 
-  // Isel's letter waits for a Master who has been away a while.
+  // Isel's letter waits for a Master who has been away a while; a brand-new Master is
+  // greeted instead, and pointed at the crystal's free first summon.
   useEffect(() => {
-    if (letterReady(stateRef.current, toWorldTime(Date.now()))) setLetter(true)
+    const st = stateRef.current
+    if (!st.life.guide.tutorialPull && !st.life.guide.done.includes('welcome') && st.tower.highestCleared === 0) {
+      setDialog({
+        speaker: 'Isel',
+        bust: iselBustUrl(),
+        lines: [
+          t('Welcome, Master. I am Isel — I keep this waiting room in order.'),
+          t('Everyone who lives here came through that crystal. They are people, with lives of their own. They eat, sleep, work, make friends… and they remember.'),
+          t('The crystal owes you a first summon: ten heroes, free. Go and meet them.'),
+        ],
+        actions: [{ label: t('To the crystal'), onClick: () => onNavigate('summon') }],
+      })
+      store.dispatch({ type: 'GUIDE_STEP', step: 'welcome' })
+    } else if (letterReady(st, toWorldTime(Date.now()))) setLetter(true)
   }, [])
 
   // Keep one walker per living hero; a new hero appears at their spot.
@@ -466,6 +481,7 @@ export function LobbyWorld({
     const h = st.heroes[id as OwnedHero['id']]
     if (!h) return
     const inParty = st.party.slots.includes(h.id)
+    if (!st.life.guide.done.includes('talk')) store.dispatch({ type: 'GUIDE_STEP', step: 'talk' })
     setDialog({
       speaker: h.name,
       bust: heroBustUrl(h),
@@ -992,7 +1008,7 @@ export function LobbyWorld({
   const living = Object.values(state.heroes).filter((h) => h.alive).length
   const hour = hourOfWorld(clock)
   const followedHero = following ? state.heroes[following as OwnedHero['id']] : null
-  const hasLetter = letterReady(state, clock, 0)
+  const hasLetter = letterReady(state, clock, 20 * 60_000 * TUNING.time.worldTimeFactor)
 
   return (
     <div className="stage" ref={stageRef}>
@@ -1044,6 +1060,8 @@ export function LobbyWorld({
           ☰ {t('Menu')}
         </button>
       </div>
+
+      <FirstSteps state={state} store={store} />
 
       {showMap && (
         <div className="hud hud-mini">

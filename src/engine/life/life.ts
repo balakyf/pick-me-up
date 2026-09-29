@@ -135,11 +135,19 @@ export function bedCount(state: GameState): number {
   return L.beds.base + L.beds.perLevel * state.facilities.dormitory.level
 }
 
+const livingOrder = new WeakMap<GameState['heroes'], Map<string, number>>()
+
 /** Bed index per living hero (earliest arrivals first); null = sleeps in the hall. */
 export function bedIndex(state: GameState, heroId: string): number | null {
-  const living = Object.keys(state.heroes).filter((id) => state.heroes[id as HeroId]!.alive)
-  const i = living.indexOf(heroId)
-  return i >= 0 && i < bedCount(state) ? i : null
+  let order = livingOrder.get(state.heroes)
+  if (!order) {
+    order = new Map()
+    let n = 0
+    for (const id of Object.keys(state.heroes)) if (state.heroes[id as HeroId]!.alive) order.set(id, n++)
+    livingOrder.set(state.heroes, order)
+  }
+  const i = order.get(heroId)
+  return i !== undefined && i < bedCount(state) ? i : null
 }
 
 /** Memories ranked by salience (weight fading ~2/day). */

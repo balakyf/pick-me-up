@@ -559,7 +559,8 @@ describe('Advanced pool', () => {
     let state = makeState({ gems: 1_000_000, gacha: { pity: 0, pullCount: 0, advPity4: ADV.pityFloor4At, advPity5: 0, advPullCount: 0 } })
     let seen = 0
     for (let i = 0; i < 12; i++) {
-      state = { ...state, gacha: { ...state.gacha, advPity4: ADV.pityFloor4At } }
+      // (A fresh crystal each pull: the daily charge isn't what this test is about.)
+      state = { ...state, gacha: { ...state.gacha, advPity4: ADV.pityFloor4At }, life: { ...state.life, crystal: { day: -1, advancedPulls: 0 } } }
       const { state: next, heroes } = summonMany(state, 'advanced', 1)
       state = next
       const h = heroes[0]!
@@ -607,5 +608,29 @@ describe('the mercy pull (no softlock)', () => {
     const one = summon(makeState()).state
     expect(mercySummonAvailable({ ...one, gold: 0 })).toBe(false)
     expect(() => summonMany({ ...one, gold: 0 }, 'normal', 1)).toThrow(/insufficient gold/)
+  })
+})
+
+describe('the tutorial ten-pull and the crystal’s charge', () => {
+  it('a new Master’s first Normal ten-pull is free, once', async () => {
+    const { createAccount } = await import('../account')
+    const s0 = { ...createAccount(77), gold: 0 }
+    const r = summonMany(s0, 'normal', 10)
+    expect(r.heroes).toHaveLength(10)
+    expect(r.state.gold).toBe(0)
+    expect(r.state.life.guide.tutorialPull).toBe(true)
+    expect(() => summonMany(r.state, 'normal', 10)).toThrow(/insufficient gold/)
+  })
+
+  it('the crystal gives a limited number of Advanced pulls per world-day', async () => {
+    const { createAccount } = await import('../account')
+    const cap = TUNING.gacha.advanced.dailyCharge
+    let s = { ...createAccount(78), gems: 1_000_000 }
+    for (let n = 0; n < cap; n++) s = summonMany(s, 'advanced', 1).state
+    expect(s.life.crystal.advancedPulls).toBe(cap)
+    expect(() => summonMany(s, 'advanced', 1)).toThrow(/recharge/)
+    // A new world-day recharges it.
+    const tomorrow = { ...s, meta: { ...s.meta, lastSeenAtWorld: s.meta.lastSeenAtWorld + 24 * 3_600_000 } }
+    expect(() => summonMany(tomorrow, 'advanced', 10)).not.toThrow()
   })
 })

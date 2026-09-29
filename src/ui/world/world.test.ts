@@ -177,3 +177,19 @@ describe('viewport fitting', () => {
     expect(v.h).toBeLessThanOrEqual(MAP_H * 16)
   })
 })
+
+describe('heroes on the campus', () => {
+  it('every activity has a walkable, reachable spot for every hero', async () => {
+    const { spotFor } = await import('./heroAgent')
+    const s = freshState(777)
+    const hero = Object.values(s.heroes)[0] as OwnedHero
+    const kinds = ['sleep', 'eat', 'work', 'train', 'socialize', 'hobby', 'read', 'pray', 'mourn', 'heal', 'wander', 'promoting', 'drilling', 'away'] as const
+    const places = ['dormitory', 'hall', 'kitchen', 'forge', 'yard', 'tavern', 'library', 'promotion', 'memorial', 'infirmary', 'garden', 'market', 'watchtower', 'courtyard'] as const
+    for (const kind of kinds)
+      for (const place of places) {
+        const spot = spotFor(s, hero, { kind, place, untilSlot: 0 })
+        expect(isWalkable(spot.at.x, spot.at.y), `${kind}@${place}`).toBe(true)
+        expect(findPath(MASTER_SPAWN, (x, y) => x === spot.at.x && y === spot.at.y), `${kind}@${place}`).not.toBeNull()
+      }
+  })
+})

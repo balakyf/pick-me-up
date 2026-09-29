@@ -1160,5 +1160,7 @@ export type Command =
   | { type: 'SET_FORGE_ORDER'; order: ForgeOrder | null }
   /** Quanton Life: the Master has read Isel's letter (the tally resets). */
   | { type: 'READ_LETTER' }
+  /** Onboarding: mark a first-steps item the engine cannot see (e.g. talking to a hero). */
+  | { type: 'GUIDE_STEP'; step: string }
   /** Testing-only: grant free gold. Not part of the real economy. */
   | { type: 'ADD_GOLD'; amount: number }

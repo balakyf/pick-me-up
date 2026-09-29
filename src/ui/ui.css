@@ -555,15 +555,24 @@ span.arm-slot { padding: 2px 8px; border: 2px dashed #3e3478; color: var(--ink-f
 
 /* ── Summon ritual ──────────────────────────────────────────────────────────── */
 .ritual { position: fixed; inset: 0; z-index: 200; background: radial-gradient(circle at 50% 60%, #1a1030 0%, #06040c 70%); display: flex; align-items: center; justify-content: center; cursor: pointer; overflow: hidden; }
-.ritual-circle { position: absolute; top: 58%; animation: ritual-circle 1.9s steps(24) both; }
+.ritual-circle { position: absolute; top: 58%; animation: ritual-circle 2.9s steps(30) both; }
 @keyframes ritual-circle { 0% { transform: scale(0.2); opacity: 0; filter: brightness(1); } 30% { opacity: 1; } 55% { filter: brightness(2.2) drop-shadow(0 0 12px var(--beam)); } 100% { transform: scale(1.15); opacity: 1; filter: brightness(1.4) drop-shadow(0 0 8px var(--beam)); } }
 .ritual-beams { position: absolute; bottom: 30%; display: flex; gap: 6px; align-items: flex-end; height: 70vh; }
-.ritual-beam { width: 22px; height: 0; opacity: 0.85; box-shadow: 0 0 18px var(--beam); animation: ritual-beam 0.6s steps(8) forwards; }
+.ritual-beam {
+  width: 22px; height: 0; opacity: 0.85; background: #fff6e0; box-shadow: 0 0 18px #fff6e0;
+  animation: ritual-beam 0.6s steps(8) forwards, ritual-color 0.45s steps(5) forwards;
+}
+.ritual-beam.rare { width: 30px; }
 @keyframes ritual-beam { to { height: 70vh; } }
-.ritual-flash { position: absolute; inset: 0; background: #fff6e0; opacity: 0; animation: ritual-flash 1.9s steps(10) forwards; pointer-events: none; }
+@keyframes ritual-color { to { background: var(--final); box-shadow: 0 0 24px var(--final); } }
+.ritual-flash { position: absolute; inset: 0; background: #fff6e0; opacity: 0; animation: ritual-flash 2.9s steps(14) forwards; pointer-events: none; }
+.btn.gold.pulse { animation: pulseGlow 1.2s steps(4) infinite; }
 @keyframes ritual-flash { 0%, 50% { opacity: 0; } 58% { opacity: 0.9; } 100% { opacity: 0; } }
-.ritual-stars { position: absolute; top: 18%; font-size: 48px; letter-spacing: 6px; text-shadow: 3px 3px 0 #06040c; opacity: 0; animation: ritual-stars 1.9s steps(6) forwards; }
-@keyframes ritual-stars { 0%, 55% { opacity: 0; transform: scale(2); } 70%, 100% { opacity: 1; transform: scale(1); } }
+.ritual-stars { position: absolute; top: 18%; font-size: 48px; letter-spacing: 6px; text-shadow: 3px 3px 0 #06040c; }
+.ritual-star { display: inline-block; opacity: 0; animation: ritual-star 0.3s steps(4) forwards; }
+@keyframes ritual-star { from { opacity: 0; transform: scale(2.4); } to { opacity: 1; transform: scale(1); } }
+.flip-in { animation: flipIn 0.35s steps(5) both; }
+@keyframes flipIn { from { transform: rotateY(90deg) scale(0.9); filter: brightness(3); } to { transform: rotateY(0) scale(1); filter: none; } }
 
 /* ── The tower exterior ─────────────────────────────────────────────────────── */
 .tower-layout { display: flex; gap: 18px; justify-content: center; align-items: flex-start; }
@@ -687,3 +696,13 @@ span.arm-slot { padding: 2px 8px; border: 2px dashed #3e3478; color: var(--ink-f
 .scout-notes { color: var(--accent-2); font-size: 12px; }
 .scout-warn { color: var(--warn); font-size: 13px; margin-top: 4px; }
 .scout-actions { margin-top: 8px; }
+
+/* ── Onboarding ─────────────────────────────────────────────────────────────── */
+.hud-guide { top: 124px; left: 12px; width: 250px; background: #120e2cdd; border: 2px solid var(--rim-dark); box-shadow: 0 0 0 2px #3e3478; padding: 6px 10px; font-size: 13px; pointer-events: auto; }
+.guide-head { background: none; border: none; color: var(--gold); font: inherit; font-weight: 600; cursor: pointer; padding: 0; }
+.guide-list { list-style: none; margin: 6px 0; padding: 0; }
+.guide-list li { margin: 2px 0; color: var(--ink-dim); }
+.guide-list li.done { color: var(--good); text-decoration: line-through; opacity: 0.8; }
+.guide-list li.next { color: var(--ink); font-weight: 600; }
+.guide-hint { font-style: italic; color: #d8d0f0; margin-bottom: 6px; }
+@media (max-width: 720px) { .hud-guide { top: auto; bottom: 170px; width: 220px; } }

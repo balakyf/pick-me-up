@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { sfx } from './audio/sound'
 import { drawSummonCircle } from './pixel/summonFx'
 import { shownStar } from '../engine/shop'
-import { mercySummonAvailable } from '../engine/gacha'
+import { crystalChargeLeft, mercySummonAvailable, tutorialPullAvailable } from '../engine/gacha'
 import type { GameState, HeroId, Line, OwnedHero, FloorResult } from '../engine/types'
 import type { Store } from '../engine/store'
 import { TUNING } from '../engine/tuning'
@@ -86,8 +86,9 @@ function SummonRitual({ heroes, masterLevel, onDone }: { heroes: OwnedHero[]; ma
   const tint = STAR_COLOR[best]
   useEffect(() => {
     sfx('summon')
-    const reveal = setTimeout(() => sfx(best >= 5 ? 'legend' : best >= 4 ? 'rare' : 'levelup'), 1100)
-    const done = setTimeout(onDone, 1900)
+    // The build-up: white light first, then each pillar takes its colour — the best last.
+    const reveal = setTimeout(() => sfx(best >= 5 ? 'legend' : best >= 4 ? 'rare' : 'levelup'), 1900)
+    const done = setTimeout(onDone, 2900)
     return () => {
       clearTimeout(reveal)
       clearTimeout(done)
@@ -98,14 +99,29 @@ function SummonRitual({ heroes, masterLevel, onDone }: { heroes: OwnedHero[]; ma
   return (
     <div className="ritual" onClick={onDone} style={{ ['--beam' as string]: tint }} title={t('Click to skip')}>
       <div className="ritual-beams">
-        {heroes.map((h, i) => (
-          <span key={h.id} className="ritual-beam" style={{ background: STAR_COLOR[shownStar(h, masterLevel) as Star], animationDelay: `${0.5 + i * 0.05}s` }} />
-        ))}
+        {heroes.map((h, i) => {
+          const star = shownStar(h, masterLevel)
+          const isBest = star === best
+          return (
+            <span
+              key={h.id}
+              className={`ritual-beam ${isBest && best >= 4 ? 'rare' : ''}`}
+              style={{
+                ['--final' as string]: STAR_COLOR[star as Star],
+                animationDelay: `${0.5 + i * 0.05}s, ${1.2 + (isBest ? 0.5 : i * 0.04)}s`,
+              }}
+            />
+          )
+        })}
       </div>
       {circle && <img className="px ritual-circle" src={circle} width={288} height={168} alt="" />}
       <div className="ritual-flash" />
       <div className="ritual-stars" style={{ color: tint }}>
-        {'★'.repeat(best)}
+        {Array.from({ length: best }, (_, i) => (
+          <span key={i} className="ritual-star" style={{ animationDelay: `${1.9 + i * 0.12}s` }}>
+            ★
+          </span>
+        ))}
       </div>
     </div>
   )
@@ -133,8 +149,11 @@ export function SummonScreen({ state, store }: { state: GameState; store: Store 
   }
 
   const mercy = pool === 'normal' && mercySummonAvailable(state)
-  const canOne = pool === 'normal' ? state.gold >= SUMMON_COST || mercy : state.gems >= ADV.costGems
-  const canTen = state.gems >= ADV.tenPullGems
+  const tutorial = tutorialPullAvailable(state)
+  const charge = crystalChargeLeft(state)
+  const canOne = pool === 'normal' ? state.gold >= SUMMON_COST || mercy : state.gems >= ADV.costGems && charge >= 1
+  const canTen = state.gems >= ADV.tenPullGems && charge >= 10
+  const canTenNormal = tutorial || state.gold >= SUMMON_COST * 10
 
   return (
     <div className="screen">
@@ -159,8 +178,10 @@ export function SummonScreen({ state, store }: { state: GameState; store: Store 
       <div className="summon-stage">
         {revealed.length > 0 ? (
           <div className={`reveal ${revealed.length > 1 ? 'reveal-many' : ''}`}>
-            {revealed.map((h) => (
-              <HeroCard key={h.id} hero={h} showStats={revealed.length === 1} masterLevel={state.meta.masterLevel} />
+            {revealed.map((h, i) => (
+              <div key={h.id} className="flip-in" style={{ animationDelay: `${i * 0.12}s` }}>
+                <HeroCard hero={h} showStats={revealed.length === 1} masterLevel={state.meta.masterLevel} />
+              </div>
             ))}
           </div>
         ) : (
@@ -176,15 +197,22 @@ export function SummonScreen({ state, store }: { state: GameState; store: Store 
         ) : (
           <div className="pity">
             {t('Quality floor:')} <b>{state.gacha.advPity4}</b> / {ADV.pityFloor4At} → ★★★★ · <b>{state.gacha.advPity5}</b> /{' '}
-            {ADV.pityFloor5At} → ★★★★★
+            {ADV.pityFloor5At} → ★★★★★ · {t('Crystal charge: {n}/{m} today', { n: charge, m: ADV.dailyCharge })}
           </div>
         )}
 
         <div className="summon-buttons">
           {pool === 'normal' ? (
-            <button className="btn gold big" onClick={() => pull(1)} disabled={!canOne}>
-              {mercy ? t('Summon · free (the crystal takes pity)') : t('Summon · {SUMMON_COST} Gold', { SUMMON_COST: SUMMON_COST.toLocaleString() })}
-            </button>
+            <>
+              <button className="btn gold big" onClick={() => pull(1)} disabled={!canOne}>
+                {mercy ? t('Summon · free (the crystal takes pity)') : t('Summon · {SUMMON_COST} Gold', { SUMMON_COST: SUMMON_COST.toLocaleString() })}
+              </button>
+              <button className={`btn gold big ${tutorial ? 'pulse' : ''}`} onClick={() => pull(10)} disabled={!canTenNormal}>
+                {tutorial
+                  ? t('Summon ×10 · free (your first summon)')
+                  : t('Summon ×10 · {gold} Gold', { gold: (SUMMON_COST * 10).toLocaleString() })}
+              </button>
+            </>
           ) : (
             <>
               <button className="btn gem big" onClick={() => pull(1)} disabled={!canOne}>

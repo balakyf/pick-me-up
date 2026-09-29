@@ -283,6 +283,7 @@ class Bot {
     // A casual player keeps a small bench; the engaged keep pulling while gold is spare.
     const cap = this.p.id === 'casual' ? 15 : 40
     let guard = 0
+    if (!this.s.life.guide.tutorialPull) this.try({ type: 'SUMMON', pool: 'normal', count: 10 }) // the free tutorial draw
     if (living(this.s).length === 0) this.try({ type: 'SUMMON', pool: 'normal' }) // the mercy pull
     // Fill the party first; after that, keep a pull's worth of gold in hand.
     const reserve = (n: number) => (n < SIZE ? cost : cost * 2)

@@ -1,6 +1,6 @@
 # The Living Lobby · Quanton Life
 
-> **Status:** In progress · **Date:** 2026-09-30 · Builds on the balance pass (2026-09-29).
+> **Status:** Built (first pass) · **Date:** 2026-09-30 · Builds on the balance pass (2026-09-29).
 
 ## Goal
 
@@ -104,8 +104,8 @@ the source of the **away letter** (§5).
 ### 1.7 Catch-up
 
 `advanceTime` steps life slot by slot. A long absence is capped at 7 world-days of
-detailed simulation. The time before that is skipped, needs start at comfortable values,
-and jobs are paid out at their average rate.
+detailed simulation. The time before that simply passes: needs start at comfortable
+values and nobody works (heroes don't run the waiting room without a Master).
 
 ## 2. Jobs: heroes working in buildings
 
@@ -225,3 +225,35 @@ letter bookkeeping), plus the new facility keys. Migration fills defaults.
   many short ones within the detailed window).
 - The determinism guard stays green.
 - `npm run sim` re-run: jobs and the new buildings must not break pacing.
+
+## 10. As built (2026-09-30)
+
+- **Engine** `src/engine/life/` (personality, jobs, life step, reactions) and
+  `src/engine/scout/` (scouting report, suggested party). Schema v10.
+- **Campus** `src/ui/world/lobbyMap.ts` (80×58, generated from building, zone and road
+  tables), `heroAgent.ts` (the spot for each activity), `LobbyWorld.tsx` (roofs,
+  day/night, minimap, follow camera, speech bubbles).
+- **Dialogue** `src/ui/life/speech.ts`. **Windows** `lifeWindows.tsx` (tracker, profile,
+  letter), `lifePanels.tsx` (staff seats, forge order, memorial), `FirstSteps.tsx`.
+- **Battle** timed `BattleOrder`s in combat; `store.revise` re-plays the last floor
+  attempt; `BattleScene` shows orders, the death moment, shake and hit-stop.
+- **Places have a capacity**, so heroes spread out instead of all choosing the tavern.
+- **Lore-driven touches** (from `docs/research/living-lobby-lore.md`): the veteran who
+  welcomes newcomers (canon Jenna), mourning at graves, the login report as Isel's
+  letter, food steadying nerves, trust and rivalry rather than romance, and the
+  tutorial ten-pull.
+- **Pacing**: the tutorial ten-pull is free once; the Mobius crystal gives at most 10
+  Advanced pulls per world-day (30 per real day). The bots take the free pull.
+
+### Not built yet / next
+
+- Trauma states beyond grief (withdrawn, burnout → instructor), tryout duels, a
+  favoritism tracker, and gift-meaning drift, all suggested by the lore research.
+- The dialogue banks are hand-written. More topics and more lines per voice make heroes
+  feel less repetitive over long sessions.
+- 60 days × 3 seeds after this work: casual F79 ×3, engaged F78–79, whales F79–84; the
+  Wall holds. At a charge of 10 per world-day, whale runs diverge (one 20-day seed stalls
+  at F59). Casual bots still hold ~1M idle gold because they don't build; the nine new
+  buildings can absorb about 3.7M across their levels.
+- The bots don't use jobs, buildings, orders or retreat, so the sim doesn't measure
+  those levers yet.

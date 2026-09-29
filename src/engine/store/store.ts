@@ -270,6 +270,11 @@ function reduceCore(state: GameState | null, cmd: Command, nowWorld: number): Ga
         },
       }
 
+    case 'GUIDE_STEP':
+      return current.life.guide.done.includes(cmd.step)
+        ? current
+        : { ...current, life: { ...current.life, guide: { ...current.life.guide, done: [...current.life.guide.done, cmd.step].sort() } } }
+
     case 'ADD_GOLD':
       // Testing-only cheat: grant free gold. Not part of the real economy.
       return { ...current, gold: current.gold + cmd.amount }
