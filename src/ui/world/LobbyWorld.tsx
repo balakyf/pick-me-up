@@ -29,12 +29,12 @@ import {
   type Pt,
   type RoomId,
 } from './lobbyMap'
-import { heroLines, iselLines } from './lines'
+import { banterLines, heroLines, iselLines } from './lines'
 import { PlacePanel, roomFor, type PanelPlace } from '../facilityPanels'
 import { DialogBox, Gauge, PixelWindow, type DialogScript } from '../kit'
 import { canvasAvailable, cachedCanvas } from '../pixel/render'
 import { renderLobbyBase, drawSummonCircle } from '../pixel/tiles'
-import { PROP_FRAMES, drawEmote, drawProp } from '../pixel/props'
+import { PROP_FRAMES, drawEmote, drawProp, type EmoteKind } from '../pixel/props'
 import { heroBustUrl, heroFrameCanvas, iselBustUrl, masterBustUrl, masterFrameCanvas } from '../pixel/sprites'
 import type { Dir, WalkFrame } from '../pixel/heroSprite'
 
@@ -138,10 +138,51 @@ interface Walker {
   steps: number
 }
 
+/** What an idle hero is doing (cosmetic autonomy — the Quanton AI heroes have lives). */
+interface Activity {
+  kind: 'spar' | 'eat' | 'pray' | 'study' | 'read' | 'shop' | 'chat'
+  until: number
+  /** The prop they walked to (faced on arrival). */
+  prop?: Prop
+  /** Chat partner and the line this hero says. */
+  partner?: string
+  line?: string
+  /** Set once they have arrived and started. */
+  started: boolean
+}
+
 interface HeroWalker extends Walker {
   id: string
   room: RoomId
   idleUntil: number
+  activity: Activity | null
+}
+
+/** Props a hero in `room` might use on their own, by activity. */
+const ROOM_ACTIVITIES: Partial<Record<RoomId, { kind: Activity['kind']; prop: Prop['kind'] }[]>> = {
+  training: [{ kind: 'spar', prop: 'dummy' }],
+  kitchen: [{ kind: 'eat', prop: 'table' }],
+  promotionChamber: [{ kind: 'pray', prop: 'altar' }],
+  tacticalCenter: [{ kind: 'study', prop: 'warTable' }],
+  hall: [
+    { kind: 'read', prop: 'lectern' },
+    { kind: 'shop', prop: 'stall' },
+  ],
+}
+
+const ACTIVITY_EMOTE: Record<Activity['kind'], EmoteKind> = {
+  spar: 'sword',
+  eat: 'food',
+  pray: 'pray',
+  study: 'book',
+  read: 'book',
+  shop: 'heart',
+  chat: 'note',
+}
+
+function propsIn(room: RoomId, kind: Prop['kind']): Prop[] {
+  const r = ROOMS[room]
+  return PROPS.filter((p) => p.kind === kind && p.x >= r.x - 1 && p.x < r.x + r.w + 1 && p.y >= r.y - 1 && p.y < r.y + r.h)
 }
 
 type Target = { kind: 'prop'; prop: Prop } | { kind: 'hero'; id: string }
@@ -159,6 +200,21 @@ const KEY_DIR: Record<string, Dir> = {
   a: 'left',
   q: 'left',
   d: 'right',
+}
+
+/** A small speech bubble with a line of pixel text above a chatting hero. */
+function drawSpeech(ctx: CanvasRenderingContext2D, text: string, x: number, y: number): void {
+  ctx.font = '8px "Pixelify Sans", monospace'
+  const w = Math.min(150, Math.ceil(ctx.measureText(text).width) + 8)
+  const bx = Math.round(x - w / 2)
+  const by = Math.round(y - 12)
+  ctx.fillStyle = '#fff6e0'
+  ctx.fillRect(bx, by, w, 12)
+  ctx.fillRect(Math.round(x) - 1, by + 12, 3, 2)
+  ctx.strokeStyle = '#1b1225'
+  ctx.strokeRect(bx + 0.5, by + 0.5, w - 1, 11)
+  ctx.fillStyle = '#1b1225'
+  ctx.fillText(text, bx + 4, by + 9, w - 8)
 }
 
 function newWalker(p: Pt, dir: Dir = 'down'): Walker {
@@ -303,11 +359,12 @@ export function LobbyWorld({
       const room = heroRoom(h, partyIds)
       const hw = w.heroes.get(h.id)
       if (!hw) {
-        w.heroes.set(h.id, { ...newWalker(randomTileIn(room)), id: h.id, room, idleUntil: Math.random() * 2 })
+        w.heroes.set(h.id, { ...newWalker(randomTileIn(room)), id: h.id, room, idleUntil: Math.random() * 2, activity: null })
       } else if (hw.room !== room) {
         hw.room = room
         hw.idleUntil = 0
         hw.path = []
+        hw.activity = null
       }
     }
   }, [state])
@@ -479,7 +536,53 @@ export function LobbyWorld({
           else hw.path = []
           continue
         }
+        // An activity in progress: arrive, face the thing, then keep at it until done.
+        const act = hw.activity
+        if (act) {
+          if (!act.started) {
+            act.started = true
+            act.until = w.time + 4 + Math.random() * 4
+            if (act.prop) hw.dir = facingToward(act.prop, hw.x, hw.y)
+            if (act.partner) {
+              const other = w.heroes.get(act.partner)
+              if (other) hw.dir = dirBetween(hw, other)
+            }
+          }
+          if (w.time < act.until) continue
+          hw.activity = null
+          hw.idleUntil = w.time + 1 + Math.random() * 2
+          continue
+        }
         if (w.time < hw.idleUntil) continue
+        // Idle: sometimes take up something to do (a prop in the room, or a chat).
+        const options = ROOM_ACTIVITIES[hw.room] ?? []
+        const roll = Math.random()
+        if (roll < 0.3 && options.length > 0) {
+          const o = options[Math.floor(Math.random() * options.length)]!
+          const props = propsIn(hw.room, o.prop)
+          const prop = props[Math.floor(Math.random() * props.length)]
+          const path = prop ? findPath(hw, (x, y) => isAdjacentTo(prop, x, y) && isWalkable(x, y)) : null
+          if (prop && path) {
+            hw.path = path
+            hw.activity = { kind: o.kind, until: Infinity, prop, started: false }
+            continue
+          }
+        } else if (roll < 0.45) {
+          // Chat with an idle hero nearby in the same room.
+          const mate = [...w.heroes.values()].find(
+            (o) => o.id !== hw.id && o.room === hw.room && !o.activity && !o.moving && Math.abs(o.x - hw.x) + Math.abs(o.y - hw.y) <= 4,
+          )
+          if (mate) {
+            const bucket = Math.floor(w.time / 30)
+            const [a, b] = banterLines(hw.id, mate.id, bucket)
+            const path = findPath(hw, (x, y) => Math.abs(x - mate.x) + Math.abs(y - mate.y) === 1 && isWalkable(x, y)) ?? []
+            hw.path = path
+            hw.activity = { kind: 'chat', until: Infinity, partner: mate.id, line: a, started: false }
+            mate.path = []
+            mate.activity = { kind: 'chat', until: Infinity, partner: hw.id, line: b, started: false }
+            continue
+          }
+        }
         const inRoom = roomAt(hw.x, hw.y) === hw.room
         const goal = inRoom && Math.random() < 0.35 ? null : randomTileIn(hw.room)
         if (goal) hw.path = findPath(hw, (x, y) => x === goal.x && y === goal.y) ?? []
@@ -547,14 +650,21 @@ export function LobbyWorld({
         const h = st.heroes[hw.id as OwnedHero['id']]
         if (!h) continue
         const { px, py } = walkerPx(hw)
-        const img = heroFrameCanvas(h, hw.dir, walkFrame(hw))
-        const emote = emoteFor(h, partyIds.has(h.id))
+        const busy = hw.activity?.started ? hw.activity : null
+        // Sparring swings (a quick two-frame cycle); everyone else walks as usual.
+        const frame = busy?.kind === 'spar' ? ((Math.floor(w.time * 5) % 2) + 1) as WalkFrame : walkFrame(hw)
+        const img = heroFrameCanvas(h, hw.dir, frame)
+        const emote: EmoteKind | null = busy ? ACTIVITY_EMOTE[busy.kind] : emoteFor(h, partyIds.has(h.id))
         list.push({
           y: py,
           draw: () => {
             drawShadow(px, py)
             if (img) ctx.drawImage(img, Math.round(px - 12 - camX), Math.round(py - 30 - camY))
-            if (emote && Math.floor(w.time + hw.x) % 4 < 2) {
+            if (busy?.kind === 'chat' && busy.line) {
+              // Take turns: the pair alternate who is speaking.
+              const speaking = Math.floor(w.time / 2.5) % 2 === (hw.id < (busy.partner ?? '') ? 0 : 1)
+              if (speaking) drawSpeech(ctx, busy.line, px - camX, py - 40 - camY)
+            } else if (emote && Math.floor(w.time + hw.x) % 4 < 2) {
               const e = cachedCanvas(`emote|${emote}`, () => drawEmote(emote))
               if (e) ctx.drawImage(e, Math.round(px - 5 - camX), Math.round(py - 44 - camY))
             }

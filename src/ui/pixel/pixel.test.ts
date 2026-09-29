@@ -4,6 +4,8 @@ import { lookForHero, lookForMaster, type LookSource } from './look'
 import { drawHeroFrame, drawHeroBust, FRAME_W, FRAME_H, BUST } from './heroSprite'
 import { drawEnemy, KNOWN_ENEMIES } from './enemySprite'
 import { drawBattleBg } from './battleBg'
+import { drawTowerExterior, TOWER_H, TOWER_W } from './towerMap'
+import { drawSummonCircle } from './summonFx'
 import { INK, CLASS_CLOTH, tame } from './palette'
 import { hashString } from './rand'
 import { ENEMY_TEMPLATES } from '../../engine/content'
@@ -140,11 +142,26 @@ describe('enemy sprites', () => {
 
   it('every act has its own battle backdrop', () => {
     const seen = new Set<string>()
-    for (const f of [5, 10, 15, 20, 25, 33, 50, 75, 85, 95, 100]) seen.add(Array.from(drawBattleBg(f).px.slice(0, 4000)).join(','))
-    expect(seen.size).toBe(11)
+    const floors = [5, 10, 15, 20, 25, 30, 33, 45, 50, 75, 85, 90, 95, 100]
+    for (const f of floors) seen.add(Array.from(drawBattleBg(f).px.slice(0, 20000)).join(','))
+    expect(seen.size).toBe(floors.length)
   })
 
   it('unknown templates fall back to a generic figure instead of blank', () => {
     expect(opaqueCount(drawEnemy('does_not_exist', 'water'))).toBeGreaterThan(100)
+  })
+})
+
+describe('tower exterior & summon circle', () => {
+  it('lights cleared floors and marks the current one; the world greys after F90', () => {
+    const early = drawTowerExterior({ current: 5, highest: 4, worldEnded: false, worldSaved: false })
+    const late = drawTowerExterior({ current: 60, highest: 59, worldEnded: false, worldSaved: false })
+    expect(Array.from(early.px).join()).not.toBe(Array.from(late.px).join())
+    const ended = drawTowerExterior({ current: 91, highest: 90, worldEnded: true, worldSaved: false })
+    expect(ended.px[(TOWER_H - 4) * TOWER_W + 2]).not.toBe(late.px[(TOWER_H - 4) * TOWER_W + 2])
+  })
+
+  it('draws a summoning circle in the rarity colour', () => {
+    expect(opaqueCount(drawSummonCircle('#f2c75c'))).toBeGreaterThan(200)
   })
 })

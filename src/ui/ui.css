@@ -552,3 +552,21 @@ span.arm-slot { padding: 2px 8px; border: 2px dashed #3e3478; color: var(--ink-f
 .captive-row { grid-template-columns: 30px 1fr auto auto auto; }
 .captive-select { font: inherit; font-size: 13px; background: #120e2c; color: var(--ink); border: 2px solid #3e3478; }
 .pvp-panel .drill-row { gap: 6px; }
+
+/* ── Summon ritual ──────────────────────────────────────────────────────────── */
+.ritual { position: fixed; inset: 0; z-index: 200; background: radial-gradient(circle at 50% 60%, #1a1030 0%, #06040c 70%); display: flex; align-items: center; justify-content: center; cursor: pointer; overflow: hidden; }
+.ritual-circle { position: absolute; top: 58%; animation: ritual-circle 1.9s steps(24) both; }
+@keyframes ritual-circle { 0% { transform: scale(0.2); opacity: 0; filter: brightness(1); } 30% { opacity: 1; } 55% { filter: brightness(2.2) drop-shadow(0 0 12px var(--beam)); } 100% { transform: scale(1.15); opacity: 1; filter: brightness(1.4) drop-shadow(0 0 8px var(--beam)); } }
+.ritual-beams { position: absolute; bottom: 30%; display: flex; gap: 6px; align-items: flex-end; height: 70vh; }
+.ritual-beam { width: 22px; height: 0; opacity: 0.85; box-shadow: 0 0 18px var(--beam); animation: ritual-beam 0.6s steps(8) forwards; }
+@keyframes ritual-beam { to { height: 70vh; } }
+.ritual-flash { position: absolute; inset: 0; background: #fff6e0; opacity: 0; animation: ritual-flash 1.9s steps(10) forwards; pointer-events: none; }
+@keyframes ritual-flash { 0%, 50% { opacity: 0; } 58% { opacity: 0.9; } 100% { opacity: 0; } }
+.ritual-stars { position: absolute; top: 18%; font-size: 48px; letter-spacing: 6px; text-shadow: 3px 3px 0 #06040c; opacity: 0; animation: ritual-stars 1.9s steps(6) forwards; }
+@keyframes ritual-stars { 0%, 55% { opacity: 0; transform: scale(2); } 70%, 100% { opacity: 1; transform: scale(1); } }
+
+/* ── The tower exterior ─────────────────────────────────────────────────────── */
+.tower-layout { display: flex; gap: 18px; justify-content: center; align-items: flex-start; }
+.tower-layout .tower { flex: 1; margin: 0; }
+.tower-exterior { position: sticky; top: 8px; flex: none; }
+@media (max-width: 720px) { .tower-exterior { display: none; } }

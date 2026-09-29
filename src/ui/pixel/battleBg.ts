@@ -7,6 +7,7 @@
  *   F21–30 the swamp · F31–35 the drowned coast · F36–69 the Order's war camp
  *   F70–79 the inflection's crimson sky · F80–89 the Wailing Wall
  *   F90–99 the unfinished floors · F100 the summit
+ *   anchors: F30 the statue's valley · F50 the Egg's vault · F90 the world's end
  *   other  the tower's stone depths (tournaments)
  */
 import { createBitmap, ellipse, hex, hline, mix, rect, set, vline, type Bitmap, type RGBA } from './bitmap'
@@ -290,10 +291,54 @@ function summit(): Bitmap {
   return b
 }
 
+function statueRuins(): Bitmap {
+  // F30: the ancient stone statue's valley — a colossal broken figure against a green dusk.
+  const b = swamp()
+  const stone = hex('#7a7a72')
+  rect(b, 250, 20, 60, HORIZON - 20, stone)
+  rect(b, 262, 4, 36, 22, stone) // head
+  rect(b, 270, 12, 6, 4, hex('#ff5a3a')) // the eye beam
+  rect(b, 286, 12, 6, 4, hex('#ff5a3a'))
+  rect(b, 236, 40, 16, 50, stone) // arms
+  rect(b, 308, 40, 16, 50, stone)
+  for (let y = 24; y < HORIZON; y += 9) hline(b, 250, y, 60, hex('#5e5e58'))
+  return b
+}
+
+function eggChamber(): Bitmap {
+  // F50: a fleshy vault where the Egg pulses.
+  const b = createBitmap(BG_W, BG_H)
+  skyGradient(b, hex('#1a060e'), hex('#4a1a2a'), HORIZON)
+  const r = seededRand(5050)
+  for (let i = 0; i < 18; i++) {
+    const x = r.int(0, BG_W)
+    for (let y = 0; y < HORIZON; y += 2) set(b, x + Math.round(Math.sin(y / 9) * 4), y, hex('#6a2a3a')) // veins
+  }
+  ellipse(b, 150, 30, 84, 70, hex('#3a0e1e'))
+  for (let y = HORIZON; y < BG_H; y++) hline(b, 0, y, BG_W, Math.floor((y - HORIZON) / 6) % 2 ? hex('#2a0a16') : hex('#34101c'))
+  hline(b, 0, HORIZON, BG_W, hex('#14040a'))
+  return b
+}
+
+function worldsEnd(): Bitmap {
+  // F90: the top of the unfinished tower; far below, the world burns.
+  const b = createBitmap(BG_W, BG_H)
+  skyGradient(b, hex('#000000'), hex('#6a1a0e'), HORIZON)
+  const r = seededRand(9000)
+  for (let i = 0; i < 140; i++) set(b, r.int(0, BG_W - 1), r.int(HORIZON - 30, HORIZON), r.chance(0.5) ? hex('#ff7a2a') : hex('#e8e05a'))
+  for (let i = 0; i < 30; i++) rect(b, r.int(0, BG_W - 10), r.int(0, HORIZON - 40), r.int(6, 30), 2, hex('#ff3aff')) // the sky tearing
+  for (let y = HORIZON; y < BG_H; y++) hline(b, 0, y, BG_W, Math.floor((y - HORIZON) / 8) % 2 ? hex('#1a1030') : hex('#140c24'))
+  hline(b, 0, HORIZON, BG_W, hex('#ff3aff'))
+  return b
+}
+
 export function drawBattleBg(floor: number): Bitmap {
   if (floor >= 1 && floor <= 9) return prairie()
   if (floor === 10) return fallingCity()
   if (floor === 20) return lair()
+  if (floor === 30) return statueRuins()
+  if (floor === 50) return eggChamber()
+  if (floor === 90) return worldsEnd()
   if (floor >= 11 && floor <= 19) return ruins()
   if (floor >= 21 && floor <= 30) return swamp()
   if (floor >= 31 && floor <= 35) return coast()

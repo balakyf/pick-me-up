@@ -10,6 +10,9 @@ import { BattleScene } from './battle/BattleScene'
 import { ResultsScreen } from './screens'
 import { HeroCard } from './HeroCard'
 import { TimingGame } from './metaPanels'
+import { cachedDataUrl } from './pixel/render'
+import { scale } from './pixel/bitmap'
+import { drawTowerExterior, TOWER_H, TOWER_W } from './pixel/towerMap'
 
 const MAX_FLOOR = TUNING.tower.sliceTopFloor
 const EV = TUNING.events
@@ -200,6 +203,23 @@ function PeekLine({ preview }: { preview: ReturnType<typeof buildEncounter> }) {
   return <div className="peek-line">👁 {notes.size > 0 ? [...notes].join(' · ') : 'No special weakness — just steel and nerve.'}</div>
 }
 
+/** The tower from outside: where the party stands on the spire of 100 floors. */
+function TowerExterior({ state }: { state: GameState }) {
+  const t = state.tower
+  const key = `tower|${t.currentFloor}|${t.highestCleared}|${t.worldEnded}|${t.worldSaved}`
+  const url = cachedDataUrl(key, () =>
+    scale(drawTowerExterior({ current: t.currentFloor, highest: t.highestCleared, worldEnded: t.worldEnded, worldSaved: t.worldSaved }), 2),
+  )
+  return (
+    <div className="tower-exterior" title={`Floor ${Math.min(t.currentFloor, MAX_FLOOR)} of ${MAX_FLOOR}`}>
+      {url && <img className="px" src={url} width={TOWER_W * 2} height={TOWER_H * 2} alt="The Tower from outside" />}
+      <div className="muted" style={{ fontSize: 12, textAlign: 'center' }}>
+        {t.highestCleared}/{MAX_FLOOR} cleared
+      </div>
+    </div>
+  )
+}
+
 export function TowerScreen({ state, store }: { state: GameState; store: Store }) {
   const [combat, setCombat] = useState<CombatLog | null>(null)
   const [pending, setPending] = useState<FloorResult | null>(null)
@@ -316,6 +336,8 @@ export function TowerScreen({ state, store }: { state: GameState; store: Store }
         </div>
       )}
 
+      <div className="tower-layout">
+      <TowerExterior state={state} />
       <div className="tower">
         {ACTS.flatMap((act) => {
           const open = openActs.has(act.id)
@@ -377,6 +399,8 @@ export function TowerScreen({ state, store }: { state: GameState; store: Store }
             </div>
           )
         })}
+      </div>
+
       </div>
 
       <Chronicle state={state} />

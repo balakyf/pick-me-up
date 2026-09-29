@@ -53,3 +53,20 @@ export function iselLines(state: GameState): string[] {
   else tip = `Floor ${state.tower.currentFloor} is next. Every hero who falls there is gone for good — remember that.`
   return ['Welcome back, Master. I am Isel — I keep this waiting room in order.', tip]
 }
+
+const BANTER: string[][] = [
+  ['Heard the tower goes all the way to a hundred.', 'Then we climb a hundred.'],
+  ['Do you ever dream about home?', 'Every night. Then I wake up here.'],
+  ['The Master looked tired today.', 'Aren’t we all.'],
+  ['That goblin on floor three nearly had me.', 'Nearly is a good word.'],
+  ['Who cooks tonight?', 'Not you. Never again.'],
+  ['Isel smiles too much.', 'Fairies always do. Keep your purse close.'],
+  ['Did you see the new one from the crystal?', 'Another stranger with a sad story.'],
+  ['My sword arm aches.', 'Then use the other one.'],
+]
+
+/** A two-line exchange for two idle heroes chatting (stable for a while, then rotates). */
+export function banterLines(aId: string, bId: string, bucket: number): [string, string] {
+  const pair = BANTER[hashString(`${aId}|${bId}|${bucket}`) % BANTER.length]!
+  return [pair[0]!, pair[1]!]
+}

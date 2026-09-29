@@ -583,7 +583,9 @@ export function drawProp(kind: PropKind, frame = 0): PropSprite {
 }
 
 /** Tiny speech/emote bubble shown above a hero's head. */
-export function drawEmote(kind: 'dots' | 'bang' | 'heart' | 'zz'): Bitmap {
+export type EmoteKind = 'dots' | 'bang' | 'heart' | 'zz' | 'sword' | 'food' | 'note' | 'book' | 'pray'
+
+export function drawEmote(kind: EmoteKind): Bitmap {
   const b = createBitmap(11, 11)
   roundRect(b, 0, 0, 11, 8, hex('#fff6e0'))
   set(b, 4, 8, hex('#fff6e0'))
@@ -602,6 +604,28 @@ export function drawEmote(kind: 'dots' | 'bang' | 'heart' | 'zz'): Bitmap {
       rect(b, 3, 4, 5, 1, hex('#e0405a'))
       rect(b, 4, 5, 3, 1, hex('#e0405a'))
       set(b, 5, 6, hex('#e0405a'))
+      break
+    case 'sword':
+      for (let i = 0; i < 5; i++) set(b, 3 + i, 6 - i, hex('#8e94aa'))
+      set(b, 3, 5, hex('#7a4a24'))
+      set(b, 4, 6, hex('#7a4a24'))
+      break
+    case 'food':
+      rect(b, 3, 3, 5, 3, hex('#c8762a'))
+      set(b, 5, 2, hex('#e8e0c8'))
+      break
+    case 'note':
+      vline(b, 6, 1, 5, INK)
+      rect(b, 4, 5, 3, 2, INK)
+      set(b, 7, 2, INK)
+      break
+    case 'book':
+      rect(b, 3, 2, 5, 4, hex('#6a3a8e'))
+      vline(b, 5, 2, 4, hex('#fff6e0'))
+      break
+    case 'pray':
+      vline(b, 5, 1, 5, hex('#f2c75c'))
+      hline(b, 3, 3, 5, hex('#f2c75c'))
       break
     case 'zz':
       hline(b, 2, 2, 3, hex('#3a4ab8'))

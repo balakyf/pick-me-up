@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { playMusic, sfx } from '../audio/sound'
 import type { CombatEvent, CombatLog, CombatUnitInit, GameState, Line } from '../../engine/types'
 import { SKILLS } from '../../engine/content'
 import { drawBattleBg, BG_H, BG_W } from '../pixel/battleBg'
@@ -189,6 +190,23 @@ export function BattleScene({ log, state, onDone }: { log: CombatLog; state: Gam
   }, [log])
 
   const [cursor, setCursor] = useState(0)
+  // Battle music while the scene is up; the lobby theme returns after.
+  useEffect(() => {
+    playMusic('battle')
+    return () => playMusic('lobby')
+  }, [])
+  // A sound for each event as it plays (cosmetic).
+  useEffect(() => {
+    const e = cursor > 0 ? log.events[cursor - 1] : undefined
+    if (!e) return
+    if (e.kind === 'hit') sfx(e.crit ? 'crit' : 'hit')
+    else if (e.kind === 'miss') sfx('miss')
+    else if (e.kind === 'guard') sfx('guard')
+    else if (e.kind === 'heal') sfx('heal')
+    else if (e.kind === 'death') sfx('death')
+    else if (e.kind === 'panic') sfx('panic')
+    else if (e.kind === 'end') sfx(e.outcome === 'win' ? 'victory' : 'defeat')
+  }, [cursor, log.events])
   const [playing, setPlaying] = useState(true)
   const [speed, setSpeed] = useState<number>(1)
   const atEnd = cursor >= frames.length - 1

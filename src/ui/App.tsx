@@ -13,6 +13,8 @@ import { PixelWindow } from './kit'
 import { attemptFloorWithResult } from '../engine/store'
 import type { CombatLog, GameState } from '../engine/types'
 import type { Store } from '../engine/store'
+import { playMusic, sfx, unlockAudio } from './audio/sound'
+import { useMuted } from './audio/useSound'
 
 type View = 'lobby' | WorldView
 
@@ -78,6 +80,7 @@ function Scene({
 function GameMenu({ store, onGo, onClose }: { store: Store; onGo: (p: PlaceId) => void; onClose: () => void }) {
   // In-page confirmation (browser confirm() dialogs are blocked in embedded viewers).
   const [confirmReset, setConfirmReset] = useState(false)
+  const [muted, setMuted] = useMuted()
   return (
     <PixelWindow title="Menu" icon="☰" onClose={onClose}>
       <div className="menu-grid">
@@ -89,6 +92,9 @@ function GameMenu({ store, onGo, onClose }: { store: Store; onGo: (p: PlaceId) =
         ))}
       </div>
       <div className="menu-foot">
+        <button className="pbtn ghost" onClick={() => setMuted(!muted)} title="Chiptune sound effects and music">
+          {muted ? '🔇 Sound off' : '🔊 Sound on'}
+        </button>
         <button
           className="pbtn ghost"
           onClick={() => store.dispatch({ type: 'ADD_GOLD', amount: 10000 })}
@@ -124,6 +130,17 @@ function GameMenu({ store, onGo, onClose }: { store: Store; onGo: (p: PlaceId) =
 
 export function App() {
   const { state, store } = useGame()
+  // Every pixel button clicks; the first gesture wakes the audio context and the lobby theme.
+  useEffect(() => {
+    const onClick = (e: MouseEvent) => {
+      unlockAudio()
+      playMusic('lobby')
+      const b = (e.target as HTMLElement | null)?.closest?.('button')
+      if (b && !(b as HTMLButtonElement).disabled) sfx('click')
+    }
+    window.addEventListener('click', onClick, true)
+    return () => window.removeEventListener('click', onClick, true)
+  }, [])
   const params = urlParams()
   const [view, setView] = useState<View>(params.view)
   const [menuOpen, setMenuOpen] = useState(false)

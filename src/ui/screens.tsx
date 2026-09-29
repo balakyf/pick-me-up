@@ -1,10 +1,13 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { sfx } from './audio/sound'
+import { drawSummonCircle } from './pixel/summonFx'
+import { shownStar } from '../engine/shop'
 import type { GameState, HeroId, Line, OwnedHero, FloorResult } from '../engine/types'
 import type { Store } from '../engine/store'
 import { TUNING } from '../engine/tuning'
 import { HeroCard } from './HeroCard'
 import { HeroBond } from './metaPanels'
-import { cpOf, Stars, Portrait } from './bits'
+import { cpOf, Stars, Portrait, STAR_COLOR } from './bits'
 import { freshSeed } from './useGame'
 import { heroFrameUrl } from './pixel/sprites'
 import { cachedDataUrl } from './pixel/render'
@@ -76,9 +79,41 @@ export function TitleScreen({ store, hasSave }: { store: Store; hasSave: boolean
 // ── Summon ───────────────────────────────────────────────────────────────────
 const ADV = TUNING.gacha.advanced
 
+/** The summoning ritual: the circle wakes, a pillar of light in the (shown) rarity's colour, a flash. */
+function SummonRitual({ heroes, masterLevel, onDone }: { heroes: OwnedHero[]; masterLevel: number; onDone: () => void }) {
+  const best = Math.max(...heroes.map((h) => shownStar(h, masterLevel))) as Star
+  const tint = STAR_COLOR[best]
+  useEffect(() => {
+    sfx('summon')
+    const reveal = setTimeout(() => sfx(best >= 5 ? 'legend' : best >= 4 ? 'rare' : 'levelup'), 1100)
+    const done = setTimeout(onDone, 1900)
+    return () => {
+      clearTimeout(reveal)
+      clearTimeout(done)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+  const circle = cachedDataUrl(`circle|${tint}`, () => scale(drawSummonCircle(tint), 3))
+  return (
+    <div className="ritual" onClick={onDone} style={{ ['--beam' as string]: tint }} title="Click to skip">
+      <div className="ritual-beams">
+        {heroes.map((h, i) => (
+          <span key={h.id} className="ritual-beam" style={{ background: STAR_COLOR[shownStar(h, masterLevel) as Star], animationDelay: `${0.5 + i * 0.05}s` }} />
+        ))}
+      </div>
+      {circle && <img className="px ritual-circle" src={circle} width={288} height={168} alt="" />}
+      <div className="ritual-flash" />
+      <div className="ritual-stars" style={{ color: tint }}>
+        {'★'.repeat(best)}
+      </div>
+    </div>
+  )
+}
+
 export function SummonScreen({ state, store }: { state: GameState; store: Store }) {
   const [pool, setPool] = useState<SummonPool>('normal')
   const [revealed, setRevealed] = useState<OwnedHero[]>([])
+  const [ritual, setRitual] = useState<OwnedHero[] | null>(null)
   const [err, setErr] = useState<string | null>(null)
 
   function pull(count: 1 | 10) {
@@ -86,11 +121,11 @@ export function SummonScreen({ state, store }: { state: GameState; store: Store 
     const prev = new Set(Object.keys(state.heroes))
     try {
       const next = store.dispatch({ type: 'SUMMON', pool, count })
-      setRevealed(
-        Object.keys(next.heroes)
-          .filter((id) => !prev.has(id))
-          .map((id) => next.heroes[id as HeroId]!),
-      )
+      const pulled = Object.keys(next.heroes)
+        .filter((id) => !prev.has(id))
+        .map((id) => next.heroes[id as HeroId]!)
+      setRevealed([])
+      setRitual(pulled)
     } catch (e) {
       setErr(e instanceof Error ? e.message.replace(/^\w+: /, '') : 'Summon failed')
     }
@@ -163,6 +198,16 @@ export function SummonScreen({ state, store }: { state: GameState; store: Store 
         )}
         {err && <div className="muted" style={{ color: 'var(--bad)' }}>{err}</div>}
       </div>
+      {ritual && (
+        <SummonRitual
+          heroes={ritual}
+          masterLevel={state.meta.masterLevel}
+          onDone={() => {
+            setRevealed(ritual)
+            setRitual(null)
+          }}
+        />
+      )}
     </div>
   )
 }
