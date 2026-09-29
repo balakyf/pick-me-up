@@ -541,6 +541,7 @@ function promotableState(seed = 5): GameState {
     sanity: 100,
     promotion: null,
     equipment: { weapon: null, armor: null, accessory: null },
+    training: null,
   }
   return { ...acct, heroes: { [hero.id]: hero }, materials: { promotionStone: 999, attrStone_fire: 999 }, gems: 200 }
 }
@@ -603,6 +604,7 @@ function dailyReadyState(seed = 5): GameState {
     sanity: 100,
     promotion: null,
     equipment: { weapon: null, armor: null, accessory: null },
+    training: null,
   }
   return {
     ...acct,

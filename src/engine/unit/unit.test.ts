@@ -58,6 +58,7 @@ function ownedFromTemplate(t: HeroTemplate, level = 1): OwnedHero {
     sanity: 100,
     promotion: null,
     equipment: { weapon: null, armor: null, accessory: null },
+    training: null,
   }
 }
 
@@ -79,6 +80,7 @@ function makeWarrior(overrides: Partial<OwnedHero> = {}): OwnedHero {
     sanity: 100,
     promotion: null,
     equipment: { weapon: null, armor: null, accessory: null },
+    training: null,
     ...overrides,
   }
 }

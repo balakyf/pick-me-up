@@ -248,6 +248,7 @@ function buildOwnedHero(hero: Hero): OwnedHero {
     sanity: TUNING.lobby.sanityMax,
     promotion: null,
     equipment: { weapon: null, armor: null, accessory: null },
+    training: null,
   }
 }
 

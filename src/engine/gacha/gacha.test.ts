@@ -40,6 +40,7 @@ function makeState(overrides: Partial<GameState> = {}): GameState {
       kitchen: { level: 1, build: null },
       promotionChamber: { level: 0, build: null },
       tacticalCenter: { level: 1, build: null },
+      trainingCenter: { level: 0, build: null },
     },
     dailies: { attemptsUsed: 0, lastResetWorldDay: 0 },
     heroes: {},

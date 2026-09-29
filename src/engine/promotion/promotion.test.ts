@@ -39,6 +39,7 @@ function cappedHero(overrides: Partial<OwnedHero> = {}): OwnedHero {
     sanity: 100,
     promotion: null,
     equipment: { weapon: null, armor: null, accessory: null },
+    training: null,
     ...overrides,
   }
 }

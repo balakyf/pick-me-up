@@ -10,6 +10,7 @@ import { clampSanity } from '../kitchen'
 import { completePromotion } from '../promotion'
 import { worldDayIndex } from '../daily'
 import { addMasterXp } from '../master'
+import { completeTraining } from '../training'
 import type { GameState, OwnedHero, HeroId, DailiesState, FacilityId } from '../types'
 
 /** 1 world-hour in world-time ms. World-time is plain ms, only dilated at the edge. */
@@ -46,6 +47,7 @@ export function advanceTime(state: GameState, nowWorld: number): GameState {
 
   const nextHeroes: Record<HeroId, OwnedHero> = {}
   let promotionsCompleted = 0
+  let drillsCompleted = 0
   for (const key of Object.keys(state.heroes) as HeroId[]) {
     const hero = state.heroes[key]!
     if (!hero.alive) {
@@ -56,6 +58,10 @@ export function advanceTime(state: GameState, nowWorld: number): GameState {
     if (next.promotion !== null && next.promotion.completesAtWorld <= nowWorld) {
       next = completePromotion(next, state.seed)
       promotionsCompleted++
+    }
+    if (next.training !== null && next.training.completesAtWorld <= nowWorld) {
+      next = completeTraining(next, state.facilities.trainingCenter.level)
+      drillsCompleted++
     }
     nextHeroes[key] = next
   }
@@ -78,11 +84,12 @@ export function advanceTime(state: GameState, nowWorld: number): GameState {
       ? { attemptsUsed: 0, lastResetWorldDay: today }
       : state.dailies
 
-  // Completed promotions AND facility upgrades feed the Master-Level spine.
+  // Completed promotions, facility upgrades and training drills feed the Master-Level spine.
   let meta = { ...state.meta, lastSeenAtWorld: nowWorld }
   const masterGain =
     promotionsCompleted * TUNING.lobby.master.xpPerPromotion +
-    facilitiesCompleted * TUNING.lobby.master.xpPerFacilityUpgrade
+    facilitiesCompleted * TUNING.lobby.master.xpPerFacilityUpgrade +
+    drillsCompleted * TUNING.lobby.master.xpPerTrainingDrill
   if (masterGain > 0) meta = addMasterXp(meta, masterGain)
 
   return { ...state, heroes: nextHeroes, facilities: nextFacilities, dailies, meta }

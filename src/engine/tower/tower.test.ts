@@ -77,6 +77,7 @@ function makeHero(o: HeroOpts): OwnedHero {
     sanity: o.sanity ?? 100,
     promotion: null,
     equipment: { weapon: null, armor: null, accessory: null },
+    training: null,
   }
 }
 
@@ -113,6 +114,7 @@ function makeState(o: StateOpts = {}): GameState {
       kitchen: { level: 1, build: null },
       promotionChamber: { level: 0, build: null },
       tacticalCenter: { level: 1, build: null },
+      trainingCenter: { level: 0, build: null },
     },
     dailies: { attemptsUsed: 0, lastResetWorldDay: 0 },
     heroes,

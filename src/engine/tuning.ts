@@ -140,7 +140,7 @@ export const TUNING = {
     /** Sanity is per-hero, 0..100; heroes summon at full. */
     sanityMax: 100,
     /** Facilities present at account creation. 0 = locked / not yet built. */
-    facilityStartLevels: { kitchen: 1, promotionChamber: 0, tacticalCenter: 1 },
+    facilityStartLevels: { kitchen: 1, promotionChamber: 0, tacticalCenter: 1, trainingCenter: 0 },
     /** Master Level — the lobby progression spine (Layer 3 §3.1). */
     master: {
       /** masterXpToNext(L) = round(coeff × L^exp); levels stop at `cap`. */
@@ -152,6 +152,7 @@ export const TUNING = {
       xpPerFirstClear: 30,
       xpPerPromotion: 40,
       xpPerFacilityUpgrade: 25,
+      xpPerTrainingDrill: 5,
     },
     /** Facility upgrades — gold cost × growth^level, world-time timer, gem-skippable. */
     facilities: {
@@ -159,8 +160,10 @@ export const TUNING = {
       maxLevel: 10,
       /** Master Level required to BUILD the Promotion Chamber (level 0 → 1). */
       chamberUnlockMasterLevel: 3,
+      /** Master Level required for a facility's first build (level 0 → 1). Absent = ML1. */
+      unlockMasterLevel: { promotionChamber: 3, trainingCenter: 2 } as Record<string, number>,
       /** upgradeCost(level) = round(baseCost × costGrowth^level), in gold. */
-      baseCost: { kitchen: 800, promotionChamber: 1200, tacticalCenter: 1000 } as Record<string, number>,
+      baseCost: { kitchen: 800, promotionChamber: 1200, tacticalCenter: 1000, trainingCenter: 900 } as Record<string, number>,
       costGrowth: 1.5,
       /** Build timer per TARGET level (world-time ms): ~`durationPerLevel × toLevel`. */
       durationPerLevel: 15 * 60_000,
@@ -328,10 +331,25 @@ export const TUNING = {
     xpToNext: [0, 3, 5, 8, 12, 18] as readonly number[],
     /** CP per point of skillScore. */
     cpPerSkillScore: 2,
+    /** Training Center drills (Layer 1 §2.4 lever; Layer 3 facility row). First-pass. */
+    training: {
+      /** Highest trainable grade at a Training Center level (highest threshold ≤ level wins). */
+      maxGradeThresholds: { 1: 'E', 2: 'D', 4: 'C', 6: 'B' } as Record<number, string>,
+      /** Use-XP a refine drill grants: base + perLevel × (level − 1). */
+      drillXpBase: 3,
+      drillXpPerLevel: 1,
+      /** World-time length of one drill (1 world-hour ≈ 20 real minutes). */
+      drillDurationMs: 60 * 60_000,
+      /** Gold per drill by the skill's grade; a learn drill costs ×learnMult. */
+      drillGold: { F: 100, E: 150, D: 300, C: 600, B: 1200, A: 2400, S: 4800, U: 9600 } as Record<string, number>,
+      learnMult: 2,
+      /** Gems to finish a drill immediately. */
+      skipGemCost: 15,
+    },
   },
 
   account: {
-    schemaVersion: 4,
+    schemaVersion: 5,
     /** Canon protagonist account id (display only). */
     defaultAccountId: '46631913',
     partySize: 5,

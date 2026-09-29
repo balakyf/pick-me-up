@@ -342,7 +342,8 @@ export function playFloor(
     if (heroId === null || heroId === undefined) continue
     const hero = state.heroes[heroId]
     // Skip empty slots, the dead, and the broken-down (Sanity 0 = cannot deploy).
-    if (hero === undefined || !hero.alive || hero.sanity <= 0) continue
+    // A hero in a Training Center drill is in the yard, not the party.
+    if (hero === undefined || !hero.alive || hero.sanity <= 0 || hero.training !== null) continue
     const line: Line = lines[s] ?? 'front'
     heroUnits.push(buildCombatUnit(hero, line, SKILLS, state.inventory))
     deployedIds.push(heroId)

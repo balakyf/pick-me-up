@@ -10,6 +10,7 @@
  *
  * `learnable: false` marks merge-only results (and their canon inputs) that a
  * promotion must not hand out — promotion keeps drawing from the original pool.
+ * `trainable: true` marks the canon "trained" skills the Training Center can teach.
  *
  * Element `null` means "inherit the unit's element". Numbers are first-pass tuning
  * shapes; no logic lives here.
@@ -30,6 +31,7 @@ export const SKILLS: SkillRegistry = {
     spCost: 30,
     baseMult: 1.6,
     perLevel: 0.08,
+    trainable: false,
     learnable: true,
   },
   // Spear thrust hitting a single front target hard (Muden's "Spear" flavor).
@@ -43,6 +45,7 @@ export const SKILLS: SkillRegistry = {
     spCost: 35,
     baseMult: 1.7,
     perLevel: 0.08,
+    trainable: false,
     learnable: true,
   },
   // Thief multi-strike flurry (King's-Eyes scout flavor).
@@ -56,6 +59,7 @@ export const SKILLS: SkillRegistry = {
     spCost: 25,
     baseMult: 1.25,
     perLevel: 0.06,
+    trainable: false,
     learnable: true,
   },
   // Archer lightning volley vs all enemies (Nihaku "Thunderbringer").
@@ -69,6 +73,7 @@ export const SKILLS: SkillRegistry = {
     spCost: 45,
     baseMult: 0.9,
     perLevel: 0.05,
+    trainable: false,
     learnable: true,
   },
   // Mage elemental nuke vs all enemies.
@@ -82,6 +87,7 @@ export const SKILLS: SkillRegistry = {
     spCost: 50,
     baseMult: 1.4,
     perLevel: 0.07,
+    trainable: false,
     learnable: true,
   },
 
@@ -96,6 +102,7 @@ export const SKILLS: SkillRegistry = {
     spCost: 10,
     baseMult: 1.15,
     perLevel: 0.05,
+    trainable: true,
     learnable: false,
   },
   basic_shield: {
@@ -108,6 +115,7 @@ export const SKILLS: SkillRegistry = {
     spCost: 10,
     baseMult: 1.1,
     perLevel: 0.04,
+    trainable: true,
     learnable: false,
   },
   // Berserk: +power, loses rationality (canon Lv1-6, +10 stat bonus flavor).
@@ -121,6 +129,7 @@ export const SKILLS: SkillRegistry = {
     spCost: 20,
     baseMult: 1.35,
     perLevel: 0.06,
+    trainable: true,
     learnable: false,
   },
   // Composure: a measured, precise strike (canon: learned by synthesizing Tobi).
@@ -134,6 +143,7 @@ export const SKILLS: SkillRegistry = {
     spCost: 15,
     baseMult: 1.2,
     perLevel: 0.05,
+    trainable: true,
     learnable: false,
   },
   calmness: {
@@ -146,6 +156,7 @@ export const SKILLS: SkillRegistry = {
     spCost: 15,
     baseMult: 1.2,
     perLevel: 0.05,
+    trainable: true,
     learnable: false,
   },
   sword_soul: {
@@ -158,6 +169,7 @@ export const SKILLS: SkillRegistry = {
     spCost: 25,
     baseMult: 1.45,
     perLevel: 0.07,
+    trainable: true,
     learnable: false,
   },
   // Ganggyeok (강격): a crushing heavy blow.
@@ -171,6 +183,7 @@ export const SKILLS: SkillRegistry = {
     spCost: 28,
     baseMult: 1.5,
     perLevel: 0.07,
+    trainable: true,
     learnable: false,
   },
 
@@ -185,6 +198,7 @@ export const SKILLS: SkillRegistry = {
     spCost: 25,
     baseMult: 1.55,
     perLevel: 0.07,
+    trainable: false,
     learnable: false,
   },
   // Berserk + Composure → Exceed (canon, Islat Han).
@@ -198,6 +212,7 @@ export const SKILLS: SkillRegistry = {
     spCost: 35,
     baseMult: 1.9,
     perLevel: 0.09,
+    trainable: false,
     learnable: false,
   },
   // Berserk + Calmness → Ixid (canon B+, Unique): consumes vitality; can kill at max.
@@ -213,6 +228,7 @@ export const SKILLS: SkillRegistry = {
     perLevel: 0.15,
     hpCost: 18,
     hpCostPerLevel: 10,
+    trainable: false,
     learnable: false,
   },
   // Sword Soul + Ganggyeok → Pathology (canon B, Unique): fixed damage, self-damage.
@@ -228,6 +244,7 @@ export const SKILLS: SkillRegistry = {
     perLevel: 0.15,
     hpCost: 22,
     hpCostPerLevel: 12,
+    trainable: false,
     learnable: false,
   },
 }

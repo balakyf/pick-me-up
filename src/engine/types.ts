@@ -41,7 +41,7 @@ export type WorldGrade = 'C' | 'B' | 'A' | 'S'
 
 export type HeroOrigin = 'procedural' | 'cameo'
 
-export type FacilityId = 'kitchen' | 'promotionChamber' | 'tacticalCenter'
+export type FacilityId = 'kitchen' | 'promotionChamber' | 'tacticalCenter' | 'trainingCenter'
 
 /** Material bucket key, e.g. 'promotionStone', 'attrStone_fire', 'rankMaterial'. */
 export type MaterialId = string
@@ -151,6 +151,8 @@ export interface SkillDef {
   hpCostPerLevel?: number
   /** Can a promotion grant this skill? (Merge-only / achievement skills cannot.) */
   learnable: boolean
+  /** Can the Training Center teach this skill from scratch? (canon "trained" skills) */
+  trainable: boolean
 }
 
 /** A hero's copy of a skill: it levels by being cast (auto-learn, Layer 1 §2.4). */
@@ -226,6 +228,15 @@ export interface OwnedHero extends Omit<Hero, 'skillIds'> {
   promotion: { completesAtWorld: number } | null
   /** Equipped item ids per slot (Layer 1 §5); each references GameState.inventory. */
   equipment: HeroEquipment
+  /** In-progress Training Center drill; null when not training (schema v5). */
+  training: TrainingDrill | null
+}
+
+/** A Training Center drill: refine an owned skill, or learn a trainable one. */
+export interface TrainingDrill {
+  skillId: string
+  mode: 'refine' | 'learn'
+  completesAtWorld: number
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -547,8 +558,10 @@ export type Command =
   | { type: 'PROMOTE_HERO'; heroId: HeroId }
   /** Start a facility upgrade: pay gold, begin the world-time build timer. */
   | { type: 'UPGRADE_FACILITY'; facility: FacilityId }
-  /** Gem pay-to-skip a running timer. `kind: 'promotion'` → HeroId; `'facility'` → FacilityId. */
-  | { type: 'SKIP_TIMER'; kind: 'facility' | 'promotion'; id: string }
+  /** Gem pay-to-skip a running timer. `'promotion'`/`'training'` → HeroId; `'facility'` → FacilityId. */
+  | { type: 'SKIP_TIMER'; kind: 'facility' | 'promotion' | 'training'; id: string }
+  /** Training Center: start a drill that refines an owned skill or learns a trainable one. */
+  | { type: 'TRAIN_SKILL'; heroId: HeroId; skillId: string }
   /** Run today's Daily Dungeon (seeded combat; free attempts then gem-paid). */
   | { type: 'ATTEMPT_DAILY' }
   /** Synthesis (Layer 1 §4): destroy heroes to transfer traits or render materials. */

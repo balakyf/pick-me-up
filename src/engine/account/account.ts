@@ -110,6 +110,7 @@ export function createAccount(entropySeed: number, opts?: CreateAccountOpts): Ga
       kitchen: { level: TUNING.lobby.facilityStartLevels.kitchen, build: null },
       promotionChamber: { level: TUNING.lobby.facilityStartLevels.promotionChamber, build: null },
       tacticalCenter: { level: TUNING.lobby.facilityStartLevels.tacticalCenter, build: null },
+      trainingCenter: { level: TUNING.lobby.facilityStartLevels.trainingCenter, build: null },
     },
     dailies: { attemptsUsed: 0, lastResetWorldDay: 0 },
     heroes: { [STARTER_HERO_ID]: starter },
@@ -156,11 +157,12 @@ function migrateV1toV2(envelope: SaveEnvelope): SaveEnvelope {
       gems: TUNING.lobby.startingGems,
       materials: {},
       meta: { masterLevel: 1, masterXp: 0, lastSeenAtWorld: toWorldTime(createdAt) },
+      // v2 facilities only; the Training Center is added by the v4 → v5 step.
       facilities: {
         kitchen: { level: TUNING.lobby.facilityStartLevels.kitchen, build: null },
         promotionChamber: { level: TUNING.lobby.facilityStartLevels.promotionChamber, build: null },
         tacticalCenter: { level: TUNING.lobby.facilityStartLevels.tacticalCenter, build: null },
-      },
+      } as GameState['facilities'],
       dailies: { attemptsUsed: 0, lastResetWorldDay: 0 },
     },
   }
@@ -207,6 +209,28 @@ function migrateV3toV4(envelope: SaveEnvelope): SaveEnvelope {
   }
 }
 
+/** v4 → v5: the Training Center (unbuilt) and an idle drill slot on every hero. */
+function migrateV4toV5(envelope: SaveEnvelope): SaveEnvelope {
+  const s = envelope.state as unknown as Record<string, unknown>
+  const oldHeroes = s.heroes as Record<string, OwnedHero>
+  const heroes: Record<string, OwnedHero> = {}
+  for (const [id, hero] of Object.entries(oldHeroes)) heroes[id] = { ...hero, training: null }
+  const facilities = s.facilities as GameState['facilities']
+  return {
+    schemaVersion: 5,
+    savedAt: envelope.savedAt,
+    state: {
+      ...(s as unknown as GameState),
+      schemaVersion: 5,
+      heroes,
+      facilities: {
+        ...facilities,
+        trainingCenter: { level: TUNING.lobby.facilityStartLevels.trainingCenter, build: null },
+      },
+    },
+  }
+}
+
 /**
  * Migrate a SaveEnvelope from `fromVersion` up to the current schema version.
  * Identity when already current; otherwise apply each version's upgrade step in
@@ -233,6 +257,10 @@ export function migrate(envelope: SaveEnvelope, fromVersion: number): SaveEnvelo
   if (v === 3) {
     env = migrateV3toV4(env)
     v = 4
+  }
+  if (v === 4) {
+    env = migrateV4toV5(env)
+    v = 5
   }
   if (v !== current) {
     throw new SaveLoadError(`migrate: no migration path from version ${fromVersion}`)
@@ -282,6 +310,9 @@ function assertGameStateShape(state: unknown): asserts state is GameState {
   for (const [id, hero] of Object.entries(state.heroes)) {
     if (!isPlainObject(hero) || !Array.isArray(hero.skills)) {
       throw new SaveLoadError(`loadState: hero '${id}' is missing its skills list`)
+    }
+    if (!('training' in hero)) {
+      throw new SaveLoadError(`loadState: hero '${id}' is missing its training slot`)
     }
   }
 }

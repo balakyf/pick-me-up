@@ -37,6 +37,7 @@ import { startPromotion, skipPromotion } from '../promotion'
 import { synthesize } from '../synthesis'
 import { craftEquipment, equipItem, unequipItem } from '../equipment'
 import { startUpgrade, skipFacility } from '../facilities'
+import { startTraining, skipTraining } from '../training'
 import { attemptDaily, type DailyResult } from '../daily'
 import { advanceTime, toWorldTime } from '../time'
 
@@ -126,7 +127,12 @@ export function reduce(state: GameState | null, cmd: Command, nowWorld: number =
     case 'SKIP_TIMER':
       return cmd.kind === 'promotion'
         ? skipPromotion(current, cmd.id as HeroId)
-        : skipFacility(current, cmd.id as FacilityId)
+        : cmd.kind === 'training'
+          ? skipTraining(current, cmd.id as HeroId)
+          : skipFacility(current, cmd.id as FacilityId)
+
+    case 'TRAIN_SKILL':
+      return startTraining(current, cmd.heroId, cmd.skillId, nowWorld)
 
     case 'ATTEMPT_DAILY':
       return attemptDaily(current, nowWorld).state

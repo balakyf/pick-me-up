@@ -9,8 +9,9 @@
  * and the level bump.
  *
  * Gating: a facility may not exceed the current Master Level (level ≤ masterLevel),
- * nor the hard slice cap; the Promotion Chamber's first build (0 → 1) additionally
- * requires `chamberUnlockMasterLevel`. Pure/deterministic — no RNG.
+ * nor the hard slice cap; a gated facility's first build (0 → 1) additionally requires
+ * its `unlockMasterLevel` (Promotion Chamber ML3, Training Center ML2).
+ * Pure/deterministic — no RNG.
  */
 
 import { TUNING } from '../tuning'
@@ -21,6 +22,12 @@ const F = TUNING.lobby.facilities
 const MASTER = TUNING.lobby.master
 
 /** Gold to upgrade a facility FROM `level` to `level + 1`. */
+/** Master Level a facility's FIRST build (level 0 → 1) requires. Facilities not in the
+ *  table (built from the start) are unrestricted. */
+export function unlockMasterLevel(facility: FacilityId): number {
+  return F.unlockMasterLevel[facility] ?? 1
+}
+
 export function upgradeCost(facility: FacilityId, level: number): number {
   return Math.round(F.baseCost[facility]! * F.costGrowth ** level)
 }
@@ -33,7 +40,7 @@ export function upgradeDuration(toLevel: number): number {
 /**
  * Whether a facility can start upgrading right now: below the slice cap AND the
  * Master-Level ceiling (level < masterLevel), idle (no build in flight), the
- * Promotion Chamber's first build cleared at `chamberUnlockMasterLevel`, and the
+ * first build of a gated facility cleared at its `unlockMasterLevel`, and the
  * gold cost affordable.
  */
 export function canUpgrade(state: GameState, facility: FacilityId): boolean {
@@ -41,9 +48,7 @@ export function canUpgrade(state: GameState, facility: FacilityId): boolean {
   if (f.build !== null) return false
   if (f.level >= F.maxLevel) return false
   if (f.level >= state.meta.masterLevel) return false
-  if (facility === 'promotionChamber' && f.level === 0 && state.meta.masterLevel < F.chamberUnlockMasterLevel) {
-    return false
-  }
+  if (f.level === 0 && state.meta.masterLevel < unlockMasterLevel(facility)) return false
   return state.gold >= upgradeCost(facility, f.level)
 }
 

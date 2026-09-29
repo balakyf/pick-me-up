@@ -159,7 +159,8 @@ export function attemptDaily(state: GameState, nowWorld: number): { state: GameS
     const heroId = slots[s]
     if (heroId === null || heroId === undefined) continue
     const hero = state.heroes[heroId]
-    if (hero === undefined || !hero.alive || hero.sanity <= 0) continue
+    // A hero in a Training Center drill is in the yard, not the party.
+    if (hero === undefined || !hero.alive || hero.sanity <= 0 || hero.training !== null) continue
     heroUnits.push(buildCombatUnit(hero, lines[s] ?? 'front', SKILLS, state.inventory))
     deployedIds.push(heroId)
   }

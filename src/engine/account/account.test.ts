@@ -144,6 +144,7 @@ function midGameOf(acct: GameState): GameState {
     sanity: 100,
     promotion: null,
     equipment: { weapon: null, armor: null, accessory: null },
+    training: null,
   }
   copy.heroes[fakeId] = fakeHero
   copy.tower.currentFloor = 7
@@ -441,7 +442,7 @@ describe('migrate — v3 → v4', () => {
 
     const restored = loadState(v3Json)
 
-    expect(restored.schemaVersion).toBe(4)
+    expect(restored.schemaVersion).toBe(TUNING.account.schemaVersion) // chained v3→v4→v5
     const hero = Object.values(restored.heroes)[0]!
     expect(hero.skills).toEqual([
       { id: 'power_strike', level: 1, xp: 0 },
@@ -462,5 +463,37 @@ describe('migrate — v3 → v4', () => {
     )
     const json = JSON.stringify({ schemaVersion: 4, savedAt: 0, state: { ...acct, heroes: broken } })
     expect(() => loadState(json)).toThrow(SaveLoadError)
+  })
+})
+
+describe('migrate — v4 → v5 (Training Center)', () => {
+  it('adds an unbuilt Training Center and an idle drill slot on every hero', () => {
+    const v5 = createAccount(558, { now: 1000 })
+    const heroesV4 = Object.fromEntries(
+      Object.entries(v5.heroes).map(([id, h]) => {
+        const { training, ...rest } = h as unknown as Record<string, unknown>
+        return [id, rest]
+      }),
+    )
+    const { trainingCenter, ...facilitiesV4 } = v5.facilities
+    const v4Json = JSON.stringify({
+      schemaVersion: 4,
+      savedAt: 0,
+      state: { ...v5, schemaVersion: 4, heroes: heroesV4, facilities: facilitiesV4 },
+    })
+
+    const restored = loadState(v4Json)
+
+    expect(restored.schemaVersion).toBe(5)
+    expect(restored.facilities.trainingCenter).toEqual({ level: 0, build: null })
+    expect(Object.values(restored.heroes)[0]!.training).toBeNull()
+    // v4 fields survive the upgrade.
+    expect(Object.values(restored.heroes)[0]!.skills.length).toBeGreaterThan(0)
+  })
+
+  it('fresh accounts start with the Training Center unbuilt and no drills', () => {
+    const acct = createAccount(559, { now: 0 })
+    expect(acct.facilities.trainingCenter).toEqual({ level: 0, build: null })
+    expect(Object.values(acct.heroes).every((h) => h.training === null)).toBe(true)
   })
 })
