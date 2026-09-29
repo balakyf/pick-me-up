@@ -8,7 +8,9 @@ import { loginClaimed } from '../../engine/shop'
 import { toWorldTime } from '../../engine/time'
 import { masterXpToNext } from '../../engine/master'
 import { TUNING } from '../../engine/tuning'
+import { activityOf, dayOfSlot, hourOfWorld, slotOf } from '../../engine/life'
 import {
+  BUILDINGS,
   MAP_H,
   MAP_W,
   MASTER_SPAWN,
@@ -16,34 +18,46 @@ import {
   PROPS,
   ROOMS,
   TILE,
+  buildingAt,
   facingToward,
   findPath,
+  graveTile,
+  insideBuilding,
   isAdjacentTo,
   isWalkable,
+  isWallChar,
   propAt,
   propForPlace,
-  roomAt,
-  walkableTilesIn,
+  tileAt,
+  type Building,
   type PlaceId,
   type Prop,
   type Pt,
   type RoomId,
 } from './lobbyMap'
-import { banterLines, heroLines, iselLines } from './lines'
-import { PlacePanel, roomFor, type PanelPlace } from '../facilityPanels'
+import { iselLines } from './lines'
+import { activityKey, isOffsite, spotFor, type Spot } from './heroAgent'
+import { accountDay, conversation, pairLines, speak, statusLine } from '../life/speech'
+import { HeroProfile, HeroTracker, LetterWindow, letterReady } from '../life/lifeWindows'
+import { PlacePanel, type PanelPlace } from '../facilityPanels'
 import { DialogBox, Gauge, PixelWindow, type DialogScript } from '../kit'
 import { canvasAvailable, cachedCanvas } from '../pixel/render'
 import { renderLobbyBase, drawSummonCircle } from '../pixel/tiles'
 import { PROP_FRAMES, drawEmote, drawProp, type EmoteKind } from '../pixel/props'
+import { ROOF_LIFT, blanket, drawRoof, smoke } from '../pixel/campusProps'
 import { heroBustUrl, heroFrameCanvas, iselBustUrl, masterBustUrl, masterFrameCanvas } from '../pixel/sprites'
 import type { Dir, WalkFrame } from '../pixel/heroSprite'
+import { hashString } from '../pixel/rand'
 import { t, t as tr } from '../i18n/i18n'
 
 /**
- * The Lobby as a walkable top-down world. The Master (player avatar) walks with
- * arrows / WASD / ZQSD or by clicking; E / Space / Enter uses what they face.
- * Heroes wander the room their state puts them in. All motion here is cosmetic:
- * the engine is only touched through Commands dispatched by facility panels.
+ * The waiting room as a walkable campus (Living Lobby spec §3). The Master walks with
+ * arrows / WASD / ZQSD or by clicking; E / Space / Enter uses what they face. Heroes are
+ * driven by the Quanton Life engine: each walks to the building of their current
+ * activity and does it there — sleeping in their own bed, hammering at the forge,
+ * drinking in the tavern, standing at a friend's grave. Roofs hide interiors until the
+ * Master steps inside; the light follows the world clock. Motion is cosmetic: the engine
+ * is only touched through Commands.
  */
 
 export type WorldView = 'tower' | 'summon' | 'party' | 'roster'
@@ -72,8 +86,8 @@ function cameraFor(px: number, py: number, vw: number, vh: number): { camX: numb
     world <= view ? Math.round((world - view) / 2) : Math.round(Math.max(0, Math.min(world - view, c - view / 2)))
   return { camX: clampAxis(px, vw, MAP_W * TILE), camY: clampAxis(py - 12, vh, MAP_H * TILE) }
 }
-const MASTER_SPEED = 5.5 // tiles / s
-const HERO_SPEED = 2
+const MASTER_SPEED = 6.5 // tiles / s
+const HERO_SPEED = 2.4
 const PANEL_PLACES: PanelPlace[] = [
   'kitchen',
   'tacticalCenter',
@@ -87,6 +101,14 @@ const PANEL_PLACES: PanelPlace[] = [
   'hallOfMagic',
   'rift',
   'guild',
+  'dormitory',
+  'tavern',
+  'infirmary',
+  'garden',
+  'memorial',
+  'library',
+  'watchtower',
+  'market',
 ]
 export const PLACE_ICON: Record<PlaceId, string> = {
   kitchen: '🍲',
@@ -106,6 +128,14 @@ export const PLACE_ICON: Record<PlaceId, string> = {
   party: '🛡',
   tower: '🗼',
   fairy: '✧',
+  dormitory: '🛏',
+  tavern: '🍺',
+  infirmary: '✚',
+  garden: '🌱',
+  memorial: '🕯',
+  library: '📚',
+  watchtower: '🔭',
+  market: '⚖',
 }
 /** Order of the fast-travel menu. */
 export const MENU_PLACES: PlaceId[] = [
@@ -114,12 +144,20 @@ export const MENU_PLACES: PlaceId[] = [
   'party',
   'roster',
   'kitchen',
+  'tavern',
+  'dormitory',
   'tacticalCenter',
   'promotionChamber',
   'trainingCenter',
+  'armory',
   'transferStation',
   'synthesis',
-  'armory',
+  'library',
+  'infirmary',
+  'garden',
+  'market',
+  'watchtower',
+  'memorial',
   'daily',
   'hallOfMagic',
   'rift',
@@ -139,51 +177,32 @@ interface Walker {
   steps: number
 }
 
-/** What an idle hero is doing (cosmetic autonomy — the Quanton AI heroes have lives). */
-interface Activity {
-  kind: 'spar' | 'eat' | 'pray' | 'study' | 'read' | 'shop' | 'chat'
-  until: number
-  /** The prop they walked to (faced on arrival). */
-  prop?: Prop
-  /** Chat partner and the line this hero says. */
-  partner?: string
-  line?: string
-  /** Set once they have arrived and started. */
-  started: boolean
-}
-
 interface HeroWalker extends Walker {
   id: string
-  room: RoomId
-  idleUntil: number
-  activity: Activity | null
+  /** The activity the walker is currently acting out. */
+  key: string
+  spot: Spot | null
+  departAt: number
+  arrived: boolean
+  lying: boolean
+  hidden: boolean
+  fidgetAt: number
+  nextThought: number
+  bubble: { text: string; until: number } | null
 }
 
-/** Props a hero in `room` might use on their own, by activity. */
-const ROOM_ACTIVITIES: Partial<Record<RoomId, { kind: Activity['kind']; prop: Prop['kind'] }[]>> = {
-  training: [{ kind: 'spar', prop: 'dummy' }],
-  kitchen: [{ kind: 'eat', prop: 'table' }],
-  promotionChamber: [{ kind: 'pray', prop: 'altar' }],
-  tacticalCenter: [{ kind: 'study', prop: 'warTable' }],
-  hall: [
-    { kind: 'read', prop: 'lectern' },
-    { kind: 'shop', prop: 'stall' },
-  ],
-}
-
-const ACTIVITY_EMOTE: Record<Activity['kind'], EmoteKind> = {
-  spar: 'sword',
+const ACTIVITY_EMOTE: Partial<Record<string, EmoteKind>> = {
+  sleep: 'zz',
   eat: 'food',
-  pray: 'pray',
-  study: 'book',
+  work: 'sword',
+  train: 'sword',
+  drilling: 'sword',
+  socialize: 'note',
   read: 'book',
-  shop: 'heart',
-  chat: 'note',
-}
-
-function propsIn(room: RoomId, kind: Prop['kind']): Prop[] {
-  const r = ROOMS[room]
-  return PROPS.filter((p) => p.kind === kind && p.x >= r.x - 1 && p.x < r.x + r.w + 1 && p.y >= r.y - 1 && p.y < r.y + r.h)
+  pray: 'pray',
+  promoting: 'pray',
+  mourn: 'dots',
+  heal: 'heart',
 }
 
 type Target = { kind: 'prop'; prop: Prop } | { kind: 'hero'; id: string }
@@ -203,19 +222,36 @@ const KEY_DIR: Record<string, Dir> = {
   d: 'right',
 }
 
-/** A small speech bubble with a line of pixel text above a chatting hero. */
-function drawSpeech(ctx: CanvasRenderingContext2D, text: string, x: number, y: number): void {
+/** A speech bubble that wraps to up to three lines above a hero. */
+function drawBubble(ctx: CanvasRenderingContext2D, text: string, x: number, y: number): void {
   ctx.font = '8px "Pixelify Sans", monospace'
-  const w = Math.min(150, Math.ceil(ctx.measureText(text).width) + 8)
+  const maxW = 128
+  const words = text.split(' ')
+  const lines: string[] = []
+  let cur = ''
+  for (const wd of words) {
+    const next = cur ? `${cur} ${wd}` : wd
+    if (ctx.measureText(next).width > maxW - 8 && cur) {
+      lines.push(cur)
+      cur = wd
+    } else cur = next
+  }
+  if (cur) lines.push(cur)
+  if (lines.length > 3) {
+    lines.length = 3
+    lines[2] = lines[2]!.replace(/\s*\S*$/, '') + '…'
+  }
+  const w = Math.min(maxW, Math.ceil(Math.max(...lines.map((l) => ctx.measureText(l).width))) + 8)
+  const h = lines.length * 9 + 4
   const bx = Math.round(x - w / 2)
-  const by = Math.round(y - 12)
+  const by = Math.round(y - h)
   ctx.fillStyle = '#fff6e0'
-  ctx.fillRect(bx, by, w, 12)
-  ctx.fillRect(Math.round(x) - 1, by + 12, 3, 2)
+  ctx.fillRect(bx, by, w, h)
+  ctx.fillRect(Math.round(x) - 1, by + h, 3, 2)
   ctx.strokeStyle = '#1b1225'
-  ctx.strokeRect(bx + 0.5, by + 0.5, w - 1, 11)
+  ctx.strokeRect(bx + 0.5, by + 0.5, w - 1, h - 1)
   ctx.fillStyle = '#1b1225'
-  ctx.fillText(text, bx + 4, by + 9, w - 8)
+  lines.forEach((l, i) => ctx.fillText(l, bx + 4, by + 9 + i * 9, w - 8))
 }
 
 function newWalker(p: Pt, dir: Dir = 'down'): Walker {
@@ -265,23 +301,6 @@ function walkFrame(w: Walker): WalkFrame {
   return w.t < 0.5 ? (w.steps % 2 ? 1 : 2) : 0
 }
 
-function heroRoom(h: OwnedHero, partyIds: Set<string>): RoomId {
-  return roomFor(h, partyIds)
-}
-
-function randomTileIn(room: RoomId): Pt {
-  const tiles = walkableTilesIn(room)
-  return tiles[Math.floor(Math.random() * tiles.length)] ?? MASTER_SPAWN
-}
-
-function emoteFor(h: OwnedHero, inParty: boolean): 'zz' | 'dots' | 'bang' | 'heart' | null {
-  if (h.sanity < 35) return 'zz'
-  if (h.sanity < 60) return 'dots'
-  if (h.xp.atCap && !h.promotion) return 'bang'
-  if (inParty) return null
-  return null
-}
-
 const offsetCache = new Map<string, { dx: number; dy: number }>()
 /** Draw offsets are frame-independent; compute them once per kind. */
 function propOffset(kind: Prop['kind']): { dx: number; dy: number } {
@@ -296,14 +315,49 @@ function propOffset(kind: Prop['kind']): { dx: number; dy: number } {
 
 function lockedRooms(state: GameState): RoomId[] {
   const out: RoomId[] = []
+  const f = state.facilities
   if (!synthesisUnlocked(state)) out.push('synthesis')
   if (!smithyUnlocked(state)) out.push('armory')
   if (!dailyUnlocked(state)) out.push('daily')
-  if (state.facilities.promotionChamber.level === 0) out.push('promotionChamber')
-  if (state.facilities.trainingCenter.level === 0) out.push('training')
-  if (state.facilities.transferStation.level === 0) out.push('transfer')
-  if (state.facilities.hallOfMagic.level === 0 && !state.meta.crackOpen) out.push('magic')
+  if (f.promotionChamber.level === 0) out.push('promotionChamber')
+  if (f.trainingCenter.level === 0) out.push('training')
+  if (f.transferStation.level === 0) out.push('transfer')
+  if (f.hallOfMagic.level === 0 && !state.meta.crackOpen) out.push('magic')
+  if (f.tavern.level === 0) out.push('tavern')
+  if (f.infirmary.level === 0) out.push('infirmary')
+  if (f.garden.level === 0) out.push('garden')
+  if (f.library.level === 0) out.push('library')
+  if (f.watchtower.level === 0) out.push('watchtower')
+  if (f.market.level === 0) out.push('market')
   return out
+}
+
+/** Darkness 0..1 by hour of the world day (dusk 17–20, dawn 5–7). */
+export function darknessAt(hour: number): number {
+  if (hour >= 7 && hour < 17) return 0
+  if (hour >= 17 && hour < 20) return ((hour - 17) / 3) * 0.62
+  if (hour >= 5 && hour < 7) return (1 - (hour - 5) / 2) * 0.62
+  return 0.62
+}
+
+export function clockLabel(worldMs: number): string {
+  const h = hourOfWorld(worldMs)
+  const hh = Math.floor(h)
+  const mm = Math.floor((h - hh) * 60)
+  return `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`
+}
+
+const LIGHTS: Partial<Record<Prop['kind'], { color: string; r: number }>> = {
+  torch: { color: '255,170,80', r: 36 },
+  lamp: { color: '255,210,120', r: 44 },
+  hearth: { color: '255,140,60', r: 52 },
+  forge: { color: '255,120,50', r: 56 },
+  summonCrystal: { color: '140,200,255', r: 60 },
+  obelisk: { color: '255,160,80', r: 30 },
+  portal: { color: '110,220,230', r: 44 },
+  rift: { color: '190,120,255', r: 48 },
+  fountain: { color: '150,200,255', r: 30 },
+  orrery: { color: '200,180,255', r: 36 },
 }
 
 export function LobbyWorld({
@@ -321,6 +375,7 @@ export function LobbyWorld({
   travelRequest?: { place: PlaceId; nonce: number } | null
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  const miniRef = useRef<HTMLCanvasElement>(null)
   const stageRef = useRef<HTMLDivElement>(null)
   const [vp, setVp] = useState<Viewport>({ w: VIEW_W, h: VIEW_H, zoom: 3 })
   const vpRef = useRef(vp)
@@ -328,6 +383,12 @@ export function LobbyWorld({
   const [openPlace, setOpenPlace] = useState<PanelPlace | null>(null)
   const [dialog, setDialog] = useState<DialogScript | null>(null)
   const [prompt, setPrompt] = useState<string | null>(null)
+  const [profile, setProfile] = useState<string | null>(null)
+  const [tracker, setTracker] = useState(false)
+  const [letter, setLetter] = useState(false)
+  const [showMap, setShowMap] = useState(() => typeof window === 'undefined' || window.innerWidth >= 720)
+  const [clock, setClock] = useState(() => toWorldTime(Date.now()))
+  const [following, setFollowing] = useState<string | null>(null)
 
   // Live world state for the game loop (never React state: 60 fps mutation).
   const world = useRef({
@@ -337,36 +398,53 @@ export function LobbyWorld({
     pending: null as Target | null,
     time: 0,
     promptLabel: null as string | null,
+    follow: null as string | null,
+    roofAlpha: new Map<string, number>(),
   })
+  world.current.follow = following
   const stateRef = useRef(state)
   stateRef.current = state
   const modalRef = useRef(false)
-  modalRef.current = openPlace !== null || dialog !== null
+  modalRef.current = openPlace !== null || dialog !== null || profile !== null || tracker || letter
 
-  // Pump the world clock (timers finish, Sanity regenerates) while in the lobby.
+  // Pump the world clock (timers finish, heroes live, Sanity regenerates) while in the lobby.
   useEffect(() => {
-    const id = setInterval(() => store.dispatch({ type: 'TICK' }, Date.now()), 1000)
+    const id = setInterval(() => {
+      store.dispatch({ type: 'TICK' }, Date.now())
+      setClock(toWorldTime(Date.now()))
+    }, 1000)
     return () => clearInterval(id)
   }, [store])
 
-  // Keep one wandering walker per living hero, in the room their state implies.
+  // Isel's letter waits for a Master who has been away a while.
+  useEffect(() => {
+    if (letterReady(stateRef.current, toWorldTime(Date.now()))) setLetter(true)
+  }, [])
+
+  // Keep one walker per living hero; a new hero appears at their spot.
   useEffect(() => {
     const w = world.current
-    const partyIds = new Set(state.party.slots.filter(Boolean) as string[])
     const living = (Object.values(state.heroes) as OwnedHero[]).filter((h) => h.alive)
     const alive = new Set(living.map((h) => h.id as string))
     for (const id of [...w.heroes.keys()]) if (!alive.has(id)) w.heroes.delete(id)
     for (const h of living) {
-      const room = heroRoom(h, partyIds)
-      const hw = w.heroes.get(h.id)
-      if (!hw) {
-        w.heroes.set(h.id, { ...newWalker(randomTileIn(room)), id: h.id, room, idleUntil: Math.random() * 2, activity: null })
-      } else if (hw.room !== room) {
-        hw.room = room
-        hw.idleUntil = 0
-        hw.path = []
-        hw.activity = null
-      }
+      if (w.heroes.has(h.id)) continue
+      const d = activityOf(h)
+      const spot = spotFor(state, h, d)
+      const at = spot.lie ?? spot.at
+      w.heroes.set(h.id, {
+        ...newWalker(at),
+        id: h.id,
+        key: activityKey(d),
+        spot,
+        departAt: 0,
+        arrived: true,
+        lying: Boolean(spot.lie),
+        hidden: Boolean(spot.vanish),
+        fidgetAt: Math.random() * 12,
+        nextThought: 4 + Math.random() * 20,
+        bubble: null,
+      })
     }
   }, [state])
 
@@ -383,19 +461,32 @@ export function LobbyWorld({
     return () => window.removeEventListener('resize', fit)
   }, [])
 
+  function talkTo(id: string) {
+    const st = stateRef.current
+    const h = st.heroes[id as OwnedHero['id']]
+    if (!h) return
+    const inParty = st.party.slots.includes(h.id)
+    setDialog({
+      speaker: h.name,
+      bust: heroBustUrl(h),
+      lines: [...conversation(st, h, inParty), `— ${statusLine(st, h)}`],
+      actions: [{ label: t('Profile'), onClick: () => setProfile(h.id) }],
+    })
+  }
+
   function interact(target: Target) {
     const st = stateRef.current
-    if (target.kind === 'hero') {
-      const h = st.heroes[target.id as OwnedHero['id']]
-      if (!h) return
-      const inParty = st.party.slots.includes(h.id)
-      setDialog({ speaker: h.name, bust: heroBustUrl(h), lines: heroLines(h, inParty) })
-      return
-    }
+    if (target.kind === 'hero') return talkTo(target.id)
     const place = target.prop.place
     if (!place) return
     if (place === 'fairy') {
-      setDialog({ speaker: 'Isel', bust: iselBustUrl(), lines: iselLines(st) })
+      const lines = iselLines(st)
+      setDialog({
+        speaker: 'Isel',
+        bust: iselBustUrl(),
+        lines,
+        actions: [{ label: t('Read her letter'), onClick: () => setLetter(true) }],
+      })
     } else if ((PANEL_PLACES as string[]).includes(place)) {
       setOpenPlace(place as PanelPlace)
     } else {
@@ -408,15 +499,15 @@ export function LobbyWorld({
     const d = DELTA[m.dir]
     const fx = m.x + d.x
     const fy = m.y + d.y
-    for (const hw of world.current.heroes.values()) if (hw.x === fx && hw.y === fy) return { kind: 'hero', id: hw.id }
+    for (const hw of world.current.heroes.values()) if (!hw.hidden && hw.x === fx && hw.y === fy) return { kind: 'hero', id: hw.id }
     const p = propAt(fx, fy)
     return p && p.place ? { kind: 'prop', prop: p } : null
   }
 
-  function labelFor(t: Target | null): string | null {
-    if (!t) return null
-    if (t.kind === 'hero') return stateRef.current.heroes[t.id as OwnedHero['id']]?.name.split(/\s+/)[0] ?? null
-    return t.prop.place ? tr(PLACE_LABEL[t.prop.place]) : null
+  function labelFor(tg: Target | null): string | null {
+    if (!tg) return null
+    if (tg.kind === 'hero') return stateRef.current.heroes[tg.id as OwnedHero['id']]?.name.split(/\s+/)[0] ?? null
+    return tg.prop.place ? tr(PLACE_LABEL[tg.prop.place]) : null
   }
 
   /** Walk next to `target` then use it. */
@@ -443,7 +534,7 @@ export function LobbyWorld({
     const down = (e: KeyboardEvent) => {
       if (modalRef.current) return
       const tag = (e.target as HTMLElement | null)?.tagName
-      if (tag === 'INPUT' || tag === 'TEXTAREA') return
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return
       const k = e.key.length === 1 ? e.key.toLowerCase() : e.key
       const dir = KEY_DIR[k]
       const w = world.current
@@ -451,16 +542,21 @@ export function LobbyWorld({
         e.preventDefault()
         w.master.path = []
         w.pending = null
+        if (w.follow) setFollowing(null)
         if (!w.master.moving) w.master.dir = dir // a tap turns in place
         if (!w.held.includes(dir)) w.held.push(dir)
         return
       }
       if (k === 'e' || k === ' ' || k === 'Enter') {
         e.preventDefault()
-        const t = targetInFront()
-        if (t) interact(t)
+        const tg = targetInFront()
+        if (tg) interact(tg)
       } else if (k === 'Escape' || k === 'm') {
         onMenu()
+      } else if (k === 'h') {
+        setTracker(true)
+      } else if (k === 'n') {
+        setShowMap((v) => !v)
       }
     }
     const up = (e: KeyboardEvent) => {
@@ -486,9 +582,10 @@ export function LobbyWorld({
     const ctx = cv?.getContext('2d')
     if (!cv || !ctx) return
     ctx.imageSmoothingEnabled = false
-    const base = cachedCanvas('lobby-base', renderLobbyBase)
+    const base = cachedCanvas('campus-base', renderLobbyBase)
     let raf = 0
     let last = performance.now()
+    let miniAt = 0
 
     const step = (now: number) => {
       const dt = Math.min(0.05, (now - last) / 1000)
@@ -513,81 +610,106 @@ export function LobbyWorld({
           const n = { x: m.x + DELTA[dir].x, y: m.y + DELTA[dir].y }
           if (isWalkable(n.x, n.y)) beginStep(m, n)
         } else if (w.pending) {
-          const t = w.pending
+          const tg = w.pending
           w.pending = null
-          if (t.kind === 'prop') m.dir = facingToward(t.prop, m.x, m.y)
+          if (tg.kind === 'prop') m.dir = facingToward(tg.prop, m.x, m.y)
           else {
-            const hw = w.heroes.get(t.id)
+            const hw = w.heroes.get(tg.id)
             if (hw) {
               m.dir = dirBetween(m, hw)
-              hw.dir = dirBetween(hw, m)
+              if (!hw.lying) hw.dir = dirBetween(hw, m)
             }
           }
-          interact(t)
+          interact(tg)
         }
       }
 
-      // ── heroes
+      // ── heroes: act out the life engine's activity
       for (const hw of w.heroes.values()) {
+        const h = st.heroes[hw.id as OwnedHero['id']]
+        if (!h || !h.alive) continue
+        const d = activityOf(h)
+        const key = activityKey(d)
+        if (key !== hw.key) {
+          hw.key = key
+          hw.spot = spotFor(st, h, d)
+          hw.arrived = false
+          hw.departAt = w.time + Math.random() * 6
+          hw.path = []
+          if (hw.lying) {
+            // Get up: step off the bed onto the tile beside it.
+            hw.lying = false
+            const off = findPath(hw, () => true, isWalkable)
+            const stand = off && off.length ? off[0]! : hw
+            Object.assign(hw, newWalker(stand, 'down'))
+          }
+          if (hw.hidden && !isOffsite(h)) {
+            hw.hidden = false
+            const rift = propForPlace('rift')
+            Object.assign(hw, newWalker({ x: rift.x, y: rift.y + 1 }, 'down'))
+          }
+        }
         advance(hw, dt, HERO_SPEED)
-        if (hw.moving) continue
+        if (hw.moving || hw.hidden) continue
         if (hw.path.length > 0) {
           const n = hw.path.shift()!
           if (isWalkable(n.x, n.y) && !(n.x === m.x && n.y === m.y)) beginStep(hw, n)
           else hw.path = []
           continue
         }
-        // An activity in progress: arrive, face the thing, then keep at it until done.
-        const act = hw.activity
-        if (act) {
-          if (!act.started) {
-            act.started = true
-            act.until = w.time + 4 + Math.random() * 4
-            if (act.prop) hw.dir = facingToward(act.prop, hw.x, hw.y)
-            if (act.partner) {
-              const other = w.heroes.get(act.partner)
-              if (other) hw.dir = dirBetween(hw, other)
+        const spot = hw.spot
+        if (!spot) continue
+        if (!hw.arrived) {
+          if (w.time < hw.departAt) continue
+          if (hw.x === spot.at.x && hw.y === spot.at.y) {
+            hw.arrived = true
+            if (spot.face) hw.dir = facingToward(spot.face, hw.x, hw.y)
+            if (spot.lie) {
+              hw.lying = true
+              Object.assign(hw, { x: spot.lie.x, y: spot.lie.y, fx: spot.lie.x, fy: spot.lie.y, dir: 'down' as Dir })
             }
+            if (spot.vanish) hw.hidden = true
+          } else {
+            const path = findPath(hw, (x, y) => x === spot.at.x && y === spot.at.y)
+            if (path && path.length) hw.path = path
+            else hw.arrived = true // unreachable: stay put
           }
-          if (w.time < act.until) continue
-          hw.activity = null
-          hw.idleUntil = w.time + 1 + Math.random() * 2
           continue
         }
-        if (w.time < hw.idleUntil) continue
-        // Idle: sometimes take up something to do (a prop in the room, or a chat).
-        const options = ROOM_ACTIVITIES[hw.room] ?? []
-        const roll = Math.random()
-        if (roll < 0.3 && options.length > 0) {
-          const o = options[Math.floor(Math.random() * options.length)]!
-          const props = propsIn(hw.room, o.prop)
-          const prop = props[Math.floor(Math.random() * props.length)]
-          const path = prop ? findPath(hw, (x, y) => isAdjacentTo(prop, x, y) && isWalkable(x, y)) : null
-          if (prop && path) {
-            hw.path = path
-            hw.activity = { kind: o.kind, until: Infinity, prop, started: false }
-            continue
-          }
-        } else if (roll < 0.45) {
-          // Chat with an idle hero nearby in the same room.
-          const mate = [...w.heroes.values()].find(
-            (o) => o.id !== hw.id && o.room === hw.room && !o.activity && !o.moving && Math.abs(o.x - hw.x) + Math.abs(o.y - hw.y) <= 4,
-          )
-          if (mate) {
-            const bucket = Math.floor(w.time / 30)
-            const [a, b] = banterLines(hw.id, mate.id, bucket)
-            const path = findPath(hw, (x, y) => Math.abs(x - mate.x) + Math.abs(y - mate.y) === 1 && isWalkable(x, y)) ?? []
-            hw.path = path
-            hw.activity = { kind: 'chat', until: Infinity, partner: mate.id, line: a, started: false }
-            mate.path = []
-            mate.activity = { kind: 'chat', until: Infinity, partner: hw.id, line: b, started: false }
-            continue
+        // Arrived: fidget a little inside the place, now and then.
+        if (!hw.lying && w.time > hw.fidgetAt) {
+          hw.fidgetAt = w.time + 10 + Math.random() * 18
+          if (['socialize', 'wander', 'work', 'hobby', 'train', 'eat', 'read'].includes(d.kind) && Math.random() < 0.45) {
+            hw.spot = spotFor(st, h, d, String(Math.floor(Math.random() * 1000)))
+            hw.arrived = false
+            hw.departAt = w.time
           }
         }
-        const inRoom = roomAt(hw.x, hw.y) === hw.room
-        const goal = inRoom && Math.random() < 0.35 ? null : randomTileIn(hw.room)
-        if (goal) hw.path = findPath(hw, (x, y) => x === goal.x && y === goal.y) ?? []
-        hw.idleUntil = w.time + 1.5 + Math.random() * 4
+      }
+
+      // Pair chats and passing thoughts.
+      for (const hw of w.heroes.values()) {
+        if (hw.hidden || !hw.arrived || hw.lying) continue
+        if (hw.bubble && w.time > hw.bubble.until) hw.bubble = null
+        if (w.time < hw.nextThought) continue
+        hw.nextThought = w.time + 18 + Math.random() * 40
+        const h = st.heroes[hw.id as OwnedHero['id']]
+        if (!h) continue
+        const d = activityOf(h)
+        const mate = d.with ? w.heroes.get(d.with) : undefined
+        if (mate && mate.arrived && Math.abs(mate.x - hw.x) + Math.abs(mate.y - hw.y) <= 3 && !mate.bubble) {
+          const mh = st.heroes[mate.id as OwnedHero['id']]
+          if (mh) {
+            const [a, b] = pairLines(st, h, mh, Math.floor(w.time / 60))
+            hw.bubble = { text: a, until: w.time + 3.5 }
+            mate.bubble = { text: b, until: w.time + 7.5 }
+            mate.nextThought = w.time + 12
+            hw.dir = dirBetween(hw, mate)
+            mate.dir = dirBetween(mate, hw)
+          }
+        } else if (Math.random() < 0.35) {
+          hw.bubble = { text: speak(st, h, st.party.slots.includes(h.id), String(Math.floor(w.time / 30))), until: w.time + 4.5 }
+        }
       }
 
       // ── prompt
@@ -597,81 +719,109 @@ export function LobbyWorld({
         setPrompt(label)
       }
 
-      // ── draw
-      const mp = walkerPx(m)
+      // ── camera (the Master, or a hero being followed)
+      const followed = w.follow ? w.heroes.get(w.follow) : undefined
+      const focus = followed && !followed.hidden ? walkerPx(followed) : walkerPx(m)
       const { w: VW, h: VH } = vpRef.current
       if (cv.width !== VW || cv.height !== VH) {
         cv.width = VW
         cv.height = VH
         ctx.imageSmoothingEnabled = false
       }
-      const { camX, camY } = cameraFor(mp.px, mp.py, VW, VH)
+      const { camX, camY } = cameraFor(focus.px, focus.py, VW, VH)
+      const onScreen = (x: number, y: number, pad = 48) => x > camX - pad && x < camX + VW + pad && y > camY - pad && y < camY + VH + pad
       ctx.fillStyle = '#0a0710'
       ctx.fillRect(0, 0, VW, VH)
       if (base) ctx.drawImage(base, -camX, -camY)
 
-      // summoning circle on the hall carpet (under everything else)
+      // summoning circle under the crystal
       const phase = Math.floor(w.time * 4) % 24
       const circle = cachedCanvas(`circle|${phase}`, () => drawSummonCircle(phase))
+      const crystal = propForPlace('summon')
       if (circle) {
         ctx.globalAlpha = 0.55 + 0.25 * Math.sin(w.time * 2)
-        ctx.drawImage(circle, 15 * TILE - 36 - camX, 10 * TILE - 36 - camY)
+        ctx.drawImage(circle, (crystal.x + 1) * TILE - 36 - camX, (crystal.y + 1) * TILE - 36 - camY)
         ctx.globalAlpha = 1
       }
 
-      // locked rooms sit in darkness
+      // locked (unbuilt) places sit in darkness
       for (const room of lockedRooms(st)) {
         const r = ROOMS[room]
         ctx.fillStyle = 'rgba(8,4,16,0.55)'
         ctx.fillRect(r.x * TILE - camX, r.y * TILE - camY, r.w * TILE, r.h * TILE)
       }
 
-      // y-sorted props + characters
+      // y-sorted props, graves, characters and roofs
       type Drawable = { y: number; draw: () => void }
       const list: Drawable[] = []
       for (const p of PROPS) {
+        const ox = p.x * TILE
+        const oy = p.y * TILE
+        if (!onScreen(ox, oy, 64)) continue
         const frames = PROP_FRAMES[p.kind]
-        const f = frames > 1 ? Math.floor(w.time * 6 + p.x) % frames : 0
+        const f = frames > 1 ? Math.floor(w.time * (p.kind === 'tree' ? 1 : 6) + p.x) % frames : 0
         const img = cachedCanvas(`prop|${p.kind}|${f}`, () => drawProp(p.kind, f).bmp)
         if (!img) continue
         const spr = propOffset(p.kind)
-        const wallMounted = p.y === 0 || p.kind === 'torch' || p.kind === 'banner' || p.kind === 'gate' || p.kind === 'drillBoard'
+        const wallMounted = isWallChar(tileAt(p.x, p.y)) || p.kind === 'torch' || p.kind === 'banner'
         list.push({
-          y: wallMounted ? -1 : (p.y + p.h) * TILE,
-          draw: () => ctx.drawImage(img, p.x * TILE + spr.dx - camX, p.y * TILE + spr.dy - camY),
+          y: wallMounted ? (p.y + 0.5) * TILE : (p.y + p.h) * TILE,
+          draw: () => ctx.drawImage(img, ox + spr.dx - camX, oy + spr.dy - camY),
         })
       }
+      const graves = st.life.memorial.slice(-12)
+      graves.forEach((_, i) => {
+        const g = graveTile(i)
+        if (!g) return
+        const img = cachedCanvas('prop|grave|0', () => drawProp('grave', 0).bmp)
+        const spr = propOffset('grave')
+        if (img) list.push({ y: (g.y + 1) * TILE, draw: () => ctx.drawImage(img, g.x * TILE + spr.dx - camX, g.y * TILE + spr.dy - camY) })
+      })
       const drawShadow = (px: number, py: number) => {
         ctx.fillStyle = 'rgba(10,6,20,0.35)'
         ctx.fillRect(px - 6 - camX, py - 1 - camY, 12, 3)
         ctx.fillRect(px - 5 - camX, py - 2 - camY, 10, 5)
       }
-      const partyIds = new Set(st.party.slots.filter(Boolean) as string[])
       for (const hw of w.heroes.values()) {
+        if (hw.hidden) continue
         const h = st.heroes[hw.id as OwnedHero['id']]
         if (!h) continue
         const { px, py } = walkerPx(hw)
-        const busy = hw.activity?.started ? hw.activity : null
-        // Sparring swings (a quick two-frame cycle); everyone else walks as usual.
-        const frame = busy?.kind === 'spar' ? ((Math.floor(w.time * 5) % 2) + 1) as WalkFrame : walkFrame(hw)
-        const img = heroFrameCanvas(h, hw.dir, frame)
-        const emote: EmoteKind | null = busy ? ACTIVITY_EMOTE[busy.kind] : emoteFor(h, partyIds.has(h.id))
+        if (!onScreen(px, py)) continue
+        const d = activityOf(h)
+        const busy = hw.arrived ? d.kind : null
+        const sparring = busy === 'train' || busy === 'drilling' || (busy === 'work' && (h.life?.job === 'blacksmith' || h.life?.job === 'instructor'))
+        const frame = sparring ? (((Math.floor(w.time * 5) % 2) + 1) as WalkFrame) : walkFrame(hw)
+        const img = heroFrameCanvas(h, hw.lying ? 'down' : hw.dir, hw.lying ? 0 : frame)
+        const emote = busy ? ACTIVITY_EMOTE[busy] : null
+        const isFollowed = w.follow === hw.id
         list.push({
-          y: py,
+          y: hw.lying ? py + 14 : py,
           draw: () => {
-            drawShadow(px, py)
-            if (img) ctx.drawImage(img, Math.round(px - 12 - camX), Math.round(py - 30 - camY))
-            if (busy?.kind === 'chat' && busy.line) {
-              // Take turns: the pair alternate who is speaking.
-              const speaking = Math.floor(w.time / 2.5) % 2 === (hw.id < (busy.partner ?? '') ? 0 : 1)
-              if (speaking) drawSpeech(ctx, busy.line, px - camX, py - 40 - camY)
-            } else if (emote && Math.floor(w.time + hw.x) % 4 < 2) {
+            if (hw.lying) {
+              // Tucked in: the head on the pillow, the blanket over the rest.
+              const bx = Math.round(hw.x * TILE - camX)
+              const by = Math.round(hw.y * TILE - camY)
+              if (img) ctx.drawImage(img, bx - 4, by - 4, 24, 32)
+              const bl = cachedCanvas(`blanket|${hashString(hw.id) % 4}`, () => blanket(hashString(hw.id)))
+              if (bl) ctx.drawImage(bl, bx + 1, by + 11)
+            } else {
+              drawShadow(px, py)
+              if (img) ctx.drawImage(img, Math.round(px - 12 - camX), Math.round(py - 30 - camY))
+            }
+            if (isFollowed) {
+              ctx.strokeStyle = '#f2c75c'
+              ctx.strokeRect(Math.round(px - 7 - camX) + 0.5, Math.round(py - 1 - camY) + 0.5, 14, 4)
+            }
+            if (hw.bubble) drawBubble(ctx, hw.bubble.text, px - camX, py - (hw.lying ? 20 : 36) - camY)
+            else if (emote && Math.floor(w.time + hw.x) % 4 < 2) {
               const e = cachedCanvas(`emote|${emote}`, () => drawEmote(emote))
-              if (e) ctx.drawImage(e, Math.round(px - 5 - camX), Math.round(py - 44 - camY))
+              if (e) ctx.drawImage(e, Math.round(px - 5 - camX), Math.round(py - (hw.lying ? 26 : 44) - camY))
             }
           },
         })
       }
+      const mp = walkerPx(m)
       const mImg = masterFrameCanvas(st.accountId, m.dir, walkFrame(m))
       list.push({
         y: mp.py + 0.5,
@@ -680,8 +830,73 @@ export function LobbyWorld({
           if (mImg) ctx.drawImage(mImg, Math.round(mp.px - 12 - camX), Math.round(mp.py - 30 - camY))
         },
       })
+      // Roofs: sorted at the building's front wall, faded away while the Master is inside.
+      const inside = insideBuilding(m.x, m.y) ?? buildingAt(m.x, m.y)
+      const roofFrame = Math.floor(w.time * 8)
+      for (const b of BUILDINGS) {
+        const target = inside === b ? 0 : 1
+        const cur = w.roofAlpha.get(b.id) ?? target
+        const next = cur + Math.sign(target - cur) * Math.min(Math.abs(target - cur), dt * 4)
+        w.roofAlpha.set(b.id, next)
+        if (next <= 0.01) continue
+        const rx = b.rect.x * TILE
+        const ry = b.rect.y * TILE - ROOF_LIFT
+        if (!onScreen(rx, ry, b.rect.w * TILE)) continue
+        const roof = cachedCanvas(`roof|${b.id}`, () => drawRoof(b, 0))
+        list.push({
+          y: (b.rect.y + b.rect.h - 1) * TILE + 1,
+          draw: () => {
+            if (!roof) return
+            ctx.globalAlpha = next
+            ctx.drawImage(roof, rx - camX, ry - camY)
+            if (b.chimney) {
+              const sm = cachedCanvas(`smoke|${roofFrame % 15}`, () => smoke(roofFrame % 15))
+              if (sm) ctx.drawImage(sm, rx + Math.round(b.rect.w * TILE * 0.78) - 2 - camX, ry - 18 - camY)
+            }
+            ctx.globalAlpha = 1
+          },
+        })
+      }
       list.sort((a, b) => a.y - b.y)
       for (const d of list) d.draw()
+
+      // ── day and night
+      const hour = hourOfWorld(toWorldTime(Date.now()))
+      const dark = darknessAt(hour)
+      if (dark > 0) {
+        ctx.fillStyle = `rgba(10,14,46,${dark})`
+        ctx.fillRect(0, 0, VW, VH)
+        ctx.globalCompositeOperation = 'lighter'
+        const covered = (p: Prop) => {
+          const b = buildingAt(p.x, p.y)
+          return b !== null && b !== inside && (w.roofAlpha.get(b.id) ?? 1) > 0.5
+        }
+        for (const p of PROPS) {
+          const L = LIGHTS[p.kind]
+          if (!L || covered(p)) continue
+          const cx = (p.x + p.w / 2) * TILE - camX
+          const cy = (p.y + 0.5) * TILE - camY
+          if (cx < -L.r || cy < -L.r || cx > VW + L.r || cy > VH + L.r) continue
+          const flick = 1 + 0.06 * Math.sin(w.time * 9 + p.x)
+          const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, L.r * flick)
+          g.addColorStop(0, `rgba(${L.color},${0.5 * dark})`)
+          g.addColorStop(1, `rgba(${L.color},0)`)
+          ctx.fillStyle = g
+          ctx.fillRect(cx - L.r * 1.1, cy - L.r * 1.1, L.r * 2.2, L.r * 2.2)
+        }
+        // lit windows on the roofs
+        for (const b of BUILDINGS) {
+          if (b === inside) continue
+          const cx = (b.rect.x + b.rect.w / 2) * TILE - camX
+          const cy = b.rect.y * TILE - ROOF_LIFT + Math.round(((b.rect.h - 1) * TILE + ROOF_LIFT) * 0.36) + 9 - camY
+          const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, 14)
+          g.addColorStop(0, `rgba(255,200,110,${0.7 * dark})`)
+          g.addColorStop(1, 'rgba(255,200,110,0)')
+          ctx.fillStyle = g
+          ctx.fillRect(cx - 16, cy - 16, 32, 32)
+        }
+        ctx.globalCompositeOperation = 'source-over'
+      }
 
       // warm vignette
       const g = ctx.createRadialGradient(VW / 2, VH / 2, Math.min(VW, VH) * 0.45, VW / 2, VH / 2, Math.max(VW, VH) * 0.7)
@@ -689,6 +904,13 @@ export function LobbyWorld({
       g.addColorStop(1, 'rgba(6,2,14,0.55)')
       ctx.fillStyle = g
       ctx.fillRect(0, 0, VW, VH)
+
+      // ── minimap (a few times a second)
+      const mini = miniRef.current
+      if (mini && now - miniAt > 250) {
+        miniAt = now
+        drawMinimap(mini, st, w.heroes, m, { camX, camY, VW, VH })
+      }
 
       raf = requestAnimationFrame(step)
     }
@@ -704,23 +926,40 @@ export function LobbyWorld({
     const { w: VW, h: VH } = vpRef.current
     const lx = ((e.clientX - rect.left) / rect.width) * VW
     const ly = ((e.clientY - rect.top) / rect.height) * VH
-    const m = world.current.master
-    const mp = walkerPx(m)
-    const { camX, camY } = cameraFor(mp.px, mp.py, VW, VH)
+    const w = world.current
+    const m = w.master
+    const followed = w.follow ? w.heroes.get(w.follow) : undefined
+    const focus = followed && !followed.hidden ? walkerPx(followed) : walkerPx(m)
+    const { camX, camY } = cameraFor(focus.px, focus.py, VW, VH)
     const tx = Math.floor((lx + camX) / TILE)
     const ty = Math.floor((ly + camY) / TILE)
-    world.current.held = []
-    for (const hw of world.current.heroes.values()) {
+    w.held = []
+    if (w.follow) setFollowing(null)
+    for (const hw of w.heroes.values()) {
+      if (hw.hidden) continue
       // heroes are tall: a click on their head counts too
       if (hw.x === tx && (hw.y === ty || hw.y === ty + 1)) return goTo({ kind: 'hero', id: hw.id })
     }
     const p = propAt(tx, ty) ?? propAt(tx, ty + 1)
     if (p && p.place) return goTo({ kind: 'prop', prop: p })
-    const path = findPath({ x: m.x, y: m.y }, (x, y) => x === tx && y === ty)
+    walkTo(tx, ty)
+  }
+
+  function walkTo(tx: number, ty: number) {
+    const m = world.current.master
+    const path = findPath({ x: m.x, y: m.y }, (x, y) => Math.abs(x - tx) + Math.abs(y - ty) <= 1 && isWalkable(x, y))
     if (path) {
       m.path = path
       world.current.pending = null
     }
+  }
+
+  function onMiniClick(e: React.PointerEvent<HTMLCanvasElement>) {
+    const r = e.currentTarget.getBoundingClientRect()
+    const tx = Math.floor(((e.clientX - r.left) / r.width) * MAP_W)
+    const ty = Math.floor(((e.clientY - r.top) / r.height) * MAP_H)
+    setFollowing(null)
+    walkTo(tx, ty)
   }
 
   /** Fast travel from the menu: open the place now, and send the Master walking there. */
@@ -741,9 +980,19 @@ export function LobbyWorld({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [travelRequest?.nonce])
 
+  /** Find a hero: follow them with the camera (and walk the Master over). */
+  function findHero(id: string) {
+    setTracker(false)
+    setProfile(null)
+    setFollowing(id)
+  }
+
   const ml = state.meta.masterLevel
   const xpPct = (state.meta.masterXp / masterXpToNext(ml)) * 100
   const living = Object.values(state.heroes).filter((h) => h.alive).length
+  const hour = hourOfWorld(clock)
+  const followedHero = following ? state.heroes[following as OwnedHero['id']] : null
+  const hasLetter = letterReady(state, clock, 0)
 
   return (
     <div className="stage" ref={stageRef}>
@@ -769,15 +1018,26 @@ export function LobbyWorld({
             {living === 1 ? t('1 hero') : t('{n} heroes', { n: living })} ·{' '}
             {t('Floor {n}', { n: Math.min(state.tower.currentFloor, TUNING.tower.sliceTopFloor) })} · PI {Math.floor(state.meta.pi)}
           </div>
+          <div className="hud-sub hud-clock">
+            {hour >= 6 && hour < 19 ? '☀' : '☾'} {t('Day {n}', { n: accountDay(state, dayOfSlot(slotOf(clock))) })} · {clockLabel(clock)}
+          </div>
         </div>
       </div>
 
       <div className="hud hud-tr">
+        {hasLetter && (
+          <button className="pbtn gem pulse" onClick={() => setLetter(true)} title={t('Isel’s letter: what happened while you were away')}>
+            ✉ {t('Letter')}
+          </button>
+        )}
         {!loginClaimed(state, toWorldTime(Date.now())) && (
           <button className="pbtn gem" onClick={() => store.dispatch({ type: 'CLAIM_LOGIN' }, Date.now())} title="Daily login reward">
             🎁 {t('Daily')}
           </button>
         )}
+        <button className="pbtn" onClick={() => setTracker(true)} title={t('Where is everyone? (H)')}>
+          👥 {t('Heroes')}
+        </button>
         <span className="coin gold">◆ {state.gold.toLocaleString()}</span>
         <span className="coin gem">♦ {state.gems.toLocaleString()}</span>
         <button className="pbtn" onClick={onMenu}>
@@ -785,19 +1045,128 @@ export function LobbyWorld({
         </button>
       </div>
 
+      {showMap && (
+        <div className="hud hud-mini">
+          <canvas ref={miniRef} className="px minimap" width={MAP_W * 2} height={MAP_H * 2} onPointerDown={onMiniClick} aria-label={t('Map')} />
+        </div>
+      )}
+
+      {followedHero && (
+        <div className="hud hud-follow">
+          <img className="px" src={heroBustUrl(followedHero)} width={24} height={24} alt="" />
+          <span>
+            <b>{followedHero.name.split(/\s+/)[0]}</b> · {statusLine(state, followedHero)}
+          </span>
+          <button className="pbtn sm" onClick={() => talkTo(followedHero.id)}>
+            💬
+          </button>
+          <button className="pbtn sm" onClick={() => setProfile(followedHero.id)}>
+            {t('Profile')}
+          </button>
+          <button className="pbtn sm ghost" onClick={() => setFollowing(null)}>
+            ✕
+          </button>
+        </div>
+      )}
+
       {prompt && !dialog && !openPlace && (
         <div className="hud hud-prompt">
           <kbd>E</kbd> {prompt}
         </div>
       )}
-      <div className="hud hud-help">{t('↑↓←→ / WASD / ZQSD · E interact · click to walk · M menu')}</div>
+      <div className="hud hud-help">
+        {t('↑↓←→ / WASD / ZQSD · E interact · click to walk · H heroes · N map · M menu')}
+        <button className="pbtn sm ghost" onClick={() => setShowMap((v) => !v)} style={{ marginLeft: 6 }}>
+          🗺
+        </button>
+      </div>
 
       {openPlace && (
         <PixelWindow title={tr(PLACE_LABEL[openPlace])} icon={PLACE_ICON[openPlace]} onClose={() => setOpenPlace(null)}>
-          <PlacePanel place={openPlace} state={state} store={store} />
+          <PlacePanel place={openPlace} state={state} store={store} onFindHero={findHero} onProfile={(id) => setProfile(id)} />
         </PixelWindow>
+      )}
+      {tracker && <HeroTracker state={state} onClose={() => setTracker(false)} onFind={findHero} onProfile={(id) => setProfile(id)} />}
+      {profile && state.heroes[profile as OwnedHero['id']] && (
+        <HeroProfile state={state} store={store} heroId={profile} onClose={() => setProfile(null)} onFind={findHero} />
+      )}
+      {letter && (
+        <LetterWindow
+          state={state}
+          onClose={() => {
+            setLetter(false)
+            store.dispatch({ type: 'READ_LETTER' }, Date.now())
+          }}
+        />
       )}
       {dialog && <DialogBox script={dialog} onDone={() => setDialog(null)} />}
     </div>
   )
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Minimap
+// ─────────────────────────────────────────────────────────────────────────────
+
+const MINI_COLORS: Partial<Record<string, string>> = {
+  '#': '#3a2e46',
+  G: '#e8c060',
+  D: '#a07a4e',
+  '=': '#6a5a3a',
+  g: '#2e5a2e',
+  c: '#6e6a72',
+  s: '#5e3e24',
+  y: '#35603a',
+  r: '#b8966a',
+  q: '#8a7a6a',
+  d: '#264654',
+}
+
+function miniBase(): HTMLCanvasElement | null {
+  if (typeof document === 'undefined') return null
+  const c = document.createElement('canvas')
+  c.width = MAP_W * 2
+  c.height = MAP_H * 2
+  const x = c.getContext('2d')
+  if (!x) return null
+  for (let y = 0; y < MAP_H; y++)
+    for (let xx = 0; xx < MAP_W; xx++) {
+      const ch = tileAt(xx, y)
+      x.fillStyle = MINI_COLORS[ch] ?? '#6a4a3a'
+      x.fillRect(xx * 2, y * 2, 2, 2)
+    }
+  for (const b of BUILDINGS) {
+    x.fillStyle = b.roof
+    x.globalAlpha = 0.85
+    x.fillRect(b.rect.x * 2, b.rect.y * 2, b.rect.w * 2, (b.rect.h - 1) * 2)
+    x.globalAlpha = 1
+  }
+  return c
+}
+
+let miniCache: HTMLCanvasElement | null = null
+
+function drawMinimap(
+  cv: HTMLCanvasElement,
+  st: GameState,
+  heroes: Map<string, HeroWalker>,
+  m: Walker,
+  view: { camX: number; camY: number; VW: number; VH: number },
+): void {
+  const x = cv.getContext('2d')
+  if (!x) return
+  miniCache ??= miniBase()
+  if (miniCache) x.drawImage(miniCache, 0, 0)
+  for (const hw of heroes.values()) {
+    if (hw.hidden) continue
+    const inParty = st.party.slots.includes(hw.id as OwnedHero['id'])
+    x.fillStyle = inParty ? '#f2c75c' : '#8ae0ff'
+    x.fillRect(hw.x * 2, hw.y * 2, 2, 2)
+  }
+  x.fillStyle = '#ffffff'
+  x.fillRect(m.x * 2 - 1, m.y * 2 - 1, 4, 4)
+  x.strokeStyle = 'rgba(255,255,255,0.5)'
+  x.strokeRect((view.camX / TILE) * 2 + 0.5, (view.camY / TILE) * 2 + 0.5, (view.VW / TILE) * 2, (view.VH / TILE) * 2)
+}
+
+export type { Building }

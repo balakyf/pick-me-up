@@ -18,6 +18,7 @@ import {
 } from './bitmap'
 import { BONE, GOLD, INK, LINEN, STEEL, WOOD, ramp } from './palette'
 import type { PropKind } from '../world/lobbyMap'
+import * as campus from './campusProps'
 
 export interface PropSprite {
   bmp: Bitmap
@@ -54,6 +55,23 @@ export const PROP_FRAMES: Record<PropKind, number> = {
   rift: 4,
   stall: 1,
   standard: 2,
+  bed: 1,
+  tree: 2,
+  bush: 1,
+  fountain: 4,
+  well: 1,
+  bench: 1,
+  crop: 2,
+  grave: 1,
+  obelisk: 2,
+  bookcase: 1,
+  desk: 1,
+  cot: 1,
+  bar: 1,
+  lamp: 2,
+  telescope: 1,
+  marketStall: 1,
+  flowers: 1,
 }
 
 const STONE = ramp('#4a4452', '#6e6678', '#8e869a')
@@ -576,6 +594,23 @@ const DRAW: Record<PropKind, (f: number) => PropSprite> = {
   rift,
   stall,
   standard,
+  bed: campus.bed,
+  tree: campus.tree,
+  bush: campus.bush,
+  fountain: campus.fountain,
+  well: campus.well,
+  bench: campus.bench,
+  crop: campus.crop,
+  grave: campus.grave,
+  obelisk: campus.obelisk,
+  bookcase: campus.bookcase,
+  desk: campus.desk,
+  cot: campus.cot,
+  bar: campus.bar,
+  lamp: campus.lamp,
+  telescope: campus.telescope,
+  marketStall: campus.marketStall,
+  flowers: campus.flowers,
 }
 
 export function drawProp(kind: PropKind, frame = 0): PropSprite {

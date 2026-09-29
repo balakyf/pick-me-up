@@ -160,12 +160,12 @@ describe('App smoke', () => {
     expect(container.textContent).toContain('Unlocks at Master Lv 3')
   })
 
-  it('the Armory renders, gated by Master Level', () => {
+  it('the Forge (Armory) renders, gated by Master Level', () => {
     mount()
     act(() => {
       getStore().dispatch({ type: 'NEW_ACCOUNT', seed: 4242, now: 0 })
     })
-    openPlace('Armory')
+    openPlace('Forge')
     expect(container.textContent).toContain('Armory')
     // …but a fresh ML1 account sees the forge locked (the Smithy opens at ML2).
     expect(container.textContent).toContain('Unlocks at Master Lv 2')

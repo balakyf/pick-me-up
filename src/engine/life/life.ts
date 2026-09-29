@@ -207,6 +207,33 @@ interface Ctx {
   slot: number
   hour: number
   forgeHasWork: boolean
+  /** Heroes already headed to each place this slot (crowding). */
+  crowd: Map<LifePlace, number>
+}
+
+/** How many heroes a place holds comfortably before it feels crowded. */
+export function placeCapacity(place: LifePlace, st: GameState): number {
+  const f = st.facilities
+  switch (place) {
+    case 'tavern':
+      return 5 + 3 * f.tavern.level
+    case 'kitchen':
+      return 6 + 3 * f.kitchen.level
+    case 'library':
+      return 3 + 2 * f.library.level
+    case 'yard':
+      return 10
+    case 'garden':
+      return 4 + 2 * f.garden.level
+    case 'hall':
+      return 14
+    case 'infirmary':
+      return 4 * Math.max(1, f.infirmary.level)
+    case 'dormitory':
+      return 999
+    default:
+      return 8
+  }
 }
 
 function hobbyPlace(p: Personality, st: GameState): LifePlace {
@@ -305,7 +332,10 @@ function chooseActivity(hero: OwnedHero, life: HeroLife, ctx: Ctx, rnd: () => nu
   let best: ActivityKind = 'wander'
   let bestScore = -Infinity
   for (const [k, s] of scores) {
-    const v = s + rnd() * 0.35
+    // A full room is less inviting: every hero past its capacity costs a little.
+    const place = placeFor(k, hero, life, ctx.state)
+    const over = (ctx.crowd.get(place) ?? 0) - placeCapacity(place, ctx.state)
+    const v = s + rnd() * 0.35 - (over > 0 && k !== 'work' && k !== 'sleep' ? 0.25 * over : 0)
     if (v > bestScore) {
       bestScore = v
       best = k
@@ -429,7 +459,8 @@ export function stepLife(state: GameState, nowWorld: number): GameState {
     const orderSlot: EquipmentSlot | null =
       forge.wip?.slot ?? (forge.order === 'auto' ? autoForgeSlot(forgeState) : forge.order)
     const forgeHasWork = smithyUnlocked(state) && forge.order !== null && orderSlot !== null
-    const ctx: Ctx = { state: forgeState, slot, hour, forgeHasWork }
+    const crowd = new Map<LifePlace, number>()
+    const ctx: Ctx = { state: forgeState, slot, hour, forgeHasWork, crowd }
 
     // 1. Decide.
     for (const w of work) {
@@ -448,6 +479,7 @@ export function stepLife(state: GameState, nowWorld: number): GameState {
       } else if (d.with) {
         w.life.doing = { ...d, with: undefined }
       }
+      crowd.set(w.life.doing.place, (crowd.get(w.life.doing.place) ?? 0) + 1)
     }
 
     // 2. Work (account-level outputs first: the instructor and healer powers feed step 3).

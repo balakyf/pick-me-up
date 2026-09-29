@@ -49,6 +49,8 @@ export interface DialogScript {
   speaker: string
   bust?: string
   lines: string[]
+  /** Buttons offered on the last line (e.g. "Profile"). Choosing one closes the dialog. */
+  actions?: { label: string; onClick: () => void }[]
 }
 
 /**
@@ -98,6 +100,23 @@ export function DialogBox({ script, onDone }: { script: DialogScript; onDone: ()
         <div className="dialog-name">{script.speaker}</div>
         <div className="dialog-text">{line.slice(0, shown)}</div>
         {done && <span className="dialog-next">{idx + 1 < script.lines.length ? '▼' : '■'}</span>}
+        {done && idx + 1 >= script.lines.length && script.actions && script.actions.length > 0 && (
+          <div className="dialog-actions">
+            {script.actions.map((a) => (
+              <button
+                key={a.label}
+                className="pbtn sm"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onDone()
+                  a.onClick()
+                }}
+              >
+                {a.label}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   )

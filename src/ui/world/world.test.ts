@@ -6,6 +6,9 @@ import {
   MASTER_SPAWN,
   PROPS,
   ROOMS,
+  BUILDINGS,
+  graveTile,
+  insideBuilding,
   findPath,
   isAdjacentTo,
   isWalkable,
@@ -70,19 +73,38 @@ describe('lobby map', () => {
     }
   })
 
-  it('props never block a doorway (hall stays connected to all six rooms)', () => {
-    // covered by reachability above; also assert no prop sits on a doorway row gap
+  it('props never sit on a door, and every door opens onto walkable ground both ways', () => {
     for (const p of PROPS) {
-      for (let i = 0; i < p.w; i++) {
-        const ch = MAP_ROWS[p.y]![p.x + i]!
-        if (p.y === 6 || p.y === 13) expect(ch, `${p.kind}@${p.x},${p.y}`).toBe('#')
+      for (let j = 0; j < p.h; j++)
+        for (let i = 0; i < p.w; i++) expect(MAP_ROWS[p.y + j]![p.x + i], `${p.kind}@${p.x},${p.y}`).not.toBe('D')
+    }
+    for (const b of BUILDINGS) {
+      for (const d of b.doors) {
+        expect(isWalkable(d.x, d.y), `${b.id} door`).toBe(true)
+        const around = [
+          [d.x + 1, d.y],
+          [d.x - 1, d.y],
+          [d.x, d.y + 1],
+          [d.x, d.y - 1],
+        ].filter(([x, y]) => isWalkable(x!, y!))
+        expect(around.length, `${b.id} door ${d.x},${d.y}`).toBeGreaterThanOrEqual(2)
       }
     }
   })
 
-  it('the Training Yard connects to the hall and the Tower Gate sits on the west wall', () => {
-    expect(walkableTilesIn('training').length).toBeGreaterThan(20)
-    expect(propForPlace('tower').x).toBe(0)
+  it('the campus is big, the Training Yard is roomy and the Tower Gate sits in the north wall', () => {
+    expect(MAP_W * MAP_H).toBeGreaterThan(4000)
+    expect(walkableTilesIn('training').length).toBeGreaterThan(100)
+    expect(propForPlace('tower').y).toBe(0)
+  })
+
+  it('every building has an interior, and the Memorial has room for twelve graves', () => {
+    for (const b of BUILDINGS) expect(insideBuilding(b.rect.x + 1, b.rect.y + 1)?.id).toBe(b.id)
+    for (let i = 0; i < 12; i++) {
+      const g = graveTile(i)!
+      expect(isWalkable(g.x, g.y), `grave ${i}`).toBe(true)
+      expect(isWalkable(g.x, g.y + 1), `grave ${i} visitor spot`).toBe(true)
+    }
   })
 
   it('findPath returns [] when already at the goal and null when unreachable', () => {
