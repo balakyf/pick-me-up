@@ -167,3 +167,25 @@ No actions, no new panel.
 - `skillScore` adds the CP term; an all-Lv1, unmerged hero is otherwise damage-identical to the pre-slice baseline.
 - Heroes now cast their authored/leveled skills in real combat (previously basic-only); affected golden tests are re-baselined and the determinism guard stays green.
 - No regression in any prior *flow* (clears still clear, wipes still wipe); the Roster renders each hero's skills (name · grade · level).
+
+## 10. Implementation notes (as built, 2026-09-29)
+
+Decisions taken while building the slice, where the spec left room or needed a fix:
+
+- **AoE scoring.** "Highest resolved `skillMult`" alone would never pick an all-enemies skill
+  whose mult is below the basic attack's 1.0 (Thunder Volley is 0.9). Selection scores a skill as
+  `skillMult × foes it would hit` (1 for single-target), ties by array order.
+- **HP-cost scaling.** Ultimates carry `hpCost` + `hpCostPerLevel`, so the canon "can kill at
+  max" survives as a *self-gating* property: at high level the cost outgrows the wielder's HP
+  and the skill simply stops being castable. Casts emit a new `hp-cost` combat event.
+- **Registry shape.** `SKILLS` now holds `SkillDef`s (`grade`, `baseMult`, `perLevel`,
+  `hpCost?`, `learnable`); `baseMult` of the original five equals their old `skillMult`.
+  `learnable: false` keeps promotion drawing from the original five in the same order, so its
+  seeded draws are unchanged.
+- **Canon kit.** Islat Han's cameo now carries Power Strike + Berserk + Composure, making the
+  canon Exceed merge reachable from the starter.
+- **Transfers arrive fresh.** Synthesis transfer/rescue and promotion grants add the skill at Lv1.
+- **Results.** `FloorResult` / `DailyResult` carry `skillProgress` (level-ups, merges) for the
+  results screen; daily survivors auto-learn win or lose (the run is non-lethal).
+- **Re-baselining.** Only fixtures (`skillIds` → `skills`), CP expectations (+skill term) and the
+  registry shape needed updating; tower/daily/integration golden outcomes held.

@@ -276,13 +276,44 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
     return frontMost(cands)
   }
 
-  // ── Skill selection: first skill affordable; basic attack always available ─
+  // ── Skill selection (Layer 1 §2): the strongest castable skill ─────────────
+  // Castable = enough SP AND strictly more HP than the skill's HP cost (an HP-cost
+  // ultimate never kills its own caster — it gates itself off instead). "Strongest"
+  // = leveled skillMult, times the number of foes it would hit for an all-enemies
+  // skill (so an AoE isn't dominated by a single-target basic attack). Ties keep
+  // array order. The basic attack (mult 1, free) is the floor.
+  const castable = (actor: MutUnit, s: SkillEffect): boolean =>
+    s.spCost <= actor.currentSP && (s.hpCost === undefined || actor.currentHP > s.hpCost)
   const chooseSkill = (actor: MutUnit): SkillEffect => {
+    let best: SkillEffect | null = null
+    let bestScore = -Infinity
     for (const s of actor.ref.skills) {
-      if (s.spCost <= actor.currentSP) return s
+      if (!castable(actor, s)) continue
+      const reach = s.target === 'all-enemies' ? Math.max(1, targetableFoes(actor).length) : 1
+      const score = s.skillMult * reach
+      if (score > bestScore) {
+        best = s
+        bestScore = score
+      }
     }
     // Synthesized basic attack (spCost 0) so skills may be empty.
-    return BASIC_ATTACK
+    return best ?? BASIC_ATTACK
+  }
+
+  // Authored-skill casts per hero, for the post-combat auto-learn fold.
+  const skillCasts: Record<string, Record<string, number>> = {}
+  /** Pay a skill's costs and tally the cast. */
+  const payAndTally = (actor: MutUnit, skill: SkillEffect): void => {
+    actor.currentSP -= skill.spCost
+    if (skill.hpCost !== undefined && skill.hpCost > 0) {
+      actor.currentHP -= skill.hpCost
+      emit({ kind: 'hp-cost', unitId: actor.id, amount: skill.hpCost, hpAfter: actor.currentHP })
+    }
+    const sid = actor.ref.sourceHeroId
+    if (sid !== undefined && skill.id !== 'basic' && skill.id !== BASIC_ATTACK.id) {
+      const tally = (skillCasts[sid] ??= {})
+      tally[skill.id] = (tally[skill.id] ?? 0) + 1
+    }
   }
 
   // ── Mission evaluation (after each action) ────────────────────────────────
@@ -352,9 +383,9 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
     if (skill.target === 'all-enemies') {
       const targets = targetableFoes(actor).slice().sort((a, b) => a.spawnIndex - b.spawnIndex)
       if (targets.length === 0) return // no valid target → action fizzles, SP retained
-      actor.currentSP -= skill.spCost
       // 'act' event uses the first target as a representative.
       emit({ kind: 'act', actorId: actor.id, skillId: skill.id, targetId: targets[0]!.id })
+      payAndTally(actor, skill)
       for (const t of targets) {
         if (!t.alive) continue
         resolveHit(actor, skill, t)
@@ -362,8 +393,8 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
     } else {
       const target = pickSingleTarget(actor)
       if (target === null) return // no valid target → action fizzles, SP retained
-      actor.currentSP -= skill.spCost
       emit({ kind: 'act', actorId: actor.id, skillId: skill.id, targetId: target.id })
+      payAndTally(actor, skill)
       resolveHit(actor, skill, target)
     }
 
@@ -444,6 +475,7 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
     defeatedTargetTags,
     survivorHeroIds,
     fallenHeroIds,
+    skillCasts,
     log,
   }
 }

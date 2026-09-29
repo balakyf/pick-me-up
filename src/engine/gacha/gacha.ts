@@ -35,6 +35,7 @@ import type {
 } from '../types'
 import { envelopeForStar } from '../stats'
 import { CAMEO_HEROES, NAME_POOLS, SKILLS } from '../content'
+import { heroSkillsFromIds } from '../skills'
 import {
   type Rng,
   type Draw,
@@ -232,20 +233,16 @@ export function buildOwnedHeroFromTemplate(template: HeroTemplate, id: HeroId): 
     portraitToken: template.portraitToken,
     origin: 'cameo',
   }
-  return {
-    ...hero,
-    xp: { level: 1, xpIntoLevel: 0, heldXp: 0, atCap: false },
-    alive: true,
-    sanity: TUNING.lobby.sanityMax,
-    promotion: null,
-    equipment: { weapon: null, armor: null, accessory: null },
-  }
+  return buildOwnedHero(hero)
 }
 
-/** Build a fresh OwnedHero around an already-assembled static Hero. */
+/** Build a fresh OwnedHero around an already-assembled static Hero: its innate
+ *  skillIds become Lv1 HeroSkills (schema v4). */
 function buildOwnedHero(hero: Hero): OwnedHero {
+  const { skillIds, ...identity } = hero
   return {
-    ...hero,
+    ...identity,
+    skills: heroSkillsFromIds(skillIds),
     xp: { level: 1, xpIntoLevel: 0, heldXp: 0, atCap: false },
     alive: true,
     sanity: TUNING.lobby.sanityMax,

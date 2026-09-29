@@ -33,6 +33,7 @@ import type {
   Element,
   MaterialId,
   Seed,
+  SkillProgress,
 } from '../types'
 import { buildCombatUnit, buildEnemyUnit } from '../unit'
 import { runBattle } from '../combat'
@@ -42,6 +43,7 @@ import { clampSanity } from '../kitchen'
 import { attrStoneId } from '../promotion'
 import { tacticalFocusBonus } from '../tactical'
 import { addMasterXp } from '../master'
+import { foldBattleSkills } from '../skills'
 import { hash, rngFor, nextInt, chance, pick, type Rng } from '../rng/rng'
 
 const T = TUNING.tower
@@ -370,15 +372,19 @@ export function playFloor(
   const drain = sanityDrain(floorPower(floor, worldMult), partyCp, cleared, fallenSet.size > 0)
 
   const nextHeroes: Record<HeroId, OwnedHero> = {}
+  const skillProgress: SkillProgress[] = []
   for (const key of Object.keys(state.heroes) as HeroId[]) {
     const hero = state.heroes[key]!
     if (fallenSet.has(key as string)) {
       // PERMADEATH: a hero that fell this battle is gone.
       nextHeroes[key] = { ...hero, alive: false }
     } else if (survivorSet.has(key as string)) {
-      // Deployed survivor: drain Sanity, and grant XP on a clear.
+      // Deployed survivor: drain Sanity, grant XP on a clear, and auto-learn skills
+      // from this battle's casts (level-ups, then merges — Layer 1 §2.4).
       const xp = xpAwarded > 0 ? applyXp(hero.xp, xpAwarded, hero.star) : hero.xp
-      nextHeroes[key] = { ...hero, xp, sanity: clampSanity(hero.sanity - drain) }
+      const learned = foldBattleSkills(key, hero.skills, res.skillCasts[key as string])
+      skillProgress.push(...learned.progress)
+      nextHeroes[key] = { ...hero, xp, sanity: clampSanity(hero.sanity - drain), skills: learned.skills }
     } else {
       nextHeroes[key] = hero
     }
@@ -434,6 +440,7 @@ export function playFloor(
     xpAwarded,
     materialsAwarded,
     fallenHeroIds: res.fallenHeroIds,
+    skillProgress,
     result: res,
   }
 

@@ -79,6 +79,15 @@ function transferGrades(survivor: GrowthGrades, sac: GrowthGrades): GrowthGrades
   return out
 }
 
+function hasSkill(hero: OwnedHero, id: string): boolean {
+  return hero.skills.some((s) => s.id === id)
+}
+
+/** A transferred skill arrives fresh (Lv1): synthesis keeps <10% of a sacrifice. */
+function withSkill(hero: OwnedHero, id: string): OwnedHero {
+  return { ...hero, skills: [...hero.skills, { id, level: 1, xp: 0 }] }
+}
+
 /**
  * Optional Salvage rescue onto a survivor: prefer copying ONE missing skill; else
  * rescue the single best grade (highest attribute across the sacrifices), whole and
@@ -89,9 +98,9 @@ function applyRescue(
   sacrifices: OwnedHero[],
 ): { survivor: OwnedHero; applied: boolean; desc: string | null } {
   for (const sac of sacrifices) {
-    for (const sid of sac.skillIds) {
-      if (!survivor.skillIds.includes(sid)) {
-        return { survivor: { ...survivor, skillIds: [...survivor.skillIds, sid] }, applied: true, desc: `skill: ${sid}` }
+    for (const s of sac.skills) {
+      if (!hasSkill(survivor, s.id)) {
+        return { survivor: withSkill(survivor, s.id), applied: true, desc: `skill: ${s.id}` }
       }
     }
   }
@@ -162,18 +171,18 @@ export function synthesize(state: GameState, input: SynthesisInput, _nowWorld = 
   const heroes: Record<HeroId, OwnedHero> = { ...state.heroes }
   const materials: Record<MaterialId, number> = { ...state.materials }
   let surv: OwnedHero | null = survivor
-    ? { ...survivor, growthGrades: { ...survivor.growthGrades }, skillIds: [...survivor.skillIds] }
+    ? { ...survivor, growthGrades: { ...survivor.growthGrades }, skills: survivor.skills.map((s) => ({ ...s })) }
     : null
 
   if (input.mode === 'transfer') {
     for (const sac of sacrifices) {
       surv!.growthGrades = transferGrades(surv!.growthGrades, sac.growthGrades)
-      const missing = sac.skillIds.filter((sid) => !surv!.skillIds.includes(sid))
+      const missing = sac.skills.map((s) => s.id).filter((sid) => !hasSkill(surv!, sid))
       if (missing.length > 0) {
         const roll = chance(rngFor(state.seed, 'synthesis', surv!.id, sac.id), S.skillCopyChance)
         if (roll.value) {
           const drew = pick(roll.rng, missing)
-          surv!.skillIds = [...surv!.skillIds, drew.value]
+          surv = withSkill(surv!, drew.value)
         }
       }
       surv!.sanity = Math.max(0, surv!.sanity - S.survivorSanityCost)
@@ -236,7 +245,7 @@ export function synthesisPreview(state: GameState, input: SynthesisInput): Synth
     }
     if (survivor) {
       const r = applyRescue(
-        { ...survivor, growthGrades: { ...survivor.growthGrades }, skillIds: [...survivor.skillIds] },
+        { ...survivor, growthGrades: { ...survivor.growthGrades }, skills: survivor.skills.map((s) => ({ ...s })) },
         sacrifices,
       )
       rescue = r.desc

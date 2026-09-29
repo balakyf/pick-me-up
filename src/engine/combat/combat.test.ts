@@ -687,6 +687,94 @@ describe('skills', () => {
 })
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Skill selection, HP-cost ultimates, cast tally (Layer 1 §2)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('skill selection (strongest castable)', () => {
+  const basic: SkillEffect = { id: 'basic', name: 'Attack', skillMult: 1, damageType: 'physical', element: null, target: 'single', spCost: 0 }
+  const strike: SkillEffect = { id: 'strike', name: 'Strike', skillMult: 1.6, damageType: 'physical', element: null, target: 'single', spCost: 30 }
+  const volley: SkillEffect = { id: 'volley', name: 'Volley', skillMult: 0.9, damageType: 'physical', element: null, target: 'all-enemies', spCost: 45 }
+  const ult: SkillEffect = { id: 'ult', name: 'Ult', skillMult: 2.6, damageType: 'physical', element: null, target: 'single', spCost: 0, hpCost: 30 }
+  const tank = (id: string) => enemy({ id, stats: { maxHP: 1e9, pDef: 0, spd: 1, pAtk: 0 } })
+  const survive = (ticks: number) => mission([{ kind: 'survive', ticks }], ticks)
+  const acts = (r: ReturnType<typeof runBattle>) =>
+    (r.log.events.filter((e) => e.kind === 'act') as { skillId: string }[]).map((a) => a.skillId)
+
+  it('a hero with the basic attack prepended still casts its authored skill (no longer basic-only)', () => {
+    const r = runBattle(
+      [hero({ id: 'h', skills: [basic, strike], sp: 100, stats: { spd: 1000, critPct: 0 } })],
+      encounter([[tank('e')]], survive(5)),
+      1,
+    )
+    expect(acts(r)[0]).toBe('strike')
+  })
+
+  it('scores an all-enemies skill by the foes it reaches (0.9 × 3 beats a 1.6 single hit)', () => {
+    const r = runBattle(
+      [hero({ id: 'h', skills: [basic, strike, volley], sp: 100, stats: { spd: 1000, critPct: 0 } })],
+      encounter([[tank('a'), tank('b'), tank('c')]], survive(5)),
+      2,
+    )
+    expect(acts(r)[0]).toBe('volley')
+  })
+
+  it('an HP-cost ultimate fires when affordable and drains its caster', () => {
+    const r = runBattle(
+      [hero({ id: 'h', skills: [basic, ult], hp: 100, stats: { maxHP: 100, spd: 1000, critPct: 0 } })],
+      encounter([[tank('e')]], survive(3)),
+      3,
+    )
+    expect(acts(r)[0]).toBe('ult')
+    const cost = r.log.events.find((e) => e.kind === 'hp-cost') as { amount: number; hpAfter: number } | undefined
+    expect(cost).toMatchObject({ amount: 30, hpAfter: 70 })
+  })
+
+  it('the ultimate gates itself off instead of killing its wielder', () => {
+    const r = runBattle(
+      [hero({ id: 'h', skills: [basic, ult], hp: 100, stats: { maxHP: 100, spd: 1000, critPct: 0 } })],
+      encounter([[tank('e')]], survive(40)),
+      4,
+    )
+    const costs = r.log.events.filter((e) => e.kind === 'hp-cost') as { hpAfter: number }[]
+    // 100 → 70 → 40 → 10; at 10 HP (≤ 30) it can no longer be paid.
+    expect(costs.map((c) => c.hpAfter)).toEqual([70, 40, 10])
+    expect(costs.every((c) => c.hpAfter > 0)).toBe(true)
+    expect(acts(r).slice(3).every((id) => id === 'basic')).toBe(true)
+    expect(r.survivorHeroIds).toContain('h')
+  })
+
+  it('an HP-cost skill is never chosen when current HP does not strictly exceed its cost', () => {
+    const r = runBattle(
+      [hero({ id: 'h', skills: [basic, ult], hp: 30, stats: { maxHP: 100, spd: 1000, critPct: 0 } })],
+      encounter([[tank('e')]], survive(3)),
+      5,
+    )
+    expect(acts(r)).not.toContain('ult')
+  })
+
+  it('tallies authored-skill casts per hero, excluding basic attacks and enemies', () => {
+    const r = runBattle(
+      [hero({ id: 'h', skills: [basic, strike], sp: 60, stats: { spd: 1000, critPct: 0 } })],
+      encounter([[enemy({ id: 'e', skills: [strike], sp: 100, stats: { maxHP: 1e9, pDef: 0, spd: 50, pAtk: 0 } })]], survive(10)),
+      6,
+    )
+    // 60 SP / 30 → exactly two Strikes, then basic attacks (not tallied).
+    expect(r.skillCasts).toEqual({ h: { strike: 2 } })
+  })
+
+  it('stays deterministic', () => {
+    const run = () =>
+      runBattle(
+        [hero({ id: 'h', skills: [basic, strike, volley, ult], sp: 100, stats: { spd: 1000 } })],
+        encounter([[tank('a'), tank('b')]], survive(20)),
+        7,
+      )
+    expect(run().log).toEqual(run().log)
+    expect(run().skillCasts).toEqual(run().skillCasts)
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Enrage keyword
 // ─────────────────────────────────────────────────────────────────────────────
 

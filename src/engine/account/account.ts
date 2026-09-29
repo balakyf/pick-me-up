@@ -186,6 +186,27 @@ function migrateV2toV3(envelope: SaveEnvelope): SaveEnvelope {
   }
 }
 
+/** v3 → v4: innate skillIds become leveled HeroSkills (Layer 1 §2) at Lv1, xp 0. */
+function migrateV3toV4(envelope: SaveEnvelope): SaveEnvelope {
+  const s = envelope.state as unknown as Record<string, unknown>
+  const oldHeroes = s.heroes as Record<string, OwnedHero & { skillIds?: string[] }>
+  const heroes: Record<string, OwnedHero> = {}
+  for (const [id, hero] of Object.entries(oldHeroes)) {
+    const { skillIds, ...rest } = hero
+    const skills = skillIds ? skillIds.map((sid) => ({ id: sid, level: 1, xp: 0 })) : (rest.skills ?? [])
+    heroes[id] = { ...rest, skills }
+  }
+  return {
+    schemaVersion: 4,
+    savedAt: envelope.savedAt,
+    state: {
+      ...(s as unknown as GameState),
+      schemaVersion: 4,
+      heroes,
+    },
+  }
+}
+
 /**
  * Migrate a SaveEnvelope from `fromVersion` up to the current schema version.
  * Identity when already current; otherwise apply each version's upgrade step in
@@ -208,6 +229,10 @@ export function migrate(envelope: SaveEnvelope, fromVersion: number): SaveEnvelo
   if (v === 2) {
     env = migrateV2toV3(env)
     v = 3
+  }
+  if (v === 3) {
+    env = migrateV3toV4(env)
+    v = 4
   }
   if (v !== current) {
     throw new SaveLoadError(`migrate: no migration path from version ${fromVersion}`)
@@ -249,6 +274,14 @@ function assertGameStateShape(state: unknown): asserts state is GameState {
   for (const key of required) {
     if (!(key in state)) {
       throw new SaveLoadError(`loadState: state is missing required field '${key}'`)
+    }
+  }
+  if (!isPlainObject(state.heroes)) {
+    throw new SaveLoadError('loadState: state.heroes is not an object')
+  }
+  for (const [id, hero] of Object.entries(state.heroes)) {
+    if (!isPlainObject(hero) || !Array.isArray(hero.skills)) {
+      throw new SaveLoadError(`loadState: hero '${id}' is missing its skills list`)
     }
   }
 }

@@ -143,7 +143,7 @@ export function deriveStats(attrs: PrimaryAttrs): DerivedStats {
 }
 
 /** Level a hero's attributes then derive its combat statline. */
-export function deriveStatsForHero(hero: Hero, level: number): DerivedStats {
+export function deriveStatsForHero(hero: Omit<Hero, 'skillIds'>, level: number): DerivedStats {
   return deriveStats(leveledAttrs(hero.baseAttrs, hero.growthGrades, level))
 }
 
@@ -283,6 +283,6 @@ export function combatPower(stats: DerivedStats, skillScore = 0): number {
 }
 
 /** Combat Power for a hero at a level (derive stats, then CP). */
-export function combatPowerForHero(hero: Hero, level: number, skillScore = 0): number {
+export function combatPowerForHero(hero: Omit<Hero, 'skillIds'>, level: number, skillScore = 0): number {
   return combatPower(deriveStatsForHero(hero, level), skillScore)
 }

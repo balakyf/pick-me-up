@@ -18,6 +18,10 @@ import type { GameState, OwnedHero, HeroId } from '../types'
 
 const S = TUNING.lobby.synthesis
 
+/** Lv1 skills from ids. */
+const sk = (...ids: string[]) => ids.map((id) => ({ id, level: 1, xp: 0 }))
+const ids = (h: OwnedHero) => h.skills.map((s) => s.id)
+
 /** A hand-built hero (mirrors unit.test.ts's makeWarrior). */
 function makeHero(id: string, overrides: Partial<OwnedHero> = {}): OwnedHero {
   return {
@@ -28,7 +32,7 @@ function makeHero(id: string, overrides: Partial<OwnedHero> = {}): OwnedHero {
     element: 'fire',
     baseAttrs: { str: 20, agi: 15, vit: 18, int: 8, wil: 12 },
     growthGrades: { str: 5, agi: 4, vit: 5, int: 2, wil: 3 },
-    skillIds: ['power_strike'],
+    skills: sk('power_strike'),
     portraitToken: '#ffffff',
     origin: 'procedural',
     xp: { level: 7, xpIntoLevel: 0, heldXp: 0, atCap: false },
@@ -89,12 +93,12 @@ describe('Transfer mode', () => {
   })
 
   it('skill copy is seeded + deterministic (same seed → same outcome)', () => {
-    const surv = makeHero('surv', { skillIds: [] })
-    const sac = makeHero('sac', { skillIds: ['power_strike', 'piercing_thrust'] })
+    const surv = makeHero('surv', { skills: [] })
+    const sac = makeHero('sac', { skills: sk('power_strike', 'piercing_thrust') })
     const state = accountWith([surv, sac])
     const a = synthesize(state, { mode: 'transfer', survivorId: surv.id, sacrificeIds: [sac.id] })
     const b = synthesize(state, { mode: 'transfer', survivorId: surv.id, sacrificeIds: [sac.id] })
-    expect(a.heroes['surv' as HeroId]!.skillIds).toEqual(b.heroes['surv' as HeroId]!.skillIds)
+    expect(a.heroes['surv' as HeroId]!.skills).toEqual(b.heroes['surv' as HeroId]!.skills)
   })
 })
 
@@ -117,18 +121,20 @@ describe('Salvage mode', () => {
   })
 
   it('optional rescue copies a missing skill onto the survivor (preferred over grade)', () => {
-    const surv = makeHero('surv', { skillIds: [] })
-    const sac = makeHero('sac', { skillIds: ['piercing_thrust'] })
+    const surv = makeHero('surv', { skills: [] })
+    const sac = makeHero('sac', { skills: sk('piercing_thrust') })
     const state = accountWith([surv, sac])
     const after = synthesize(state, { mode: 'salvage', survivorId: surv.id, sacrificeIds: [sac.id] })
-    expect(after.heroes['surv' as HeroId]!.skillIds).toContain('piercing_thrust')
+    expect(ids(after.heroes['surv' as HeroId]!)).toContain('piercing_thrust')
+    // a transferred skill arrives fresh (Lv1)
+    expect(after.heroes['surv' as HeroId]!.skills.find((s) => s.id === 'piercing_thrust')!.level).toBe(1)
     // Rescue charges the survivor Sanity once.
     expect(after.heroes['surv' as HeroId]!.sanity).toBe(100 - S.survivorSanityCost)
   })
 
   it('rescues the best grade (upward-only) when the survivor already knows every skill', () => {
-    const surv = makeHero('surv', { skillIds: ['power_strike'], growthGrades: { str: 2, agi: 2, vit: 2, int: 2, wil: 2 } })
-    const sac = makeHero('sac', { skillIds: ['power_strike'], growthGrades: { str: 9, agi: 1, vit: 1, int: 1, wil: 1 } })
+    const surv = makeHero('surv', { skills: sk('power_strike'), growthGrades: { str: 2, agi: 2, vit: 2, int: 2, wil: 2 } })
+    const sac = makeHero('sac', { skills: sk('power_strike'), growthGrades: { str: 9, agi: 1, vit: 1, int: 1, wil: 1 } })
     const state = accountWith([surv, sac])
     const after = synthesize(state, { mode: 'salvage', survivorId: surv.id, sacrificeIds: [sac.id] })
     expect(after.heroes['surv' as HeroId]!.growthGrades.str).toBe(9) // best grade rescued whole
@@ -260,7 +266,7 @@ describe('salvage preview + no-survivor', () => {
     const sac = makeHero('sac', { star: 3 })
     const state = accountWith([keeper, sac])
     const after = synthesize(state, { mode: 'salvage', survivorId: null, sacrificeIds: [sac.id] })
-    expect(after.heroes['keeper' as HeroId]!.skillIds).toEqual(keeper.skillIds)
+    expect(after.heroes['keeper' as HeroId]!.skills).toEqual(keeper.skills)
     expect((after.materials['promotionStone'] ?? 0)).toBeGreaterThan(0)
   })
 })

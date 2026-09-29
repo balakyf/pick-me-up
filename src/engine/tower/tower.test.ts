@@ -69,7 +69,7 @@ function makeHero(o: HeroOpts): OwnedHero {
     element: o.element ?? 'physical',
     baseAttrs: base,
     growthGrades: grades,
-    skillIds: o.skillIds ?? [],
+    skills: (o.skillIds ?? []).map((id) => ({ id, level: 1, xp: 0 })),
     portraitToken: '#abcdef',
     origin: 'procedural',
     xp: { level, xpIntoLevel: 0, heldXp: 0, atCap: false },
@@ -744,6 +744,40 @@ describe('playFloor — Master XP', () => {
     const { state: next, result } = playFloor(state)
     expect(result.cleared).toBe(false)
     expect(next.meta).toEqual(state.meta)
+  })
+})
+
+describe('playFloor — skills auto-learn + merge (Layer 1 §2.4)', () => {
+  it("a survivor's cast skill gains use-XP and levels up at the threshold", () => {
+    const xpToLv2 = TUNING.skills.xpToNext[1]!
+    const crusher = { ...makeCrusher('h_crush'), skills: [{ id: 'power_strike', level: 1, xp: xpToLv2 - 1 }] }
+    const { state: next, result } = playFloor(makeState({ heroes: [crusher] }))
+    expect(result.result.skillCasts['h_crush']?.power_strike ?? 0).toBeGreaterThanOrEqual(1)
+    expect(next.heroes['h_crush' as HeroId]!.skills[0]!.level).toBe(2)
+    expect(result.skillProgress).toContainEqual({ kind: 'level-up', heroId: 'h_crush', skillId: 'power_strike', level: 2 })
+  })
+
+  it('a hero holding both recipe inputs at minLevel merges them after the floor', () => {
+    const crusher = {
+      ...makeCrusher('h_crush'),
+      skills: [
+        { id: 'berserk', level: 3, xp: 0 },
+        { id: 'composure', level: 3, xp: 0 },
+      ],
+    }
+    const { state: next, result } = playFloor(makeState({ heroes: [crusher] }))
+    const ids = next.heroes['h_crush' as HeroId]!.skills.map((s) => s.id)
+    expect(ids).toContain('exceed')
+    expect(ids).not.toContain('berserk')
+    expect(ids).not.toContain('composure')
+    expect(result.skillProgress).toContainEqual({ kind: 'merge', heroId: 'h_crush', skillId: 'exceed', from: ['berserk', 'composure'] })
+  })
+
+  it('heroes left in the lobby do not learn', () => {
+    const benched = { ...makeCrusher('h_bench'), skills: [{ id: 'berserk', level: 3, xp: 0 }, { id: 'composure', level: 3, xp: 0 }] }
+    const state = makeState({ heroes: [makeCrusher('h_crush'), benched], slots: ['h_crush' as HeroId, null, null, null, null] })
+    const { state: next } = playFloor(state)
+    expect(next.heroes['h_bench' as HeroId]!.skills).toEqual(benched.skills)
   })
 })
 

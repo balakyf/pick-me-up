@@ -136,7 +136,7 @@ function midGameOf(acct: GameState): GameState {
     element: 'fire',
     baseAttrs: { str: 10, agi: 8, vit: 9, int: 7, wil: 6 },
     growthGrades: { str: 3, agi: 2, vit: 3, int: 2, wil: 2 },
-    skillIds: [],
+    skills: [],
     portraitToken: '#abcdef',
     origin: 'procedural',
     xp: { level: 5, xpIntoLevel: 40, heldXp: 0, atCap: false },
@@ -408,5 +408,59 @@ describe('migrate — v2 → v3', () => {
     // v2 fields survive the upgrade.
     expect(hero.sanity).toBe(TUNING.lobby.sanityMax)
     expect(restored.gems).toBe(TUNING.lobby.startingGems)
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// v4 schema — leveled skills (Layer 1 §2)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('createAccount — v4 skills', () => {
+  it("the starter's innate kit is owned as Lv1 skills (Islat Han: Power Strike, Berserk, Composure)", () => {
+    const acct = createAccount(4242, { now: 0 })
+    const starter = Object.values(acct.heroes)[0]!
+    expect(starter.skills).toEqual([
+      { id: 'power_strike', level: 1, xp: 0 },
+      { id: 'berserk', level: 1, xp: 0 },
+      { id: 'composure', level: 1, xp: 0 },
+    ])
+    expect('skillIds' in starter).toBe(false)
+  })
+})
+
+describe('migrate — v3 → v4', () => {
+  it('turns each hero skillIds into Lv1 skills and drops skillIds', () => {
+    const v4 = createAccount(556, { now: 1000 })
+    const heroesV3 = Object.fromEntries(
+      Object.entries(v4.heroes).map(([id, h]) => {
+        const { skills, ...rest } = h as unknown as Record<string, unknown>
+        return [id, { ...rest, skillIds: ['power_strike', 'berserk'] }]
+      }),
+    )
+    const v3Json = JSON.stringify({ schemaVersion: 3, savedAt: 0, state: { ...v4, schemaVersion: 3, heroes: heroesV3 } })
+
+    const restored = loadState(v3Json)
+
+    expect(restored.schemaVersion).toBe(4)
+    const hero = Object.values(restored.heroes)[0]!
+    expect(hero.skills).toEqual([
+      { id: 'power_strike', level: 1, xp: 0 },
+      { id: 'berserk', level: 1, xp: 0 },
+    ])
+    expect('skillIds' in hero).toBe(false)
+    // v3 fields survive the upgrade.
+    expect(hero.equipment).toEqual({ weapon: null, armor: null, accessory: null })
+  })
+
+  it('rejects a current-version save whose hero lacks a skills list', () => {
+    const acct = createAccount(557, { now: 0 })
+    const broken = Object.fromEntries(
+      Object.entries(acct.heroes).map(([id, h]) => {
+        const { skills, ...rest } = h as unknown as Record<string, unknown>
+        return [id, rest]
+      }),
+    )
+    const json = JSON.stringify({ schemaVersion: 4, savedAt: 0, state: { ...acct, heroes: broken } })
+    expect(() => loadState(json)).toThrow(SaveLoadError)
   })
 })

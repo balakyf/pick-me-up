@@ -318,8 +318,20 @@ export const TUNING = {
     },
   },
 
+  /** Skills (Layer 1 §2): grade ladder, auto-learn curve, CP feed. First-pass. */
+  skills: {
+    /** Level cap per grade. */
+    maxLevel: { F: 4, E: 4, D: 4, C: 5, B: 5, A: 5, S: 6, U: 6 } as Record<string, number>,
+    /** CP weight per grade (skillScore = Σ gradeValue × level). */
+    gradeValue: { F: 1, E: 2, D: 3, C: 4, B: 5, A: 6, S: 8, U: 10 } as Record<string, number>,
+    /** Casts needed to go from level N to N+1 (index = N; frozen integer curve). */
+    xpToNext: [0, 3, 5, 8, 12, 18] as readonly number[],
+    /** CP per point of skillScore. */
+    cpPerSkillScore: 2,
+  },
+
   account: {
-    schemaVersion: 3,
+    schemaVersion: 4,
     /** Canon protagonist account id (display only). */
     defaultAccountId: '46631913',
     partySize: 5,

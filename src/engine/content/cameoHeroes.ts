@@ -32,7 +32,8 @@ export const CAMEO_HEROES: HeroTemplate[] = [
     element: 'physical',
     baseAttrs: { str: 8, agi: 7, vit: 7, int: 2, wil: 4 },
     growthGrades: { str: 3, agi: 3, vit: 3, int: 1, wil: 2 },
-    skillIds: ['power_strike'],
+    // Canon kit: Berserk + Composure fuse into Exceed (Layer 1 §2.4).
+    skillIds: ['power_strike', 'berserk', 'composure'],
     portraitToken: '#d4af37', // golden bloodline
   },
 
