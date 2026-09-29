@@ -260,6 +260,13 @@ export function buildOwnedHeroFromTemplate(template: HeroTemplate, id: HeroId): 
   return buildOwnedHero(hero, template.engraving ? { ...template.engraving } : null)
 }
 
+/** The Layer 3 per-hero fields every fresh (or v7-migrated) hero starts with. */
+export function HERO_V8_DEFAULTS(): Pick<OwnedHero, 'favor' | 'bondTier' | 'ip' | 'gift' | 'blessed' | 'expedition'> {
+  const favor = TUNING.favor.start
+  const bondTier = TUNING.favor.tierCeilings.findIndex((c) => favor <= c)
+  return { favor, bondTier, ip: 0, gift: { last: null, streak: 0 }, blessed: false, expedition: null }
+}
+
 /** Build a fresh OwnedHero around an already-assembled static Hero: its innate
  *  skillIds become Lv1 HeroSkills (schema v4). */
 function buildOwnedHero(hero: Hero, engraving: HeroEngraving | null = null): OwnedHero {
@@ -274,6 +281,7 @@ function buildOwnedHero(hero: Hero, engraving: HeroEngraving | null = null): Own
     equipment: { weapon: null, armor: null, accessory: null },
     training: null,
     engraving,
+    ...HERO_V8_DEFAULTS(),
   }
 }
 
@@ -487,6 +495,12 @@ function advancedPull(state: GameState): { state: GameState; hero: OwnedHero } {
     state.consumedTemplateIds,
     state.usedNames,
   )
+  // Whale-bait inflation (Layer 3 §D3, canon Sirris): after a dry streak a 3★ may be
+  // SHOWN as a 4★. Its own stream; the engine always uses the true star.
+  if (star === 3 && g.advPity4 >= TUNING.shop.baitPity) {
+    const bait = chance(rngFor(state.seed, 'gacha-bait', g.advPullCount), TUNING.shop.baitChance)
+    if (bait.value) roll.hero = { ...roll.hero, displayStar: 4 }
+  }
   const admitted = admit(state, roll)
   return {
     hero: admitted.hero,
@@ -558,17 +572,20 @@ export function summon(state: GameState): { state: GameState; hero: OwnedHero } 
   // The gacha sub-stream is a pure function of (seed, 'gacha', pullCount).
   const rng = rngFor(state.seed, 'gacha', state.gacha.pullCount)
 
-  const { value: roll } = rollSummon(
-    rng,
-    state.gacha.pity,
-    state.consumedHeroIds,
-    state.consumedTemplateIds,
-    state.usedNames,
-  )
+  // Nudge probability (an Intervention, Layer 3 §D2): a second star roll from its own
+  // stream, keep the better. Without a nudge this is exactly rollSummon's draw order.
+  const first = rollStar(rng, state.gacha.pity)
+  let star = first.value
+  if (state.meta.nudge) {
+    const alt = rollStar(rngFor(state.seed, 'gacha-nudge', state.gacha.pullCount), state.gacha.pity).value
+    if (alt > star) star = alt
+  }
+  const { value: roll } = rollHeroOfStar(first.rng, star, state.consumedHeroIds, state.consumedTemplateIds, state.usedNames)
 
   const admitted = admit({ ...state, gold: state.gold - cost }, roll)
   const nextState: GameState = {
     ...admitted.state,
+    meta: state.meta.nudge ? { ...admitted.state.meta, nudge: false } : admitted.state.meta,
     gacha: {
       ...state.gacha,
       pity: roll.star >= 3 ? 0 : state.gacha.pity + 1,

@@ -302,8 +302,9 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
     let cands = targetableFoes(actor)
     if (cands.length === 0) return null
 
-    // FOCUS: hero attackers force-prioritize a living, targetable focus enemy.
-    if (actor.side === 'hero') {
+    // FOCUS: hero attackers force-prioritize a living, targetable focus enemy (a Wary,
+    // defiant hero ignores the Master and picks its own target).
+    if (actor.side === 'hero' && actor.ref.defiant !== true) {
       const focusId = encounter.focus?.focusEnemyId
       if (focusId !== undefined) {
         const focused = cands.find((e) => e.id === focusId)

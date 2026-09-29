@@ -3,6 +3,7 @@ import type { GameState, HeroId, Line, OwnedHero, FloorResult } from '../engine/
 import type { Store } from '../engine/store'
 import { TUNING } from '../engine/tuning'
 import { HeroCard } from './HeroCard'
+import { HeroBond } from './metaPanels'
 import { cpOf, Stars, Portrait } from './bits'
 import { freshSeed } from './useGame'
 import { heroFrameUrl } from './pixel/sprites'
@@ -119,7 +120,7 @@ export function SummonScreen({ state, store }: { state: GameState; store: Store 
         {revealed.length > 0 ? (
           <div className={`reveal ${revealed.length > 1 ? 'reveal-many' : ''}`}>
             {revealed.map((h) => (
-              <HeroCard key={h.id} hero={h} showStats={revealed.length === 1} />
+              <HeroCard key={h.id} hero={h} showStats={revealed.length === 1} masterLevel={state.meta.masterLevel} />
             ))}
           </div>
         ) : (
@@ -167,7 +168,7 @@ export function SummonScreen({ state, store }: { state: GameState; store: Store 
 }
 
 // ── Roster ───────────────────────────────────────────────────────────────────
-export function RosterScreen({ state }: { state: GameState }) {
+export function RosterScreen({ state, store }: { state: GameState; store?: Store }) {
   const [sel, setSel] = useState<HeroId | null>(null)
   const heroes = roster(state).sort((a, b) => {
     if (a.alive !== b.alive) return a.alive ? -1 : 1
@@ -186,10 +187,16 @@ export function RosterScreen({ state }: { state: GameState }) {
             hero={h}
             selected={sel === h.id}
             showStats={sel === h.id}
+            masterLevel={state.meta.masterLevel}
             onClick={() => setSel(sel === h.id ? null : h.id)}
           />
         ))}
       </div>
+      {sel && store && state.heroes[sel] && (
+        <div className="roster-bond">
+          <HeroBond hero={state.heroes[sel]!} state={state} store={store} />
+        </div>
+      )}
     </div>
   )
 }
@@ -348,6 +355,17 @@ export function ResultsScreen({
                 </div>
               )
             })}
+          </div>
+        )}
+
+        {result.refusedHeroIds.length > 0 && (
+          <div className="fallen">
+            <div className="ft">✋ Refused to fight</div>
+            {result.refusedHeroIds.map((id) => (
+              <div key={id}>
+                {state.heroes[id]?.name ?? id} <span className="muted">(Wary and broken — win back their trust)</span>
+              </div>
+            ))}
           </div>
         )}
 

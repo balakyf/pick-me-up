@@ -146,6 +146,12 @@ function midGameOf(acct: GameState): GameState {
     equipment: { weapon: null, armor: null, accessory: null },
     training: null,
     engraving: null,
+    favor: 35,
+    bondTier: 1,
+    ip: 0,
+    gift: { last: null, streak: 0 },
+    blessed: false,
+    expedition: null,
   }
   copy.heroes[fakeId] = fakeHero
   copy.tower.currentFloor = 7
@@ -531,7 +537,7 @@ describe('migrate — v6 → v7 (the full climb)', () => {
       state: { ...v7, schemaVersion: 6, tower: { currentFloor: 14, highestCleared: 13, attemptIndex: 2 } },
     })
     const restored = loadState(v6Json)
-    expect(restored.schemaVersion).toBe(7)
+    expect(restored.schemaVersion).toBe(TUNING.account.schemaVersion)
     expect(restored.tower).toEqual({
       currentFloor: 14,
       highestCleared: 13,
@@ -541,5 +547,28 @@ describe('migrate — v6 → v7 (the full climb)', () => {
       hiddenFound: [],
       worldEnded: false,
     })
+  })
+})
+
+describe('migrate — v7 → v8 (the meta-economy)', () => {
+  it('adds favor/IP/gift fields to heroes, PI and the shop to meta, and the Hall of Magic', () => {
+    const v8 = createAccount(562, { now: 1000 })
+    const heroesV7 = Object.fromEntries(
+      Object.entries(v8.heroes).map(([id, h]) => {
+        const { favor, bondTier, ip, gift, blessed, expedition, ...rest } = h
+        return [id, rest]
+      }),
+    )
+    const { hallOfMagic, ...facilitiesV7 } = v8.facilities
+    const meta = { masterLevel: 4, masterXp: 12, lastSeenAtWorld: 99 }
+    const v7Json = JSON.stringify({ schemaVersion: 7, savedAt: 0, state: { ...v8, schemaVersion: 7, heroes: heroesV7, facilities: facilitiesV7, meta } })
+    const restored = loadState(v7Json)
+    expect(restored.schemaVersion).toBe(8)
+    const h = Object.values(restored.heroes)[0]!
+    expect([h.favor, h.ip, h.blessed, h.expedition]).toEqual([TUNING.favor.start, 0, false, null])
+    expect(restored.meta.masterLevel).toBe(4)
+    expect(restored.meta.pi).toBe(0)
+    expect(restored.meta.wallet).toEqual({ spentUsd: 0, purchases: {} })
+    expect(restored.facilities.hallOfMagic).toEqual({ level: 0, build: null })
   })
 })

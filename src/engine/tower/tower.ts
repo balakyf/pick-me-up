@@ -44,6 +44,9 @@ import { attrStoneId } from '../promotion'
 import { tacticalFocusBonus } from '../tactical'
 import { addMasterXp } from '../master'
 import { foldBattleSkills } from '../skills'
+import { rebellionChance, withFavor } from '../favor'
+import { addPi } from '../interference'
+import { practice, woundBoss } from '../minigames'
 import { hash, rngFor, nextInt, nextFloat, chance, pick, makeSeed, type Rng } from '../rng/rng'
 import type { HiddenObjective, LoopState, TowerEvent, TowerState, BattleResult } from '../types'
 
@@ -458,6 +461,7 @@ export function buildEncounter(state: GameState, floor: number, focus?: FocusDir
 export function playFloor(
   state: GameState,
   focus?: FocusDirective,
+  ballista?: number,
 ): { state: GameState; result: FloorResult } {
   const floor = state.tower.currentFloor
   const worldMult = worldMultFor(state)
@@ -469,14 +473,22 @@ export function playFloor(
   // ── 1. Build deployed hero units (skip empty slots, dead, and Sanity-0). ────
   const heroUnits: CombatUnit[] = []
   const deployedIds: HeroId[] = []
+  const refusedHeroIds: HeroId[] = []
   const { slots, lines } = state.party
   for (let s = 0; s < slots.length; s++) {
     const heroId = slots[s]
     if (heroId === null || heroId === undefined) continue
     const hero = state.heroes[heroId]
     // Skip empty slots, the dead, and the broken-down (Sanity 0 = cannot deploy).
-    // A hero in a Training Center drill is in the yard, not the party.
-    if (hero === undefined || !hero.alive || hero.sanity <= 0 || hero.training !== null) continue
+    // A hero in a Training Center drill is in the yard, one in the Ruins is away.
+    if (hero === undefined || !hero.alive || hero.sanity <= 0 || hero.training !== null || hero.expedition !== null) continue
+    // REBELLION (Layer 3 §C1): a Wary, broken hero may refuse the order. The draw is
+    // gated on a positive chance, so everyone else's replays are untouched.
+    const rebel = rebellionChance(hero)
+    if (rebel > 0 && chance(rngFor(state.seed, 'rebel', floor, state.tower.attemptIndex, heroId), rebel).value) {
+      refusedHeroIds.push(heroId)
+      continue
+    }
     const line: Line = lines[s] ?? 'front'
     heroUnits.push(buildCombatUnit(hero, line, SKILLS, state.inventory))
     deployedIds.push(heroId)
@@ -486,7 +498,22 @@ export function playFloor(
   const combatSeed = hash(state.seed, 'combat', floor, state.tower.attemptIndex)
 
   // ── 3. Encounter + battle. ──────────────────────────────────────────────────
-  const enc = buildEncounter(state, floor, focus)
+  let enc = buildEncounter(state, floor, focus)
+  // BALLISTA (Layer 3 §C2): on anchors that declare it, the boss opens the fight wounded —
+  // by the Master's play, or by their tracked skill when the minigame is skipped.
+  const anchorDef = ANCHORS[floor]
+  let meta = state.meta
+  if (anchorDef?.minigame === 'ballista') {
+    const perf = ballista ?? state.meta.skill.ballista
+    if (ballista !== undefined) meta = practice(meta, 'ballista')
+    const bossTag = enc.mission.objectives.find((o) => o.kind === 'defeat' || o.kind === 'acquire') as { targetTag: string } | undefined
+    enc = {
+      ...enc,
+      waves: enc.waves.map((w) => ({
+        units: w.units.map((u) => (bossTag !== undefined && u.targetTag === bossTag.targetTag ? woundBoss(u, perf) : u)),
+      })),
+    }
+  }
   const res = runBattle(heroUnits, enc, combatSeed)
 
   // ── 4. Interpret. ───────────────────────────────────────────────────────────
@@ -512,7 +539,7 @@ export function playFloor(
     const hero = state.heroes[key]!
     if (fallenSet.has(key as string)) {
       // PERMADEATH: a hero that fell this battle is gone.
-      nextHeroes[key] = { ...hero, alive: false }
+      nextHeroes[key] = { ...hero, alive: false, blessed: false }
     } else if (survivorSet.has(key as string)) {
       // Deployed survivor: drain Sanity, grant XP on a clear, and auto-learn skills
       // from this battle's casts (level-ups, then merges — Layer 1 §2.4).
@@ -526,7 +553,12 @@ export function playFloor(
         defeatedTargetTags: res.defeatedTargetTags,
       })
       skillProgress.push(...learned.progress)
-      nextHeroes[key] = { ...hero, xp, sanity: clampSanity(hero.sanity - drain), skills: learned.skills }
+      // Favor (Layer 3 §C1): a shared victory warms; watching an ally die chills.
+      const favorDelta = (cleared ? TUNING.favor.perClear : 0) - (fallenSet.size > 0 ? TUNING.favor.witnessLoss : 0)
+      nextHeroes[key] = withFavor(
+        { ...hero, xp, sanity: clampSanity(hero.sanity - drain), skills: learned.skills, blessed: false },
+        hero.favor + favorDelta,
+      )
     } else {
       nextHeroes[key] = hero
     }
@@ -584,10 +616,13 @@ export function playFloor(
   const worldEnded = cleared && floor === T.worldEndFloor && !state.tower.worldEnded
   if (worldEnded) nextTower.worldEnded = true
 
-  // ── 6e. Master XP: floor clears feed the Master-Level spine (+first-clear bonus). ──
+  // ── 6e. Master XP: floor clears feed the Master-Level spine (+first-clear bonus);
+  //        they also strengthen the world's Probability Interference (Layer 3 §D1). ──
   const MASTER = TUNING.lobby.master
   const masterXpGain = cleared ? MASTER.xpPerFloorClear + (firstClear ? MASTER.xpPerFirstClear : 0) : 0
-  const nextMeta = masterXpGain > 0 ? addMasterXp(state.meta, masterXpGain) : state.meta
+  const PI = TUNING.interference
+  let nextMeta = masterXpGain > 0 ? addMasterXp(meta, masterXpGain) : meta
+  if (cleared) nextMeta = addPi(nextMeta, PI.perClear + (firstClear ? PI.perFirstClear : 0))
 
   const nextState: GameState = {
     ...state,
@@ -612,6 +647,7 @@ export function playFloor(
     event,
     loopRollback: tower.rollback,
     worldEnded,
+    refusedHeroIds,
     result: res,
   }
 

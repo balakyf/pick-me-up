@@ -60,7 +60,7 @@ export function promotionCost(hero: OwnedHero): Record<MaterialId, number> {
 
 /** Gate: a living hero at its level cap, below the ceiling, with no promotion in flight. */
 export function canPromote(hero: OwnedHero): boolean {
-  return hero.alive && hero.xp.atCap && hero.star < P.maxStar && hero.promotion === null
+  return hero.alive && hero.xp.atCap && hero.star < P.maxStar && hero.promotion === null && !hero.expedition
 }
 
 /** True when the account holds enough of every material the promotion costs. */
@@ -171,7 +171,9 @@ export function completePromotion(hero: OwnedHero, accountSeed: Seed, highestCle
   )
   skills = applyUnlocks(skills, xp.level, highestCleared)
 
-  return { ...hero, star: newStar, baseAttrs, growthGrades, skills, xp, engraving, promotion: null }
+  // Rank deepens the hero's connection with the Master: Intervention Points (Layer 3 §D2).
+  const ip = (hero.ip ?? 0) + TUNING.intervention.perPromotion
+  return { ...hero, star: newStar, baseAttrs, growthGrades, skills, xp, engraving, ip, promotion: null }
 }
 
 /**

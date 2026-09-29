@@ -29,7 +29,7 @@ import type {
   HeroTemplate,
 } from '../types'
 import { makeSeed } from '../rng/rng'
-import { buildOwnedHeroFromTemplate } from '../gacha'
+import { buildOwnedHeroFromTemplate, HERO_V8_DEFAULTS } from '../gacha'
 import { CAMEO_HEROES } from '../content'
 import { toWorldTime } from '../time'
 
@@ -77,6 +77,21 @@ function findStarterTemplate(): HeroTemplate {
   return template
 }
 
+/** The Layer 3 meta fields a fresh (or v7-migrated) account starts with. */
+function META_V8_DEFAULTS(): Omit<GameState['meta'], 'masterLevel' | 'masterXp' | 'lastSeenAtWorld'> {
+  return {
+    pi: 0,
+    login: { lastDay: -1, streak: 0 },
+    monthly: null,
+    wallet: { spentUsd: 0, purchases: {} },
+    skill: { blacksmith: TUNING.minigames.startSkill, ballista: TUNING.minigames.startSkill },
+    crackOpen: false,
+    revealedHidden: [],
+    peekedFloors: [],
+    nudge: false,
+  }
+}
+
 /**
  * Build a brand-new account's GameState (Layer 3 bootstrap). PURE: a given
  * (entropySeed, opts) always yields a deep-equal GameState.
@@ -105,13 +120,14 @@ export function createAccount(entropySeed: number, opts?: CreateAccountOpts): Ga
     gems: TUNING.lobby.startingGems,
     materials: {},
     inventory: [],
-    meta: { masterLevel: 1, masterXp: 0, lastSeenAtWorld: toWorldTime(opts?.now ?? 0) },
+    meta: { masterLevel: 1, masterXp: 0, lastSeenAtWorld: toWorldTime(opts?.now ?? 0), ...META_V8_DEFAULTS() },
     facilities: {
       kitchen: { level: TUNING.lobby.facilityStartLevels.kitchen, build: null },
       promotionChamber: { level: TUNING.lobby.facilityStartLevels.promotionChamber, build: null },
       tacticalCenter: { level: TUNING.lobby.facilityStartLevels.tacticalCenter, build: null },
       trainingCenter: { level: TUNING.lobby.facilityStartLevels.trainingCenter, build: null },
       transferStation: { level: TUNING.lobby.facilityStartLevels.transferStation, build: null },
+      hallOfMagic: { level: TUNING.lobby.facilityStartLevels.hallOfMagic, build: null },
     },
     dailies: { attemptsUsed: 0, lastResetWorldDay: 0 },
     heroes: { [STARTER_HERO_ID]: starter },
@@ -157,7 +173,8 @@ function migrateV1toV2(envelope: SaveEnvelope): SaveEnvelope {
       heroes,
       gems: TUNING.lobby.startingGems,
       materials: {},
-      meta: { masterLevel: 1, masterXp: 0, lastSeenAtWorld: toWorldTime(createdAt) },
+      // v2 meta only; the Layer 3 fields are added by the v7 → v8 step.
+      meta: { masterLevel: 1, masterXp: 0, lastSeenAtWorld: toWorldTime(createdAt) } as GameState['meta'],
       // v2 facilities only; the Training Center is added by the v4 → v5 step.
       facilities: {
         kitchen: { level: TUNING.lobby.facilityStartLevels.kitchen, build: null },
@@ -271,6 +288,27 @@ function migrateV6toV7(envelope: SaveEnvelope): SaveEnvelope {
   }
 }
 
+/** v7 → v8: the meta-economy — favor/IP/gifts on heroes, PI and the shop on the account. */
+function migrateV7toV8(envelope: SaveEnvelope): SaveEnvelope {
+  const s = envelope.state as unknown as Record<string, unknown>
+  const oldHeroes = s.heroes as Record<string, OwnedHero>
+  const heroes: Record<string, OwnedHero> = {}
+  for (const [id, hero] of Object.entries(oldHeroes)) heroes[id] = { ...hero, ...HERO_V8_DEFAULTS() }
+  const meta = s.meta as GameState['meta']
+  const facilities = s.facilities as GameState['facilities']
+  return {
+    schemaVersion: 8,
+    savedAt: envelope.savedAt,
+    state: {
+      ...(s as unknown as GameState),
+      schemaVersion: 8,
+      heroes,
+      meta: { masterLevel: meta.masterLevel, masterXp: meta.masterXp, lastSeenAtWorld: meta.lastSeenAtWorld, ...META_V8_DEFAULTS() },
+      facilities: { ...facilities, hallOfMagic: { level: TUNING.lobby.facilityStartLevels.hallOfMagic, build: null } },
+    },
+  }
+}
+
 /**
  * Migrate a SaveEnvelope from `fromVersion` up to the current schema version.
  * Identity when already current; otherwise apply each version's upgrade step in
@@ -309,6 +347,10 @@ export function migrate(envelope: SaveEnvelope, fromVersion: number): SaveEnvelo
   if (v === 6) {
     env = migrateV6toV7(env)
     v = 7
+  }
+  if (v === 7) {
+    env = migrateV7toV8(env)
+    v = 8
   }
   if (v !== current) {
     throw new SaveLoadError(`migrate: no migration path from version ${fromVersion}`)

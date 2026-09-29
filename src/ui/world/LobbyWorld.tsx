@@ -4,6 +4,8 @@ import type { Store } from '../../engine/store'
 import { synthesisUnlocked } from '../../engine/synthesis'
 import { smithyUnlocked } from '../../engine/equipment'
 import { dailyUnlocked } from '../../engine/daily'
+import { loginClaimed } from '../../engine/shop'
+import { toWorldTime } from '../../engine/time'
 import { masterXpToNext } from '../../engine/master'
 import { TUNING } from '../../engine/tuning'
 import {
@@ -80,6 +82,9 @@ const PANEL_PLACES: PanelPlace[] = [
   'synthesis',
   'armory',
   'daily',
+  'shop',
+  'hallOfMagic',
+  'rift',
 ]
 export const PLACE_ICON: Record<PlaceId, string> = {
   kitchen: '🍲',
@@ -87,6 +92,9 @@ export const PLACE_ICON: Record<PlaceId, string> = {
   promotionChamber: '⛩',
   trainingCenter: '⚔',
   transferStation: '⇄',
+  shop: '♦',
+  hallOfMagic: '✶',
+  rift: '⟡',
   synthesis: '⚗',
   armory: '⚒',
   daily: '🌀',
@@ -110,6 +118,9 @@ export const MENU_PLACES: PlaceId[] = [
   'synthesis',
   'armory',
   'daily',
+  'hallOfMagic',
+  'rift',
+  'shop',
 ]
 
 interface Walker {
@@ -231,6 +242,7 @@ function lockedRooms(state: GameState): RoomId[] {
   if (state.facilities.promotionChamber.level === 0) out.push('promotionChamber')
   if (state.facilities.trainingCenter.level === 0) out.push('training')
   if (state.facilities.transferStation.level === 0) out.push('transfer')
+  if (state.facilities.hallOfMagic.level === 0 && !state.meta.crackOpen) out.push('magic')
   return out
 }
 
@@ -637,12 +649,18 @@ export function LobbyWorld({
           <div className="hud-title">Master Lv {ml}</div>
           <Gauge pct={xpPct} color="var(--accent-2)" label={`${state.meta.masterXp} / ${masterXpToNext(ml)} XP`} />
           <div className="hud-sub">
-            {living} {living === 1 ? 'hero' : 'heroes'} · Floor {Math.min(state.tower.currentFloor, TUNING.tower.sliceTopFloor)}
+            {living} {living === 1 ? 'hero' : 'heroes'} · Floor {Math.min(state.tower.currentFloor, TUNING.tower.sliceTopFloor)} · PI{' '}
+            {Math.floor(state.meta.pi)}
           </div>
         </div>
       </div>
 
       <div className="hud hud-tr">
+        {!loginClaimed(state, toWorldTime(Date.now())) && (
+          <button className="pbtn gem" onClick={() => store.dispatch({ type: 'CLAIM_LOGIN' }, Date.now())} title="Daily login reward">
+            🎁 Daily
+          </button>
+        )}
         <span className="coin gold">◆ {state.gold.toLocaleString()}</span>
         <span className="coin gem">♦ {state.gems.toLocaleString()}</span>
         <button className="pbtn" onClick={onMenu}>

@@ -49,6 +49,8 @@ export function canUpgrade(state: GameState, facility: FacilityId): boolean {
   if (f.level >= F.maxLevel) return false
   if (f.level >= state.meta.masterLevel) return false
   if (f.level === 0 && state.meta.masterLevel < unlockMasterLevel(facility)) return false
+  // Some facilities also wait on the world's Probability Interference (Layer 3 §D1).
+  if (f.level === 0 && state.meta.pi < (TUNING.interference.unlock[facility] ?? 0)) return false
   return state.gold >= upgradeCost(facility, f.level)
 }
 

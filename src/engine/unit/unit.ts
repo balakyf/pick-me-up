@@ -40,6 +40,7 @@ import { applySanityPenalty } from '../kitchen'
 import { equipmentBonus } from '../equipment'
 import { passiveBonuses, resolveSkillEffect, skillCp } from '../skills'
 import { engravingCp, engravingEffect } from '../engravings'
+import { favorStatMult, isDefiant } from '../favor'
 import { TUNING } from '../tuning'
 
 /** Apply relative % bonuses to a stat block (rounded; CRIT re-capped). */
@@ -127,6 +128,11 @@ export function buildCombatUnit(
   for (const [k, v] of Object.entries(engraving?.statPct ?? {}) as [keyof DerivedStats, number][]) {
     pct[k] = (pct[k] ?? 0) + v
   }
+  // Favor (Layer 3 §C1): a warm bond lifts every stat a little; a Wary hero is sluggish.
+  const favorMult = favorStatMult(hero.favor ?? TUNING.favor.start)
+  if (favorMult !== 1) {
+    for (const k of ['maxHP', 'pAtk', 'mAtk', 'pDef', 'mDef', 'spd'] as const) pct[k] = (pct[k] ?? 0) + (favorMult - 1)
+  }
   // Low Sanity weakens the hero BEFORE the snapshot freezes (combat never recomputes).
   const base = applyStatPct(applySanityPenalty(deriveStatsForHero(hero, level), hero.sanity), pct)
   // Equipment adds a flat block ON TOP of the morale-adjusted base (gear is unaffected
@@ -157,12 +163,20 @@ export function buildCombatUnit(
     actionGauge: 0,
     alive: true,
     skills: [basicAttackFor(hero, element), ...resolveHeroSkills(hero.skills, registry)],
-    keywords: [...gear.keywords, ...(engraving?.keywords ?? []), ...passives.keywords],
+    keywords: [
+      ...gear.keywords,
+      ...(engraving?.keywords ?? []),
+      ...passives.keywords,
+      // Guarantee an action (Layer 3 §D2): a blessed hero's first strike lands hard.
+      ...(hero.blessed ? [{ kind: 'opener' as const, multiplier: TUNING.intervention.guaranteeMult }] : []),
+    ],
     // Skills add a CP term (Layer 1 §2.5): Σ gradeValue × level, weighted; an engraving adds its own.
     cp: combatPower(stats, skillCp(hero.skills, registry) + engravingCp(hero.engraving)),
     sourceHeroId: hero.id,
     // Carried for the combat panic check; enemies have no Sanity (field absent).
     sanity: hero.sanity,
+    // A Wary hero ignores the Master's focus directive.
+    ...(isDefiant(hero.favor ?? TUNING.favor.start) ? { defiant: true } : {}),
   }
 }
 

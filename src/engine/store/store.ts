@@ -28,11 +28,17 @@ import type {
   FloorResult,
   FocusDirective,
   StoragePort,
+  EquipmentId,
 } from '../types'
 import { createAccount, persist, hydrate, DEFAULT_SAVE_KEY } from '../account'
 import { summon, summonMany } from '../gacha'
 import { transferSkill, fuseSkill } from '../transfer'
 import { resolveEvent, type EventOutcome } from '../events'
+import { giveGift } from '../favor'
+import { intervene } from '../intervention'
+import { upgradeEquipment } from '../minigames'
+import { buyPackage, claimLogin, claimMonthly } from '../shop'
+import { openCrack, dispatchRuins } from '../rift'
 import { playFloor } from '../tower'
 import { banquet } from '../kitchen'
 import { startPromotion, skipPromotion } from '../promotion'
@@ -112,7 +118,7 @@ export function reduce(state: GameState | null, cmd: Command, nowWorld: number =
     }
 
     case 'ATTEMPT_FLOOR':
-      return playFloor(current, cmd.focus).state
+      return playFloor(current, cmd.focus, cmd.ballista).state
 
     case 'TICK':
       return current
@@ -160,6 +166,30 @@ export function reduce(state: GameState | null, cmd: Command, nowWorld: number =
     case 'RESOLVE_EVENT':
       return resolveEvent(current, cmd.option).state
 
+    case 'GIVE_GIFT':
+      return giveGift(current, cmd.heroId, cmd.giftId)
+
+    case 'INTERVENE':
+      return intervene(current, cmd.heroId, cmd.action)
+
+    case 'UPGRADE_EQUIPMENT':
+      return upgradeEquipment(current, cmd.itemId, cmd.performance).state
+
+    case 'BUY_PACKAGE':
+      return buyPackage(current, cmd.packageId, nowWorld)
+
+    case 'CLAIM_LOGIN':
+      return claimLogin(current, nowWorld)
+
+    case 'CLAIM_MONTHLY':
+      return claimMonthly(current, nowWorld)
+
+    case 'OPEN_CRACK':
+      return openCrack(current)
+
+    case 'DISPATCH_RUINS':
+      return dispatchRuins(current, cmd.heroIds, nowWorld)
+
     case 'ADD_GOLD':
       // Testing-only cheat: grant free gold. Not part of the real economy.
       return { ...current, gold: current.gold + cmd.amount }
@@ -205,8 +235,22 @@ export function summonBatchWithResult(
 export function attemptFloorWithResult(
   state: GameState,
   focus?: FocusDirective,
+  ballista?: number,
 ): { state: GameState; result: FloorResult } {
-  return playFloor(state, focus)
+  return playFloor(state, focus, ballista)
+}
+
+/**
+ * Like dispatching UPGRADE_EQUIPMENT, but also reports whether the forge succeeded and
+ * at what odds. Runs the same advanceTime catch-up `reduce` does.
+ */
+export function upgradeEquipmentWithResult(
+  state: GameState | null,
+  itemId: EquipmentId,
+  performance?: number,
+  nowReal = 0,
+): { state: GameState; success: boolean; odds: number } {
+  return upgradeEquipment(advanceTime(requireState(state, 'UPGRADE_EQUIPMENT'), toWorldTime(nowReal)), itemId, performance)
 }
 
 /**

@@ -83,7 +83,7 @@ function deployable(state: GameState): { hero: OwnedHero; line: CombatUnit['line
   const out: { hero: OwnedHero; line: CombatUnit['line'] }[] = []
   state.party.slots.forEach((id, i) => {
     const h = id ? state.heroes[id] : undefined
-    if (h && h.alive && h.sanity > 0 && h.training === null) out.push({ hero: h, line: state.party.lines[i] ?? 'front' })
+    if (h && h.alive && h.sanity > 0 && h.training === null && !h.expedition) out.push({ hero: h, line: state.party.lines[i] ?? 'front' })
   })
   return out
 }

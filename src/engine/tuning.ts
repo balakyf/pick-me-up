@@ -212,6 +212,122 @@ export const TUNING = {
     },
   },
 
+  /** Favorability, gifts and rebellion (Layer 3 §C1). First-pass. */
+  favor: {
+    start: 35,
+    max: 100,
+    /** Upper bound of each tier: Wary, Neutral, Warm, Devoted (Bonded = above). */
+    tierCeilings: [20, 40, 60, 80] as readonly number[],
+    tierNames: ['Wary', 'Neutral', 'Warm', 'Devoted', 'Bonded'] as readonly string[],
+    /** Combat stat multiplier by tier. */
+    statMult: [0.95, 1, 1.03, 1.06, 1.1] as readonly number[],
+    perClear: 1,
+    perBanquet: 2,
+    /** Lost by each witness when an ally permadies or is synthesized. */
+    witnessLoss: 5,
+    /** Rebellion (Wary + Sanity below this): chance = (wary gap + sanity gap) / 100 × this. */
+    rebellionSanity: 30,
+    rebellionScale: 0.8,
+    /** Gifts: liked ×likedMult, disliked −dislikedLoss flat; repeats ×repeatDecay, negative from repeatSour. */
+    likedMult: 2,
+    dislikedLoss: 3,
+    repeatDecay: 0.5,
+    repeatSour: 3,
+    sourLoss: 2,
+  },
+
+  /** Probability Interference — passive, account-wide (Layer 3 §D1). */
+  interference: {
+    perClear: 2,
+    perFirstClear: 5,
+    perLogin: 10,
+    /** Hall of Magic: PI per world-hour per level. */
+    hallPerHourPerLevel: 0.5,
+    /** Idle this many world-days and PI starts to fade, ×(1 − decay) per further idle day. */
+    idleDays: 6,
+    decay: 0.05,
+    /** Content gated on PI (alongside Master Level). */
+    unlock: { hallOfMagic: 30, crack: 200 } as Record<string, number>,
+  },
+
+  /** Intervention Points — active, per-hero (Layer 3 §D2). */
+  intervention: {
+    perPromotion: 1,
+    /** Paid once each when a hero first reaches Devoted / Bonded. */
+    devotedBonus: 2,
+    bondedBonus: 2,
+    /** The lowest tier (index) allowed to spend IP: 3 = Devoted. */
+    minTier: 3,
+    cost: { reveal: 1, peek: 1, nudge: 3, guarantee: 3 } as Record<string, number>,
+    /** Guarantee an action: the blessed hero's first strike multiplier. */
+    guaranteeMult: 2,
+  },
+
+  /** Minigames (Layer 3 §C2): skill = auto-resolve performance; playing raises it. */
+  minigames: {
+    startSkill: 0.4,
+    skillPerPlay: 0.02,
+    maxSkill: 0.9,
+    /** Blacksmithing grade-up base success by FROM grade (§A3 ladder). */
+    upgradeOdds: { E: 0.9, D: 0.75, C: 0.6, B: 0.4, A: 0.25, S: 0.12, SS: 0.05 } as Record<string, number>,
+    /** Success = base × (floor + span × performance), capped. */
+    perfFloor: 0.7,
+    perfSpan: 0.6,
+    maxOdds: 0.98,
+    /** Grade-up cost: gold per target-grade magnitude point, plus stones. */
+    upgradeGoldPerM: 60,
+    upgradeStones: { D: 1, C: 2, B: 4, A: 8, S: 16, SS: 32, SSS: 64 } as Record<string, number>,
+    /** Ballista: the boss opens wounded by up to this fraction of its HP. */
+    ballistaMaxWound: 0.3,
+  },
+
+  /** The predatory layer — SIMULATED money only (Layer 3 §D3). */
+  shop: {
+    packages: {
+      pouch: { usd: 0.99, gems: 60, gold: 0, label: 'Pouch of Gems' },
+      satchel: { usd: 4.99, gems: 330, gold: 0, label: 'Satchel of Gems' },
+      chest: { usd: 19.99, gems: 1400, gold: 20000, label: 'Chest of Gems' },
+      vault: { usd: 49.99, gems: 3800, gold: 60000, label: "Master's Vault" },
+      hoard: { usd: 99.99, gems: 8000, gold: 150000, label: 'Dragon Hoard' },
+      monthly: { usd: 9.99, gems: 0, gold: 0, label: 'Monthly Package (30 days)' },
+      so_close: { usd: 2.99, gems: 300, gold: 0, label: "So close! Pity Bundle" },
+    } as Record<string, { usd: number; gems: number; gold: number; label: string }>,
+    /** Canon: 150 gems + 10,000 gold per day for 30 days. */
+    monthlyDays: 30,
+    monthlyGems: 150,
+    monthlyGold: 10000,
+    loginGems: 50,
+    /** The 7th consecutive day pays this bonus on top. */
+    streakBonusGems: 150,
+    /** Today-only offer: one package, this discount on its price. */
+    todayOnly: ['satchel', 'chest', 'vault'] as readonly string[],
+    todayDiscount: 0.4,
+    /** Frustration deal appears once the Advanced 4★ dry streak reaches this. */
+    frustrationPity: 20,
+    /** Whale-bait: after this Advanced dry streak, a 3★ may be SHOWN as 4★ with this chance. */
+    baitPity: 10,
+    baitChance: 0.25,
+    /** The goddess lies: the true star is revealed at this Master Level. */
+    revealMasterLevel: 25,
+  },
+
+  /** The Crack of Time and Space and the Ruins (Layer 3 §A1; canon ML20). */
+  rift: {
+    masterLevel: 20,
+    gold: 50000,
+    stones: 40,
+    /** Needs a living mage at or above this star (canon: a 4★ magician). */
+    mageStar: 4,
+    expeditionMs: 4 * 3_600_000,
+    maxTeam: 3,
+    /** Gems = base + perCp × team CP / 1000 (rounded). */
+    gemsBase: 5,
+    gemsPerKCp: 2,
+    /** Chance of a rare stone bundle on return. */
+    rareChance: 0.25,
+    rareStones: 3,
+  },
+
   economy: {
     /** floorGold(f) = goldPerFloor * f * worldMult; first clear ×firstClearMult. */
     goldPerFloor: 100,
@@ -237,7 +353,14 @@ export const TUNING = {
     /** Sanity is per-hero, 0..100; heroes summon at full. */
     sanityMax: 100,
     /** Facilities present at account creation. 0 = locked / not yet built. */
-    facilityStartLevels: { kitchen: 1, promotionChamber: 0, tacticalCenter: 1, trainingCenter: 0, transferStation: 0 },
+    facilityStartLevels: {
+      kitchen: 1,
+      promotionChamber: 0,
+      tacticalCenter: 1,
+      trainingCenter: 0,
+      transferStation: 0,
+      hallOfMagic: 0,
+    },
     /** Master Level — the lobby progression spine (Layer 3 §3.1). */
     master: {
       /** masterXpToNext(L) = round(coeff × L^exp); levels stop at `cap`. */
@@ -258,7 +381,7 @@ export const TUNING = {
       /** Master Level required to BUILD the Promotion Chamber (level 0 → 1). */
       chamberUnlockMasterLevel: 3,
       /** Master Level required for a facility's first build (level 0 → 1). Absent = ML1. */
-      unlockMasterLevel: { promotionChamber: 3, trainingCenter: 2, transferStation: 4 } as Record<string, number>,
+      unlockMasterLevel: { promotionChamber: 3, trainingCenter: 2, transferStation: 4, hallOfMagic: 6 } as Record<string, number>,
       /** upgradeCost(level) = round(baseCost × costGrowth^level), in gold. */
       baseCost: {
         kitchen: 800,
@@ -266,6 +389,7 @@ export const TUNING = {
         tacticalCenter: 1000,
         trainingCenter: 900,
         transferStation: 1100,
+        hallOfMagic: 1500,
       } as Record<string, number>,
       costGrowth: 1.5,
       /** Build timer per TARGET level (world-time ms): ~`durationPerLevel × toLevel`. */
@@ -472,7 +596,7 @@ export const TUNING = {
   },
 
   account: {
-    schemaVersion: 7,
+    schemaVersion: 8,
     /** Canon protagonist account id (display only). */
     defaultAccountId: '46631913',
     partySize: 5,

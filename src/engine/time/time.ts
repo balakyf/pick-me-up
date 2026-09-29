@@ -11,6 +11,8 @@ import { completePromotion } from '../promotion'
 import { worldDayIndex } from '../daily'
 import { addMasterXp } from '../master'
 import { completeTraining } from '../training'
+import { piAfterGap } from '../interference'
+import { expeditionHaul } from '../rift'
 import type { GameState, OwnedHero, HeroId, DailiesState, FacilityId } from '../types'
 
 /** 1 world-hour in world-time ms. World-time is plain ms, only dilated at the edge. */
@@ -48,6 +50,8 @@ export function advanceTime(state: GameState, nowWorld: number): GameState {
   const nextHeroes: Record<HeroId, OwnedHero> = {}
   let promotionsCompleted = 0
   let drillsCompleted = 0
+  let gems = state.gems
+  const materials = { ...state.materials }
   for (const key of Object.keys(state.heroes) as HeroId[]) {
     const hero = state.heroes[key]!
     if (!hero.alive) {
@@ -62,6 +66,13 @@ export function advanceTime(state: GameState, nowWorld: number): GameState {
     if (next.training !== null && next.training.completesAtWorld <= nowWorld) {
       next = completeTraining(next, state.facilities.trainingCenter.level)
       drillsCompleted++
+    }
+    // A Ruins expedition that has run its course comes home with its haul.
+    if (next.expedition && next.expedition.completesAtWorld <= nowWorld) {
+      const haul = expeditionHaul(next, state.seed)
+      gems += haul.gems
+      for (const [id, n] of Object.entries(haul.materials)) materials[id] = (materials[id] ?? 0) + n
+      next = { ...next, expedition: null }
     }
     nextHeroes[key] = next
   }
@@ -85,12 +96,14 @@ export function advanceTime(state: GameState, nowWorld: number): GameState {
       : state.dailies
 
   // Completed promotions, facility upgrades and training drills feed the Master-Level spine.
-  let meta = { ...state.meta, lastSeenAtWorld: nowWorld }
+  // Probability Interference: the Hall of Magic hums; a long absence lets the world fade.
+  const pi = piAfterGap(state.meta.pi ?? 0, nowWorld - state.meta.lastSeenAtWorld, state.facilities.hallOfMagic?.level ?? 0)
+  let meta = { ...state.meta, lastSeenAtWorld: nowWorld, pi }
   const masterGain =
     promotionsCompleted * TUNING.lobby.master.xpPerPromotion +
     facilitiesCompleted * TUNING.lobby.master.xpPerFacilityUpgrade +
     drillsCompleted * TUNING.lobby.master.xpPerTrainingDrill
   if (masterGain > 0) meta = addMasterXp(meta, masterGain)
 
-  return { ...state, heroes: nextHeroes, facilities: nextFacilities, dailies, meta }
+  return { ...state, gems, materials, heroes: nextHeroes, facilities: nextFacilities, dailies, meta }
 }

@@ -34,6 +34,12 @@ function strongHero(id = 'h_str'): OwnedHero {
     equipment: { weapon: null, armor: null, accessory: null },
     training: null,
     engraving: null,
+    favor: 35,
+    bondTier: 1,
+    ip: 0,
+    gift: { last: null, streak: 0 },
+    blessed: false,
+    expedition: null,
   }
 }
 

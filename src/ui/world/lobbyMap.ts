@@ -16,6 +16,7 @@ export const TILE = 16
  *  k  kitchen tiles   t  tactical flagstones   p  promotion marble
  *  m  synthesis stone a  armory slate          d  daily-portal stone
  *  r  training-yard sand      x  transfer-station crystal floor
+ *  h  hall-of-magic star tiles (the Crack of Time opens here)
  */
 export const MAP_ROWS = [
   '#######################################',
@@ -31,18 +32,18 @@ export const MAP_ROWS = [
   'G.........~~~~~~~~~~..........rrrrrrrr#',
   '#.........~~~~~~~~~~.........#rrrrrrrr#',
   '#............................#rrrrrrrr#',
-  '####..######....######..###############',
-  '#mmmmmmmm#aaaaaaaaaa#dddddddd##########',
-  '#mmmmmmmm#aaaaaaaaaa#dddddddd##########',
-  '#mmmmmmmm#aaaaaaaaaa#dddddddd##########',
-  '#mmmmmmmm#aaaaaaaaaa#dddddddd##########',
+  '####..######....######..#########h#####',
+  '#mmmmmmmm#aaaaaaaaaa#dddddddd#hhhhhhhh#',
+  '#mmmmmmmm#aaaaaaaaaa#dddddddd#hhhhhhhh#',
+  '#mmmmmmmm#aaaaaaaaaa#dddddddd#hhhhhhhh#',
+  '#mmmmmmmm#aaaaaaaaaa#dddddddd#hhhhhhhh#',
   '#######################################',
 ] as const
 
 export const MAP_W = MAP_ROWS[0].length
 export const MAP_H = MAP_ROWS.length
 
-export type TileChar = '#' | 'G' | '.' | '~' | 'k' | 't' | 'p' | 'm' | 'a' | 'd' | 'r' | 'x'
+export type TileChar = '#' | 'G' | '.' | '~' | 'k' | 't' | 'p' | 'm' | 'a' | 'd' | 'r' | 'x' | 'h'
 
 export function tileAt(x: number, y: number): TileChar {
   if (x < 0 || y < 0 || x >= MAP_W || y >= MAP_H) return '#'
@@ -67,6 +68,7 @@ export type RoomId =
   | 'daily'
   | 'training'
   | 'transfer'
+  | 'magic'
 
 export interface Rect {
   x: number
@@ -85,6 +87,7 @@ export const ROOMS: Record<RoomId, Rect> = {
   daily: { x: 21, y: 14, w: 8, h: 4 },
   training: { x: 30, y: 7, w: 8, h: 6 },
   transfer: { x: 30, y: 1, w: 8, h: 5 },
+  magic: { x: 30, y: 14, w: 8, h: 4 },
 }
 
 export function roomAt(x: number, y: number): RoomId | null {
@@ -108,6 +111,9 @@ export type PlaceId =
   | 'synthesis'
   | 'armory'
   | 'daily'
+  | 'shop'
+  | 'hallOfMagic'
+  | 'rift'
   | 'summon'
   | 'roster'
   | 'party'
@@ -138,6 +144,9 @@ export type PropKind =
   | 'dummy'
   | 'drillBoard'
   | 'plinth'
+  | 'orrery'
+  | 'rift'
+  | 'stall'
 
 export interface Prop {
   kind: PropKind
@@ -194,6 +203,11 @@ export const PROPS: Prop[] = [
   { kind: 'torch', x: 31, y: 0, w: 1, h: 1 },
   { kind: 'torch', x: 36, y: 0, w: 1, h: 1 },
   { kind: 'banner', x: 34, y: 0, w: 1, h: 1 },
+  // Hall of Magic (south of the yard): the orrery and the Crack of Time and Space
+  { kind: 'orrery', x: 31, y: 15, w: 2, h: 1, place: 'hallOfMagic' },
+  { kind: 'rift', x: 35, y: 15, w: 2, h: 1, place: 'rift' },
+  // Isel's shop counter in the hall
+  { kind: 'stall', x: 24, y: 8, w: 2, h: 1, place: 'shop' },
   // Synthesis Chamber
   { kind: 'cauldron', x: 4, y: 15, w: 2, h: 1, place: 'synthesis' },
   { kind: 'shelves', x: 1, y: 14, w: 2, h: 1 },
@@ -216,6 +230,9 @@ export const PLACE_LABEL: Record<PlaceId, string> = {
   synthesis: 'Synthesis Chamber',
   armory: 'Armory',
   daily: 'Daily Dungeon',
+  shop: 'Gem Shop',
+  hallOfMagic: 'Hall of Magic',
+  rift: 'Crack of Time',
   summon: 'Mobius Summon',
   roster: 'Roster',
   party: 'Party',

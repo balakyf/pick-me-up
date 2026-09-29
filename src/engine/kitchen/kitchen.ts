@@ -15,6 +15,7 @@
  */
 
 import { TUNING } from '../tuning'
+import { withFavor } from '../favor'
 import type { GameState, OwnedHero, HeroId, DerivedStats } from '../types'
 
 const MAX = TUNING.lobby.sanityMax
@@ -81,7 +82,10 @@ export function banquet(state: GameState): GameState {
   const nextHeroes: Record<HeroId, OwnedHero> = {}
   for (const key of Object.keys(state.heroes) as HeroId[]) {
     const hero = state.heroes[key]!
-    nextHeroes[key] = hero.alive ? { ...hero, sanity: clampSanity(hero.sanity + B.restore) } : hero
+    // A shared table also warms the roster to the Master a little (Layer 3 §C1).
+    nextHeroes[key] = hero.alive
+      ? withFavor({ ...hero, sanity: clampSanity(hero.sanity + B.restore) }, hero.favor + TUNING.favor.perBanquet)
+      : hero
   }
 
   return { ...state, gold: state.gold - B.gold, heroes: nextHeroes }

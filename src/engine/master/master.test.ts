@@ -1,12 +1,15 @@
 import { describe, it, expect } from 'vitest'
 import { masterXpToNext, addMasterXp } from './master'
 import { TUNING } from '../tuning'
+import { createAccount } from '../account'
 import type { MetaState } from '../types'
+
+const BASE_META = createAccount(1).meta
 
 const M = TUNING.lobby.master
 
 function meta(masterLevel: number, masterXp: number): MetaState {
-  return { masterLevel, masterXp, lastSeenAtWorld: 0 }
+  return { ...BASE_META, masterLevel, masterXp, lastSeenAtWorld: 0 }
 }
 
 describe('masterXpToNext', () => {
@@ -48,7 +51,7 @@ describe('addMasterXp', () => {
   })
 
   it('preserves unrelated meta fields (lastSeenAtWorld)', () => {
-    const m: MetaState = { masterLevel: 1, masterXp: 0, lastSeenAtWorld: 777 }
+    const m: MetaState = { ...BASE_META, masterLevel: 1, masterXp: 0, lastSeenAtWorld: 777 }
     expect(addMasterXp(m, 5).lastSeenAtWorld).toBe(777)
   })
 

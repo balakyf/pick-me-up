@@ -152,6 +152,14 @@ function floorTile(b: Bitmap, ch: TileChar, tx: number, ty: number) {
       for (let i = 0; i < 3; i++) set(b, ox + r.int(0, 15), oy + r.int(0, 15), C.sandD)
       if (r.chance(0.2)) set(b, ox + r.int(2, 13), oy + r.int(2, 13), C.sandL)
       break
+    case 'h':
+      // hall-of-magic star tiles: deep blue with gold constellations
+      rect(b, ox, oy, TILE, TILE, C.crystalM)
+      hline(b, ox, oy + 15, TILE, C.wallTop)
+      vline(b, ox + 15, oy, TILE, C.wallTop)
+      if ((tx * 7 + ty * 3) % 5 === 0) set(b, ox + 4 + ((tx + ty) % 8), oy + 5, C.marbleGold)
+      if (r.chance(0.3)) set(b, ox + r.int(2, 13), oy + r.int(2, 13), C.marbleGold)
+      break
     case 'x':
       // transfer-station crystal floor: dark hex-ish tiles with faint glowing seams
       rect(b, ox, oy, TILE, TILE, C.crystalM)

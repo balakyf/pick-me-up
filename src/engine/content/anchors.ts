@@ -126,6 +126,8 @@ export const ANCHORS: Record<number, AnchorDef> = {
     timer: null,
     // The raid boss's first-clear drop: the Book of Reverse Heaven (6★→7★, §3.4).
     firstClearDrops: { bookOfReverseHeaven: 1 },
+    // Canon: the tower ballista breaks Halgiraf's scales (Layer 3 §C2 minigame).
+    minigame: 'ballista',
     waves: [
       [
         { templateId: 'soldier', count: 3 },
@@ -187,6 +189,7 @@ export const ANCHORS: Record<number, AnchorDef> = {
     missionType: 'Capture',
     objectives: [{ kind: 'acquire', targetTag: 'blue_jewel' }],
     timer: null,
+    minigame: 'ballista',
     waves: [
       [
         { templateId: 'merman', count: 3 },
@@ -394,6 +397,7 @@ export const ANCHORS: Record<number, AnchorDef> = {
     missionType: 'Conquest',
     objectives: [{ kind: 'defeat', targetTag: 'fragment_colossus' }],
     timer: null,
+    minigame: 'ballista',
     waves: [
       [
         { templateId: 'fragment_warden', count: 2 },

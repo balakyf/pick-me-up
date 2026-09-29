@@ -9,6 +9,7 @@ import { EVENT_OPTION_LABEL, merchantPrice, treasureGold, type EventOutcome } fr
 import { BattleScene } from './battle/BattleScene'
 import { ResultsScreen } from './screens'
 import { HeroCard } from './HeroCard'
+import { TimingGame } from './metaPanels'
 
 const MAX_FLOOR = TUNING.tower.sliceTopFloor
 const EV = TUNING.events
@@ -151,7 +152,8 @@ function EventOutcomeCard({
 
 /** The Chronicle: hidden objectives found (with their lore), and what is still unknown. */
 function Chronicle({ state }: { state: GameState }) {
-  const sight = state.meta.masterLevel >= EV.hiddenHintMasterLevel
+  const masterSight = state.meta.masterLevel >= EV.hiddenHintMasterLevel
+  const revealed = new Set(state.meta.revealedHidden)
   const found = new Set(state.tower.hiddenFound)
   return (
     <div className="pframe chronicle">
@@ -169,13 +171,33 @@ function Chronicle({ state }: { state: GameState }) {
               <b>{h.name}</b> — <i>{h.lore}</i>
             </span>
           ) : (
-            <span className="muted">{sight ? `??? — ${h.hint}` : '??? (a hidden objective)'}</span>
+            <span className="muted">{masterSight || revealed.has(h.id) ? `??? — ${h.hint}` : '??? (a hidden objective)'}</span>
           )}
         </div>
       ))}
-      {!sight && <div className="muted" style={{ fontSize: 13 }}>From Master Lv {EV.hiddenHintMasterLevel} you sense what the floors are hiding.</div>}
+      {!masterSight && (
+        <div className="muted" style={{ fontSize: 13 }}>
+          From Master Lv {EV.hiddenHintMasterLevel} you sense what the floors are hiding — or a Devoted hero can reveal one.
+        </div>
+      )}
     </div>
   )
+}
+
+/** A Devoted hero's peek: the current floor's enemies and what they're weak to. */
+function PeekLine({ preview }: { preview: ReturnType<typeof buildEncounter> }) {
+  const notes = new Set<string>()
+  for (const w of preview.waves) {
+    for (const u of w.units) {
+      for (const k of u.keywords) {
+        if (k.kind === 'vulnerable') notes.add(`${u.name}: weak to ${k.element}`)
+        if (k.kind === 'immune') notes.add(`${u.name}: immune to ${k.damageType}`)
+        if (k.kind === 'phased') notes.add(`${u.name}: shielded until its guard falls`)
+        if (k.kind === 'enrage') notes.add(`${u.name}: enrages after ${k.afterTick} ticks`)
+      }
+    }
+  }
+  return <div className="peek-line">👁 {notes.size > 0 ? [...notes].join(' · ') : 'No special weakness — just steel and nerve.'}</div>
 }
 
 export function TowerScreen({ state, store }: { state: GameState; store: Store }) {
@@ -185,6 +207,7 @@ export function TowerScreen({ state, store }: { state: GameState; store: Store }
   const [outcome, setOutcome] = useState<EventOutcome | null>(null)
   const [replay, setReplay] = useState<CombatLog | null>(null)
   const [err, setErr] = useState<string | null>(null)
+  const [aiming, setAiming] = useState(false)
   const [openActs, setOpenActs] = useState<Set<string>>(() => new Set([actForFloor(state.tower.currentFloor).id]))
 
   const current = state.tower.currentFloor
@@ -207,9 +230,18 @@ export function TowerScreen({ state, store }: { state: GameState; store: Store }
 
   function enter() {
     if (!deployable || current > MAX_FLOOR || event !== null) return
+    // Anchors with a mission minigame (the ballista) are played first.
+    if (ANCHORS[current]?.minigame === 'ballista') {
+      setAiming(true)
+      return
+    }
+    fight(undefined)
+  }
+  function fight(ballista: number | undefined) {
+    setAiming(false)
     const pre = store.getState()!
-    const { result } = attemptFloorWithResult(pre) // capture the log for playback
-    store.dispatch({ type: 'ATTEMPT_FLOOR' }) // advance the store identically (deterministic)
+    const { result } = attemptFloorWithResult(pre, undefined, ballista) // capture the log for playback
+    store.dispatch({ type: 'ATTEMPT_FLOOR', ballista }) // advance the store identically (deterministic)
     setPending(result)
     setCombat(result.result.log)
   }
@@ -320,7 +352,9 @@ export function TowerScreen({ state, store }: { state: GameState; store: Store }
                   {mission}
                   {enemyCount !== null && ` · ${enemyCount} enemies`}
                   {f === current && state.tower.attemptIndex > 0 && ` · attempt ${state.tower.attemptIndex + 1}`}
+                  {anchor?.minigame === 'ballista' && ' · 🎯 ballista'}
                 </div>
+                {isCurrent && preview && state.meta.peekedFloors.includes(f) && <PeekLine preview={preview} />}
               </div>
               {isCurrent && f <= MAX_FLOOR && (
                 <button className="btn primary" onClick={enter} disabled={!deployable || event !== null}>
@@ -334,6 +368,16 @@ export function TowerScreen({ state, store }: { state: GameState; store: Store }
 
       <Chronicle state={state} />
 
+      {aiming && (
+        <TimingGame
+          title="The Ballista"
+          verb="Fire"
+          skill={state.meta.skill.ballista}
+          hint="Loose the bolt as the sight crosses the heart. A true shot breaks the scales before the fight begins."
+          onDone={fight}
+          onCancel={() => setAiming(false)}
+        />
+      )}
       {combat && <BattleScene log={combat} state={state} onDone={combatDone} />}
       {showResult && pending && <ResultsScreen result={pending} state={state} onContinue={resultDone} />}
       {outcome && !replay && <EventOutcomeCard outcome={outcome} onReplay={setReplay} onClose={() => setOutcome(null)} />}

@@ -50,6 +50,9 @@ export const PROP_FRAMES: Record<PropKind, number> = {
   dummy: 1,
   drillBoard: 1,
   plinth: 4,
+  orrery: 4,
+  rift: 4,
+  stall: 1,
 }
 
 const STONE = ramp('#4a4452', '#6e6678', '#8e869a')
@@ -477,6 +480,58 @@ function plinth(f: number): PropSprite {
 
 const WHITE_PX = hex('#fff6e0')
 
+/** Plot an ellipse outline of radii (rx, ry) around (cx, cy). */
+function ring(b: Bitmap, cx: number, cy: number, rx: number, ry: number, c: number) {
+  for (let i = 0; i < 48; i++) {
+    const t = (i / 48) * Math.PI * 2
+    set(b, cx + Math.round(rx * Math.cos(t)), cy + Math.round(ry * Math.sin(t)), c)
+  }
+}
+
+/** Hall of Magic: a brass orrery, its rings turning. */
+function orrery(f: number): PropSprite {
+  const b = createBitmap(32, 30)
+  rect(b, 12, 22, 8, 7, WOOD.d) // stand
+  hline(b, 9, 28, 14, WOOD.m)
+  ring(b, 16, 12, 12, 4, GOLD.m)
+  ring(b, 16, 12, 4, 9, GOLD.d)
+  ellipse(b, 13, 9, 6, 6, hex('#7ae0ff')) // the world at the centre
+  const t = ((f % 4) / 4) * Math.PI * 2
+  set(b, 16 + Math.round(12 * Math.cos(t)), 12 + Math.round(4 * Math.sin(t)), hex('#fff6a0')) // an orbiting star
+  return { bmp: outline(b, INK), dx: 0, dy: -14 }
+}
+
+/** The Crack of Time and Space: a jagged, glowing tear in the air. */
+function rift(f: number): PropSprite {
+  const b = createBitmap(32, 36)
+  const glow = [hex('#b87aff'), hex('#d8a8ff'), hex('#ff7aff'), hex('#d8a8ff')][f % 4]!
+  const xs = [16, 13, 18, 12, 19, 14, 17, 15, 16]
+  for (let i = 0; i < xs.length - 1; i++) {
+    for (let y = i * 4; y < (i + 1) * 4; y++) {
+      const x = xs[i]! + Math.round(((xs[i + 1]! - xs[i]!) * (y - i * 4)) / 4)
+      hline(b, x - 2, y, 5, hex('#1a0a2a'))
+      set(b, x, y, glow)
+    }
+  }
+  for (let i = 0; i < 6; i++) set(b, 6 + ((i * 7 + f * 3) % 20), 4 + ((i * 11 + f) % 28), glow) // motes
+  return { bmp: outline(b, hex('#3a1a5a')), dx: 0, dy: -20 }
+}
+
+/** Isel's shop counter: bright banners and a sign. */
+function stall(): PropSprite {
+  const b = createBitmap(32, 26)
+  rect(b, 1, 12, 30, 13, WOOD.m)
+  hline(b, 1, 12, 30, WOOD.l)
+  vline(b, 2, 0, 12, WOOD.d)
+  vline(b, 29, 0, 12, WOOD.d)
+  for (let x = 2; x < 30; x += 4) rect(b, x, 1, 4, 5, (x / 4) % 2 ? hex('#e8553b') : hex('#fff6e0')) // awning stripes
+  rect(b, 10, 15, 12, 6, hex('#2a1e4a'))
+  set(b, 13, 17, hex('#6ad8e8')) // gem
+  set(b, 14, 18, hex('#6ad8e8'))
+  set(b, 18, 17, GOLD.l)
+  return { bmp: outline(b, INK), dx: 0, dy: -10 }
+}
+
 const DRAW: Record<PropKind, (f: number) => PropSprite> = {
   hearth,
   table,
@@ -501,6 +556,9 @@ const DRAW: Record<PropKind, (f: number) => PropSprite> = {
   dummy,
   drillBoard,
   plinth,
+  orrery,
+  rift,
+  stall,
 }
 
 export function drawProp(kind: PropKind, frame = 0): PropSprite {

@@ -1,4 +1,6 @@
-import type { OwnedHero } from '../engine/types'
+import type { OwnedHero, Star } from '../engine/types'
+import { baitRevealed, shownStar } from '../engine/shop'
+import { favorTierName } from '../engine/favor'
 import { deriveStatsForHero, levelCapForStar } from '../engine/stats'
 import { Stars, ElementBadge, ClassBadge, Portrait, STAR_COLOR, cpOf, gradeLetters, SkillList, EngravingBadge } from './bits'
 
@@ -7,9 +9,13 @@ interface Props {
   onClick?: () => void
   selected?: boolean
   showStats?: boolean
+  /** For the whale-bait display star (the lie holds until Master Lv 25). */
+  masterLevel?: number
 }
 
-export function HeroCard({ hero, onClick, selected, showStats }: Props) {
+export function HeroCard({ hero, onClick, selected, showStats, masterLevel = 1 }: Props) {
+  const star = shownStar(hero, masterLevel) as Star
+  const lied = hero.displayStar !== undefined && baitRevealed(hero, masterLevel)
   const cap = levelCapForStar(hero.star)
   const dead = !hero.alive
   const cls = ['card', onClick ? 'click' : '', selected ? 'sel' : '', dead ? 'dead' : ''].filter(Boolean).join(' ')
@@ -18,13 +24,13 @@ export function HeroCard({ hero, onClick, selected, showStats }: Props) {
 
   return (
     <div className={cls} onClick={onClick}>
-      <div className="rarity-strip" style={{ background: STAR_COLOR[hero.star] }} />
+      <div className="rarity-strip" style={{ background: STAR_COLOR[star] }} />
       <Portrait hero={hero} />
       <div className="row">
         <div className="hname">{hero.name}</div>
       </div>
       <div className="row" style={{ marginTop: 4 }}>
-        <Stars star={hero.star} />
+        <Stars star={star} />
         <span className="muted">
           Lv {hero.xp.level}
           <span style={{ opacity: 0.6 }}>/{cap}</span>
@@ -33,7 +39,9 @@ export function HeroCard({ hero, onClick, selected, showStats }: Props) {
       <div className="hmeta">
         <ClassBadge heroClass={hero.heroClass} />
         <ElementBadge element={hero.element} />
+        {hero.alive && <span className="favor-chip" title={`Favorability ${hero.favor}/100`}>♥ {favorTierName(hero.favor)}</span>}
       </div>
+      {lied && <div className="goddess-lied">the goddess lied — shown {hero.displayStar}★, truly {hero.star}★</div>}
       <div className="row" style={{ marginTop: 10 }}>
         <span className="muted" title="Growth grades (STR/AGI/VIT/INT/WIL)">
           {grades.STR}/{grades.AGI}/{grades.VIT}/{grades.INT}/{grades.WIL}

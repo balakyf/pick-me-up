@@ -248,3 +248,47 @@ describe('App smoke — the full climb', () => {
     expect(container.textContent).toContain('Onward')
   })
 })
+
+describe('App smoke — the meta-economy', () => {
+  it('the Gem Shop opens from the Menu, says money is simulated, and pays the daily login', () => {
+    mount()
+    act(() => {
+      getStore().dispatch({ type: 'NEW_ACCOUNT', seed: 36, now: 0 })
+    })
+    openPlace('Gem Shop')
+    expect(container.textContent).toContain('money here is simulated')
+    expect(container.textContent).toContain('Monthly Package')
+    const gems = getStore().getState()!.gems
+    clickButton('Claim +50')
+    expect(getStore().getState()!.gems).toBe(gems + 50)
+  })
+
+  it('the Hall of Magic and the Crack of Time open, gated by PI and Master Level', () => {
+    mount()
+    act(() => {
+      getStore().dispatch({ type: 'NEW_ACCOUNT', seed: 37, now: 0 })
+    })
+    openPlace('Hall of Magic')
+    expect(container.textContent).toContain('Probability Interference')
+    closeWindow()
+    openPlace('Crack of Time')
+    expect(container.textContent).toContain('Opens at Master Lv 20')
+  })
+
+  it('the Roster shows a hero’s bond: favor, gifts and (locked) interventions', () => {
+    mount()
+    act(() => {
+      getStore().dispatch({ type: 'NEW_ACCOUNT', seed: 38, now: 0 })
+    })
+    openPlace('Roster')
+    const card = container.querySelector('.card.click') as HTMLElement
+    act(() => {
+      card.click()
+    })
+    expect(container.textContent).toContain('Neutral')
+    expect(container.textContent).toContain('Honey Cake')
+    expect(container.textContent).toContain('Only a Devoted hero')
+    clickButton('Honey Cake')
+    expect(Object.values(getStore().getState()!.heroes)[0]!.gift.last).toBe('honey_cake')
+  })
+})

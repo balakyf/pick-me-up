@@ -544,6 +544,12 @@ function promotableState(seed = 5): GameState {
     equipment: { weapon: null, armor: null, accessory: null },
     training: null,
     engraving: null,
+    favor: 35,
+    bondTier: 1,
+    ip: 0,
+    gift: { last: null, streak: 0 },
+    blessed: false,
+    expedition: null,
   }
   return { ...acct, heroes: { [hero.id]: hero }, materials: { promotionStone: 999, attrStone_fire: 999 }, gems: 200 }
 }
@@ -608,6 +614,12 @@ function dailyReadyState(seed = 5): GameState {
     equipment: { weapon: null, armor: null, accessory: null },
     training: null,
     engraving: null,
+    favor: 35,
+    bondTier: 1,
+    ip: 0,
+    gift: { last: null, streak: 0 },
+    blessed: false,
+    expedition: null,
   }
   return {
     ...acct,
@@ -830,5 +842,20 @@ describe('reduce — RESOLVE_EVENT', () => {
     const r = resolveEventWithResult(s0, 'treasure')
     expect(r.state).toEqual(s1)
     expect(r.outcome.option).toBe('treasure')
+  })
+})
+
+describe('reduce — Layer 3 commands', () => {
+  it('route gifts, logins, packages and the crack through the reducer', () => {
+    const base = createAccount(9)
+    const id = Object.keys(base.heroes)[0] as HeroId
+    let s = reduce({ ...base, gold: 10_000 }, { type: 'GIVE_GIFT', heroId: id, giftId: 'honey_cake' })
+    expect(s.heroes[id]!.gift.last).toBe('honey_cake')
+    s = reduce(s, { type: 'CLAIM_LOGIN' })
+    expect(s.meta.login.streak).toBe(1)
+    s = reduce(s, { type: 'BUY_PACKAGE', packageId: 'pouch' })
+    expect(s.meta.wallet.purchases.pouch).toBe(1)
+    expect(() => reduce(s, { type: 'OPEN_CRACK' })).toThrow(/Master Lv 20/)
+    expect(() => reduce(s, { type: 'INTERVENE', heroId: id, action: 'peek' })).toThrow(/Devoted/)
   })
 })

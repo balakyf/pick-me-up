@@ -41,7 +41,13 @@ export type WorldGrade = 'C' | 'B' | 'A' | 'S'
 
 export type HeroOrigin = 'procedural' | 'cameo'
 
-export type FacilityId = 'kitchen' | 'promotionChamber' | 'tacticalCenter' | 'trainingCenter' | 'transferStation'
+export type FacilityId =
+  | 'kitchen'
+  | 'promotionChamber'
+  | 'tacticalCenter'
+  | 'trainingCenter'
+  | 'transferStation'
+  | 'hallOfMagic'
 
 /** Material bucket key, e.g. 'promotionStone', 'attrStone_fire', 'rankMaterial'. */
 export type MaterialId = string
@@ -226,6 +232,8 @@ export interface EquipmentItem {
   keywords?: KeywordTag[]
   /** A bound exclusive weapon (4★+ summons): only this hero may equip it. */
   exclusiveTo?: HeroId
+  /** Blacksmithing attempts made on this item (seeds its next roll). */
+  refines?: number
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -299,6 +307,20 @@ export interface OwnedHero extends Omit<Hero, 'skillIds'> {
   training: TrainingDrill | null
   /** The hero's engraving/imprint (4★+ identity layer); null when none (schema v6). */
   engraving: HeroEngraving | null
+  /** Favorability 0..100 (Layer 3 §C1; schema v8). */
+  favor: number
+  /** Highest favor tier ever reached (0 Wary … 4 Bonded) — IP milestones pay once. */
+  bondTier: number
+  /** Intervention Points (Layer 3 §D2). */
+  ip: number
+  /** The last gift given and how many times in a row (repeat gifts decay). */
+  gift: { last: string | null; streak: number }
+  /** Whale-bait inflation: the star the summon SHOWED (engine always uses `star`). */
+  displayStar?: Star
+  /** Guarantee an action: the next tower battle's first strike lands ×2. */
+  blessed: boolean
+  /** Away on a Ruins expedition until this world-time; null when home. */
+  expedition: { completesAtWorld: number } | null
 }
 
 /** A Training Center drill: refine an owned skill, or learn a trainable one. */
@@ -402,6 +424,24 @@ export interface MetaState {
   masterXp: number
   /** World-time ms of the last advanceTime() catch-up. */
   lastSeenAtWorld: number
+  /** Probability Interference — passive, account-wide, never spent (Layer 3 §D1; schema v8). */
+  pi: number
+  /** Daily login streak (FOMO: a missed world-day resets it). */
+  login: { lastDay: number; streak: number }
+  /** Monthly package: days of the daily claim left, and the last day claimed. */
+  monthly: { daysLeft: number; lastClaimDay: number } | null
+  /** Simulated real-money wallet — NO real payment ever happens. */
+  wallet: { spentUsd: number; purchases: Record<string, number> }
+  /** The Master's minigame skills (auto-resolve performance), 0..1. */
+  skill: { blacksmith: number; ballista: number }
+  /** The Crack of Time and Space is open (ML20+). */
+  crackOpen: boolean
+  /** Hidden objectives revealed by an intervention (ids). */
+  revealedHidden: string[]
+  /** Floors whose weakness an intervention revealed. */
+  peekedFloors: number[]
+  /** Nudge probability: the next Normal summon rolls its star twice. */
+  nudge: boolean
 }
 
 export interface DailiesState {
@@ -502,6 +542,8 @@ export interface CombatUnit {
   sourceHeroId?: HeroId
   /** Hero Sanity (0..100) carried in for the low-Sanity panic check; absent for enemies. */
   sanity?: number
+  /** A Wary hero ignores the Master's focus directive (Layer 3 §C1). */
+  defiant?: boolean
   /** Stable enemy template id for Defeat(target) missions; absent for heroes. */
   targetTag?: string
   /** A mission NPC on the hero side: targetable, never acts, not part of the party. */
@@ -657,6 +699,8 @@ export interface FloorResult {
   loopRollback: boolean
   /** This attempt cleared F90: the world ends. */
   worldEnded: boolean
+  /** Heroes who refused to deploy (Wary and broken — Layer 3 rebellion). */
+  refusedHeroIds: HeroId[]
   result: BattleResult
 }
 
@@ -725,6 +769,8 @@ export interface AnchorDef {
   allies?: AnchorAllySpec[]
   /** Materials granted on the FIRST clear only (e.g. F20's Book of Reverse Heaven). */
   firstClearDrops?: Record<MaterialId, number>
+  /** A mission minigame the Master can play before the fight (Layer 3 §C2). */
+  minigame?: 'ballista'
 }
 
 export type SkillRegistry = Record<string, SkillDef>
@@ -741,6 +787,8 @@ export interface StoragePort {
 
 export type SummonPool = 'normal' | 'advanced'
 
+export type InterventionId = 'reveal' | 'peek' | 'nudge' | 'guarantee'
+
 /** A player-chosen Salvage rescue. */
 export type RescueChoice = { kind: 'skill'; skillId: string } | { kind: 'grade'; attr: AttrKey }
 
@@ -749,7 +797,7 @@ export type Command =
   /** Mobius Summon: Normal (gold) or Advanced (gems); a 10-pull is discounted on Advanced. */
   | { type: 'SUMMON'; pool?: SummonPool; count?: 1 | 10 }
   | { type: 'SET_PARTY'; slots: (HeroId | null)[]; lines: Line[] }
-  | { type: 'ATTEMPT_FLOOR'; focus?: FocusDirective }
+  | { type: 'ATTEMPT_FLOOR'; focus?: FocusDirective; ballista?: number }
   /** Explicit world-time catch-up; advances the clock with no other state change. */
   | { type: 'TICK' }
   /** Kitchen Banquet: spend gold to restore Sanity across the living roster. */
@@ -779,6 +827,20 @@ export type Command =
   | { type: 'FUSE_SKILL'; heroId: HeroId; result: string }
   /** Resolve the open event floor with one of its options. */
   | { type: 'RESOLVE_EVENT'; option: string }
+  /** Give a hero a gift (Layer 3 §C1). */
+  | { type: 'GIVE_GIFT'; heroId: HeroId; giftId: string }
+  /** Spend a Devoted+ hero's Intervention Points. */
+  | { type: 'INTERVENE'; heroId: HeroId; action: InterventionId }
+  /** Blacksmithing: try to raise an item's grade (performance 0..1 from the minigame; omitted = auto). */
+  | { type: 'UPGRADE_EQUIPMENT'; itemId: EquipmentId; performance?: number }
+  /** Simulated purchase of a gem package (no real money). */
+  | { type: 'BUY_PACKAGE'; packageId: string }
+  | { type: 'CLAIM_LOGIN' }
+  | { type: 'CLAIM_MONTHLY' }
+  /** Open the Crack of Time and Space (ML20). */
+  | { type: 'OPEN_CRACK' }
+  /** Send 1–3 heroes on a Ruins expedition through the rift. */
+  | { type: 'DISPATCH_RUINS'; heroIds: HeroId[] }
   /** Equipment (Layer 1 §5): forge a graded item for a slot at the Smithy. */
   | { type: 'CRAFT_EQUIPMENT'; slot: EquipmentSlot }
   /** Equipment: equip an owned item onto a hero's matching slot. */

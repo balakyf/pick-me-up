@@ -186,7 +186,7 @@ export function App() {
           {view === 'tower' && <TowerScreen state={state} store={store} />}
           {view === 'summon' && <SummonScreen state={state} store={store} />}
           {view === 'party' && <PartyScreen state={state} store={store} />}
-          {view === 'roster' && <RosterScreen state={state} />}
+          {view === 'roster' && <RosterScreen state={state} store={store} />}
         </Scene>
       )}
 

@@ -28,6 +28,7 @@ import { TUNING } from '../tuning'
 import { rngFor, chance, pick } from '../rng'
 import { attrStoneId } from '../promotion'
 import { SKILLS } from '../content'
+import { withFavor } from '../favor'
 import type { GameState, OwnedHero, HeroId, MaterialId, GrowthGrades, RescueChoice } from '../types'
 
 const S = TUNING.lobby.synthesis
@@ -164,6 +165,7 @@ function validate(state: GameState, input: SynthesisInput): { survivor: OwnedHer
     if (h === undefined) throw new Error(`synthesize: unknown hero ${id}`)
     if (!h.alive) throw new Error(`synthesize: ${id} is not alive`)
     if (h.promotion !== null) throw new Error(`synthesize: ${id} is mid-promotion`)
+    if (h.expedition) throw new Error(`synthesize: ${id} is away in the Ruins`)
     if (id === input.survivorId) throw new Error('synthesize: survivor cannot be a sacrifice')
     sacrifices.push(h)
   }
@@ -250,7 +252,8 @@ export function synthesize(state: GameState, input: SynthesisInput, _nowWorld = 
     if (!h.alive) continue
     if (surv && h.id === surv.id) continue
     if (sacSet.has(h.id)) continue
-    heroes[h.id] = { ...h, sanity: Math.max(0, h.sanity - S.witnessSanityCost) }
+    // The roster witnesses the loss: Sanity and Favorability both fall (Layer 1 §4.1).
+    heroes[h.id] = withFavor({ ...h, sanity: Math.max(0, h.sanity - S.witnessSanityCost) }, h.favor - TUNING.favor.witnessLoss)
   }
 
   const slots = state.party.slots.map((id) => (id !== null && sacSet.has(id) ? null : id))

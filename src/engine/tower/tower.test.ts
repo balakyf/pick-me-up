@@ -79,6 +79,12 @@ function makeHero(o: HeroOpts): OwnedHero {
     equipment: { weapon: null, armor: null, accessory: null },
     training: null,
     engraving: null,
+    favor: 35,
+    bondTier: 1,
+    ip: 0,
+    gift: { last: null, streak: 0 },
+    blessed: false,
+    expedition: null,
   }
 }
 
@@ -110,13 +116,14 @@ function makeState(o: StateOpts = {}): GameState {
     gems: 0,
     materials: {},
     inventory: [],
-    meta: { masterLevel: 1, masterXp: 0, lastSeenAtWorld: 0 },
+    meta: { masterLevel: 1, masterXp: 0, lastSeenAtWorld: 0, pi: 0, login: { lastDay: -1, streak: 0 }, monthly: null, wallet: { spentUsd: 0, purchases: {} }, skill: { blacksmith: 0.4, ballista: 0.4 }, crackOpen: false, revealedHidden: [], peekedFloors: [], nudge: false },
     facilities: {
       kitchen: { level: 1, build: null },
       promotionChamber: { level: 0, build: null },
       tacticalCenter: { level: 1, build: null },
       trainingCenter: { level: 0, build: null },
       transferStation: { level: 0, build: null },
+      hallOfMagic: { level: 0, build: null },
     },
     dailies: { attemptsUsed: 0, lastResetWorldDay: 0 },
     heroes,
@@ -735,7 +742,10 @@ describe('playFloor — Master XP', () => {
     const state = makeState({ heroes: [crusher], currentFloor: 1, highestCleared: 0 })
     const { state: next, result } = playFloor(state)
     expect(result.firstClear).toBe(true)
-    expect(next.meta).toEqual(addMasterXp(state.meta, M.xpPerFloorClear + M.xpPerFirstClear))
+    const want = addMasterXp(state.meta, M.xpPerFloorClear + M.xpPerFirstClear)
+    expect([next.meta.masterLevel, next.meta.masterXp]).toEqual([want.masterLevel, want.masterXp])
+    // …and the clear strengthens the world's Probability Interference (Layer 3 §D1).
+    expect(next.meta.pi).toBe(state.meta.pi + TUNING.interference.perClear + TUNING.interference.perFirstClear)
   })
 
   it('awards only floor-clear Master XP on a repeat clear', () => {
@@ -743,7 +753,9 @@ describe('playFloor — Master XP', () => {
     const state = makeState({ heroes: [crusher], currentFloor: 1, highestCleared: 5 })
     const { state: next, result } = playFloor(state)
     expect(result.firstClear).toBe(false)
-    expect(next.meta).toEqual(addMasterXp(state.meta, M.xpPerFloorClear))
+    const want = addMasterXp(state.meta, M.xpPerFloorClear)
+    expect([next.meta.masterLevel, next.meta.masterXp]).toEqual([want.masterLevel, want.masterXp])
+    expect(next.meta.pi).toBe(state.meta.pi + TUNING.interference.perClear)
   })
 
   it('awards no Master XP on a wipe', () => {

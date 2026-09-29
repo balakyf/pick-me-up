@@ -522,3 +522,27 @@ span.arm-slot { padding: 2px 8px; border: 2px dashed #3e3478; color: var(--ink-f
 .tr-round.won { border-color: var(--good); }
 .tr-round.lost { border-color: var(--bad); }
 .tr-placing { font-weight: 600; color: var(--gold); }
+
+/* ── Layer 3: bonds, the shop, the minigames ────────────────────────────────── */
+.favor-chip { font-size: 12px; color: #ff9ab8; border: 2px solid #6a2a4a; padding: 0 5px; }
+.goddess-lied { font-size: 12px; color: var(--warn); margin-top: 4px; font-style: italic; }
+.roster-bond { max-width: 560px; margin: 18px auto 0; }
+.hero-bond { padding: 12px 14px; display: grid; gap: 6px; }
+.bond-head { display: flex; gap: 10px; align-items: center; }
+.bond-name { font-weight: 600; font-size: 18px; }
+.bond-gauge span { background: #ff7aa8; }
+.gift-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px; }
+.gift-btn { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; padding: 6px 8px; background: #120e2c; border: 2px solid #3e3478; color: var(--ink); font: inherit; font-size: 14px; cursor: pointer; }
+.gift-btn:hover:not(:disabled) { border-color: #ff7aa8; }
+.gift-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.gift-repeat { font-size: 11px; color: var(--warn); }
+.shop-note { font-size: 13px; color: var(--ink-dim); font-style: italic; margin-bottom: 8px; }
+.shop-deal { color: var(--warn); font-weight: 600; margin: 6px 0; }
+.drill-row.deal { border-color: var(--gold); }
+.today-tag { color: var(--gold); font-size: 12px; }
+.timing-game .tg-bar { position: relative; height: 22px; margin: 18px 0; background: #120e2c; border: 2px solid #3e3478; }
+.timing-game .tg-zone { position: absolute; left: 42%; width: 16%; top: 0; bottom: 0; background: rgba(242, 199, 92, 0.35); }
+.timing-game .tg-marker { position: absolute; top: -4px; bottom: -4px; width: 4px; margin-left: -2px; background: var(--gold); box-shadow: 0 0 6px var(--gold); }
+.timing-game .tg-actions { display: flex; gap: 8px; justify-content: center; align-items: center; flex-wrap: wrap; }
+.timing-game .tg-score { font-weight: 600; color: var(--gold); }
+.peek-line { font-size: 13px; color: #9ae8ff; margin-top: 2px; }

@@ -60,6 +60,7 @@ export function trainingRefusal(state: GameState, heroId: HeroId, skillId: strin
   if (!hero || !hero.alive) return 'That hero has fallen.'
   if (hero.promotion !== null) return 'That hero is being promoted.'
   if (hero.training !== null) return 'That hero is already training.'
+  if (hero.expedition) return 'That hero is away in the Ruins.'
   const mode = trainingMode(hero, skillId)
   if (mode === null) return 'The Training Center cannot teach that skill.'
   const def = SKILLS[skillId]!

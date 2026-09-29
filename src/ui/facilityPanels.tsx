@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import type { GameState, OwnedHero, FacilityId, HeroId, EquipmentSlot, Command, RescueChoice } from '../engine/types'
+import type { GameState, OwnedHero, FacilityId, HeroId, EquipmentSlot, Command, RescueChoice, EquipmentItem } from '../engine/types'
 import type { Store } from '../engine/store'
 import { TUNING } from '../engine/tuning'
 import { banquetWouldHelp } from '../engine/kitchen'
@@ -18,6 +18,9 @@ import { Portrait, SkillList } from './bits'
 import { SKILLS } from '../engine/content'
 import { maxTrainableGrade, drillXp, trainingOptions } from '../engine/training'
 import { skillProgressLine } from './screens'
+import { HallOfMagicInfo, RiftPanel, ShopPanel, TimingGame } from './metaPanels'
+import { upgradeCost as forgeUpgradeCost, upgradeOdds, upgradeRefusal } from '../engine/minigames'
+import { upgradeEquipmentWithResult } from '../engine/store'
 
 /**
  * Facility panels — the rules-facing half of the Lobby. The walkable world
@@ -512,6 +515,20 @@ const SLOT_GLYPH: Record<EquipmentSlot, string> = { weapon: '⚔', armor: '🛡'
 /** The Armory — the ML-gated Smithy forge plus per-hero equip/unequip (Layer 1 §5). */
 function Armory({ state, store }: { state: GameState; store: Store }) {
   const [err, setErr] = useState<string | null>(null)
+  const [anvil, setAnvil] = useState<EquipmentItem | null>(null)
+  const [forged, setForged] = useState<string | null>(null)
+
+  function strike(item: EquipmentItem, performance: number | undefined) {
+    setAnvil(null)
+    setErr(null)
+    try {
+      const r = upgradeEquipmentWithResult(store.getState(), item.id, performance, Date.now())
+      store.dispatch({ type: 'UPGRADE_EQUIPMENT', itemId: item.id, performance }, Date.now())
+      setForged(r.success ? `The hammer rings true — ${item.name} rose a grade!` : `The metal cracks. ${item.name} holds, but the materials are spent.`)
+    } catch (e) {
+      setErr(e instanceof Error ? e.message.replace(/^\w+: /, '') : 'The forge failed')
+    }
+  }
 
   if (!smithyUnlocked(state)) {
     return (
@@ -591,6 +608,42 @@ function Armory({ state, store }: { state: GameState; store: Store }) {
           )}
         </div>
       </div>
+
+      {/* Blacksmithing (Layer 3 §C2): raise an item's grade at the anvil. */}
+      <div className="syn-section">
+        <div className="syn-label">Anvil · raise a grade (failure keeps the item)</div>
+        <div className="drill-list">
+          {state.inventory.map((it) => {
+            const cost = forgeUpgradeCost(it)
+            const why = upgradeRefusal(state, it.id)
+            return (
+              <div key={it.id} className={`drill-row ${why ? 'off' : ''}`} title={why ?? undefined}>
+                <span className="skill-grade">{it.grade}</span>
+                <span className="drill-name">
+                  {SLOT_GLYPH[it.slot]} {it.name}
+                  {cost && ` · ${Math.round(upgradeOdds(it.grade, state.meta.skill.blacksmith) * 100)}%`}
+                </span>
+                <span className="muted">{cost ? `${cost.gold.toLocaleString()} ◆ + ${cost.promotionStone} 🪨` : 'max'}</span>
+                <button className="btn sm" disabled={why !== null} onClick={() => setAnvil(it)}>
+                  ⚒ Forge
+                </button>
+              </div>
+            )
+          })}
+          {state.inventory.length === 0 && <span className="lr-empty">Nothing to refine yet.</span>}
+        </div>
+        {forged && <div className="lr-action-note">{forged}</div>}
+      </div>
+      {anvil && (
+        <TimingGame
+          title="Blacksmithing"
+          verb="Strike"
+          skill={state.meta.skill.blacksmith}
+          hint={`Strike when the marker crosses the glowing centre. Base odds ${Math.round(upgradeOdds(anvil.grade, 0.5) * 100)}%.`}
+          onDone={(p) => strike(anvil, p)}
+          onCancel={() => setAnvil(null)}
+        />
+      )}
 
       {/* Per-hero loadout — one control per slot: unequip what's worn, else equip the first free fit. */}
       <div className="syn-section">
@@ -871,6 +924,9 @@ export type PanelPlace =
   | 'synthesis'
   | 'armory'
   | 'daily'
+  | 'shop'
+  | 'hallOfMagic'
+  | 'rift'
 
 const BLURB: Record<PanelPlace, string> = {
   kitchen: 'A warm hearth and a long table. Heroes with frayed nerves come here to recover.',
@@ -881,6 +937,9 @@ const BLURB: Record<PanelPlace, string> = {
   synthesis: 'The vats bubble. Heroes who enter do not come out whole.',
   armory: 'The Smithy forge and the equipment racks.',
   daily: "A rift that opens onto a different dungeon each world-day.",
+  shop: "Isel's counter. Bright banners, limited offers, a smile that never reaches her eyes.",
+  hallOfMagic: 'Brass orreries turn slowly. The world’s Probability Interference is measured — and strengthened — here.',
+  rift: 'The air itself is cracked here. Beyond it: the Ruins, and other Masters’ worlds.',
 }
 
 /** The body of a facility window: rules UI for one place in the lobby. */
@@ -897,7 +956,8 @@ export function PlacePanel({ place, state, store }: { place: PanelPlace; state: 
         place === 'tacticalCenter' ||
         place === 'promotionChamber' ||
         place === 'trainingCenter' ||
-        place === 'transferStation') && (
+        place === 'transferStation' ||
+        place === 'hallOfMagic') && (
         <div className="lr-lvl-row">
           <span className="lr-lvl">
             {state.facilities[place].level === 0 ? 'Not built' : `Facility Lv ${state.facilities[place].level}`}
@@ -940,6 +1000,14 @@ export function PlacePanel({ place, state, store }: { place: PanelPlace; state: 
           <UpgradeControl state={state} store={store} facility="transferStation" />
         </>
       )}
+      {place === 'hallOfMagic' && (
+        <>
+          <HallOfMagicInfo state={state} />
+          <UpgradeControl state={state} store={store} facility="hallOfMagic" />
+        </>
+      )}
+      {place === 'rift' && <RiftPanel state={state} store={store} />}
+      {place === 'shop' && <ShopPanel state={state} store={store} />}
       {place === 'synthesis' && <SynthesisChamber state={state} store={store} />}
       {place === 'armory' && <Armory state={state} store={store} />}
       {place === 'daily' && <DailyPortal state={state} store={store} />}
