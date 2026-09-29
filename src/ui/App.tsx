@@ -76,6 +76,8 @@ function Scene({
 }
 
 function GameMenu({ store, onGo, onClose }: { store: Store; onGo: (p: PlaceId) => void; onClose: () => void }) {
+  // In-page confirmation (browser confirm() dialogs are blocked in embedded viewers).
+  const [confirmReset, setConfirmReset] = useState(false)
   return (
     <PixelWindow title="Menu" icon="☰" onClose={onClose}>
       <div className="menu-grid">
@@ -94,17 +96,27 @@ function GameMenu({ store, onGo, onClose }: { store: Store; onGo: (p: PlaceId) =
         >
           Debug · +10k ◆
         </button>
-        <button
-          className="pbtn danger"
-          onClick={() => {
-            if (confirm('Abandon this Master and start a new game? Your save will be erased.')) {
-              window.localStorage.removeItem('pmu.save.v1')
-              location.reload()
-            }
-          }}
-        >
-          New game
-        </button>
+        {confirmReset ? (
+          <span className="menu-confirm">
+            <span className="muted">Erase this Master’s save?</span>
+            <button className="pbtn ghost" onClick={() => setConfirmReset(false)}>
+              Keep
+            </button>
+            <button
+              className="pbtn danger"
+              onClick={() => {
+                window.localStorage.removeItem('pmu.save.v1')
+                location.reload()
+              }}
+            >
+              Erase
+            </button>
+          </span>
+        ) : (
+          <button className="pbtn danger" onClick={() => setConfirmReset(true)}>
+            New game
+          </button>
+        )}
       </div>
     </PixelWindow>
   )

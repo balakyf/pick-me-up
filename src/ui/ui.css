@@ -196,6 +196,7 @@ kbd {
 .menu-item:hover, .menu-item:focus-visible { border-color: #4a3e8e; background: #2a2258; }
 .menu-item:hover::after { content: '◀'; position: absolute; right: 8px; color: var(--gold); font-size: 12px; }
 .menu-icon { width: 22px; text-align: center; }
+.menu-confirm { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .menu-foot { display: flex; justify-content: space-between; margin-top: 16px; padding-top: 12px; border-top: 2px solid #4a3e8e; gap: 8px; }
 
 /* Facility panels (inside windows) */
