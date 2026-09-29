@@ -3,7 +3,7 @@ import type { CombatEvent, CombatLog, CombatUnitInit, GameState, Line } from '..
 import { SKILLS } from '../../engine/content'
 import { drawBattleBg, BG_H, BG_W } from '../pixel/battleBg'
 import { cachedDataUrl } from '../pixel/render'
-import { enemySize, enemyUrl, heroBustUrl, heroFrameUrl } from '../pixel/sprites'
+import { allyBustUrl, allyFrameUrl, enemySize, enemyUrl, heroBustUrl, heroFrameUrl } from '../pixel/sprites'
 import type { LookSource } from '../pixel/look'
 import { ELEMENT_VIS, hpColor } from '../bits'
 
@@ -155,7 +155,14 @@ export function BattleScene({ log, state, onDone }: { log: CombatLog; state: Gam
           next.caption = e.note
           break
         case 'end':
-          next.caption = e.outcome === 'win' ? 'Victory!' : e.outcome === 'wipe' ? 'The party has fallen…' : 'Time is up…'
+          next.caption =
+            e.outcome === 'win'
+              ? 'Victory!'
+              : e.outcome === 'wipe'
+                ? 'The party has fallen…'
+                : e.outcome === 'failed'
+                  ? 'The mission has failed…'
+                  : 'Time is up…'
           break
       }
       out.push(next)
@@ -229,7 +236,11 @@ export function BattleScene({ log, state, onDone }: { log: CombatLog; state: Gam
             const skillHit = hurt && snap.skill !== null
             const dead = !!snap.dead[u.id]
             const size = isHero ? { w: 24, h: 32 } : enemySize(u.name, u.element)
-            const src = isHero ? heroFrameUrl(heroSrc(u), 'left', acting ? 1 : 0) : enemyUrl(u.name, u.element)
+            const src = u.isNpc
+              ? allyFrameUrl(u.name)
+              : isHero
+                ? heroFrameUrl(heroSrc(u), 'left', acting ? 1 : 0)
+                : enemyUrl(u.name, u.element)
             const cls = ['bunit', isHero ? 'hero' : 'enemy', acting ? 'acting' : '', hurt ? 'hurt' : '', dead ? 'ko' : '']
               .filter(Boolean)
               .join(' ')
@@ -255,7 +266,7 @@ export function BattleScene({ log, state, onDone }: { log: CombatLog; state: Gam
                 )}
                 <div className="bshadow" style={{ width: size.w * 0.7 }} />
                 {src && <img className="px bsprite" src={src} width={size.w} height={size.h} alt={u.name} />}
-                {!isHero && !dead && (
+                {(!isHero || u.isNpc) && !dead && (
                   <div className="bhp">
                     <span style={{ width: `${hpPct}%`, background: hpColor(hpPct) }} />
                   </div>
@@ -280,7 +291,7 @@ export function BattleScene({ log, state, onDone }: { log: CombatLog; state: Gam
 
           {atEnd && (
             <div className={`battle-banner ${outcome === 'win' ? 'win' : 'lose'}`}>
-              {outcome === 'win' ? 'VICTORY' : outcome === 'wipe' ? 'DEFEAT' : 'TIME UP'}
+              {outcome === 'win' ? 'VICTORY' : outcome === 'wipe' ? 'DEFEAT' : outcome === 'failed' ? 'MISSION FAILED' : 'TIME UP'}
             </div>
           )}
         </div>
@@ -303,9 +314,15 @@ export function BattleScene({ log, state, onDone }: { log: CombatLog; state: Gam
             const dead = !!snap.dead[u.id]
             return (
               <div key={u.id} className={`party-row ${snap.actor === u.id ? 'active' : ''} ${dead ? 'dead' : ''}`}>
-                <img className="px party-bust" src={heroBustUrl(heroSrc(u))} width={24} height={24} alt="" />
-                <span className="party-name">{u.name.split(/\s+/)[0]}</span>
-                <span className="party-lv">Lv{u.level}</span>
+                <img
+                  className="px party-bust"
+                  src={u.isNpc ? allyBustUrl(u.name) : heroBustUrl(heroSrc(u))}
+                  width={24}
+                  height={24}
+                  alt=""
+                />
+                <span className="party-name">{u.isNpc ? u.name.replace(/^Princess /, '') : u.name.split(/\s+/)[0]}</span>
+                <span className="party-lv">{u.isNpc ? 'escort' : `Lv${u.level}`}</span>
                 <span className="party-hp">
                   <span className="gauge">
                     <span style={{ width: `${pct}%`, background: hpColor(pct) }} />

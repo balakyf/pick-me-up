@@ -193,3 +193,25 @@ export function iselLook(): HeroLook {
     mark: 'none',
   }
 }
+
+/** Princess Priasis (canon Taoni F15 escort target): gold hair, white-and-gold gown. */
+export function priasisLook(): HeroLook {
+  return {
+    skin: SKIN[4]!,
+    hair: HAIR[4]!,
+    hairStyle: 'long',
+    eyes: hex('#2a6ab8'),
+    outfit: 'mage',
+    cloth: ramp('#a8a0b8', '#ece6f4', '#ffffff'),
+    cloth2: ramp('#a8a0b8', '#ece6f4', '#ffffff'),
+    metal: STEEL,
+    accent: ELEMENT_RAMP.light,
+    headgear: 'circlet',
+    weapon: 'none',
+    shield: false,
+    cape: ramp('#6a1424', '#9a1a2e', '#d0404a'),
+    trim: true,
+    apron: false,
+    mark: 'none',
+  }
+}

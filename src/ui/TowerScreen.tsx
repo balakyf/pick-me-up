@@ -4,10 +4,17 @@ import type { Store } from '../engine/store'
 import { attemptFloorWithResult } from '../engine/store'
 import { buildEncounter } from '../engine/tower'
 import { ANCHORS } from '../engine/content'
+import { TUNING } from '../engine/tuning'
 import { BattleScene } from './battle/BattleScene'
 import { ResultsScreen } from './screens'
 
-const MAX_FLOOR = 10
+const MAX_FLOOR = TUNING.tower.sliceTopFloor
+
+/** Acts of the climbable slice (Layer 2 §2.1 bands), bottom-up. */
+const ACTS: { title: string; subtitle: string; from: number; to: number }[] = [
+  { title: 'Act I — The Prairie', subtitle: 'goblins, wolves, harpies · the falling city at F10', from: 1, to: 10 },
+  { title: 'Act II — The Ruins', subtitle: 'undead, soldiers, assassins · Halgiraf at F20', from: 11, to: 20 },
+]
 
 export function TowerScreen({ state, store }: { state: GameState; store: Store }) {
   const [combat, setCombat] = useState<CombatLog | null>(null)
@@ -68,7 +75,19 @@ export function TowerScreen({ state, store }: { state: GameState; store: Store }
       )}
 
       <div className="tower">
-        {Array.from({ length: MAX_FLOOR }, (_, i) => i + 1).map((f) => {
+        {ACTS.flatMap((act) => [
+          ...Array.from({ length: act.to - act.from + 1 }, (_, i) => act.from + i),
+          `act:${act.title}`,
+        ]).map((f) => {
+          if (typeof f === 'string') {
+            const act = ACTS.find((a) => `act:${a.title}` === f)!
+            return (
+              <div key={f} className="act-head">
+                <span className="act-title">{act.title}</span>
+                <span className="muted">{act.subtitle}</span>
+              </div>
+            )
+          }
           const cleared = f <= state.tower.highestCleared
           const isCurrent = f === current
           const locked = f > current

@@ -5,6 +5,7 @@ import { synthesisUnlocked } from '../../engine/synthesis'
 import { smithyUnlocked } from '../../engine/equipment'
 import { dailyUnlocked } from '../../engine/daily'
 import { masterXpToNext } from '../../engine/master'
+import { TUNING } from '../../engine/tuning'
 import {
   MAP_H,
   MAP_W,
@@ -624,7 +625,7 @@ export function LobbyWorld({
           <div className="hud-title">Master Lv {ml}</div>
           <Gauge pct={xpPct} color="var(--accent-2)" label={`${state.meta.masterXp} / ${masterXpToNext(ml)} XP`} />
           <div className="hud-sub">
-            {living} {living === 1 ? 'hero' : 'heroes'} · Floor {Math.min(state.tower.currentFloor, 10)}
+            {living} {living === 1 ? 'hero' : 'heroes'} · Floor {Math.min(state.tower.currentFloor, TUNING.tower.sliceTopFloor)}
           </div>
         </div>
       </div>

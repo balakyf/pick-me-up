@@ -199,6 +199,50 @@ function lv999(): Bitmap {
   return outline(b, INK)
 }
 
+function halgiraf(): Bitmap {
+  // The half black dragon (canon F20): hulking, scaled, wings spread, facing right.
+  const b = createBitmap(76, 62)
+  const scale = ramp('#140e1e', '#2e2240', '#4e3a6a')
+  const belly = ramp('#4a3a2a', '#7a6248', '#a88a64')
+  const wing = ramp('#1a1024', '#3a2450', '#5a3a7a')
+  // far wing (behind)
+  for (let i = 0; i < 7; i++) line(b, 30, 22, 8 + i * 4, 2 + (i % 2) * 3, wing.d)
+  line(b, 8, 2, 30, 22, wing.m)
+  // tail
+  for (let i = 0; i < 16; i++) ellipse(b, 2 + i, 40 + Math.round(Math.sin(i / 3) * 3), 6, 6, scale.m)
+  line(b, 1, 43, 0, 36, BONE.m)
+  // back legs
+  rect(b, 22, 44, 8, 14, scale.d)
+  rect(b, 20, 56, 12, 4, scale.d)
+  // body
+  ellipse(b, 14, 24, 40, 28, scale.m)
+  ellipse(b, 22, 34, 28, 16, belly.m)
+  for (let x = 24; x < 48; x += 4) vline(b, x, 36, 12, belly.d) // belly plates
+  for (let x = 18; x < 50; x += 5) line(b, x, 25, x + 2, 21, scale.l) // dorsal ridge
+  // front legs
+  rect(b, 44, 44, 7, 14, scale.m)
+  rect(b, 42, 56, 12, 4, scale.m)
+  for (const x of [43, 47, 51]) set(b, x, 60, BONE.l) // claws
+  // neck + head
+  ellipse(b, 44, 14, 14, 20, scale.m)
+  ellipse(b, 50, 6, 20, 14, scale.m)
+  rect(b, 62, 10, 12, 7, scale.m) // snout
+  hline(b, 62, 16, 12, scale.d)
+  for (let x = 63; x < 74; x += 3) set(b, x, 17, BONE.l) // fangs
+  set(b, 72, 11, INK) // nostril
+  // horns
+  line(b, 52, 6, 46, 0, BONE.m)
+  line(b, 53, 6, 47, 0, BONE.l)
+  line(b, 57, 5, 56, 0, BONE.m)
+  // eye (glows)
+  rect(b, 60, 8, 3, 2, hex('#ff3a2e'))
+  set(b, 61, 8, hex('#ffd0a0'))
+  // near wing (in front)
+  for (let i = 0; i < 6; i++) line(b, 34, 24, 18 + i * 5, 4 + (i % 2) * 4, i % 2 ? wing.m : wing.l)
+  line(b, 34, 24, 20, 2, wing.l)
+  return outline(b, INK)
+}
+
 // ── registry ─────────────────────────────────────────────────────────────────
 
 const DRAWERS: Record<string, () => Bitmap> = {
@@ -266,6 +310,31 @@ const DRAWERS: Record<string, () => Bitmap> = {
       }),
     ),
   lv999_creature: lv999,
+  assassin: () =>
+    humanoid(
+      baseLook({
+        skin: ramp('#8a6a5a', '#c09a82', '#dcbca4'),
+        outfit: 'thief',
+        cloth: ramp('#0e0c14', '#1e1a28', '#34304a'),
+        accent: ramp('#5a0e1e', '#9a1a2e', '#d0404a'),
+        headgear: 'hood',
+        weapon: 'daggers',
+      }),
+    ),
+  knight: () =>
+    humanoid(
+      baseLook({
+        skin: ramp('#b87450', '#e3a878', '#f6c79c'),
+        eyes: INK,
+        outfit: 'warrior',
+        cloth: ramp('#2a2a3a', '#44445a', '#666680'),
+        accent: GOLD,
+        headgear: 'helm',
+        weapon: 'sword',
+        shield: true,
+      }),
+    ),
+  halgiraf,
 }
 
 const cache = new Map<string, Bitmap>()

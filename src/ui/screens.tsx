@@ -253,12 +253,17 @@ export function ResultsScreen({
   onContinue: () => void
 }) {
   const win = result.cleared
+  const failed = result.result.outcome === 'failed'
   const fallen = result.fallenHeroIds.map((id) => state.heroes[id]).filter(Boolean) as OwnedHero[]
   return (
     <div className="overlay">
       <div className="result-card">
-        <div className={`big-outcome ${win ? 'win' : 'lose'}`}>{win ? 'FLOOR CLEARED' : 'DEFEATED'}</div>
-        <div className="muted">Floor {result.floor}{result.firstClear && win ? ' · first clear bonus!' : ''}</div>
+        <div className={`big-outcome ${win ? 'win' : 'lose'}`}>{win ? 'FLOOR CLEARED' : failed ? 'MISSION FAILED' : 'DEFEATED'}</div>
+        <div className="muted">
+          Floor {result.floor}
+          {result.firstClear && win ? ' · first clear bonus!' : ''}
+          {failed ? ' · the escort fell — the floor must be retried' : ''}
+        </div>
 
         <div className="reward-row">
           <div className="r">
