@@ -37,6 +37,7 @@ import { renderLobbyBase, drawSummonCircle } from '../pixel/tiles'
 import { PROP_FRAMES, drawEmote, drawProp, type EmoteKind } from '../pixel/props'
 import { heroBustUrl, heroFrameCanvas, iselBustUrl, masterBustUrl, masterFrameCanvas } from '../pixel/sprites'
 import type { Dir, WalkFrame } from '../pixel/heroSprite'
+import { t, t as tr } from '../i18n/i18n'
 
 /**
  * The Lobby as a walkable top-down world. The Master (player avatar) walks with
@@ -415,7 +416,7 @@ export function LobbyWorld({
   function labelFor(t: Target | null): string | null {
     if (!t) return null
     if (t.kind === 'hero') return stateRef.current.heroes[t.id as OwnedHero['id']]?.name.split(/\s+/)[0] ?? null
-    return t.prop.place ? PLACE_LABEL[t.prop.place] : null
+    return t.prop.place ? tr(PLACE_LABEL[t.prop.place]) : null
   }
 
   /** Walk next to `target` then use it. */
@@ -759,14 +760,14 @@ export function LobbyWorld({
       <div className="hud hud-tl">
         <img className="px hud-bust" src={masterBustUrl(state.accountId)} width={48} height={48} alt="" />
         <div>
-          <div className="hud-title">Master Lv {ml}</div>
+          <div className="hud-title">{t('Master Lv {n}', { n: ml })}</div>
           <Gauge pct={xpPct} color="var(--accent-2)" label={`${state.meta.masterXp} / ${masterXpToNext(ml)} XP`} />
           {state.meta.piZeroSince !== null && toWorldTime(Date.now()) - state.meta.piZeroSince >= TUNING.lifecycle.greyMs && (
-            <div className="hud-grey">The waiting room is greying…</div>
+            <div className="hud-grey">{t('The waiting room is greying…')}</div>
           )}
           <div className="hud-sub">
-            {living} {living === 1 ? 'hero' : 'heroes'} · Floor {Math.min(state.tower.currentFloor, TUNING.tower.sliceTopFloor)} · PI{' '}
-            {Math.floor(state.meta.pi)}
+            {living === 1 ? t('1 hero') : t('{n} heroes', { n: living })} ·{' '}
+            {t('Floor {n}', { n: Math.min(state.tower.currentFloor, TUNING.tower.sliceTopFloor) })} · PI {Math.floor(state.meta.pi)}
           </div>
         </div>
       </div>
@@ -774,13 +775,13 @@ export function LobbyWorld({
       <div className="hud hud-tr">
         {!loginClaimed(state, toWorldTime(Date.now())) && (
           <button className="pbtn gem" onClick={() => store.dispatch({ type: 'CLAIM_LOGIN' }, Date.now())} title="Daily login reward">
-            🎁 Daily
+            🎁 {t('Daily')}
           </button>
         )}
         <span className="coin gold">◆ {state.gold.toLocaleString()}</span>
         <span className="coin gem">♦ {state.gems.toLocaleString()}</span>
         <button className="pbtn" onClick={onMenu}>
-          ☰ Menu
+          ☰ {t('Menu')}
         </button>
       </div>
 
@@ -789,10 +790,10 @@ export function LobbyWorld({
           <kbd>E</kbd> {prompt}
         </div>
       )}
-      <div className="hud hud-help">↑↓←→ / WASD / ZQSD · E interact · click to walk · M menu</div>
+      <div className="hud hud-help">{t('↑↓←→ / WASD / ZQSD · E interact · click to walk · M menu')}</div>
 
       {openPlace && (
-        <PixelWindow title={PLACE_LABEL[openPlace]} icon={PLACE_ICON[openPlace]} onClose={() => setOpenPlace(null)}>
+        <PixelWindow title={tr(PLACE_LABEL[openPlace])} icon={PLACE_ICON[openPlace]} onClose={() => setOpenPlace(null)}>
           <PlacePanel place={openPlace} state={state} store={store} />
         </PixelWindow>
       )}

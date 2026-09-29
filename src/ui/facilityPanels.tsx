@@ -22,6 +22,7 @@ import { HallOfMagicInfo, RiftPanel, ShopPanel, TimingGame } from './metaPanels'
 import { GuildPanel } from './pvpPanels'
 import { upgradeCost as forgeUpgradeCost, upgradeOdds, upgradeRefusal } from '../engine/minigames'
 import { upgradeEquipmentWithResult } from '../engine/store'
+import { t } from './i18n/i18n'
 
 /**
  * Facility panels — the rules-facing half of the Lobby. The walkable world
@@ -55,7 +56,7 @@ function Occupants({ heroes, empty }: { heroes: OwnedHero[]; empty: string }) {
   return (
     <div className="occupants">
       {heroes.map((h) => (
-        <div key={h.id} className="occupant" title={`${h.name} · Sanity ${h.sanity}/${SANITY_MAX}`}>
+        <div key={h.id} className="occupant" title={`${h.name} · ${t('Sanity')} ${h.sanity}/${SANITY_MAX}`}>
           <Portrait hero={h} size="sm" />
           <span className="lh-name">{h.name.split(/\s+/)[0]}</span>
           <span className="lh-sanity">
@@ -81,21 +82,21 @@ function BanquetAction({ state, store }: { state: GameState; store: Store }) {
     try {
       store.dispatch({ type: 'BANQUET' }, Date.now())
     } catch (e) {
-      setErr(e instanceof Error ? e.message : 'Banquet failed')
+      setErr(t(e instanceof Error ? e.message : 'Banquet failed'))
     }
   }
 
   return (
     <div className="lr-action">
       <button className="btn gold sm" onClick={hold} disabled={disabled}>
-        🍴 Banquet · {BANQUET.gold.toLocaleString()} ◆
+        {t('🍴 Banquet · {gold} ◆', { gold: BANQUET.gold.toLocaleString() })}
       </button>
       <div className="lr-action-note">
         {!canAfford
-          ? 'Not enough gold.'
+          ? t('Not enough gold.')
           : !helps
-            ? 'Everyone is at full morale.'
-            : `+${BANQUET.restore} Sanity to all living heroes.`}
+            ? t('Everyone is at full morale.')
+            : t('+{n} Sanity to all living heroes.', { n: BANQUET.restore })}
       </div>
       {err && <div className="lr-action-note" style={{ color: 'var(--bad)' }}>{err}</div>}
     </div>
@@ -106,10 +107,10 @@ const SKIP_GEMS = TUNING.lobby.promotion.skipGemCost
 
 /** Human-readable "time left" for a promotion countdown (cosmetic; whole units). */
 function timeLeft(ms: number): string {
-  if (ms <= 0) return 'finishing…'
+  if (ms <= 0) return t('finishing…')
   const mins = Math.ceil(ms / 60_000)
-  if (mins < 60) return `${mins}m left`
-  return `${Math.floor(mins / 60)}h ${mins % 60}m left`
+  if (mins < 60) return t('{m}m left', { m: mins })
+  return t('{h}h {m}m left', { h: Math.floor(mins / 60), m: mins % 60 })
 }
 
 /** The Promotion Chamber's actions: promote at-cap heroes, or skip a running timer. */
@@ -125,12 +126,12 @@ function PromotionAction({ state, store }: { state: GameState; store: Store }) {
     try {
       store.dispatch(cmd, Date.now())
     } catch (e) {
-      setErr(e instanceof Error ? e.message : 'Action failed')
+      setErr(t(e instanceof Error ? e.message : 'Action failed'))
     }
   }
 
   if (promoting.length === 0 && ready.length === 0) {
-    return <div className="lr-action-note">No heroes are at their star cap yet — keep climbing.</div>
+    return <div className="lr-action-note">{t('No heroes are at their star cap yet — keep climbing.')}</div>
   }
 
   return (
@@ -143,7 +144,7 @@ function PromotionAction({ state, store }: { state: GameState; store: Store }) {
             className="btn gem sm"
             onClick={() => dispatch({ type: 'SKIP_TIMER', kind: 'promotion', id: h.id })}
             disabled={state.gems < SKIP_GEMS}
-            title={`Finish now for ${SKIP_GEMS} gems`}
+            title={t('Finish now for {n} gems', { n: SKIP_GEMS })}
           >
             ⏩ {SKIP_GEMS} 💎
           </button>
@@ -164,9 +165,9 @@ function PromotionAction({ state, store }: { state: GameState; store: Store }) {
               className="btn sm"
               onClick={() => dispatch({ type: 'PROMOTE_HERO', heroId: h.id })}
               disabled={!affordable}
-              title={affordable ? 'Begin promotion' : 'Not enough materials'}
+              title={affordable ? t('Begin promotion') : t('Not enough materials')}
             >
-              ⬆ Promote
+              {t('⬆ Promote')}
             </button>
           </div>
         )
@@ -189,7 +190,7 @@ function UpgradeControl({ state, store, facility }: { state: GameState; store: S
     try {
       store.dispatch(cmd, Date.now())
     } catch (e) {
-      setErr(e instanceof Error ? e.message : 'Action failed')
+      setErr(t(e instanceof Error ? e.message : 'Action failed'))
     }
   }
 
@@ -197,7 +198,7 @@ function UpgradeControl({ state, store, facility }: { state: GameState; store: S
   if (f.build !== null) {
     return (
       <div className="lr-upgrade">
-        <span className="muted">⏳ Lv {f.build.toLevel} · {timeLeft(f.build.completesAtWorld - nowWorld)}</span>
+        <span className="muted">{t('⏳ Lv {toLevel} · {n}', { toLevel: f.build.toLevel, n: timeLeft(f.build.completesAtWorld - nowWorld) })}</span>
         <button
           className="btn gem sm"
           onClick={() => dispatch({ type: 'SKIP_TIMER', kind: 'facility', id: facility })}
@@ -218,14 +219,14 @@ function UpgradeControl({ state, store, facility }: { state: GameState; store: S
   const isBuild = f.level === 0
 
   const note = maxed
-    ? 'Max level reached.'
+    ? t('Max level reached.')
     : chamberLocked
-      ? `Unlocks at Master Lv ${unlockAt}.`
+      ? t('Unlocks at Master Lv {unlockMasterLevel}.', { unlockMasterLevel: unlockAt })
       : mlCapped
-        ? 'Raise Master Level to upgrade.'
+        ? t('Raise Master Level to upgrade.')
         : state.gold < cost
-          ? 'Not enough gold.'
-          : `Lv ${f.level + 1}: faster/stronger effects.`
+          ? t('Not enough gold.')
+          : t('Lv {n}: faster/stronger effects.', { n: f.level + 1 })
 
   return (
     <div className="lr-upgrade">
@@ -247,9 +248,9 @@ function TacticalAction({ state }: { state: GameState }) {
   const slots = tacticalOverlookSlots(level)
   return (
     <div className="lr-action tactical-action">
-      <div className="ta-row"><span>🎯 Focus damage</span><span className="ta-val">+{bonusPct}%</span></div>
-      <div className="ta-row"><span>🛡 Overlook slots</span><span className="ta-val">{slots}</span></div>
-      <div className="lr-action-note">Mark a target in the Tower to concentrate fire.</div>
+      <div className="ta-row"><span>{t('🎯 Focus damage')}</span><span className="ta-val">+{bonusPct}%</span></div>
+      <div className="ta-row"><span>{t('🛡 Overlook slots')}</span><span className="ta-val">{slots}</span></div>
+      <div className="lr-action-note">{t('Mark a target in the Tower to concentrate fire.')}</div>
     </div>
   )
 }
@@ -261,7 +262,7 @@ const MAT_LABEL: Record<string, string> = {
   bookOfReverseHeaven: '📕 Book of Reverse Heaven',
 }
 const matLabel = (id: string): string =>
-  MAT_LABEL[id] ?? (id.startsWith('attrStone_') ? `🔹 ${id.slice('attrStone_'.length)}` : id)
+  MAT_LABEL[id] !== undefined ? t(MAT_LABEL[id]) : id.startsWith('attrStone_') ? `🔹 ${id.slice('attrStone_'.length)}` : id
 
 /** One-line summary of a daily reward bundle. */
 function rewardSummary(r: DailyReward): string {
@@ -270,7 +271,7 @@ function rewardSummary(r: DailyReward): string {
   if (r.gems) parts.push(`+${r.gems} 💎`)
   if (r.heroXp) parts.push(`+${r.heroXp} XP`)
   for (const id of Object.keys(r.materials ?? {})) parts.push(`+${r.materials![id]} ${matLabel(id)}`)
-  return parts.join(' · ') || 'a reward'
+  return parts.join(' · ') || t('a reward')
 }
 
 /** The Daily Dungeon portal: an access point (not a leveled facility). */
@@ -295,11 +296,11 @@ function DailyPortal({ state, store }: { state: GameState; store: Store }) {
       setLast({
         cleared: result.cleared,
         text:
-          (result.cleared ? `Cleared! ${rewardSummary(result.rewards)}` : 'Failed — no reward this run.') +
+          (result.cleared ? `${t('Cleared!')} ${rewardSummary(result.rewards)}` : t('Failed — no reward this run.')) +
           result.skillProgress.map((p) => ` ${skillProgressLine(p, store.getState() ?? state)}`).join(''),
       })
     } catch (e) {
-      setErr(e instanceof Error ? e.message : 'Run failed')
+      setErr(t(e instanceof Error ? e.message : 'Run failed'))
     }
   }
 
@@ -307,15 +308,19 @@ function DailyPortal({ state, store }: { state: GameState; store: Store }) {
     <div className="lobby-portal">
       <div className="lp-head">
         <span className="lp-glyph">🌀</span>
-        <span className="lp-name">Daily Dungeon</span>
-        <span className="lp-today">{dungeon.weekday} · {dungeon.name}</span>
+        <span className="lp-name">{t('Daily Dungeon')}</span>
+        <span className="lp-today">{t(dungeon.weekday)} · {t(dungeon.name)}</span>
       </div>
       <div className="lp-body">
         <span className="muted">
-          {unlocked ? `${free} free attempt${free === 1 ? '' : 's'} left` : `Clear floor ${DAILY.unlockHighestCleared} to unlock`}
+          {unlocked
+            ? free === 1
+              ? t('1 free attempt left')
+              : t('{n} free attempts left', { n: free })
+            : t('Clear floor {n} to unlock', { n: DAILY.unlockHighestCleared })}
         </span>
         <button className={`btn ${paid ? 'gem' : 'primary'} sm`} onClick={enter} disabled={disabled}>
-          {!unlocked ? '🔒 Locked' : paid ? `Enter · ${DAILY.extraAttemptGemCost} 💎` : '⚔ Enter today’s run'}
+          {!unlocked ? t('🔒 Locked') : paid ? `${t('Enter')} · ${DAILY.extraAttemptGemCost} 💎` : t('⚔ Enter today’s run')}
         </button>
       </div>
       {last && (
@@ -373,10 +378,10 @@ function SynthesisChamber({ state, store }: { state: GameState; store: Store }) 
       <div className="lobby-portal synth-portal locked">
         <div className="lp-head">
           <span className="lp-glyph">🧪</span>
-          <span className="lp-name">Synthesis Chamber</span>
-          <span className="muted">— the door stays shut</span>
+          <span className="lp-name">{t('Synthesis Chamber')}</span>
+          <span className="muted">{t('— the door stays shut')}</span>
         </div>
-        <div className="lr-blurb">Unlocks at Master Lv {SYN.unlockMasterLevel}.</div>
+        <div className="lr-blurb">{t('Unlocks at Master Lv {unlockMasterLevel}.', { unlockMasterLevel: SYN.unlockMasterLevel })}</div>
       </div>
     )
   }
@@ -407,7 +412,7 @@ function SynthesisChamber({ state, store }: { state: GameState; store: Store }) 
       store.dispatch({ type: 'SYNTHESIZE', mode, survivorId, sacrificeIds, ...(chosen ? { rescue: chosen } : {}) }, Date.now())
       reset()
     } catch (e) {
-      setErr(e instanceof Error ? e.message : 'Synthesis failed')
+      setErr(t(e instanceof Error ? e.message : 'Synthesis failed'))
     }
   }
 
@@ -417,22 +422,22 @@ function SynthesisChamber({ state, store }: { state: GameState; store: Store }) 
     <div className="lobby-portal synth-portal">
       <div className="lp-head">
         <span className="lp-glyph">🧪</span>
-        <span className="lp-name">Synthesis Chamber</span>
-        <span className="muted">— the Master can’t watch</span>
+        <span className="lp-name">{t('Synthesis Chamber')}</span>
+        <span className="muted">{t('— the Master can’t watch')}</span>
       </div>
 
       <div className="syn-modes">
         <button className={`btn sm ${mode === 'salvage' ? 'primary' : ''}`} onClick={() => { setMode('salvage'); setConfirming(false) }}>
-          ♻ Salvage
+          {t('♻ Salvage')}
         </button>
         <button className={`btn sm ${mode === 'transfer' ? 'primary' : ''}`} onClick={() => { setMode('transfer'); setConfirming(false) }}>
-          ⇄ Transfer
+          {t('⇄ Transfer')}
         </button>
       </div>
 
       <div className="syn-section">
         <div className="syn-label">
-          {mode === 'transfer' ? 'Survivor (required)' : 'Rescue onto (optional)'}
+          {mode === 'transfer' ? t('Survivor (required)') : t('Rescue onto (optional)')}
         </div>
         <div className="syn-row">
           {living.map((h) => (
@@ -442,7 +447,7 @@ function SynthesisChamber({ state, store }: { state: GameState; store: Store }) 
       </div>
 
       <div className="syn-section">
-        <div className="syn-label">Sacrifices (permanently destroyed)</div>
+        <div className="syn-label">{t('Sacrifices (permanently destroyed)')}</div>
         <div className="syn-row">
           {sacrificeable.map((h) => (
             <HeroChip key={h.id} hero={h} selected={sacrificeIds.includes(h.id)} onClick={() => toggleSac(h.id)} />
@@ -452,14 +457,14 @@ function SynthesisChamber({ state, store }: { state: GameState; store: Store }) 
 
       {rescueChoices.length > 0 && (
         <div className="syn-section">
-          <div className="syn-label">Rescue (optional — else the first missing skill, then the best grade)</div>
+          <div className="syn-label">{t('Rescue (optional — else the first missing skill, then the best grade)')}</div>
           <div className="syn-row">
             {rescueChoices.map((r) => {
               const key = rescueKey(r)
               const on = rescue !== null && rescueKey(rescue) === key
               return (
                 <button key={key} type="button" className={`btn sm ${on ? 'primary' : ''}`} onClick={() => setRescue(on ? null : r)}>
-                  {r.kind === 'skill' ? `✦ ${SKILLS[r.skillId]?.name ?? r.skillId}` : `▲ ${r.attr.toUpperCase()} grade`}
+                  {r.kind === 'skill' ? `✦ ${t(SKILLS[r.skillId]?.name ?? r.skillId)}` : `▲ ${t('{attr} grade', { attr: r.attr.toUpperCase() })}`}
                 </button>
               )
             })}
@@ -472,35 +477,38 @@ function SynthesisChamber({ state, store }: { state: GameState; store: Store }) 
           {mode === 'transfer' ? (
             <span>
               {Object.keys(preview.gradeDeltas).length > 0
-                ? 'Grades ' + Object.entries(preview.gradeDeltas).map(([k, v]) => `${k} +${v}`).join(', ')
-                : 'No grade gain'}
+                ? t('Grades') + ' ' + Object.entries(preview.gradeDeltas).map(([k, v]) => `${k} +${v}`).join(', ')
+                : t('No grade gain')}
               {' · '}
               {preview.skillCopyOdds.length > 0
-                ? 'copy odds ' +
-                  preview.skillCopyOdds.map((o) => `${SKILLS[o.skillId]?.name ?? o.skillId} ${Math.round(o.chance * 100)}%`).join(', ')
-                : 'no skill to copy'}
+                ? t('copy odds') + ' ' +
+                  preview.skillCopyOdds.map((o) => `${t(SKILLS[o.skillId]?.name ?? o.skillId)} ${Math.round(o.chance * 100)}%`).join(', ')
+                : t('no skill to copy')}
             </span>
           ) : (
             <span>
-              Yields {Object.entries(preview.materialYield).map(([k, v]) => `${v} × ${matLabel(k)}`).join(', ') || '—'}
-              {preview.rescue ? ` · rescue ${preview.rescue}` : ''}
+              {t('Yields')} {Object.entries(preview.materialYield).map(([k, v]) => `${v} × ${matLabel(k)}`).join(', ') || '—'}
+              {preview.rescue ? ` · ${t('rescue')} ${t(preview.rescue)}` : ''}
             </span>
           )}
-          <span className="muted"> · −{preview.survivorSanityCost} survivor / −{preview.witnessSanityCost} witness Sanity</span>
+          <span className="muted">
+            {' · '}
+            {t('−{a} survivor / −{b} witness Sanity', { a: preview.survivorSanityCost, b: preview.witnessSanityCost })}
+          </span>
         </div>
       )}
 
       <div className="syn-actions">
         {!confirming ? (
           <button className="btn sm" disabled={!valid} onClick={() => setConfirming(true)}>
-            {mode === 'transfer' ? '⇄ Synthesize' : '♻ Render'}
+            {mode === 'transfer' ? t('⇄ Synthesize') : t('♻ Render')}
           </button>
         ) : (
           <>
             <button className="btn sm syn-destroy" onClick={run}>
               Permanently destroy {sacrificeIds.length} hero{sacrificeIds.length === 1 ? '' : 'es'}
             </button>
-            <button className="btn sm" onClick={() => setConfirming(false)}>Cancel</button>
+            <button className="btn sm" onClick={() => setConfirming(false)}>{t('Cancel')}</button>
           </>
         )}
       </div>
@@ -510,6 +518,14 @@ function SynthesisChamber({ state, store }: { state: GameState; store: Store }) 
 }
 
 const EQUIP = TUNING.lobby.equipment
+/** Forged item names come from the engine in English ("S Blade", "Aria's Oath-Blade"). */
+function itemLabel(name: string): string {
+  const oath = /^(.+)'s Oath-(\w+)$/.exec(name)
+  if (oath) return t("{who}'s Oath-{noun}", { who: oath[1]!, noun: t(oath[2]!) })
+  const plain = /^(\S+) (Blade|Plate|Charm)$/.exec(name)
+  if (plain) return t('{grade} {noun}', { grade: plain[1]!, noun: t(plain[2]!) })
+  return t(name)
+}
 const EQUIP_SLOTS: EquipmentSlot[] = ['weapon', 'armor', 'accessory']
 const SLOT_GLYPH: Record<EquipmentSlot, string> = { weapon: '⚔', armor: '🛡', accessory: '💍' }
 
@@ -525,9 +541,13 @@ function Armory({ state, store }: { state: GameState; store: Store }) {
     try {
       const r = upgradeEquipmentWithResult(store.getState(), item.id, performance, Date.now())
       store.dispatch({ type: 'UPGRADE_EQUIPMENT', itemId: item.id, performance }, Date.now())
-      setForged(r.success ? `The hammer rings true — ${item.name} rose a grade!` : `The metal cracks. ${item.name} holds, but the materials are spent.`)
+      setForged(
+        r.success
+          ? t('The hammer rings true — {item} rose a grade!', { item: itemLabel(item.name) })
+          : t('The metal cracks. {item} holds, but the materials are spent.', { item: itemLabel(item.name) }),
+      )
     } catch (e) {
-      setErr(e instanceof Error ? e.message.replace(/^\w+: /, '') : 'The forge failed')
+      setErr(t(e instanceof Error ? e.message.replace(/^\w+: /, '') : 'The forge failed'))
     }
   }
 
@@ -536,10 +556,10 @@ function Armory({ state, store }: { state: GameState; store: Store }) {
       <div className="lobby-portal armory-portal locked">
         <div className="lp-head">
           <span className="lp-glyph">🛠</span>
-          <span className="lp-name">Armory</span>
-          <span className="muted">— the forge is cold</span>
+          <span className="lp-name">{t('Armory')}</span>
+          <span className="muted">{t('— the forge is cold')}</span>
         </div>
-        <div className="lr-blurb">Unlocks at Master Lv {EQUIP.unlockMasterLevel}.</div>
+        <div className="lr-blurb">{t('Unlocks at Master Lv {unlockMasterLevel}.', { unlockMasterLevel: EQUIP.unlockMasterLevel })}</div>
       </div>
     )
   }
@@ -556,7 +576,7 @@ function Armory({ state, store }: { state: GameState; store: Store }) {
     try {
       store.dispatch(cmd, Date.now())
     } catch (e) {
-      setErr(e instanceof Error ? e.message : fail)
+      setErr(t(e instanceof Error ? e.message : fail))
     }
   }
 
@@ -564,8 +584,8 @@ function Armory({ state, store }: { state: GameState; store: Store }) {
     <div className="lobby-portal armory-portal">
       <div className="lp-head">
         <span className="lp-glyph">🛠</span>
-        <span className="lp-name">Armory</span>
-        <span className="muted">— forge &amp; equip</span>
+        <span className="lp-name">{t('Armory')}</span>
+        <span className="muted">{t('— forge & equip')}</span>
       </div>
 
       {/* Forge — one button per slot, each forging the best grade the Master Level allows. */}
@@ -586,7 +606,7 @@ function Armory({ state, store }: { state: GameState; store: Store }) {
             </button>
           ))}
         </div>
-        {!affordable && <div className="lr-action-note muted">Not enough gold or Promotion Stones to forge.</div>}
+        {!affordable && <div className="lr-action-note muted">{t('Not enough gold or Promotion Stones to forge.')}</div>}
       </div>
 
       {/* Forged items not currently worn by anyone. */}
@@ -594,15 +614,15 @@ function Armory({ state, store }: { state: GameState; store: Store }) {
         <div className="syn-label">Forged &amp; free ({freeItems.length})</div>
         <div className="syn-row">
           {freeItems.length === 0 ? (
-            <span className="lr-empty">Nothing forged yet.</span>
+            <span className="lr-empty">{t('Nothing forged yet.')}</span>
           ) : (
             freeItems.map((it) => (
               <span
                 key={it.id}
                 className={`arm-item ${it.exclusiveTo ? 'bound' : ''}`}
-                title={`${it.name} · ${it.slot}${it.exclusiveTo ? ` · bound to ${state.heroes[it.exclusiveTo]?.name ?? 'its hero'}` : ''}`}
+                title={`${itemLabel(it.name)} · ${t(it.slot)}${it.exclusiveTo ? ` · ${t('bound to {name}', { name: state.heroes[it.exclusiveTo]?.name ?? t('its hero') })}` : ''}`}
               >
-                {SLOT_GLYPH[it.slot]} {it.name}
+                {SLOT_GLYPH[it.slot]} {itemLabel(it.name)}
                 {it.exclusiveTo && ' 🔗'}
               </span>
             ))
@@ -612,35 +632,35 @@ function Armory({ state, store }: { state: GameState; store: Store }) {
 
       {/* Blacksmithing (Layer 3 §C2): raise an item's grade at the anvil. */}
       <div className="syn-section">
-        <div className="syn-label">Anvil · raise a grade (failure keeps the item)</div>
+        <div className="syn-label">{t('Anvil · raise a grade (failure keeps the item)')}</div>
         <div className="drill-list">
           {state.inventory.map((it) => {
             const cost = forgeUpgradeCost(it)
             const why = upgradeRefusal(state, it.id)
             return (
-              <div key={it.id} className={`drill-row ${why ? 'off' : ''}`} title={why ?? undefined}>
+              <div key={it.id} className={`drill-row ${why ? 'off' : ''}`} title={why ? t(why) : undefined}>
                 <span className="skill-grade">{it.grade}</span>
                 <span className="drill-name">
-                  {SLOT_GLYPH[it.slot]} {it.name}
+                  {SLOT_GLYPH[it.slot]} {itemLabel(it.name)}
                   {cost && ` · ${Math.round(upgradeOdds(it.grade, state.meta.skill.blacksmith) * 100)}%`}
                 </span>
-                <span className="muted">{cost ? `${cost.gold.toLocaleString()} ◆ + ${cost.promotionStone} 🪨` : 'max'}</span>
+                <span className="muted">{cost ? `${cost.gold.toLocaleString()} ◆ + ${cost.promotionStone} 🪨` : t('max')}</span>
                 <button className="btn sm" disabled={why !== null} onClick={() => setAnvil(it)}>
-                  ⚒ Forge
+                  {t('⚒ Forge')}
                 </button>
               </div>
             )
           })}
-          {state.inventory.length === 0 && <span className="lr-empty">Nothing to refine yet.</span>}
+          {state.inventory.length === 0 && <span className="lr-empty">{t('Nothing to refine yet.')}</span>}
         </div>
         {forged && <div className="lr-action-note">{forged}</div>}
       </div>
       {anvil && (
         <TimingGame
-          title="Blacksmithing"
-          verb="Strike"
+          title={t('Blacksmithing')}
+          verb={t('Strike')}
           skill={state.meta.skill.blacksmith}
-          hint={`Strike when the marker crosses the glowing centre. Base odds ${Math.round(upgradeOdds(anvil.grade, 0.5) * 100)}%.`}
+          hint={t('Strike when the marker crosses the glowing centre. Base odds {n}%.', { n: Math.round(upgradeOdds(anvil.grade, 0.5) * 100) })}
           onDone={(p) => strike(anvil, p)}
           onCancel={() => setAnvil(null)}
         />
@@ -648,7 +668,7 @@ function Armory({ state, store }: { state: GameState; store: Store }) {
 
       {/* Per-hero loadout — one control per slot: unequip what's worn, else equip the first free fit. */}
       <div className="syn-section">
-        <div className="syn-label">Loadouts</div>
+        <div className="syn-label">{t('Loadouts')}</div>
         {living.map((h) => (
           <div key={h.id} className="arm-hero">
             <span className="arm-hero-name">{h.name.split(/\s+/)[0]}</span>
@@ -663,9 +683,9 @@ function Armory({ state, store }: { state: GameState; store: Store }) {
                     key={slot}
                     className="btn sm arm-slot"
                     onClick={() => run({ type: 'UNEQUIP_ITEM', heroId: h.id, slot }, 'Unequip failed')}
-                    title={`Unequip ${worn.name}`}
+                    title={t('Unequip {item}', { item: itemLabel(worn.name) })}
                   >
-                    {SLOT_GLYPH[slot]} {worn.name} ✕
+                    {SLOT_GLYPH[slot]} {itemLabel(worn.name)} ✕
                   </button>
                 )
               }
@@ -675,9 +695,9 @@ function Armory({ state, store }: { state: GameState; store: Store }) {
                     key={slot}
                     className="btn sm arm-slot"
                     onClick={() => run({ type: 'EQUIP_ITEM', heroId: h.id, itemId: candidate.id }, 'Equip failed')}
-                    title={`Equip ${candidate.name}`}
+                    title={t('Equip {item}', { item: itemLabel(candidate.name) })}
                   >
-                    {SLOT_GLYPH[slot]} + {candidate.name}
+                    {SLOT_GLYPH[slot]} + {itemLabel(candidate.name)}
                   </button>
                 )
               }
@@ -715,34 +735,34 @@ function TrainingAction({ state, store }: { state: GameState; store: Store }) {
     try {
       store.dispatch(cmd, Date.now())
     } catch (e) {
-      setErr(e instanceof Error ? e.message.replace(/^\w+: /, '') : 'Action failed')
+      setErr(t(e instanceof Error ? e.message.replace(/^\w+: /, '') : 'Action failed'))
     }
   }
 
   if (ceiling === null) {
-    return <div className="lr-action-note">Build the Training Center to start drills.</div>
+    return <div className="lr-action-note">{t('Build the Training Center to start drills.')}</div>
   }
 
   return (
     <div className="lr-action training-action">
-      <div className="ta-row"><span>Max trainable grade</span><span className="ta-val">{ceiling}</span></div>
-      <div className="ta-row"><span>Skill XP per drill</span><span className="ta-val">+{drillXp(level)}</span></div>
-      <div className="ta-row"><span>Drill length</span><span className="ta-val">{Math.round(TRAIN.drillDurationMs / 60_000)} world-min</span></div>
+      <div className="ta-row"><span>{t('Max trainable grade')}</span><span className="ta-val">{ceiling}</span></div>
+      <div className="ta-row"><span>{t('Skill XP per drill')}</span><span className="ta-val">+{drillXp(level)}</span></div>
+      <div className="ta-row"><span>{t('Drill length')}</span><span className="ta-val">{t('{n} world-min', { n: Math.round(TRAIN.drillDurationMs / 60_000) })}</span></div>
 
       {drilling.length > 0 && (
         <>
-          <h4 className="panel-sub">In the yard</h4>
+          <h4 className="panel-sub">{t('In the yard')}</h4>
           {drilling.map((h) => (
             <div key={h.id} className="promo-row">
               <span className="promo-name">
-                {h.name.split(/\s+/)[0]} · {h.training!.mode === 'learn' ? 'learning' : 'refining'} {SKILLS[h.training!.skillId]?.name}
+                {h.name.split(/\s+/)[0]} · {h.training!.mode === 'learn' ? t('learning') : t('refining')} {t(SKILLS[h.training!.skillId]?.name ?? '')}
               </span>
               <span className="muted">{timeLeft(h.training!.completesAtWorld - nowWorld)}</span>
               <button
                 className="btn gem sm"
                 onClick={() => run({ type: 'SKIP_TIMER', kind: 'training', id: h.id })}
                 disabled={state.gems < TRAIN.skipGemCost}
-                title={`Finish now for ${TRAIN.skipGemCost} gems`}
+                title={t('Finish now for {n} gems', { n: TRAIN.skipGemCost })}
               >
                 ⏩ {TRAIN.skipGemCost} ♦
               </button>
@@ -751,9 +771,9 @@ function TrainingAction({ state, store }: { state: GameState; store: Store }) {
         </>
       )}
 
-      <h4 className="panel-sub">New drill</h4>
+      <h4 className="panel-sub">{t('New drill')}</h4>
       {free.length === 0 ? (
-        <div className="lr-empty">Every hero is busy.</div>
+        <div className="lr-empty">{t('Every hero is busy.')}</div>
       ) : (
         <div className="syn-row">
           {free.map((h) => (
@@ -775,10 +795,10 @@ function TrainingAction({ state, store }: { state: GameState; store: Store }) {
           {trainingOptions(state, selected.id).map((o) => {
             const def = SKILLS[o.skillId]!
             return (
-              <div key={o.skillId} className={`drill-row ${o.ok ? '' : 'off'}`} title={o.reason ?? undefined}>
+              <div key={o.skillId} className={`drill-row ${o.ok ? '' : 'off'}`} title={o.reason ? t(o.reason) : undefined}>
                 <span className="skill-grade">{def.grade}</span>
                 <span className="drill-name">
-                  {o.mode === 'learn' ? 'Learn' : 'Refine'} {def.name}
+                  {o.mode === 'learn' ? t('Learn') : t('Refine')} {t(def.name)}
                 </span>
                 <span className="muted">{o.cost.toLocaleString()} ◆</span>
                 <button
@@ -786,7 +806,7 @@ function TrainingAction({ state, store }: { state: GameState; store: Store }) {
                   disabled={!o.ok}
                   onClick={() => run({ type: 'TRAIN_SKILL', heroId: selected.id, skillId: o.skillId })}
                 >
-                  Train
+                  {t('Train')}
                 </button>
               </div>
             )
@@ -821,12 +841,12 @@ function TransferAction({ state, store }: { state: GameState; store: Store }) {
     try {
       store.dispatch(cmd, Date.now())
     } catch (e) {
-      setErr(e instanceof Error ? e.message.replace(/^\w+: /, '') : 'Action failed')
+      setErr(t(e instanceof Error ? e.message.replace(/^\w+: /, '') : 'Action failed'))
     }
   }
 
   if (ceiling === null) {
-    return <div className="lr-action-note">Build the Transfer Station to move and fuse skills.</div>
+    return <div className="lr-action-note">{t('Build the Transfer Station to move and fuse skills.')}</div>
   }
 
   const chips = (selected: OwnedHero | null, pick: (id: HeroId | null) => void, exclude?: HeroId | null) => (
@@ -841,21 +861,21 @@ function TransferAction({ state, store }: { state: GameState; store: Store }) {
 
   return (
     <div className="lr-action transfer-action">
-      <div className="ta-row"><span>Max transferable grade</span><span className="ta-val">{ceiling}</span></div>
+      <div className="ta-row"><span>{t('Max transferable grade')}</span><span className="ta-val">{ceiling}</span></div>
       <div className="ta-row">
-        <span>A moved skill arrives at</span>
-        <span className="ta-val">{level >= TRANSFER.keepLevelAt ? 'its full level' : 'one level lower'}</span>
+        <span>{t('A moved skill arrives at')}</span>
+        <span className="ta-val">{level >= TRANSFER.keepLevelAt ? t('its full level') : t('one level lower')}</span>
       </div>
       <div className="syn-modes">
-        <button className={`btn sm ${tab === 'transfer' ? 'primary' : ''}`} onClick={() => setTab('transfer')}>⇄ Transfer</button>
-        <button className={`btn sm ${tab === 'fuse' ? 'primary' : ''}`} onClick={() => setTab('fuse')}>✦ Fuse &amp; evolve</button>
+        <button className={`btn sm ${tab === 'transfer' ? 'primary' : ''}`} onClick={() => setTab('transfer')}>{t('⇄ Transfer')}</button>
+        <button className={`btn sm ${tab === 'fuse' ? 'primary' : ''}`} onClick={() => setTab('fuse')}>{t('✦ Fuse & evolve')}</button>
       </div>
 
       {tab === 'transfer' ? (
         <>
-          <div className="syn-label">Donor (forgets the skill)</div>
+          <div className="syn-label">{t('Donor (forgets the skill)')}</div>
           {chips(donor, (id) => { setDonorId(id); setErr(null) }, recipientId)}
-          <div className="syn-label">Recipient</div>
+          <div className="syn-label">{t('Recipient')}</div>
           {chips(recipient, (id) => { setRecipientId(id); setErr(null) }, donorId)}
           {donor && recipient && (
             <div className="drill-list">
@@ -864,10 +884,10 @@ function TransferAction({ state, store }: { state: GameState; store: Store }) {
                 if (!def) return null
                 const reason = transferRefusal(state, donor.id, recipient.id, sk.id)
                 return (
-                  <div key={sk.id} className={`drill-row ${reason ? 'off' : ''}`} title={reason ?? undefined}>
+                  <div key={sk.id} className={`drill-row ${reason ? 'off' : ''}`} title={reason ? t(reason) : undefined}>
                     <span className="skill-grade">{def.grade}</span>
                     <span className="drill-name">
-                      {def.name} Lv{sk.level} → Lv{transferredLevel(sk.level, level)}
+                      {t('{name} Lv{level} → Lv{n}', { name: t(def.name), level: sk.level, n: transferredLevel(sk.level, level) })}
                     </span>
                     <span className="muted">{transferCost(sk.id).toLocaleString()} ◆</span>
                     <button
@@ -875,18 +895,18 @@ function TransferAction({ state, store }: { state: GameState; store: Store }) {
                       disabled={reason !== null}
                       onClick={() => run({ type: 'TRANSFER_SKILL', donorId: donor.id, recipientId: recipient.id, skillId: sk.id })}
                     >
-                      Move
+                      {t('Move')}
                     </button>
                   </div>
                 )
               })}
-              {donor.skills.length === 0 && <div className="lr-empty">The donor has no skills.</div>}
+              {donor.skills.length === 0 && <div className="lr-empty">{t('The donor has no skills.')}</div>}
             </div>
           )}
         </>
       ) : (
         <>
-          <div className="syn-label">Hero</div>
+          <div className="syn-label">{t('Hero')}</div>
           {chips(fuser, (id) => { setFuserId(id); setErr(null) })}
           {fuser && (
             <div className="drill-list">
@@ -894,19 +914,19 @@ function TransferAction({ state, store }: { state: GameState; store: Store }) {
               {fuseOptions(state, fuser.id).map((o) => {
                 const def = SKILLS[o.result]!
                 return (
-                  <div key={o.result} className={`drill-row ${o.ok ? '' : 'off'}`} title={o.reason ?? undefined}>
+                  <div key={o.result} className={`drill-row ${o.ok ? '' : 'off'}`} title={o.reason ? t(o.reason) : undefined}>
                     <span className="skill-grade">{def.grade}</span>
                     <span className="drill-name">
-                      {o.kind === 'evolve' ? 'Evolve' : 'Fuse'} {o.inputs.map((i) => SKILLS[i]?.name ?? i).join(' + ')} → {def.name}
+                      {o.kind === 'evolve' ? t('Evolve') : t('Fuse')} {o.inputs.map((i) => t(SKILLS[i]?.name ?? i)).join(' + ')} → {t(def.name)}
                     </span>
                     <span className="muted">{o.cost.toLocaleString()} ◆</span>
                     <button className="btn sm" disabled={!o.ok} onClick={() => run({ type: 'FUSE_SKILL', heroId: fuser.id, result: o.result })}>
-                      {o.kind === 'evolve' ? 'Evolve' : 'Fuse'}
+                      {o.kind === 'evolve' ? t('Evolve') : t('Fuse')}
                     </button>
                   </div>
                 )
               })}
-              {fuseOptions(state, fuser.id).length === 0 && <div className="lr-empty">No recipe uses this hero’s skills yet.</div>}
+              {fuseOptions(state, fuser.id).length === 0 && <div className="lr-empty">{t('No recipe uses this hero’s skills yet.')}</div>}
             </div>
           )}
         </>
@@ -954,7 +974,7 @@ export function PlacePanel({ place, state, store }: { place: PanelPlace; state: 
 
   return (
     <div className={`place-panel place-${place}`}>
-      <p className="place-blurb">{BLURB[place]}</p>
+      <p className="place-blurb">{t(BLURB[place])}</p>
       {(place === 'kitchen' ||
         place === 'tacticalCenter' ||
         place === 'promotionChamber' ||
@@ -963,7 +983,7 @@ export function PlacePanel({ place, state, store }: { place: PanelPlace; state: 
         place === 'hallOfMagic') && (
         <div className="lr-lvl-row">
           <span className="lr-lvl">
-            {state.facilities[place].level === 0 ? 'Not built' : `Facility Lv ${state.facilities[place].level}`}
+            {state.facilities[place].level === 0 ? t('Not built') : t('Facility Lv {n}', { n: state.facilities[place].level })}
           </span>
         </div>
       )}
@@ -971,7 +991,7 @@ export function PlacePanel({ place, state, store }: { place: PanelPlace; state: 
         <>
           <BanquetAction state={state} store={store} />
           <UpgradeControl state={state} store={store} facility="kitchen" />
-          <h4 className="panel-sub">Resting here</h4>
+          <h4 className="panel-sub">{t('Resting here')}</h4>
           <Occupants heroes={here('kitchen')} empty="Nobody needs comforting right now." />
         </>
       )}
@@ -979,7 +999,7 @@ export function PlacePanel({ place, state, store }: { place: PanelPlace; state: 
         <>
           <TacticalAction state={state} />
           <UpgradeControl state={state} store={store} facility="tacticalCenter" />
-          <h4 className="panel-sub">On duty</h4>
+          <h4 className="panel-sub">{t('On duty')}</h4>
           <Occupants heroes={here('tacticalCenter')} empty="No party assigned — use the party board." />
         </>
       )}
@@ -987,7 +1007,7 @@ export function PlacePanel({ place, state, store }: { place: PanelPlace; state: 
         <>
           <PromotionAction state={state} store={store} />
           <UpgradeControl state={state} store={store} facility="promotionChamber" />
-          <h4 className="panel-sub">Waiting at the cap</h4>
+          <h4 className="panel-sub">{t('Waiting at the cap')}</h4>
           <Occupants heroes={here('promotionChamber')} empty="No one is waiting here." />
         </>
       )}

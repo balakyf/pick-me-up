@@ -6,6 +6,7 @@ import { createRoot, type Root } from 'react-dom/client'
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 import { App } from './App'
 import { getStore } from './useGame'
+import { setLocale } from './i18n/i18n'
 
 /**
  * UI smoke test: mount the REAL App against the REAL engine in jsdom and verify
@@ -343,5 +344,36 @@ describe('App smoke — PvP & social', () => {
       getStore().load()
     })
     expect(container.textContent).toContain('The waiting room has greyed')
+  })
+})
+
+describe('App smoke — French', () => {
+  it('the Menu switches the whole game to French and back', () => {
+    mount()
+    act(() => {
+      getStore().dispatch({ type: 'NEW_ACCOUNT', seed: 99, now: 0 })
+    })
+    try {
+      clickButton('Menu')
+      clickButton('Français')
+      // The menu itself re-renders in French…
+      expect(container.textContent).toContain('Cuisine')
+      expect(container.textContent).toContain('Salle de magie')
+      expect(container.textContent).toContain('English')
+      const kitchen = Array.from(container.querySelectorAll('button.menu-item')).find((b) => b.textContent?.includes('Cuisine'))
+      act(() => {
+        ;(kitchen as HTMLButtonElement).click()
+      })
+      // …and so does a facility window.
+      expect(container.textContent).toContain('Banquet')
+      expect(container.textContent).toContain('moral au maximum')
+      closeWindow()
+      expect(container.textContent).toContain('Maître Niv. 1')
+      clickButton('Menu')
+      clickButton('English')
+      expect(container.textContent).toContain('Kitchen')
+    } finally {
+      act(() => setLocale('en'))
+    }
   })
 })

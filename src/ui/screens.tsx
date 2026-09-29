@@ -15,6 +15,7 @@ import { drawProp } from './pixel/props'
 import { scale } from './pixel/bitmap'
 import type { Element, HeroClass, SkillProgress, Star, SummonPool } from '../engine/types'
 import { HIDDEN_OBJECTIVES, SKILLS } from '../engine/content'
+import { t } from './i18n/i18n'
 
 export const PARTY_LINES: Line[] = ['front', 'front', 'mid', 'back', 'back']
 const SUMMON_COST = TUNING.gacha.normalCostGold
@@ -38,7 +39,7 @@ const PARADE: { heroClass: HeroClass | null; star: Star; element: Element }[] = 
 export function TitleScreen({ store, hasSave }: { store: Store; hasSave: boolean }) {
   return (
     <div className="title-wrap">
-      <div className="subtitle">Infinite Gacha</div>
+      <div className="subtitle">{t('Infinite Gacha')}</div>
       <div className="logo">
         Pick Me Up<span className="spark">!</span>
       </div>
@@ -55,23 +56,22 @@ export function TitleScreen({ store, hasSave }: { store: Store; hasSave: boolean
         ))}
       </div>
       <div className="tag">
-        Summon unique heroes from the Mobius gacha, build a party of five, and climb the permadeath tower.
-        Every hero is one of a kind. Every death is forever.
+        {t('Summon unique heroes from the Mobius gacha, build a party of five, and climb the permadeath tower. Every hero is one of a kind. Every death is forever.')}
       </div>
       <div className="btns">
         {hasSave && (
           <button className="btn big" onClick={() => store.load()}>
-            Continue
+            {t('Continue')}
           </button>
         )}
         <button
           className="btn primary big"
           onClick={() => store.dispatch({ type: 'NEW_ACCOUNT', seed: freshSeed(), now: Date.now() })}
         >
-          {hasSave ? 'New Game' : 'Begin'}
+          {hasSave ? t('New Game') : t('Begin')}
         </button>
       </div>
-      {hasSave && <div className="muted" style={{ marginTop: 14 }}>Starting a new game overwrites your save.</div>}
+      {hasSave && <div className="muted" style={{ marginTop: 14 }}>{t('Starting a new game overwrites your save.')}</div>}
     </div>
   )
 }
@@ -95,7 +95,7 @@ function SummonRitual({ heroes, masterLevel, onDone }: { heroes: OwnedHero[]; ma
   }, [])
   const circle = cachedDataUrl(`circle|${tint}`, () => scale(drawSummonCircle(tint), 3))
   return (
-    <div className="ritual" onClick={onDone} style={{ ['--beam' as string]: tint }} title="Click to skip">
+    <div className="ritual" onClick={onDone} style={{ ['--beam' as string]: tint }} title={t('Click to skip')}>
       <div className="ritual-beams">
         {heroes.map((h, i) => (
           <span key={h.id} className="ritual-beam" style={{ background: STAR_COLOR[shownStar(h, masterLevel) as Star], animationDelay: `${0.5 + i * 0.05}s` }} />
@@ -127,7 +127,7 @@ export function SummonScreen({ state, store }: { state: GameState; store: Store 
       setRevealed([])
       setRitual(pulled)
     } catch (e) {
-      setErr(e instanceof Error ? e.message.replace(/^\w+: /, '') : 'Summon failed')
+      setErr(t(e instanceof Error ? e.message.replace(/^\w+: /, '') : 'Summon failed'))
     }
   }
 
@@ -136,19 +136,22 @@ export function SummonScreen({ state, store }: { state: GameState; store: Store 
 
   return (
     <div className="screen">
-      <h2>Mobius Summon</h2>
+      <h2>{t('Mobius Summon')}</h2>
       <div className="summon-pools">
         <button className={`btn sm ${pool === 'normal' ? 'primary' : ''}`} onClick={() => setPool('normal')}>
-          Normal · 1–3★
+          {t('Normal · 1–3★')}
         </button>
         <button className={`btn sm ${pool === 'advanced' ? 'primary' : ''}`} onClick={() => setPool('advanced')}>
-          ♦ Advanced · 3–5★
+          {t('♦ Advanced · 3–5★')}
         </button>
       </div>
       <p className="sub">
         {pool === 'normal'
-          ? `Normal pool · ${SUMMON_COST.toLocaleString()} Gold per pull · every hero is unique, no duplicates.`
-          : `Advanced pool · ${ADV.costGems} gems per pull (${ADV.tenPullGems.toLocaleString()} for ten) · 4★+ arrive with an exclusive weapon and an engraving.`}
+          ? t('Normal pool · {gold} Gold per pull · every hero is unique, no duplicates.', { gold: SUMMON_COST.toLocaleString() })
+          : t('Advanced pool · {gems} gems per pull ({ten} for ten) · 4★+ arrive with an exclusive weapon and an engraving.', {
+              gems: ADV.costGems,
+              ten: ADV.tenPullGems.toLocaleString(),
+            })}
       </p>
 
       <div className="summon-stage">
@@ -160,17 +163,17 @@ export function SummonScreen({ state, store }: { state: GameState; store: Store 
           </div>
         ) : (
           <div className="orb">
-            <img className="px" src={cachedDataUrl('summon-orb', () => scale(drawProp('summonCrystal', 0).bmp, 5))} width={160} height={220} alt="The Mobius crystal" />
+            <img className="px" src={cachedDataUrl('summon-orb', () => scale(drawProp('summonCrystal', 0).bmp, 5))} width={160} height={220} alt={t('The Mobius crystal')} />
           </div>
         )}
 
         {pool === 'normal' ? (
           <div className="pity">
-            Quality floor: <b>{state.gacha.pity}</b> / {PITY_AT} dry pulls → guaranteed ★★★
+            {t('Quality floor:')} <b>{state.gacha.pity}</b> / {PITY_AT} {t('dry pulls → guaranteed ★★★')}
           </div>
         ) : (
           <div className="pity">
-            Quality floor: <b>{state.gacha.advPity4}</b> / {ADV.pityFloor4At} → ★★★★ · <b>{state.gacha.advPity5}</b> /{' '}
+            {t('Quality floor:')} <b>{state.gacha.advPity4}</b> / {ADV.pityFloor4At} → ★★★★ · <b>{state.gacha.advPity5}</b> /{' '}
             {ADV.pityFloor5At} → ★★★★★
           </div>
         )}
@@ -178,22 +181,24 @@ export function SummonScreen({ state, store }: { state: GameState; store: Store 
         <div className="summon-buttons">
           {pool === 'normal' ? (
             <button className="btn gold big" onClick={() => pull(1)} disabled={!canOne}>
-              Summon · {SUMMON_COST.toLocaleString()} Gold
+              {t('Summon · {SUMMON_COST} Gold', { SUMMON_COST: SUMMON_COST.toLocaleString() })}
             </button>
           ) : (
             <>
               <button className="btn gem big" onClick={() => pull(1)} disabled={!canOne}>
-                Summon · {ADV.costGems} ♦
+                {t('Summon · {costGems} ♦', { costGems: ADV.costGems })}
               </button>
               <button className="btn gem big" onClick={() => pull(10)} disabled={!canTen}>
-                Summon ×10 · {ADV.tenPullGems.toLocaleString()} ♦
+                {t('Summon ×10 · {tenPullGems} ♦', { tenPullGems: ADV.tenPullGems.toLocaleString() })}
               </button>
             </>
           )}
         </div>
         {!canOne && (
           <div className="muted">
-            {pool === 'normal' ? 'Not enough Gold — clear tower floors to earn more.' : 'Not enough gems — the Friday Soulforge dungeon pays them.'}
+            {pool === 'normal'
+              ? t('Not enough Gold — clear tower floors to earn more.')
+              : t('Not enough gems — the Friday Soulforge dungeon pays them.')}
           </div>
         )}
         {err && <div className="muted" style={{ color: 'var(--bad)' }}>{err}</div>}
@@ -223,8 +228,10 @@ export function RosterScreen({ state, store }: { state: GameState; store?: Store
 
   return (
     <div className="screen">
-      <h2>Roster</h2>
-      <p className="sub">{heroes.length} {heroes.length === 1 ? 'hero' : 'heroes'} · {living} living · click a card for full stats.</p>
+      <h2>{t('Roster')}</h2>
+      <p className="sub">
+        {heroes.length === 1 ? t('1 hero') : t('{n} heroes', { n: heroes.length })} · {t('{n} living · click a card for full stats.', { n: living })}
+      </p>
       <div className="grid cards">
         {heroes.map((h) => (
           <HeroCard
@@ -282,8 +289,8 @@ export function PartyScreen({ state, store }: { state: GameState; store: Store }
 
   return (
     <div className="screen">
-      <h2>Party</h2>
-      <p className="sub">Up to five heroes. Slots 1–2 stand front, 3 mid, 4–5 back. Total CP {partyCP.toLocaleString()}.</p>
+      <h2>{t('Party')}</h2>
+      <p className="sub">{t('Up to five heroes. Slots 1–2 stand front, 3 mid, 4–5 back. Total CP {partyCP}.', { partyCP: partyCP.toLocaleString() })}</p>
 
       <div className="party-slots">
         {draft.map((id, i) => {
@@ -293,20 +300,20 @@ export function PartyScreen({ state, store }: { state: GameState; store: Store }
               key={i}
               className={`slot ${h ? 'filled' : ''}`}
               onClick={() => h && clearSlot(i)}
-              title={h ? 'Click to remove' : 'Empty'}
+              title={h ? t('Click to remove') : t('Empty')}
             >
-              <span className="line-tag">{PARTY_LINES[i]}</span>
+              <span className="line-tag">{t(PARTY_LINES[i]!)}</span>
               {h ? (
                 <div style={{ textAlign: 'center' }}>
                   <Portrait hero={h} />
                   <div className="hname" style={{ fontSize: 13 }}>{h.name}</div>
                   <div className="row" style={{ justifyContent: 'center', gap: 8 }}>
                     <Stars star={h.star} />
-                    <span className="cp"><span className="lab">CP </span>{cpOf(h)}</span>
+                    <span className="cp"><span className="lab">{t('CP')} </span>{cpOf(h)}</span>
                   </div>
                 </div>
               ) : (
-                <span>+ empty</span>
+                <span>{t('+ empty')}</span>
               )}
             </div>
           )
@@ -315,17 +322,17 @@ export function PartyScreen({ state, store }: { state: GameState; store: Store }
 
       <div className="row" style={{ margin: '8px 0 20px' }}>
         <button className="btn primary" onClick={save} disabled={!dirty}>
-          {saved && !dirty ? '✓ Saved' : 'Save Party'}
+          {saved && !dirty ? t('✓ Saved') : t('Save Party')}
         </button>
-        <span className="muted">{draft.filter(Boolean).length}/5 deployed</span>
+        <span className="muted">{t('{n}/5 deployed', { n: draft.filter(Boolean).length })}</span>
       </div>
 
-      <h3 style={{ margin: '0 0 10px' }}>Available heroes</h3>
+      <h3 style={{ margin: '0 0 10px' }}>{t('Available heroes')}</h3>
       <div className="grid cards">
         {living.map((h) => (
           <HeroCard key={h.id} hero={h} selected={inParty(h.id)} onClick={() => addHero(h.id)} />
         ))}
-        {living.length === 0 && <div className="empty">No living heroes. Summon to recruit.</div>}
+        {living.length === 0 && <div className="empty">{t('No living heroes. Summon to recruit.')}</div>}
       </div>
     </div>
   )
@@ -334,17 +341,17 @@ export function PartyScreen({ state, store }: { state: GameState; store: Store }
 // ── Results ──────────────────────────────────────────────────────────────────
 /** One line of skill news for the results screen. */
 export function skillProgressLine(p: SkillProgress, state: GameState): string {
-  const who = state.heroes[p.heroId]?.name.split(/\s+/)[0] ?? 'A hero'
-  const name = (id: string) => SKILLS[id]?.name ?? id
+  const who = state.heroes[p.heroId]?.name.split(/\s+/)[0] ?? t('A hero')
+  const name = (id: string) => t(SKILLS[id]?.name ?? id)
   switch (p.kind) {
     case 'level-up':
-      return `▲ ${who}'s ${name(p.skillId)} reached Lv ${p.level}`
+      return t("▲ {who}'s {skill} reached Lv {n}", { who, skill: name(p.skillId), n: p.level })
     case 'merge':
-      return `✦ ${who} fused ${name(p.from[0])} + ${name(p.from[1])} into ${name(p.skillId)}!`
+      return t('✦ {who} fused {a} + {b} into {skill}!', { who, a: name(p.from[0]), b: name(p.from[1]), skill: name(p.skillId) })
     case 'unlock':
-      return `✧ ${who} awakened a new skill: ${name(p.skillId)}`
+      return t('✧ {who} awakened a new skill: {skill}', { who, skill: name(p.skillId) })
     case 'achievement':
-      return `🏆 ${who} earned ${name(p.skillId)}!`
+      return t('🏆 {who} earned {skill}!', { who, skill: name(p.skillId) })
   }
 }
 
@@ -363,21 +370,21 @@ export function ResultsScreen({
   return (
     <div className="overlay">
       <div className="result-card">
-        <div className={`big-outcome ${win ? 'win' : 'lose'}`}>{win ? 'FLOOR CLEARED' : failed ? 'MISSION FAILED' : 'DEFEATED'}</div>
+        <div className={`big-outcome ${win ? 'win' : 'lose'}`}>{win ? t('FLOOR CLEARED') : failed ? t('MISSION FAILED') : t('DEFEATED')}</div>
         <div className="muted">
-          Floor {result.floor}
-          {result.firstClear && win ? ' · first clear bonus!' : ''}
-          {failed ? ' · the escort fell — the floor must be retried' : ''}
+          {t('Floor {floor}', { floor: result.floor })}
+          {result.firstClear && win ? ' · ' + t('first clear bonus!') : ''}
+          {failed ? ' · ' + t('the escort fell — the floor must be retried') : ''}
         </div>
 
         <div className="reward-row">
           <div className="r">
             <div className="n" style={{ color: 'var(--gold)' }}>+{result.goldAwarded.toLocaleString()}</div>
-            <div className="l">Gold</div>
+            <div className="l">{t('Gold')}</div>
           </div>
           <div className="r">
             <div className="n" style={{ color: 'var(--accent-2)' }}>+{result.xpAwarded}</div>
-            <div className="l">XP each</div>
+            <div className="l">{t('XP each')}</div>
           </div>
         </div>
 
@@ -395,8 +402,8 @@ export function ResultsScreen({
               const h = HIDDEN_OBJECTIVES.find((x) => x.id === id)
               return (
                 <div key={id} className="sp-row achievement">
-                  ✧ Hidden objective: {h?.name ?? id}
-                  {h?.reward.gems ? ` · +${h.reward.gems} gems` : ''}
+                  ✧ {t('Hidden objective:')} {t(h?.name ?? id)}
+                  {h?.reward.gems ? ` · ${t('+{n} gems', { n: h.reward.gems })}` : ''}
                 </div>
               )
             })}
@@ -405,10 +412,10 @@ export function ResultsScreen({
 
         {result.refusedHeroIds.length > 0 && (
           <div className="fallen">
-            <div className="ft">✋ Refused to fight</div>
+            <div className="ft">{t('✋ Refused to fight')}</div>
             {result.refusedHeroIds.map((id) => (
               <div key={id}>
-                {state.heroes[id]?.name ?? id} <span className="muted">(Wary and broken — win back their trust)</span>
+                {state.heroes[id]?.name ?? id} <span className="muted">{t('(Wary and broken — win back their trust)')}</span>
               </div>
             ))}
           </div>
@@ -416,46 +423,46 @@ export function ResultsScreen({
 
         {result.worldSaved && (
           <div className="world-ended pframe" style={{ borderColor: 'var(--good)', color: '#c8f0d0' }}>
-            You refused the win condition. The Herald falls, and the world beneath the tower is still there.
+            {t('You refused the win condition. The Herald falls, and the world beneath the tower is still there.')}
           </div>
         )}
 
         {result.worldEnded && (
           <div className="world-ended pframe">
-            The ninetieth floor falls — and with it, the world beneath the tower. No one on its surface survives.
+            {t('The ninetieth floor falls — and with it, the world beneath the tower. No one on its surface survives.')}
           </div>
         )}
 
         {result.loopRollback && (
           <div className="fallen">
-            <div className="ft">↺ The loop resets</div>
-            <div>The gate held. The waiting room drops back to floor {TUNING.tower.loop.fallbackTo}.</div>
+            <div className="ft">{t('↺ The loop resets')}</div>
+            <div>{t('The gate held. The waiting room drops back to floor {fallbackTo}.', { fallbackTo: TUNING.tower.loop.fallbackTo })}</div>
           </div>
         )}
 
         {result.event && (
           <div className="muted" style={{ marginBottom: 10 }}>
             {result.event.kind === 'tournament'
-              ? '🏆 A tournament gathers between the floors.'
+              ? t('🏆 A tournament gathers between the floors.')
               : result.event.kind === 'recovery'
-                ? '✚ The tower offers a recovery floor.'
-                : '✦ An event floor opens before the next climb.'}
+                ? t('✚ The tower offers a recovery floor.')
+                : t('✦ An event floor opens before the next climb.')}
           </div>
         )}
 
         {fallen.length > 0 && (
           <div className="fallen">
-            <div className="ft">☠ Permanently lost</div>
+            <div className="ft">{t('☠ Permanently lost')}</div>
             {fallen.map((h) => (
               <div key={h.id}>
-                {h.name} <span className="muted">({h.star}★ Lv{h.xp.level})</span>
+                {h.name} <span className="muted">{t('({star}★ Lv{level})', { star: h.star, level: h.xp.level })}</span>
               </div>
             ))}
           </div>
         )}
 
         <button className="btn primary big" onClick={onContinue} style={{ marginTop: 8 }}>
-          {win ? 'Onward ▸' : 'Regroup'}
+          {win ? t('Onward ▸') : t('Regroup')}
         </button>
       </div>
     </div>

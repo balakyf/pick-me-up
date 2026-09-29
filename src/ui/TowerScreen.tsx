@@ -13,6 +13,8 @@ import { TimingGame } from './metaPanels'
 import { cachedDataUrl } from './pixel/render'
 import { scale } from './pixel/bitmap'
 import { drawTowerExterior, TOWER_H, TOWER_W } from './pixel/towerMap'
+import { t } from './i18n/i18n'
+import { ELEMENT_VIS } from './bits'
 
 const MAX_FLOOR = TUNING.tower.sliceTopFloor
 const EV = TUNING.events
@@ -21,25 +23,25 @@ const EV = TUNING.events
 function optionBlurb(option: string, floor: number): string {
   switch (option) {
     case 'rest':
-      return `Every living hero recovers ${EV.restSanity} Sanity.`
+      return t('Every living hero recovers {n} Sanity.', { n: EV.restSanity })
     case 'treasure':
-      return `A cache: ${treasureGold(floor).toLocaleString()} gold and ${EV.treasureStones} stones.`
+      return t('A cache: {g} gold and {s} stones.', { g: treasureGold(floor).toLocaleString(), s: EV.treasureStones })
     case 'merchant':
-      return `Buy ${EV.merchantStones} Promotion Stones for ${merchantPrice().toLocaleString()} gold.`
+      return t('Buy {n} Promotion Stones for {g} gold.', { n: EV.merchantStones, g: merchantPrice().toLocaleString() })
     case 'gamble':
-      return `A sealed door. ${Math.round(EV.gambleChance * 100)}%: a vault worth ×${EV.gambleWinMult} treasure. Otherwise the party loses ${EV.gambleSanity} Sanity.`
+      return t('A sealed door. {p}%: a vault worth ×{m} treasure. Otherwise the party loses {s} Sanity.', { p: Math.round(EV.gambleChance * 100), m: EV.gambleWinMult, s: EV.gambleSanity })
     case 'reinforcement':
-      return 'A free Normal summon joins the roster.'
+      return t('A free Normal summon joins the roster.')
     case 'battle_royale':
-      return 'Your party against three rival squads, back to back.'
+      return t('Your party against three rival squads, back to back.')
     case 'party_raid':
-      return 'Your party against a raid colossus, against the clock.'
+      return t('Your party against a raid colossus, against the clock.')
     case 'team':
-      return 'Three 5-on-5 rounds against rising rivals.'
+      return t('Three 5-on-5 rounds against rising rivals.')
     case 'pair':
-      return 'Your two strongest heroes, three rounds.'
+      return t('Your two strongest heroes, three rounds.')
     case 'deathmatch':
-      return 'Your single strongest hero, three duels.'
+      return t('Your single strongest hero, three duels.')
     default:
       return ''
   }
@@ -53,15 +55,15 @@ function EventPanel({ state, onResolve }: { state: GameState; onResolve: (option
   return (
     <div className="pframe event-panel">
       <div className="event-head">
-        <span className="event-kind">{EVENT_TITLE[ev.kind]}</span>
-        <span className="muted">between F{ev.floor} and F{ev.floor + 1}</span>
+        <span className="event-kind">{t(EVENT_TITLE[ev.kind])}</span>
+        <span className="muted">{t('between F{a} and F{b}', { a: ev.floor, b: ev.floor + 1 })}</span>
       </div>
       <p className="muted" style={{ margin: '4px 0 10px' }}>
         {ev.kind === 'tournament'
-          ? 'Masters from other worlds gather between the floors. Pick a format — no one dies here.'
+          ? t('Masters from other worlds gather between the floors. Pick a format — no one dies here.')
           : ev.kind === 'recovery'
-            ? 'The main team is gone. The tower offers a breather before the next floor.'
-            : 'A quiet floor between the fights. Choose how to spend it.'}
+            ? t('The main team is gone. The tower offers a breather before the next floor.')
+            : t('A quiet floor between the fights. Choose how to spend it.')}
       </p>
       <div className="event-options">
         {ev.options.map((o) => (
@@ -71,7 +73,7 @@ function EventPanel({ state, onResolve }: { state: GameState; onResolve: (option
             onClick={() => onResolve(o)}
             disabled={o === 'merchant' && state.gold < merchantPrice()}
           >
-            <span className="eo-name">{EVENT_OPTION_LABEL[o] ?? o}</span>
+            <span className="eo-name">{t(EVENT_OPTION_LABEL[o] ?? o)}</span>
             <span className="eo-blurb">{optionBlurb(o, ev.floor)}</span>
           </button>
         ))}
@@ -95,17 +97,19 @@ function EventOutcomeCard({
     <div className="overlay">
       <div className="result-card">
         <div className={`big-outcome ${outcome.won === false || (outcome.wins !== undefined && outcome.wins === 0) ? 'lose' : 'win'}`}>
-          {EVENT_OPTION_LABEL[outcome.option] ?? outcome.option}
+          {t(EVENT_OPTION_LABEL[outcome.option] ?? outcome.option)}
         </div>
-        <div className="muted">{outcome.note}</div>
+        <div className="muted">
+          {/^Placed \d/.test(outcome.note) ? t('Placed {n} of 8.', { n: outcome.placing ?? 8 }) : t(outcome.note)}
+        </div>
         {outcome.rounds && (
           <div className="tourney-rounds">
             {outcome.rounds.map((r, i) => (
-              <button key={i} className={`tr-round ${r.won ? 'won' : 'lost'}`} onClick={() => onReplay(r.log)} title="Watch this round">
-                Round {i + 1} · {r.won ? 'won' : 'lost'} · rival CP {r.rivalCp.toLocaleString()} ▸
+              <button key={i} className={`tr-round ${r.won ? 'won' : 'lost'}`} onClick={() => onReplay(r.log)} title={t('Watch this round')}>
+                {t('Round {n}', { n: i + 1 })} · {r.won ? t('won') : t('lost')} · {t('rival CP')} {r.rivalCp.toLocaleString()} ▸
               </button>
             ))}
-            <div className="tr-placing">Placing: {outcome.placing} / 8</div>
+            <div className="tr-placing">{t('Placing: {n} / 8', { n: outcome.placing ?? 8 })}</div>
           </div>
         )}
         <div className="reward-row">
@@ -115,13 +119,13 @@ function EventOutcomeCard({
                 {outcome.gold > 0 ? '+' : ''}
                 {outcome.gold.toLocaleString()}
               </div>
-              <div className="l">Gold</div>
+              <div className="l">{t('Gold')}</div>
             </div>
           )}
           {outcome.gems > 0 && (
             <div className="r">
               <div className="n" style={{ color: 'var(--gem)' }}>+{outcome.gems}</div>
-              <div className="l">Gems</div>
+              <div className="l">{t('Gems')}</div>
             </div>
           )}
           {mats.map(([k, v]) => (
@@ -136,7 +140,7 @@ function EventOutcomeCard({
                 {outcome.sanity > 0 ? '+' : ''}
                 {outcome.sanity}
               </div>
-              <div className="l">Sanity</div>
+              <div className="l">{t('Sanity')}</div>
             </div>
           )}
         </div>
@@ -146,7 +150,7 @@ function EventOutcomeCard({
           </div>
         )}
         <button className="btn primary big" onClick={onClose}>
-          Onward ▸
+          {t('Onward ▸')}
         </button>
       </div>
     </div>
@@ -161,9 +165,9 @@ function Chronicle({ state }: { state: GameState }) {
   return (
     <div className="pframe chronicle">
       <div className="event-head">
-        <span className="event-kind">Chronicle</span>
+        <span className="event-kind">{t('Chronicle')}</span>
         <span className="muted">
-          {found.size} / {HIDDEN_OBJECTIVES.length} truths
+          {t('{n} / {m} truths', { n: found.size, m: HIDDEN_OBJECTIVES.length })}
         </span>
       </div>
       {HIDDEN_OBJECTIVES.map((h) => (
@@ -171,16 +175,16 @@ function Chronicle({ state }: { state: GameState }) {
           <span className="chron-floor">F{h.floor}</span>
           {found.has(h.id) ? (
             <span>
-              <b>{h.name}</b> — <i>{h.lore}</i>
+              <b>{t(h.name)}</b> — <i>{t(h.lore)}</i>
             </span>
           ) : (
-            <span className="muted">{masterSight || revealed.has(h.id) ? `??? — ${h.hint}` : '??? (a hidden objective)'}</span>
+            <span className="muted">{masterSight || revealed.has(h.id) ? `??? — ${t(h.hint)}` : t('??? (a hidden objective)')}</span>
           )}
         </div>
       ))}
       {!masterSight && (
         <div className="muted" style={{ fontSize: 13 }}>
-          From Master Lv {EV.hiddenHintMasterLevel} you sense what the floors are hiding — or a Devoted hero can reveal one.
+          {t('From Master Lv {n} you sense what the floors are hiding — or a Devoted hero can reveal one.', { n: EV.hiddenHintMasterLevel })}
         </div>
       )}
     </div>
@@ -193,28 +197,29 @@ function PeekLine({ preview }: { preview: ReturnType<typeof buildEncounter> }) {
   for (const w of preview.waves) {
     for (const u of w.units) {
       for (const k of u.keywords) {
-        if (k.kind === 'vulnerable') notes.add(`${u.name}: weak to ${k.element}`)
-        if (k.kind === 'immune') notes.add(`${u.name}: immune to ${k.damageType}`)
-        if (k.kind === 'phased') notes.add(`${u.name}: shielded until its guard falls`)
-        if (k.kind === 'enrage') notes.add(`${u.name}: enrages after ${k.afterTick} ticks`)
+        const name = t(u.name)
+        if (k.kind === 'vulnerable') notes.add(t('{name}: weak to {what}', { name, what: t(ELEMENT_VIS[k.element].label) }))
+        if (k.kind === 'immune') notes.add(t('{name}: immune to {what}', { name, what: t(k.damageType) }))
+        if (k.kind === 'phased') notes.add(t('{name}: shielded until its guard falls', { name }))
+        if (k.kind === 'enrage') notes.add(t('{name}: enrages after {n} ticks', { name, n: k.afterTick }))
       }
     }
   }
-  return <div className="peek-line">👁 {notes.size > 0 ? [...notes].join(' · ') : 'No special weakness — just steel and nerve.'}</div>
+  return <div className="peek-line">👁 {notes.size > 0 ? [...notes].join(' · ') : t('No special weakness — just steel and nerve.')}</div>
 }
 
 /** The tower from outside: where the party stands on the spire of 100 floors. */
 function TowerExterior({ state }: { state: GameState }) {
-  const t = state.tower
-  const key = `tower|${t.currentFloor}|${t.highestCleared}|${t.worldEnded}|${t.worldSaved}`
+  const tw = state.tower
+  const key = `tower|${tw.currentFloor}|${tw.highestCleared}|${tw.worldEnded}|${tw.worldSaved}`
   const url = cachedDataUrl(key, () =>
-    scale(drawTowerExterior({ current: t.currentFloor, highest: t.highestCleared, worldEnded: t.worldEnded, worldSaved: t.worldSaved }), 2),
+    scale(drawTowerExterior({ current: tw.currentFloor, highest: tw.highestCleared, worldEnded: tw.worldEnded, worldSaved: tw.worldSaved }), 2),
   )
   return (
-    <div className="tower-exterior" title={`Floor ${Math.min(t.currentFloor, MAX_FLOOR)} of ${MAX_FLOOR}`}>
-      {url && <img className="px" src={url} width={TOWER_W * 2} height={TOWER_H * 2} alt="The Tower from outside" />}
+    <div className="tower-exterior" title={t('Floor {n} of {max}', { n: Math.min(tw.currentFloor, MAX_FLOOR), max: MAX_FLOOR })}>
+      {url && <img className="px" src={url} width={TOWER_W * 2} height={TOWER_H * 2} alt={t('The Tower from outside')} />}
       <div className="muted" style={{ fontSize: 12, textAlign: 'center' }}>
-        {t.highestCleared}/{MAX_FLOOR} cleared
+        {t('{n}/{max} cleared', { n: tw.highestCleared, max: MAX_FLOOR })}
       </div>
     </div>
   )
@@ -273,7 +278,7 @@ export function TowerScreen({ state, store }: { state: GameState; store: Store }
       store.dispatch({ type: 'RESOLVE_EVENT', option }, Date.now())
       setOutcome(out)
     } catch (e) {
-      setErr(e instanceof Error ? e.message.replace(/^\w+: /, '') : 'That failed')
+      setErr(t(e instanceof Error ? e.message.replace(/^\w+: /, '') : 'That failed'))
     }
   }
 
@@ -298,32 +303,37 @@ export function TowerScreen({ state, store }: { state: GameState; store: Store }
 
   return (
     <div className="screen">
-      <h2>The Tower</h2>
+      <h2>{t('The Tower')}</h2>
       <p className="sub">
-        100 floors of permadeath. Falling heroes are gone for good.
-        {state.tower.worldEnded && ' The world you climbed is gone.'}
+        {t('100 floors of permadeath. Falling heroes are gone for good.')}
+        {state.tower.worldEnded && ` ${t('The world you climbed is gone.')}`}
       </p>
 
       {summit && (
         <div className="result-card" style={{ marginTop: 0, marginBottom: 20 }}>
-          <div className="big-outcome win">{state.tower.worldSaved ? 'TRUE END ✦' : 'SUMMIT ✦'}</div>
+          <div className="big-outcome win">{state.tower.worldSaved ? t('TRUE END ✦') : t('SUMMIT ✦')}</div>
           <div className="muted">
-            Tell, the Architect, has fallen. You conquered all {MAX_FLOOR} floors
-            {state.tower.worldSaved ? ' — and the world you climbed is still there.' : ' — for a world that is already gone.'}
+            {t('Tell, the Architect, has fallen. You conquered all {n} floors', { n: MAX_FLOOR })}
+            {state.tower.worldSaved ? t(' — and the world you climbed is still there.') : t(' — for a world that is already gone.')}
           </div>
         </div>
       )}
       {state.tower.worldEnded && !summit && (
         <div className="pframe world-ended">
-          The ninetieth floor is behind you, and the world beneath it has ended. The climb goes on into floors that were never finished.
+          {t('The ninetieth floor is behind you, and the world beneath it has ended. The climb goes on into floors that were never finished.')}
         </div>
       )}
 
       {loop && (
         <div className="pframe loop-banner">
-          <b>Looped mission</b> — F{TUNING.tower.loop.start}–{TUNING.tower.loop.gate}. Failing F{TUNING.tower.loop.gate} sends the room back
-          to F{TUNING.tower.loop.fallbackTo}. Attempts left: <b>{loop.attemptsLeft}</b>
-          {loop.scars > 0 && <> · scars: <b>{loop.scars}</b> (the loop has hardened)</>}
+          <b>{t('Looped mission')}</b> —{' '}
+          {t('F{a}–{b}. Failing F{b} sends the room back to F{c}.', {
+            a: TUNING.tower.loop.start,
+            b: TUNING.tower.loop.gate,
+            c: TUNING.tower.loop.fallbackTo,
+          })}{' '}
+          {t('Attempts left:')} <b>{loop.attemptsLeft}</b>
+          {loop.scars > 0 && <> · {t('scars:')} <b>{loop.scars}</b> {t('(the loop has hardened)')}</>}
         </div>
       )}
 
@@ -332,7 +342,7 @@ export function TowerScreen({ state, store }: { state: GameState; store: Store }
 
       {!deployable && !event && (
         <div className="empty" style={{ color: 'var(--warn)' }}>
-          No deployable heroes — set your Party (heroes in training or broken down can't fight).
+          {t("No deployable heroes — set your Party (heroes in training or broken down can't fight).")}
         </div>
       )}
 
@@ -350,10 +360,10 @@ export function TowerScreen({ state, store }: { state: GameState; store: Store }
             return (
               <button key={f} className={`act-head ${openActs.has(act.id) ? 'open' : ''}`} onClick={() => toggleAct(act.id)}>
                 <span className="act-title">
-                  {openActs.has(act.id) ? '▾' : '▸'} {act.title}
+                  {openActs.has(act.id) ? '▾' : '▸'} {t(act.title)}
                 </span>
                 <span className="muted">
-                  {act.subtitle} · {cleared}/{act.to - act.from + 1}
+                  {t(act.subtitle)} · {cleared}/{act.to - act.from + 1}
                 </span>
               </button>
             )
@@ -370,20 +380,20 @@ export function TowerScreen({ state, store }: { state: GameState; store: Store }
               <div className="fnum">{cleared ? '✓' : `F${f}`}</div>
               <div className="fdesc">
                 <div className="ft">
-                  Floor {f} {anchor && <span className="anchor-badge">ANCHOR</span>}
-                  {f === TUNING.tower.worldEndFloor && <span className="anchor-badge danger">WORLD'S END</span>}
+                  {t('Floor {n}', { n: f })} {anchor && <span className="anchor-badge">{t('ANCHOR')}</span>}
+                  {f === TUNING.tower.worldEndFloor && <span className="anchor-badge danger">{t('WORLD\'S END')}</span>}
                 </div>
                 <div className="fs">
-                  {mission}
-                  {enemyCount !== null && ` · ${enemyCount} enemies`}
-                  {f === current && state.tower.attemptIndex > 0 && ` · attempt ${state.tower.attemptIndex + 1}`}
-                  {anchor?.minigame === 'ballista' && ' · 🎯 ballista'}
+                  {t(mission)}
+                  {enemyCount !== null && ` · ${t('{n} enemies', { n: enemyCount })}`}
+                  {f === current && state.tower.attemptIndex > 0 && ` · ${t('attempt {n}', { n: state.tower.attemptIndex + 1 })}`}
+                  {anchor?.minigame === 'ballista' && ` · 🎯 ${t('ballista')}`}
                 </div>
                 {isCurrent && preview && state.meta.peekedFloors.includes(f) && <PeekLine preview={preview} />}
               </div>
               {isCurrent && f <= MAX_FLOOR && (
                 <button className="btn primary" onClick={enter} disabled={!deployable || event !== null}>
-                  {f === TUNING.tower.worldEndFloor && !state.tower.worldSaved ? 'Clear it ▸' : 'Enter ▸'}
+                  {f === TUNING.tower.worldEndFloor && !state.tower.worldSaved ? t('Clear it ▸') : t('Enter ▸')}
                 </button>
               )}
               {isCurrent && f === TUNING.tower.worldEndFloor && state.tower.hiddenFound.length >= TUNING.lifecycle.subvertTruths && (
@@ -391,9 +401,9 @@ export function TowerScreen({ state, store }: { state: GameState; store: Store }
                   className="btn gem"
                   onClick={() => fight(undefined, true)}
                   disabled={!deployable || event !== null}
-                  title="You know what clearing this floor does. Refuse the win condition."
+                  title={t('You know what clearing this floor does. Refuse the win condition.')}
                 >
-                  Subvert ✦
+                  {t('Subvert ✦')}
                 </button>
               )}
             </div>
@@ -407,10 +417,10 @@ export function TowerScreen({ state, store }: { state: GameState; store: Store }
 
       {aiming && (
         <TimingGame
-          title="The Ballista"
-          verb="Fire"
+          title={t('The Ballista')}
+          verb={t('Shoot')}
           skill={state.meta.skill.ballista}
-          hint="Loose the bolt as the sight crosses the heart. A true shot breaks the scales before the fight begins."
+          hint={t('Loose the bolt as the sight crosses the heart. A true shot breaks the scales before the fight begins.')}
           onDone={fight}
           onCancel={() => setAiming(false)}
         />

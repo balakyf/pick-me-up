@@ -18,6 +18,7 @@ import {
 } from '../engine/pvp'
 import { BattleScene } from './battle/BattleScene'
 import { Portrait } from './bits'
+import { t } from './i18n/i18n'
 
 const P = TUNING.pvp
 
@@ -34,22 +35,38 @@ function useRunner(store: Store) {
         store.dispatch(cmd, Date.now())
         return true
       } catch (e) {
-        setErr(e instanceof Error ? e.message.replace(/^\w+: /, '') : 'That failed')
+        setErr(t(e instanceof Error ? e.message.replace(/^\w+: /, '') : 'That failed'))
         return false
       }
     },
     fail(e: unknown) {
-      setErr(e instanceof Error ? e.message.replace(/^\w+: /, '') : 'That failed')
+      setErr(t(e instanceof Error ? e.message.replace(/^\w+: /, '') : 'That failed'))
     },
   }
 }
 
 function worldTimeLeft(ms: number): string {
-  if (ms <= 0) return 'any moment'
+  if (ms <= 0) return t('any moment')
   const h = Math.ceil(ms / 3_600_000)
-  if (h < 24) return `${h} world-h`
+  if (h < 24) return t('{n} world-h', { n: h })
   const d = Math.floor(h / 24)
-  return `${d} world-day${d === 1 ? '' : 's'}`
+  return d === 1 ? t('1 world-day') : t('{n} world-days', { n: d })
+}
+
+/** The engine writes invasion-log notes in English; render them through the dictionary. */
+const NOTE_PATTERNS: [RegExp, string][] = [
+  [/^raided them and took (.+) captive$/, 'raided them and took {name} captive'],
+  [/^raided you and carried off (.+)$/, 'raided you and carried off {name}'],
+  [/^synthesized (.+)$/, 'synthesized {name}'],
+  [/^stormed their lobby and freed (.+)$/, 'stormed their lobby and freed {name}'],
+  [/^failed to free (.+)$/, 'failed to free {name}'],
+]
+function logNote(note: string): string {
+  for (const [re, key] of NOTE_PATTERNS) {
+    const m = re.exec(note)
+    if (m) return t(key, { name: m[1]! })
+  }
+  return t(note)
 }
 
 /** The PvP side of the open crack: raid, defend, captives, the invasion log (Layer 4). */
@@ -69,8 +86,12 @@ export function PvpPanel({ state, store }: { state: GameState; store: Store }) {
       store.dispatch({ type: 'RAID_RIVAL', rivalId: id }, Date.now())
       r.setNote(
         out.outcome.won
-          ? `You raided ${out.outcome.rival.name}: +${out.outcome.gold.toLocaleString()} gold, +${out.outcome.stones} stones${out.outcome.captive ? `, and took ${out.outcome.captive.name} captive.` : '.'}`
-          : `${out.outcome.rival.name}'s defense drove you back.`,
+          ? t('You raided {rival}: +{gold} gold, +{stones} stones', {
+              rival: out.outcome.rival.name,
+              gold: out.outcome.gold.toLocaleString(),
+              stones: out.outcome.stones,
+            }) + (out.outcome.captive ? t(', and took {name} captive.', { name: out.outcome.captive.name }) : '.')
+          : t("{rival}'s defense drove you back.", { rival: out.outcome.rival.name }),
       )
       setReplay(out.outcome.log)
     } catch (e) {
@@ -84,19 +105,25 @@ export function PvpPanel({ state, store }: { state: GameState; store: Store }) {
   return (
     <div className="lr-action pvp-panel">
       <div className="ta-row">
-        <span>Sector {sectorOf(state)} · rating {state.pvp.rating}</span>
+        <span>{t('Sector {n} · rating {rating}', { n: sectorOf(state), rating: state.pvp.rating })}</span>
         <span className="ta-val">
-          #{sectorRank(state)} of {P.sectorSize} · server #{serverRank(state).toLocaleString()}
+          {t('#{n} of {sectorSize} · server #{n2}', { n: sectorRank(state), sectorSize: P.sectorSize, n2: serverRank(state).toLocaleString() })}
         </span>
       </div>
       <div className="ta-row">
-        <span>Protection shield</span>
+        <span>{t('Protection shield')}</span>
         <span className="ta-val">{shielded ? worldTimeLeft(state.pvp.shieldUntil - nowWorld) : 'down — raiders can come'}</span>
       </div>
       <div className="syn-modes">
-        {(['raid', 'defense', 'captives', 'log'] as const).map((t) => (
-          <button key={t} className={`btn sm ${tab === t ? 'primary' : ''}`} onClick={() => setTab(t)}>
-            {t === 'raid' ? '⚔ Raid' : t === 'defense' ? '🛡 Defense' : t === 'captives' ? `⛓ Captives${heldOurs.length > 0 ? ` (${heldOurs.length}!)` : ''}` : '📜 Log'}
+        {(['raid', 'defense', 'captives', 'log'] as const).map((tb) => (
+          <button key={tb} className={`btn sm ${tab === tb ? 'primary' : ''}`} onClick={() => setTab(tb)}>
+            {tb === 'raid'
+              ? `⚔ ${t('Raid')}`
+              : tb === 'defense'
+                ? `🛡 ${t('Defense')}`
+                : tb === 'captives'
+                  ? `⛓ ${t('Captives')}${heldOurs.length > 0 ? ` (${heldOurs.length}!)` : ''}`
+                  : `📜 ${t('Log')}`}
           </button>
         ))}
       </div>
@@ -104,21 +131,21 @@ export function PvpPanel({ state, store }: { state: GameState; store: Store }) {
       {tab === 'raid' && (
         <div className="drill-list">
           <div className="muted" style={{ fontSize: 13 }}>
-            Raids are non-lethal. A win loots their storeroom; a fallen defender at Lv{P.protectionLevel}+ may be carried off.
+            {t('Raids are non-lethal. A win loots their storeroom; a fallen defender at Lv{n}+ may be carried off.', { n: P.protectionLevel })}
           </div>
-          {raidTargets(state, week).map((t) => {
-            const why = raidRefusal(state, t.id, nowWorld)
-            const g = guildById(t.guildId)
+          {raidTargets(state, week).map((rv) => {
+            const why = raidRefusal(state, rv.id, nowWorld)
+            const g = guildById(rv.guildId)
             return (
-              <div key={t.id} className={`drill-row ${why ? 'off' : ''}`} title={why ?? undefined}>
-                <span className="skill-grade">{t.whale ? '🐋' : 'F'}</span>
+              <div key={rv.id} className={`drill-row ${why ? 'off' : ''}`} title={why ? t(why) : undefined}>
+                <span className="skill-grade">{rv.whale ? '🐋' : 'F'}</span>
                 <span className="drill-name">
-                  {t.name} · F{t.floor} · {g?.name ?? '—'} · defense ×{t.cpRatio.toFixed(2)}
-                  {t.whale && <b className="today-tag"> WHALE</b>}
+                  {rv.name} · F{rv.floor} · {g ? t(g.name) : '—'} · {t('defense')} ×{rv.cpRatio.toFixed(2)}
+                  {rv.whale && <b className="today-tag"> {t('WHALE')}</b>}
                 </span>
-                <span className="muted">{t.rating}</span>
-                <button className="btn sm" disabled={why !== null} onClick={() => raid(t.id)}>
-                  Raid
+                <span className="muted">{rv.rating}</span>
+                <button className="btn sm" disabled={why !== null} onClick={() => raid(rv.id)}>
+                  {t('Raid')}
                 </button>
               </div>
             )
@@ -156,43 +183,43 @@ export function PvpPanel({ state, store }: { state: GameState; store: Store }) {
                   >
                     <Portrait hero={h} size="sm" />
                     <span className="syn-chip-name">
-                      {h.name.split(/\s+/)[0]} <span className="muted">Lv{h.xp.level}</span>
+                      {h.name.split(/\s+/)[0]} <span className="muted">{t('Lv{level}', { level: h.xp.level })}</span>
                     </span>
                   </button>
                 )
               })}
           </div>
-          {state.pvp.defense.every((d) => d === null) && <div className="muted" style={{ fontSize: 13 }}>No preset — your party defends.</div>}
+          {state.pvp.defense.every((d) => d === null) && <div className="muted" style={{ fontSize: 13 }}>{t('No preset — your party defends.')}</div>}
         </div>
       )}
 
       {tab === 'captives' && (
         <div className="drill-list">
-          <h4 className="panel-sub">Your heroes, held by raiders</h4>
-          {heldOurs.length === 0 && <div className="lr-empty">No one has been taken.</div>}
+          <h4 className="panel-sub">{t('Your heroes, held by raiders')}</h4>
+          {heldOurs.length === 0 && <div className="lr-empty">{t('No one has been taken.')}</div>}
           {heldOurs.map((h) => {
             const hold = h.captiveOf!
             return (
               <div key={h.id} className="drill-row">
                 <span className="skill-grade">⛓</span>
                 <span className="drill-name">
-                  {h.name} · held by {hold.master} · synthesized in {worldTimeLeft(hold.deadlineWorld - nowWorld)}
+                  {t('{name} · held by {master} · synthesized in {n}', { name: h.name, master: hold.master, n: worldTimeLeft(hold.deadlineWorld - nowWorld) })}
                 </span>
                 <button
                   className="btn sm"
                   disabled={state.gold < hold.ransomGold || state.gems < hold.ransomGems}
                   onClick={() => r.run({ type: 'RANSOM_HERO', heroId: h.id })}
                 >
-                  Ransom {hold.ransomGold.toLocaleString()} ◆ {hold.ransomGems} ♦
+                  {t('Ransom {ransomGold} ◆ {ransomGems} ♦', { ransomGold: hold.ransomGold.toLocaleString(), ransomGems: hold.ransomGems })}
                 </button>
                 <button className="btn sm" onClick={() => r.run({ type: 'COUNTER_RAID', heroId: h.id })}>
-                  Counter-raid
+                  {t('Counter-raid')}
                 </button>
               </div>
             )
           })}
-          <h4 className="panel-sub">Heroes you took</h4>
-          {state.pvp.captives.length === 0 && <div className="lr-empty">Your cells are empty.</div>}
+          <h4 className="panel-sub">{t('Heroes you took')}</h4>
+          {state.pvp.captives.length === 0 && <div className="lr-empty">{t('Your cells are empty.')}</div>}
           {state.pvp.captives.map((c) => (
             <CaptiveRow key={c.id} captive={c} state={state} run={r.run} />
           ))}
@@ -201,12 +228,14 @@ export function PvpPanel({ state, store }: { state: GameState; store: Store }) {
 
       {tab === 'log' && (
         <div className="drill-list">
-          {state.pvp.log.length === 0 && <div className="lr-empty">Quiet so far.</div>}
+          {state.pvp.log.length === 0 && <div className="lr-empty">{t('Quiet so far.')}</div>}
           {state.pvp.log.map((l, i) => (
             <div key={i} className={`drill-row ${l.won ? '' : 'off'}`}>
               <span className="skill-grade">{l.direction === 'in' ? '⇠' : '⇢'}</span>
               <span className="drill-name">
-                Day {l.worldDay}: {l.direction === 'in' ? `${l.rival} ${l.note}` : `you ${l.note} (${l.rival})`}
+                {l.direction === 'in'
+                  ? t('Day {d}: {rival} {note}', { d: l.worldDay, rival: l.rival, note: logNote(l.note) })
+                  : t('Day {d}: you {note} ({rival})', { d: l.worldDay, rival: l.rival, note: logNote(l.note) })}
               </span>
               <span className="muted">{l.goldDelta !== 0 ? `${l.goldDelta > 0 ? '+' : ''}${l.goldDelta.toLocaleString()} ◆` : ''}</span>
             </div>
@@ -236,13 +265,13 @@ function CaptiveRow({
     <div className="drill-row captive-row">
       <span className="skill-grade">{captive.star}★</span>
       <span className="drill-name">
-        {captive.name} · Lv{captive.level}
+        {t('{name} · Lv{level}', { name: captive.name, level: captive.level })}
       </span>
       <button className="btn sm" onClick={() => run({ type: 'RELEASE_CAPTIVE', captiveId: captive.id })}>
-        Ransom back +{captive.ransomGold.toLocaleString()} ◆
+        {t('Ransom back +{ransomGold} ◆', { ransomGold: captive.ransomGold.toLocaleString() })}
       </button>
       <select className="captive-select" value={into ?? ''} onChange={(e) => setInto((e.target.value || null) as HeroId | null)}>
-        <option value="">synthesize into…</option>
+        <option value="">{t('synthesize into…')}</option>
         {living.map((h) => (
           <option key={h.id} value={h.id}>
             {h.name}
@@ -253,9 +282,9 @@ function CaptiveRow({
         className="btn sm syn-destroy"
         disabled={into === null}
         onClick={() => into && run({ type: 'SYNTHESIZE_CAPTIVE', captiveId: captive.id, survivorId: into })}
-        title="Your heroes will know what you did."
+        title={t('Your heroes will know what you did.')}
       >
-        Synthesize
+        {t('Synthesize')}
       </button>
     </div>
   )
@@ -274,13 +303,19 @@ export function GuildPanel({ state, store }: { state: GameState; store: Store })
         const o = out.outcome
         r.setNote(
           o.felled
-            ? `The Guild Colossus falls! +${o.gold.toLocaleString()} gold, +${o.gems} gems${o.book ? ' — and a Book of Reverse Heaven!' : '.'}`
-            : `You dealt ${o.dealt.toLocaleString()} and your guildmates ${o.mates.toLocaleString()} of ${o.bossHp.toLocaleString()} — it survives. +${o.gold} gold.`,
+            ? t('The Guild Colossus falls! +{gold} gold, +{gems} gems', { gold: o.gold.toLocaleString(), gems: o.gems }) +
+                (o.book ? t(' — and a Book of Reverse Heaven!') : '.')
+            : t('You dealt {dealt} and your guildmates {mates} of {hp} — it survives. +{gold} gold.', {
+                dealt: o.dealt.toLocaleString(),
+                mates: o.mates.toLocaleString(),
+                hp: o.bossHp.toLocaleString(),
+                gold: o.gold,
+              }),
         )
       } else {
         const out = serverWarWithResult(store.getState(), Date.now())
         store.dispatch({ type: 'SERVER_WAR' }, Date.now())
-        r.setNote(`Server war against ${out.enemyGuild}: ${out.wins}/3 battles won.`)
+        r.setNote(t('Server war against {guild}: {wins}/3 battles won.', { guild: t(out.enemyGuild), wins: out.wins }))
       }
     } catch (e) {
       r.fail(e)
@@ -289,30 +324,30 @@ export function GuildPanel({ state, store }: { state: GameState; store: Store })
   return (
     <div className="lr-action guild-panel">
       <div className="ta-row">
-        <span>Guild</span>
-        <span className="ta-val">{g ? g.name : 'none'}</span>
+        <span>{t('Guild')}</span>
+        <span className="ta-val">{g ? t(g.name) : t('none')}</span>
       </div>
       <div className="ta-row">
-        <span>Server wars</span>
+        <span>{t('Server wars')}</span>
         <span className="ta-val">
           {state.pvp.war.wins}W · {state.pvp.war.losses}L
         </span>
       </div>
       {g ? (
         <>
-          <div className="muted" style={{ fontSize: 13 }}>{g.blurb}</div>
+          <div className="muted" style={{ fontSize: 13 }}>{t(g.blurb)}</div>
           <div className="syn-modes">
             <button className="btn sm" onClick={() => r.run({ type: 'CLAIM_GUILD_AID' })}>
-              Claim aid (+{TUNING.guild.aidStones} stones)
+              {t('Claim aid (+{aidStones} stones)', { aidStones: TUNING.guild.aidStones })}
             </button>
             <button className="btn sm" onClick={() => weekly('raid')}>
-              Guild raid
+              {t('Guild raid')}
             </button>
             <button className="btn sm" onClick={() => weekly('war')}>
-              Server war
+              {t('Server war')}
             </button>
             <button className="btn sm ghost" onClick={() => r.run({ type: 'LEAVE_GUILD' })}>
-              Leave
+              {t('Leave')}
             </button>
           </div>
         </>
@@ -321,14 +356,14 @@ export function GuildPanel({ state, store }: { state: GameState; store: Store })
           {GUILDS.map((x) => {
             const why = joinRefusal(state, x.id)
             return (
-              <div key={x.id} className={`drill-row ${why ? 'off' : ''}`} title={why ?? undefined}>
+              <div key={x.id} className={`drill-row ${why ? 'off' : ''}`} title={why ? t(why) : undefined}>
                 <span className="skill-grade">{x.whale ? '🐋' : '⚑'}</span>
                 <span className="drill-name">
-                  {x.name} — <span className="muted">{x.blurb}</span>
+                  {t(x.name)} — <span className="muted">{t(x.blurb)}</span>
                 </span>
                 <span />
                 <button className="btn sm" disabled={why !== null} onClick={() => r.run({ type: 'JOIN_GUILD', guildId: x.id })}>
-                  Join
+                  {t('Join')}
                 </button>
               </div>
             )

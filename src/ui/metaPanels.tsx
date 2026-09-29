@@ -18,6 +18,7 @@ import { hallRate } from '../engine/interference'
 import { crackRefusal, dispatchRefusal } from '../engine/rift'
 import { Portrait } from './bits'
 import { PvpPanel } from './pvpPanels'
+import { t } from './i18n/i18n'
 
 const SHOP = TUNING.shop
 const PI = TUNING.interference
@@ -34,7 +35,7 @@ function useRunner(store: Store): { run: (cmd: Command) => boolean; err: string 
         store.dispatch(cmd, Date.now())
         return true
       } catch (e) {
-        setErr(e instanceof Error ? e.message.replace(/^\w+: /, '') : 'That failed')
+        setErr(t(e instanceof Error ? e.message.replace(/^\w+: /, '') : 'That failed'))
         return false
       }
     },
@@ -101,18 +102,18 @@ export function TimingGame({
             <button className="btn primary big" onClick={() => setStopped(pos)}>
               {verb}!
             </button>
-            <button className="btn" onClick={() => onDone(undefined)} title="Let your practiced hands decide">
-              Auto ({Math.round(skill * 100)}%)
+            <button className="btn" onClick={() => onDone(undefined)} title={t('Let your practiced hands decide')}>
+              {t('Auto ({n}%)', { n: Math.round(skill * 100) })}
             </button>
             <button className="btn ghost" onClick={onCancel}>
-              Cancel
+              {t('Cancel')}
             </button>
           </div>
         ) : (
           <div className="tg-actions">
-            <div className="tg-score">Performance {Math.round(perf * 100)}%</div>
+            <div className="tg-score">{t('Performance {n}%', { n: Math.round(perf * 100) })}</div>
             <button className="btn primary big" onClick={() => onDone(perf)}>
-              Continue ▸
+              {t('Continue ▸')}
             </button>
           </div>
         )}
@@ -138,9 +139,9 @@ export function HeroBond({ hero, state, store }: { hero: OwnedHero; state: GameS
         <div>
           <div className="bond-name">{hero.name}</div>
           <div className="muted">
-            ♥ {favorTierName(hero.favor)} · {hero.favor}/100 · IP {hero.ip}
-            {hero.expedition && ' · away in the Ruins'}
-            {hero.blessed && ' · blessed'}
+            {t('♥ {n} · {favor}/100 · IP {ip}', { n: t(favorTierName(hero.favor)), favor: hero.favor, ip: hero.ip })}
+            {hero.expedition && ' · ' + t('away in the Ruins')}
+            {hero.blessed && ' · ' + t('blessed')}
           </div>
         </div>
       </div>
@@ -148,10 +149,12 @@ export function HeroBond({ hero, state, store }: { hero: OwnedHero; state: GameS
         <span style={{ width: `${hero.favor}%` }} />
       </div>
       <div className="muted" style={{ fontSize: 13 }}>
-        {knowsTaste ? `Loves ${pref.liked}; can't stand ${pref.disliked}.` : 'Warm up to this hero to learn what they like.'}
+        {knowsTaste
+          ? t("Loves {liked}; can't stand {disliked}.", { liked: t(pref.liked), disliked: t(pref.disliked) })
+          : t('Warm up to this hero to learn what they like.')}
       </div>
 
-      <h4 className="panel-sub">Gifts</h4>
+      <h4 className="panel-sub">{t('Gifts')}</h4>
       <div className="gift-grid">
         {Object.values(GIFTS).map((g) => {
           const d = giftDelta(hero, g.id)
@@ -162,32 +165,32 @@ export function HeroBond({ hero, state, store }: { hero: OwnedHero; state: GameS
               className="gift-btn"
               disabled={!afford}
               onClick={() => run({ type: 'GIVE_GIFT', heroId: hero.id, giftId: g.id })}
-              title={knowsTaste ? `${d >= 0 ? '+' : ''}${d} favor` : 'Give a gift'}
+              title={knowsTaste ? t('{d} favor', { d: `${d >= 0 ? '+' : ''}${d}` }) : t('Give a gift')}
             >
-              <span>{g.name}</span>
+              <span>{t(g.name)}</span>
               <span className="muted">{g.gems > 0 ? `${g.gems} ♦` : `${g.gold} ◆`}</span>
-              {hero.gift.last === g.id && hero.gift.streak > 0 && <span className="gift-repeat">again ×{hero.gift.streak}</span>}
+              {hero.gift.last === g.id && hero.gift.streak > 0 && <span className="gift-repeat">{t('again ×{streak}', { streak: hero.gift.streak })}</span>}
             </button>
           )
         })}
       </div>
 
-      <h4 className="panel-sub">Interventions</h4>
+      <h4 className="panel-sub">{t('Interventions')}</h4>
       {tier < TUNING.intervention.minTier ? (
         <div className="muted" style={{ fontSize: 13 }}>
-          Only a Devoted hero will bend the system for you. ({hero.ip} IP saved)
+          {t('Only a Devoted hero will bend the system for you. ({ip} IP saved)', { ip: hero.ip })}
         </div>
       ) : (
         <div className="drill-list">
           {INTERVENTIONS.map((a: InterventionId) => {
             const why = interventionRefusal(state, hero.id, a)
             return (
-              <div key={a} className={`drill-row ${why ? 'off' : ''}`} title={why ?? undefined}>
+              <div key={a} className={`drill-row ${why ? 'off' : ''}`} title={why ? t(why) : undefined}>
                 <span className="skill-grade">{interventionCost(a)}</span>
-                <span className="drill-name">{INTERVENTION_LABEL[a]}</span>
+                <span className="drill-name">{t(INTERVENTION_LABEL[a])}</span>
                 <span />
                 <button className="btn sm" disabled={why !== null} onClick={() => run({ type: 'INTERVENE', heroId: hero.id, action: a })}>
-                  Use
+                  {t('Use')}
                 </button>
               </div>
             )
@@ -213,57 +216,57 @@ export function ShopPanel({ state, store }: { state: GameState; store: Store }) 
   const ids = Object.keys(SHOP.packages).filter((id) => id !== 'so_close' || frustrationDeal(state))
   return (
     <div className="lr-action shop-panel">
-      <div className="shop-note">Isel smiles. “Everything here is for your own good, Master.” — money here is simulated; nothing is ever charged.</div>
+      <div className="shop-note">{t('Isel smiles. “Everything here is for your own good, Master.” — money here is simulated; nothing is ever charged.')}</div>
 
       <div className="ta-row">
-        <span>Daily login · streak {state.meta.login.streak}</span>
+        <span>{t('Daily login · streak {streak}', { streak: state.meta.login.streak })}</span>
         <button className="btn sm gem" disabled={claimed} onClick={() => run({ type: 'CLAIM_LOGIN' })}>
-          {claimed ? 'Claimed today' : `Claim +${SHOP.loginGems}${nextStreak(state, nowWorld) % 7 === 0 ? ` +${SHOP.streakBonusGems}` : ''} ♦`}
+          {claimed ? t('Claimed today') : `${t('Claim')} +${SHOP.loginGems}${nextStreak(state, nowWorld) % 7 === 0 ? ` +${SHOP.streakBonusGems}` : ''} ♦`}
         </button>
       </div>
       {nextStreak(state, nowWorld) === 1 && state.meta.login.streak > 1 && !claimed && (
         <div className="muted" style={{ color: 'var(--warn)', fontSize: 13 }}>
-          You missed a day — your {state.meta.login.streak}-day streak is gone.
+          {t('You missed a day — your {streak}-day streak is gone.', { streak: state.meta.login.streak })}
         </div>
       )}
       {m && (
         <div className="ta-row">
-          <span>Monthly Package · {m.daysLeft} days left</span>
+          <span>{t('Monthly Package · {daysLeft} days left', { daysLeft: m.daysLeft })}</span>
           <button className="btn sm gem" disabled={m.lastClaimDay === day} onClick={() => run({ type: 'CLAIM_MONTHLY' })}>
-            {m.lastClaimDay === day ? 'Claimed today' : `Claim +${SHOP.monthlyGems} ♦ +${SHOP.monthlyGold.toLocaleString()} ◆`}
+            {m.lastClaimDay === day ? t('Claimed today') : `${t('Claim')} +${SHOP.monthlyGems} ♦ +${SHOP.monthlyGold.toLocaleString()} ◆`}
           </button>
         </div>
       )}
 
-      {frustrationDeal(state) && <div className="shop-deal">So close! Your next 4★ is right around the corner…</div>}
+      {frustrationDeal(state) && <div className="shop-deal">{t('So close! Your next 4★ is right around the corner…')}</div>}
 
-      <h4 className="panel-sub">Packages</h4>
+      <h4 className="panel-sub">{t('Packages')}</h4>
       <div className="drill-list">
         {ids.map((id) => {
           const pkg = SHOP.packages[id]!
           const why = packageRefusal(state, id)
           const discounted = id === offer
           return (
-            <div key={id} className={`drill-row ${why ? 'off' : ''} ${discounted ? 'deal' : ''}`} title={why ?? undefined}>
+            <div key={id} className={`drill-row ${why ? 'off' : ''} ${discounted ? 'deal' : ''}`} title={why ? t(why) : undefined}>
               <span className="skill-grade">{discounted ? '%' : '♦'}</span>
               <span className="drill-name">
-                {pkg.label}
+                {t(pkg.label)}
                 {pkg.gems > 0 && ` · ${pkg.gems.toLocaleString()} ♦`}
                 {pkg.gold > 0 && ` · ${pkg.gold.toLocaleString()} ◆`}
-                {discounted && <b className="today-tag"> TODAY ONLY</b>}
+                {discounted && <b className="today-tag"> {t('TODAY ONLY')}</b>}
               </span>
               <span className="muted">
                 {discounted && <s>${pkg.usd.toFixed(2)}</s>} ${packagePrice(id, day).toFixed(2)}
               </span>
               <button className="btn sm" disabled={why !== null} onClick={() => run({ type: 'BUY_PACKAGE', packageId: id })}>
-                Buy
+                {t('Buy')}
               </button>
             </div>
           )
         })}
       </div>
       <div className="muted" style={{ fontSize: 13, marginTop: 6 }}>
-        Simulated spend so far: ${state.meta.wallet.spentUsd.toFixed(2)}
+        {t('Simulated spend so far: ${spentUsd}', { spentUsd: state.meta.wallet.spentUsd.toFixed(2) })}
       </div>
       {err && <div className="lr-action-note" style={{ color: 'var(--bad)' }}>{err}</div>}
     </div>
@@ -279,16 +282,15 @@ export function HallOfMagicInfo({ state }: { state: GameState }) {
   return (
     <div className="lr-action">
       <div className="ta-row">
-        <span>Probability Interference</span>
+        <span>{t('Probability Interference')}</span>
         <span className="ta-val">{state.meta.pi.toFixed(1)}</span>
       </div>
       <div className="ta-row">
-        <span>Hall generation</span>
-        <span className="ta-val">+{hallRate(level)}/world-hour</span>
+        <span>{t('Hall generation')}</span>
+        <span className="ta-val">{t('+{n}/world-hour', { n: hallRate(level) })}</span>
       </div>
       <div className="lr-action-note">
-        The world grows steadier while you play and fades while you are away. Thresholds: Hall of Magic {PI.unlock.hallOfMagic} · Crack of
-        Time {PI.unlock.crack}.
+        {t('The world grows steadier while you play and fades while you are away. Thresholds: Hall of Magic {hallOfMagic} · Crack of Time {crack}.', { hallOfMagic: PI.unlock.hallOfMagic, crack: PI.unlock.crack })}
       </div>
     </div>
   )
@@ -305,14 +307,12 @@ export function RiftPanel({ state, store }: { state: GameState; store: Store }) 
     return (
       <div className="lr-action">
         <div className="lr-action-note">
-          A hairline crack in the air. Opening it needs Master Lv {RIFT.masterLevel}, a {RIFT.mageStar}★ mage to hold it,{' '}
-          {RIFT.gold.toLocaleString()} gold and {RIFT.stones} Promotion Stones. Once open, the Ruins beyond pay in gems — and other Masters
-          can come through.
+          {t('A hairline crack in the air. Opening it needs Master Lv {masterLevel}, a {mageStar}★ mage to hold it, {gold} gold and {stones} Promotion Stones. Once open, the Ruins beyond pay in gems — and other Masters can come through.', { masterLevel: RIFT.masterLevel, mageStar: RIFT.mageStar, gold: RIFT.gold.toLocaleString(), stones: RIFT.stones })}
         </div>
-        <button className="btn primary" disabled={why !== null} onClick={() => run({ type: 'OPEN_CRACK' })} title={why ?? undefined}>
-          Open the Crack of Time and Space
+        <button className="btn primary" disabled={why !== null} onClick={() => run({ type: 'OPEN_CRACK' })} title={why ? t(why) : undefined}>
+          {t('Open the Crack of Time and Space')}
         </button>
-        {why && <div className="muted" style={{ fontSize: 13 }}>{why}</div>}
+        {why && <div className="muted" style={{ fontSize: 13 }}>{t(why)}</div>}
         {err && <div className="lr-action-note" style={{ color: 'var(--bad)' }}>{err}</div>}
       </div>
     )
@@ -321,19 +321,19 @@ export function RiftPanel({ state, store }: { state: GameState; store: Store }) 
   const why = dispatchRefusal(state, team)
   return (
     <div className="lr-action">
-      <div className="lr-action-note">The crack is open. Send up to {RIFT.maxTeam} heroes into the Ruins ({RIFT.expeditionMs / 3_600_000} world-hours).</div>
+      <div className="lr-action-note">{t('The crack is open. Send up to {maxTeam} heroes into the Ruins ({n} world-hours).', { maxTeam: RIFT.maxTeam, n: RIFT.expeditionMs / 3_600_000 })}</div>
       {away.length > 0 && (
         <>
-          <h4 className="panel-sub">In the Ruins</h4>
+          <h4 className="panel-sub">{t('In the Ruins')}</h4>
           {away.map((h) => (
             <div key={h.id} className="promo-row">
               <span className="promo-name">{h.name.split(/\s+/)[0]}</span>
-              <span className="muted">{Math.max(0, Math.ceil((h.expedition!.completesAtWorld - nowWorld) / 60_000))} world-min</span>
+              <span className="muted">{t('{n} world-min', { n: Math.max(0, Math.ceil((h.expedition!.completesAtWorld - nowWorld) / 60_000)) })}</span>
             </div>
           ))}
         </>
       )}
-      <h4 className="panel-sub">Expedition team</h4>
+      <h4 className="panel-sub">{t('Expedition team')}</h4>
       <div className="syn-row">
         {free.map((h) => (
           <button
@@ -354,10 +354,10 @@ export function RiftPanel({ state, store }: { state: GameState; store: Store }) 
           if (run({ type: 'DISPATCH_RUINS', heroIds: team })) setTeam([])
         }}
       >
-        Dispatch {team.length || ''}
+        {t('Dispatch')} {team.length || ''}
       </button>
       {err && <div className="lr-action-note" style={{ color: 'var(--bad)' }}>{err}</div>}
-      <h4 className="panel-sub">Other Masters</h4>
+      <h4 className="panel-sub">{t('Other Masters')}</h4>
       <PvpPanel state={state} store={store} />
     </div>
   )

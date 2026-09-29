@@ -4,6 +4,7 @@ import { heroBustUrl } from './pixel/sprites'
 import { ENGRAVINGS, SKILLS } from '../engine/content'
 import { maxLevelFor, skillCp } from '../engine/skills'
 import { engravingCp } from '../engine/engravings'
+import { t } from './i18n/i18n'
 
 /** Visual tokens for elements. */
 export const ELEMENT_VIS: Record<Element, { glyph: string; color: string; label: string }> = {
@@ -35,7 +36,7 @@ export const STAR_COLOR: Record<Star, string> = {
 }
 
 export function classLabel(c: HeroClass | null): string {
-  return c === null ? 'Classless' : CLASS_VIS[c].label
+  return c === null ? t('Classless') : t(CLASS_VIS[c].label)
 }
 export function classGlyph(c: HeroClass | null): string {
   return c === null ? '—' : CLASS_VIS[c].glyph
@@ -52,9 +53,9 @@ export function EngravingBadge({ hero }: { hero: OwnedHero }) {
   const def = ENGRAVINGS[hero.engraving.id]
   if (!def) return null
   return (
-    <div className={`engraving grade-${hero.engraving.grade}`} title={`${def.name} (${hero.engraving.grade}) — ${def.blurb}`}>
+    <div className={`engraving grade-${hero.engraving.grade}`} title={`${t(def.name)} (${hero.engraving.grade}) — ${t(def.blurb)}`}>
       <span className="engr-grade">{hero.engraving.grade}</span>
-      <span className="engr-name">❖ {def.name}</span>
+      <span className="engr-name">❖ {t(def.name)}</span>
     </div>
   )
 }
@@ -62,7 +63,7 @@ export function EngravingBadge({ hero }: { hero: OwnedHero }) {
 /** A hero's skills as `name · grade · Lv N` chips (read-only, Layer 1 §2). */
 export function SkillList({ hero, max }: { hero: OwnedHero; max?: number }) {
   const shown = max !== undefined ? hero.skills.slice(0, max) : hero.skills
-  if (hero.skills.length === 0) return <div className="skill-list empty-skills">No skills yet</div>
+  if (hero.skills.length === 0) return <div className="skill-list empty-skills">{t('No skills yet')}</div>
   return (
     <div className="skill-list">
       {shown.map((s) => {
@@ -73,17 +74,17 @@ export function SkillList({ hero, max }: { hero: OwnedHero; max?: number }) {
           <div
             key={s.id}
             className={`skill-chip grade-${def.grade} ${def.passive ? 'passive' : ''}`}
-            title={`${def.name} · grade ${def.grade} · Lv ${s.level}/${cap}${def.passive ? ' · passive' : ''}${def.bound ? ' · achievement (bound)' : ''}`}
+            title={`${t(def.name)} · ${t('grade')} ${def.grade} · Lv ${s.level}/${cap}${def.passive ? ' · ' + t('passive') : ''}${def.bound ? ' · ' + t('achievement (bound)') : ''}`}
           >
             <span className="skill-grade">{def.grade}</span>
-            <span className="skill-name">{def.name}</span>
+            <span className="skill-name">{t(def.name)}</span>
             <span className="skill-lv">Lv {s.level}</span>
-            {def.hpCost !== undefined && <span className="skill-hp" title="Costs HP to cast">♥</span>}
-            {def.bound && <span className="skill-bound" title="Achievement skill — bound to this hero">✦</span>}
+            {def.hpCost !== undefined && <span className="skill-hp" title={t('Costs HP to cast')}>♥</span>}
+            {def.bound && <span className="skill-bound" title={t('Achievement skill — bound to this hero')}>✦</span>}
           </div>
         )
       })}
-      {max !== undefined && hero.skills.length > max && <div className="skill-more">+{hero.skills.length - max} more</div>}
+      {max !== undefined && hero.skills.length > max && <div className="skill-more">{t('+{n} more', { n: hero.skills.length - max })}</div>}
     </div>
   )
 }
@@ -113,8 +114,8 @@ export function Stars({ star }: { star: Star }) {
 export function ElementBadge({ element }: { element: Element }) {
   const v = ELEMENT_VIS[element]
   return (
-    <span className="tag" style={{ color: v.color }} title={v.label}>
-      {v.glyph} {v.label}
+    <span className="tag" style={{ color: v.color }} title={t(v.label)}>
+      {v.glyph} {t(v.label)}
     </span>
   )
 }
