@@ -1,10 +1,10 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { GameState, FloorResult, CombatLog } from '../engine/types'
 import type { Store } from '../engine/store'
 import { attemptFloorWithResult } from '../engine/store'
 import { buildEncounter } from '../engine/tower'
 import { ANCHORS } from '../engine/content'
-import { CombatView } from './CombatView'
+import { BattleScene } from './battle/BattleScene'
 import { ResultsScreen } from './screens'
 
 const MAX_FLOOR = 10
@@ -15,6 +15,11 @@ export function TowerScreen({ state, store }: { state: GameState; store: Store }
   const [showResult, setShowResult] = useState(false)
 
   const current = state.tower.currentFloor
+  const currentRef = useRef<HTMLDivElement>(null)
+  // The tower is drawn bottom-up; bring the floor you're standing on into view.
+  useEffect(() => {
+    currentRef.current?.scrollIntoView?.({ block: 'center' })
+  }, [current])
   const deployable = state.party.slots.some((id) => id && state.heroes[id]?.alive)
   const beatGame = state.tower.highestCleared >= MAX_FLOOR
 
@@ -69,7 +74,7 @@ export function TowerScreen({ state, store }: { state: GameState; store: Store }
           const mission = isCurrent && preview ? preview.mission.type : anchor ? anchor.missionType : 'Subjugation'
           const enemyCount = isCurrent && preview ? preview.waves.reduce((n, w) => n + w.units.length, 0) : null
           return (
-            <div key={f} className={cls}>
+            <div key={f} className={cls} ref={isCurrent ? currentRef : undefined}>
               <div className="fnum">{cleared ? '✓' : `F${f}`}</div>
               <div className="fdesc">
                 <div className="ft">
@@ -91,7 +96,7 @@ export function TowerScreen({ state, store }: { state: GameState; store: Store }
         })}
       </div>
 
-      {combat && <CombatView log={combat} onDone={combatDone} />}
+      {combat && <BattleScene log={combat} state={state} onDone={combatDone} />}
       {showResult && pending && <ResultsScreen result={pending} state={state} onContinue={resultDone} />}
     </div>
   )

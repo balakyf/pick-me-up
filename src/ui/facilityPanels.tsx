@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import type { GameState, OwnedHero, FacilityId, HeroId, EquipmentSlot, Command } from '../engine/types'
 import type { Store } from '../engine/store'
 import { TUNING } from '../engine/tuning'
@@ -16,90 +16,41 @@ import { smithyUnlocked, forgeGrade, forgeCost, canCraft, itemName, equippedItem
 import { Portrait } from './bits'
 
 /**
- * The Lobby (waiting room) — a single-screen diorama over the v2 lobby state
- * (facilities, Master Level, gems, per-hero Sanity). Heroes are placed into rooms
- * by their current state; placement + motion are purely cosmetic, so no game state
- * rides on them and determinism/saves stay clean.
- *
- * The Kitchen surfaces the live Banquet action (Phase 3 — spend gold to restore
- * roster Sanity). Remaining facility actions (upgrades, promotion, Daily Dungeon)
- * arrive in their own later phases.
+ * Facility panels — the rules-facing half of the Lobby. The walkable world
+ * (world/LobbyWorld) opens these inside an RPG window when the Master uses a
+ * facility; every action still goes through the engine's Commands unchanged.
  */
 
 const SANITY_MAX = TUNING.lobby.sanityMax
 
-type RoomId = FacilityId | 'courtyard'
-
-const FACILITY_VIS: Record<FacilityId, { glyph: string; name: string; blurb: string }> = {
-  kitchen: { glyph: '🍲', name: 'Kitchen', blurb: 'Restores Sanity — banquet the roster' },
-  promotionChamber: { glyph: '⛩️', name: 'Promotion Chamber', blurb: 'Raise heroes past their star cap' },
-  tacticalCenter: { glyph: '🗺️', name: 'Tactical Center', blurb: 'Focus & overlook combat levers' },
-}
-
 /** Decide which room a hero is "in" right now. Cosmetic, deterministic. */
-function roomFor(hero: OwnedHero, partyIds: Set<string>): RoomId {
+export function roomFor(hero: OwnedHero, partyIds: Set<string>): 'kitchen' | 'promotionChamber' | 'tacticalCenter' | 'hall' {
   if (hero.sanity < 60) return 'kitchen' // low morale → resting in the Kitchen
   if (hero.xp.atCap) return 'promotionChamber' // capped → waiting on promotion
   if (partyIds.has(hero.id)) return 'tacticalCenter' // on the active party → on duty
-  return 'courtyard'
+  return 'hall'
 }
 
-function sanityColor(s: number): string {
+export function sanityColor(s: number): string {
   if (s >= 60) return 'var(--good)'
   if (s >= 30) return 'var(--warn)'
   return 'var(--bad)'
 }
 
-function LobbyHero({ hero }: { hero: OwnedHero }) {
-  const pct = Math.round((hero.sanity / SANITY_MAX) * 100)
+/** Heroes currently in a room, as bust chips with their morale gauge. */
+function Occupants({ heroes, empty }: { heroes: OwnedHero[]; empty: string }) {
+  if (heroes.length === 0) return <div className="lr-empty">{empty}</div>
   return (
-    <div className="lobby-hero" title={`${hero.name} · Sanity ${hero.sanity}/${SANITY_MAX}`}>
-      <div className="bob">
-        <Portrait hero={hero} size="sm" />
-      </div>
-      <div className="lh-name">{hero.name.split(/\s+/)[0]}</div>
-      <div className="lh-sanity">
-        <span style={{ width: `${pct}%`, background: sanityColor(hero.sanity) }} />
-      </div>
-    </div>
-  )
-}
-
-function Room({
-  id,
-  level,
-  build,
-  heroes,
-  action,
-}: {
-  id: FacilityId
-  level: number
-  build: { toLevel: number; completesAtWorld: number } | null
-  heroes: OwnedHero[]
-  action?: React.ReactNode
-}) {
-  const vis = FACILITY_VIS[id]
-  // A level-0 room with no actions is "locked" (needs building); the Promotion
-  // Chamber is usable at Lv 0 (promotion gates on the hero, not the build), so it
-  // ships actions and reads as operational at base speed.
-  const locked = level === 0 && action == null
-  return (
-    <div className={`lobby-room ${locked ? 'locked' : ''}`}>
-      <div className="lr-head">
-        <span className="lr-glyph">{vis.glyph}</span>
-        <span className="lr-name">{vis.name}</span>
-        <span className="lr-lvl">{locked ? '🔒 Locked' : `Lv ${level}`}</span>
-      </div>
-      <div className="lr-blurb">{locked ? 'Unlocks at Master Lv 3' : vis.blurb}</div>
-      {build && <div className="lr-build">⏳ Upgrading to Lv {build.toLevel}…</div>}
-      {action}
-      <div className="lr-floor">
-        {heroes.length === 0 ? (
-          <span className="lr-empty">— empty —</span>
-        ) : (
-          heroes.map((h) => <LobbyHero key={h.id} hero={h} />)
-        )}
-      </div>
+    <div className="occupants">
+      {heroes.map((h) => (
+        <div key={h.id} className="occupant" title={`${h.name} · Sanity ${h.sanity}/${SANITY_MAX}`}>
+          <Portrait hero={h} size="sm" />
+          <span className="lh-name">{h.name.split(/\s+/)[0]}</span>
+          <span className="lh-sanity">
+            <span style={{ width: `${Math.round((h.sanity / SANITY_MAX) * 100)}%`, background: sanityColor(h.sanity) }} />
+          </span>
+        </div>
+      ))}
     </div>
   )
 }
@@ -641,103 +592,61 @@ function Armory({ state, store }: { state: GameState; store: Store }) {
   )
 }
 
-export function LobbyScreen({ state, store }: { state: GameState; store: Store }) {
-  // Live tick: while the lobby is open, pump the world clock once a second. This
-  // both refreshes the cosmetic countdowns (a re-render with a fresh Date.now())
-  // and lets advanceTime actually COMPLETE due timers — promotions finishing, the
-  // daily attempt counter resetting, Sanity regenerating — without a manual action.
-  useEffect(() => {
-    const id = setInterval(() => store.dispatch({ type: 'TICK' }, Date.now()), 1000)
-    return () => clearInterval(id)
-  }, [store])
+export type PanelPlace = 'kitchen' | 'tacticalCenter' | 'promotionChamber' | 'synthesis' | 'armory' | 'daily'
 
+const BLURB: Record<PanelPlace, string> = {
+  kitchen: 'A warm hearth and a long table. Heroes with frayed nerves come here to recover.',
+  tacticalCenter: 'Maps, pins and the party board. Focus & overlook combat levers.',
+  promotionChamber: 'A sealed marble chamber. Heroes at their star cap are raised past it here.',
+  synthesis: 'The vats bubble. Heroes who enter do not come out whole.',
+  armory: 'The Smithy forge and the equipment racks.',
+  daily: "A rift that opens onto a different dungeon each world-day.",
+}
+
+/** The body of a facility window: rules UI for one place in the lobby. */
+export function PlacePanel({ place, state, store }: { place: PanelPlace; state: GameState; store: Store }) {
   const living = (Object.values(state.heroes) as OwnedHero[]).filter((h) => h.alive)
   const partyIds = new Set(state.party.slots.filter(Boolean) as string[])
-
-  const byRoom: Record<RoomId, OwnedHero[]> = {
-    kitchen: [],
-    promotionChamber: [],
-    tacticalCenter: [],
-    courtyard: [],
-  }
-  for (const h of living) byRoom[roomFor(h, partyIds)].push(h)
-
-  const ml = state.meta.masterLevel
-  const toNext = masterXpToNext(ml)
-  const mlPct = Math.min(100, Math.round((state.meta.masterXp / toNext) * 100))
-  const facilityOrder: FacilityId[] = ['kitchen', 'tacticalCenter', 'promotionChamber']
+  const here = (room: 'kitchen' | 'promotionChamber' | 'tacticalCenter') =>
+    living.filter((h) => roomFor(h, partyIds) === room)
 
   return (
-    <div className="screen">
-      <h2>Waiting Room</h2>
-      <p className="sub">
-        Your heroes live here between climbs. Where they stand reflects what they're doing and how they feel.
-      </p>
-
-      {/* Master Level spine + currencies */}
-      <div className="lobby-meta">
-        <div className="ml-block">
-          <div className="ml-top">
-            <span className="ml-badge">★ Master Lv {ml}</span>
-            <span className="muted">{state.meta.masterXp} / {toNext} XP</span>
-          </div>
-          <div className="bar">
-            <span style={{ width: `${mlPct}%`, background: 'var(--accent-2)' }} />
-          </div>
-        </div>
-        <div className="lobby-currencies">
-          <span className="pill gold">◆ {state.gold.toLocaleString()}</span>
-          <span className="pill gem">💎 {state.gems.toLocaleString()}</span>
-        </div>
-      </div>
-
-      {/* The diorama */}
-      <div className="lobby-diorama">
-        {facilityOrder.map((id) => (
-          <Room
-            key={id}
-            id={id}
-            level={state.facilities[id].level}
-            build={state.facilities[id].build}
-            heroes={byRoom[id]}
-            action={
-              <>
-                {id === 'kitchen' && <BanquetAction state={state} store={store} />}
-                {id === 'promotionChamber' && <PromotionAction state={state} store={store} />}
-                {id === 'tacticalCenter' && <TacticalAction state={state} />}
-                <UpgradeControl state={state} store={store} facility={id} />
-              </>
-            }
-          />
-        ))}
-      </div>
-
-      {/* Daily Dungeon portal — an access point, not a leveled facility */}
-      <DailyPortal state={state} store={store} />
-
-      {/* Synthesis Chamber — a closed-door access point, not a leveled facility */}
-      <SynthesisChamber state={state} store={store} />
-
-      {/* Armory — the Smithy forge + per-hero equip/unequip (an access point, not a leveled facility) */}
-      <Armory state={state} store={store} />
-
-      {/* Courtyard — everyone off-duty */}
-      <div className="lobby-courtyard">
-        <div className="lc-head">🌿 Courtyard <span className="muted">— off duty</span></div>
-        <div className="lr-floor">
-          {byRoom.courtyard.length === 0 ? (
-            <span className="lr-empty">Nobody's lounging right now.</span>
-          ) : (
-            byRoom.courtyard.map((h) => <LobbyHero key={h.id} hero={h} />)
-          )}
-        </div>
-      </div>
-
-      {living.length === 0 && (
-        <div className="empty" style={{ marginTop: 16 }}>
-          No living heroes yet — visit the Summon tab to recruit your first.
+    <div className={`place-panel place-${place}`}>
+      <p className="place-blurb">{BLURB[place]}</p>
+      {(place === 'kitchen' || place === 'tacticalCenter' || place === 'promotionChamber') && (
+        <div className="lr-lvl-row">
+          <span className="lr-lvl">
+            {state.facilities[place].level === 0 ? 'Not built' : `Facility Lv ${state.facilities[place].level}`}
+          </span>
         </div>
       )}
+      {place === 'kitchen' && (
+        <>
+          <BanquetAction state={state} store={store} />
+          <UpgradeControl state={state} store={store} facility="kitchen" />
+          <h4 className="panel-sub">Resting here</h4>
+          <Occupants heroes={here('kitchen')} empty="Nobody needs comforting right now." />
+        </>
+      )}
+      {place === 'tacticalCenter' && (
+        <>
+          <TacticalAction state={state} />
+          <UpgradeControl state={state} store={store} facility="tacticalCenter" />
+          <h4 className="panel-sub">On duty</h4>
+          <Occupants heroes={here('tacticalCenter')} empty="No party assigned — use the party board." />
+        </>
+      )}
+      {place === 'promotionChamber' && (
+        <>
+          <PromotionAction state={state} store={store} />
+          <UpgradeControl state={state} store={store} facility="promotionChamber" />
+          <h4 className="panel-sub">Waiting at the cap</h4>
+          <Occupants heroes={here('promotionChamber')} empty="No one is waiting here." />
+        </>
+      )}
+      {place === 'synthesis' && <SynthesisChamber state={state} store={store} />}
+      {place === 'armory' && <Armory state={state} store={store} />}
+      {place === 'daily' && <DailyPortal state={state} store={store} />}
     </div>
   )
 }

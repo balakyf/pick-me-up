@@ -5,6 +5,11 @@ import { TUNING } from '../engine/tuning'
 import { HeroCard } from './HeroCard'
 import { cpOf, Stars, Portrait } from './bits'
 import { freshSeed } from './useGame'
+import { heroFrameUrl } from './pixel/sprites'
+import { cachedDataUrl } from './pixel/render'
+import { drawProp } from './pixel/props'
+import { scale } from './pixel/bitmap'
+import type { Element, HeroClass, Star } from '../engine/types'
 
 export const PARTY_LINES: Line[] = ['front', 'front', 'mid', 'back', 'back']
 const SUMMON_COST = TUNING.gacha.normalCostGold
@@ -15,11 +20,34 @@ function roster(state: GameState): OwnedHero[] {
 }
 
 // ── Title ────────────────────────────────────────────────────────────────────
+const PARADE: { heroClass: HeroClass | null; star: Star; element: Element }[] = [
+  { heroClass: null, star: 1, element: 'earth' },
+  { heroClass: 'warrior', star: 4, element: 'fire' },
+  { heroClass: 'mage', star: 5, element: 'dark' },
+  { heroClass: 'archer', star: 3, element: 'wind' },
+  { heroClass: 'spearman', star: 4, element: 'water' },
+  { heroClass: 'thief', star: 3, element: 'light' },
+  { heroClass: null, star: 2, element: 'physical' },
+]
+
 export function TitleScreen({ store, hasSave }: { store: Store; hasSave: boolean }) {
   return (
     <div className="title-wrap">
+      <div className="subtitle">Infinite Gacha</div>
       <div className="logo">
         Pick Me Up<span className="spark">!</span>
+      </div>
+      <div className="title-parade">
+        {PARADE.map((p, i) => (
+          <img
+            key={i}
+            className="px"
+            src={heroFrameUrl({ id: `title_${i}`, name: `Parade ${i}`, ...p }, 'down', 0)}
+            width={72}
+            height={96}
+            alt=""
+          />
+        ))}
       </div>
       <div className="tag">
         Summon unique heroes from the Mobius gacha, build a party of five, and climb the permadeath tower.
@@ -73,7 +101,7 @@ export function SummonScreen({ state, store }: { state: GameState; store: Store 
           </div>
         ) : (
           <div className="orb">
-            <span className="o-emoji">🔮</span>
+            <img className="px" src={cachedDataUrl('summon-orb', () => scale(drawProp('summonCrystal', 0).bmp, 5))} width={160} height={220} alt="The Mobius crystal" />
           </div>
         )}
 
