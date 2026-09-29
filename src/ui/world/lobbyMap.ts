@@ -2,8 +2,9 @@
  * The Lobby (waiting room) as a top-down tilemap — pure data + pathing.
  *
  * A Great Hall (summoning circle, roster lectern, the Tower Gate, the fairy Isel)
- * ringed by seven rooms: Kitchen · Tactical Center · Promotion Chamber on top,
- * Synthesis Chamber · Armory · Daily-Dungeon portal below, the Training Yard east. Heroes wander inside
+ * ringed by eight rooms: Kitchen · Tactical Center · Promotion Chamber on top,
+ * Synthesis Chamber · Armory · Daily-Dungeon portal below, the Training Yard east with
+ * the Transfer Station through its north door. Heroes wander inside
  * the room their state puts them in; the Master walks everywhere.
  */
 
@@ -14,16 +15,16 @@ export const TILE = 16
  *  .  hall planks     ~  hall carpet
  *  k  kitchen tiles   t  tactical flagstones   p  promotion marble
  *  m  synthesis stone a  armory slate          d  daily-portal stone
- *  r  training-yard sand
+ *  r  training-yard sand      x  transfer-station crystal floor
  */
 export const MAP_ROWS = [
   '#######################################',
-  '#kkkkkkkk#tttttttttt#pppppppp##########',
-  '#kkkkkkkk#tttttttttt#pppppppp##########',
-  '#kkkkkkkk#tttttttttt#pppppppp##########',
-  '#kkkkkkkk#tttttttttt#pppppppp##########',
-  '#kkkkkkkk#tttttttttt#pppppppp##########',
-  '####..######....######..###############',
+  '#kkkkkkkk#tttttttttt#pppppppp#xxxxxxxx#',
+  '#kkkkkkkk#tttttttttt#pppppppp#xxxxxxxx#',
+  '#kkkkkkkk#tttttttttt#pppppppp#xxxxxxxx#',
+  '#kkkkkkkk#tttttttttt#pppppppp#xxxxxxxx#',
+  '#kkkkkkkk#tttttttttt#pppppppp#xxxxxxxx#',
+  '####..######....######..########x######',
   '#............................#rrrrrrrr#',
   '#.........~~~~~~~~~~.........#rrrrrrrr#',
   'G.........~~~~~~~~~~..........rrrrrrrr#',
@@ -41,7 +42,7 @@ export const MAP_ROWS = [
 export const MAP_W = MAP_ROWS[0].length
 export const MAP_H = MAP_ROWS.length
 
-export type TileChar = '#' | 'G' | '.' | '~' | 'k' | 't' | 'p' | 'm' | 'a' | 'd' | 'r'
+export type TileChar = '#' | 'G' | '.' | '~' | 'k' | 't' | 'p' | 'm' | 'a' | 'd' | 'r' | 'x'
 
 export function tileAt(x: number, y: number): TileChar {
   if (x < 0 || y < 0 || x >= MAP_W || y >= MAP_H) return '#'
@@ -65,6 +66,7 @@ export type RoomId =
   | 'armory'
   | 'daily'
   | 'training'
+  | 'transfer'
 
 export interface Rect {
   x: number
@@ -82,6 +84,7 @@ export const ROOMS: Record<RoomId, Rect> = {
   armory: { x: 10, y: 14, w: 10, h: 4 },
   daily: { x: 21, y: 14, w: 8, h: 4 },
   training: { x: 30, y: 7, w: 8, h: 6 },
+  transfer: { x: 30, y: 1, w: 8, h: 5 },
 }
 
 export function roomAt(x: number, y: number): RoomId | null {
@@ -101,6 +104,7 @@ export type PlaceId =
   | 'tacticalCenter'
   | 'promotionChamber'
   | 'trainingCenter'
+  | 'transferStation'
   | 'synthesis'
   | 'armory'
   | 'daily'
@@ -133,6 +137,7 @@ export type PropKind =
   | 'fairy'
   | 'dummy'
   | 'drillBoard'
+  | 'plinth'
 
 export interface Prop {
   kind: PropKind
@@ -183,6 +188,12 @@ export const PROPS: Prop[] = [
   { kind: 'weaponRack', x: 37, y: 7, w: 1, h: 1 },
   { kind: 'torch', x: 31, y: 6, w: 1, h: 1 },
   { kind: 'banner', x: 36, y: 6, w: 1, h: 1 },
+  // Transfer Station (north of the yard): twin crystal plinths a skill passes between
+  { kind: 'plinth', x: 32, y: 2, w: 1, h: 1, place: 'transferStation' },
+  { kind: 'plinth', x: 35, y: 2, w: 1, h: 1, place: 'transferStation' },
+  { kind: 'torch', x: 31, y: 0, w: 1, h: 1 },
+  { kind: 'torch', x: 36, y: 0, w: 1, h: 1 },
+  { kind: 'banner', x: 34, y: 0, w: 1, h: 1 },
   // Synthesis Chamber
   { kind: 'cauldron', x: 4, y: 15, w: 2, h: 1, place: 'synthesis' },
   { kind: 'shelves', x: 1, y: 14, w: 2, h: 1 },
@@ -201,6 +212,7 @@ export const PLACE_LABEL: Record<PlaceId, string> = {
   tacticalCenter: 'Tactical Center',
   promotionChamber: 'Promotion Chamber',
   trainingCenter: 'Training Center',
+  transferStation: 'Transfer Station',
   synthesis: 'Synthesis Chamber',
   armory: 'Armory',
   daily: 'Daily Dungeon',

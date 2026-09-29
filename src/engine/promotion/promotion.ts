@@ -9,15 +9,19 @@
  *
  * Everything here is PURE and DETERMINISTIC. The on-complete re-roll is seeded by
  * (accountSeed, heroId, oldStar) so an "offline" promotion that finishes inside
- * `time.advanceTime` replays identically. Slice ceiling is 6★ — 6★→7★ needs the
- * out-of-slice Book of Reverse Heaven.
+ * `time.advanceTime` replays identically. 6★→7★ is paid with a Book of Reverse Heaven
+ * (§3.4) instead of stones. A promotion also evolves the hero's engraving one grade —
+ * or, on reaching 4★+ without one, may awaken it (§5.4) — and checks conditional
+ * skill unlocks against the newly released levels (§2.2).
  */
 
 import { TUNING } from '../tuning'
 import { envelopeForStar, levelCapForStar, applyXp } from '../stats'
 import { rollAttributes } from '../gacha'
-import { learnableSkillIds } from '../skills'
-import { rngFor, pick } from '../rng'
+import { applyUnlocks, promotionSkillPool } from '../skills'
+import { evolveEngraving } from '../engravings'
+import { rngFor, pick, chance, weightedPick } from '../rng'
+import { ENGRAVINGS } from '../content'
 import type {
   GameState,
   OwnedHero,
@@ -42,9 +46,11 @@ export function attrStoneId(element: Element): MaterialId {
   return `attrStone_${element}`
 }
 
-/** Material cost to promote a hero: Promotion Stones + element Attribute Stones. */
+/** Material cost to promote a hero: Promotion Stones + element Attribute Stones, or —
+ *  for 6★→7★ — one Book of Reverse Heaven. */
 export function promotionCost(hero: OwnedHero): Record<MaterialId, number> {
   const target = promotionTargetStar(hero)
+  if (target === 7) return { [P.bookId]: 1 }
   const stones = P.stoneCost[target] ?? 0
   return {
     promotionStone: stones,
@@ -118,7 +124,7 @@ function mergeUpward<T extends PrimaryAttrs | GrowthGrades>(old: T, rolled: T): 
  * in the new envelope UPWARD-ONLY into the hero's bases/grades, and grants one skill
  * the hero lacked. Clears the in-flight timer. PURE — returns a fresh OwnedHero.
  */
-export function completePromotion(hero: OwnedHero, accountSeed: Seed): OwnedHero {
+export function completePromotion(hero: OwnedHero, accountSeed: Seed, highestCleared = 0): OwnedHero {
   const newStar = promotionTargetStar(hero)
   let rng = rngFor(accountSeed, 'promotion', hero.id, hero.star)
 
@@ -127,15 +133,34 @@ export function completePromotion(hero: OwnedHero, accountSeed: Seed): OwnedHero
   const baseAttrs = mergeUpward(hero.baseAttrs, rolled.baseAttrs)
   const growthGrades = mergeUpward(hero.growthGrades, rolled.grades)
 
-  // Grant one learnable skill the hero does not already know, at Lv1 (no-op if it
-  // knows them all). Merge-only skills are never handed out by promotion.
+  // Grant one skill the hero does not already know, at Lv1: its class's signature skill
+  // first, else a learnable skill (no-op if it knows them all). Merge-only skills are
+  // never handed out by promotion.
   let skills = hero.skills
   const known = new Set(hero.skills.map((s) => s.id))
-  const missing = learnableSkillIds().filter((id) => !known.has(id))
+  const missing = promotionSkillPool(hero.heroClass, known)
   if (missing.length > 0) {
     const drew = pick(rng, missing)
     rng = drew.rng
     skills = [...hero.skills, { id: drew.value, level: 1, xp: 0 }]
+  }
+
+  // Engraving evolution (각인 진화): one grade up; a hero reaching 4★+ without one may
+  // awaken a grade-C engraving. The awaken draws come last, so earlier rolls are stable.
+  let engraving = hero.engraving
+  if (engraving !== null) {
+    engraving = evolveEngraving(engraving)
+  } else if (newStar >= 4) {
+    const awaken = chance(rng, TUNING.engravings.promotionAwakenChance)
+    rng = awaken.rng
+    if (awaken.value) {
+      const which = weightedPick(
+        rng,
+        Object.values(ENGRAVINGS).map((d) => ({ item: d.id, weight: d.weight })),
+      )
+      rng = which.rng
+      engraving = { id: which.value, grade: 'C' }
+    }
   }
 
   // Lift the cap and release held XP into the newly available levels.
@@ -144,8 +169,9 @@ export function completePromotion(hero: OwnedHero, accountSeed: Seed): OwnedHero
     hero.xp.heldXp,
     newStar,
   )
+  skills = applyUnlocks(skills, xp.level, highestCleared)
 
-  return { ...hero, star: newStar, baseAttrs, growthGrades, skills, xp, promotion: null }
+  return { ...hero, star: newStar, baseAttrs, growthGrades, skills, xp, engraving, promotion: null }
 }
 
 /**
@@ -164,6 +190,6 @@ export function skipPromotion(state: GameState, heroId: HeroId): GameState {
   return {
     ...state,
     gems: state.gems - P.skipGemCost,
-    heroes: { ...state.heroes, [heroId]: completePromotion(hero, state.seed) },
+    heroes: { ...state.heroes, [heroId]: completePromotion(hero, state.seed, state.tower.highestCleared) },
   }
 }

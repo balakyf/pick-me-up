@@ -542,6 +542,7 @@ function promotableState(seed = 5): GameState {
     promotion: null,
     equipment: { weapon: null, armor: null, accessory: null },
     training: null,
+    engraving: null,
   }
   return { ...acct, heroes: { [hero.id]: hero }, materials: { promotionStone: 999, attrStone_fire: 999 }, gems: 200 }
 }
@@ -605,6 +606,7 @@ function dailyReadyState(seed = 5): GameState {
     promotion: null,
     equipment: { weapon: null, armor: null, accessory: null },
     training: null,
+    engraving: null,
   }
   return {
     ...acct,
@@ -785,5 +787,34 @@ describe('reduce — EQUIP_ITEM / UNEQUIP_ITEM', () => {
     expect(() =>
       reduce(null, { type: 'UNEQUIP_ITEM', heroId: 'x' as HeroId, slot: 'weapon' }),
     ).toThrow(/existing account/)
+  })
+})
+
+describe('reduce — Layer 1 completion commands', () => {
+  it('SUMMON { pool: advanced, count: 10 } pays gems once and adds ten heroes', () => {
+    const s0 = { ...createAccount(3), gems: TUNING.gacha.advanced.tenPullGems }
+    const s1 = reduce(s0, { type: 'SUMMON', pool: 'advanced', count: 10 })
+    expect(s1.gems).toBe(0)
+    expect(Object.keys(s1.heroes).length).toBe(Object.keys(s0.heroes).length + 10)
+  })
+
+  it('a bare SUMMON is still one Normal pull', () => {
+    const s0 = createAccount(3)
+    expect(reduce(s0, { type: 'SUMMON' })).toEqual(summon(s0).state)
+  })
+
+  it('TRANSFER_SKILL and FUSE_SKILL route to the Transfer Station', () => {
+    const base = createAccount(4)
+    const starter = Object.keys(base.heroes)[0] as HeroId
+    const other = { ...base.heroes[starter]!, id: 'h_other' as HeroId, name: 'Other', skills: [] }
+    const s0: GameState = {
+      ...base,
+      gold: 100_000,
+      heroes: { ...base.heroes, [other.id]: other },
+      facilities: { ...base.facilities, transferStation: { level: 1, build: null } },
+    }
+    const s1 = reduce(s0, { type: 'TRANSFER_SKILL', donorId: starter, recipientId: other.id, skillId: 'berserk' })
+    expect(s1.heroes[other.id]!.skills.map((s) => s.id)).toEqual(['berserk'])
+    expect(() => reduce(s1, { type: 'FUSE_SKILL', heroId: other.id, result: 'exceed' })).toThrow(/fuseSkill/)
   })
 })

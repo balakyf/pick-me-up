@@ -111,6 +111,7 @@ export function createAccount(entropySeed: number, opts?: CreateAccountOpts): Ga
       promotionChamber: { level: TUNING.lobby.facilityStartLevels.promotionChamber, build: null },
       tacticalCenter: { level: TUNING.lobby.facilityStartLevels.tacticalCenter, build: null },
       trainingCenter: { level: TUNING.lobby.facilityStartLevels.trainingCenter, build: null },
+      transferStation: { level: TUNING.lobby.facilityStartLevels.transferStation, build: null },
     },
     dailies: { attemptsUsed: 0, lastResetWorldDay: 0 },
     heroes: { [STARTER_HERO_ID]: starter },
@@ -119,7 +120,7 @@ export function createAccount(entropySeed: number, opts?: CreateAccountOpts): Ga
     consumedTemplateIds: [STARTER_TEMPLATE_ID],
     party: { slots, lines },
     tower: { currentFloor: 1, highestCleared: 0, attemptIndex: 0 },
-    gacha: { pity: 0, pullCount: 0 },
+    gacha: { pity: 0, pullCount: 0, advPity4: 0, advPity5: 0, advPullCount: 0 },
     rng: { combatCounter: 0 },
   }
 }
@@ -231,6 +232,30 @@ function migrateV4toV5(envelope: SaveEnvelope): SaveEnvelope {
   }
 }
 
+/** v5 → v6: engravings (none yet), the Advanced pool counters, and the Transfer Station (unbuilt). */
+function migrateV5toV6(envelope: SaveEnvelope): SaveEnvelope {
+  const s = envelope.state as unknown as Record<string, unknown>
+  const oldHeroes = s.heroes as Record<string, OwnedHero>
+  const heroes: Record<string, OwnedHero> = {}
+  for (const [id, hero] of Object.entries(oldHeroes)) heroes[id] = { ...hero, engraving: null }
+  const facilities = s.facilities as GameState['facilities']
+  const gacha = s.gacha as { pity: number; pullCount: number }
+  return {
+    schemaVersion: 6,
+    savedAt: envelope.savedAt,
+    state: {
+      ...(s as unknown as GameState),
+      schemaVersion: 6,
+      heroes,
+      gacha: { pity: gacha.pity, pullCount: gacha.pullCount, advPity4: 0, advPity5: 0, advPullCount: 0 },
+      facilities: {
+        ...facilities,
+        transferStation: { level: TUNING.lobby.facilityStartLevels.transferStation, build: null },
+      },
+    },
+  }
+}
+
 /**
  * Migrate a SaveEnvelope from `fromVersion` up to the current schema version.
  * Identity when already current; otherwise apply each version's upgrade step in
@@ -261,6 +286,10 @@ export function migrate(envelope: SaveEnvelope, fromVersion: number): SaveEnvelo
   if (v === 4) {
     env = migrateV4toV5(env)
     v = 5
+  }
+  if (v === 5) {
+    env = migrateV5toV6(env)
+    v = 6
   }
   if (v !== current) {
     throw new SaveLoadError(`migrate: no migration path from version ${fromVersion}`)
@@ -313,6 +342,9 @@ function assertGameStateShape(state: unknown): asserts state is GameState {
     }
     if (!('training' in hero)) {
       throw new SaveLoadError(`loadState: hero '${id}' is missing its training slot`)
+    }
+    if (!('engraving' in hero)) {
+      throw new SaveLoadError(`loadState: hero '${id}' is missing its engraving slot`)
     }
   }
 }

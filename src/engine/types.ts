@@ -41,7 +41,7 @@ export type WorldGrade = 'C' | 'B' | 'A' | 'S'
 
 export type HeroOrigin = 'procedural' | 'cameo'
 
-export type FacilityId = 'kitchen' | 'promotionChamber' | 'tacticalCenter' | 'trainingCenter'
+export type FacilityId = 'kitchen' | 'promotionChamber' | 'tacticalCenter' | 'trainingCenter' | 'transferStation'
 
 /** Material bucket key, e.g. 'promotionStone', 'attrStone_fire', 'rankMaterial'. */
 export type MaterialId = string
@@ -132,6 +132,16 @@ export interface SkillEffect {
   hpCost?: number
 }
 
+/** A passive skill's effect: never cast; resolved into keywords / stat bonuses at unit
+ *  build, magnitude = base + perLevel × (level − 1). */
+export type PassiveEffect =
+  /** −X% damage taken (optionally only from ranged attackers or one element). */
+  | { kind: 'guard'; base: number; perLevel: number; vs?: GuardSource }
+  /** +X% to one derived stat. */
+  | { kind: 'stat'; stat: keyof DerivedStats; base: number; perLevel: number }
+  /** ×(1 + X) damage against an enemy family. */
+  | { kind: 'bane'; family: EnemyFamily; base: number; perLevel: number }
+
 /** Authored, static skill definition (the registry entry). Levels resolve it into a SkillEffect. */
 export interface SkillDef {
   id: string
@@ -153,6 +163,10 @@ export interface SkillDef {
   learnable: boolean
   /** Can the Training Center teach this skill from scratch? (canon "trained" skills) */
   trainable: boolean
+  /** Present on passive skills: never cast, resolved at unit build. */
+  passive?: PassiveEffect
+  /** Achievement skills are bound: never trained, transferred or copied. */
+  bound?: boolean
 }
 
 /** A hero's copy of a skill: it levels by being cast (auto-learn, Layer 1 §2.4). */
@@ -161,6 +175,29 @@ export interface HeroSkill {
   level: number
   /** Use-XP banked toward the next level. */
   xp: number
+}
+
+/** Conditional unlock (Layer 1 §2.2): a hero reaching `minLevel` (after the account has
+ *  cleared `minFloorCleared`, when set) learns `skillId` at Lv1. */
+export interface SkillUnlock {
+  skillId: string
+  minLevel: number
+  minFloorCleared?: number
+}
+
+/** Achievement skill (Layer 1 §2.1): granted to every deployed survivor of a WON battle
+ *  that meets the condition. */
+export interface AchievementDef {
+  id: string
+  skillId: string
+  label: string
+  condition: { kind: 'defeat'; targetTag: string } | { kind: 'clearFloor'; floor: number }
+}
+
+/** Manual-only evolution (Transfer Station): `from` at its max level becomes `result` (Lv1). */
+export interface EvolutionRecipe {
+  from: string
+  result: string
 }
 
 /** Auto-merge recipe: holding both inputs at ≥ minLevel fuses them into `result` (Lv1). */
@@ -187,6 +224,36 @@ export interface EquipmentItem {
   element?: Element
   /** Conditional-effect tags fed through the Layer 0 keyword system. */
   keywords?: KeywordTag[]
+  /** A bound exclusive weapon (4★+ summons): only this hero may equip it. */
+  exclusiveTo?: HeroId
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Engravings / Imprints (Layer 1 §5.4) — the 4★+ identity layer
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type EngravingGrade = 'C' | 'B' | 'A' | 'S'
+
+/** One grade's resolved effect: keyword tags + optional % bonuses to derived stats. */
+export interface EngravingEffect {
+  keywords: KeywordTag[]
+  statPct?: Partial<Record<keyof DerivedStats, number>>
+}
+
+/** Authored engraving (the registry entry). */
+export interface EngravingDef {
+  id: string
+  name: string
+  /** Relative roll weight among engravings (True Black Dragon's Blood = 2 of 100). */
+  weight: number
+  blurb: string
+  byGrade: Record<EngravingGrade, EngravingEffect>
+}
+
+/** A hero's engraving. */
+export interface HeroEngraving {
+  id: string
+  grade: EngravingGrade
 }
 
 /** A hero's three equipment slots; each references an inventory item or is empty. */
@@ -230,6 +297,8 @@ export interface OwnedHero extends Omit<Hero, 'skillIds'> {
   equipment: HeroEquipment
   /** In-progress Training Center drill; null when not training (schema v5). */
   training: TrainingDrill | null
+  /** The hero's engraving/imprint (4★+ identity layer); null when none (schema v6). */
+  engraving: HeroEngraving | null
 }
 
 /** A Training Center drill: refine an owned skill, or learn a trainable one. */
@@ -265,6 +334,12 @@ export interface GachaState {
   pity: number
   /** Monotonic total Normal pulls; doubles as the gacha sub-stream index. */
   pullCount: number
+  /** Advanced pool: consecutive pulls without a 4★+ (schema v6). */
+  advPity4: number
+  /** Advanced pool: consecutive pulls without a 5★. */
+  advPity5: number
+  /** Monotonic total Advanced pulls; the `gacha-adv` sub-stream index. */
+  advPullCount: number
 }
 
 export interface RngCursors {
@@ -334,12 +409,32 @@ export interface SaveEnvelope {
 
 export type CombatSide = 'hero' | 'enemy'
 
-/** Boss/enemy keyword gimmicks as data (Layer 0 §2.6). Slice uses phased + enrage. */
+/** What a `guard` reduction applies to: everything, ranged attackers (archer/mage), or one element. */
+export type GuardSource = 'ranged' | Element
+
+/** Enemy families for `bane` (Dragon Slayer etc.). */
+export type EnemyFamily = 'dragon' | 'undead' | 'beast' | 'humanoid'
+
+/** Conditional-effect keywords as data (Layer 0 §2.6). None of them draws RNG. */
 export type KeywordTag =
+  /** Takes no damage of this type. */
   | { kind: 'immune'; damageType: DamageType }
+  /** Takes ×vulnerableMult damage from this element. */
   | { kind: 'vulnerable'; element: Element }
   | { kind: 'phased' } // untargetable until all non-phased enemies in the wave are down
   | { kind: 'enrage'; afterTick: number; multiplier: number }
+  /** Negates the first `charges` hits taken (True Black Dragon's Blood). */
+  | { kind: 'aegis'; charges: number }
+  /** Deals ×multiplier while own HP is below `belowHpPct`% (Beast King's Heir). */
+  | { kind: 'frenzy'; belowHpPct: number; multiplier: number }
+  /** The unit's first action deals ×multiplier (Sword Saint's Mark). */
+  | { kind: 'opener'; multiplier: number }
+  /** Heals `fraction` of damage dealt (Blood Pact). */
+  | { kind: 'lifesteal'; fraction: number }
+  /** Deals ×multiplier against an enemy family (Dragon Slayer). */
+  | { kind: 'bane'; family: EnemyFamily; multiplier: number }
+  /** Takes ×(1 − reduction) damage, optionally only from one source. */
+  | { kind: 'guard'; reduction: number; vs?: GuardSource }
 
 /** A fully-assembled combatant. Heroes AND enemies share this shape; the sim
  *  treats them identically. Built fresh per battle by the `unit` module. */
@@ -368,6 +463,8 @@ export interface CombatUnit {
   targetTag?: string
   /** A mission NPC on the hero side: targetable, never acts, not part of the party. */
   isNpc?: boolean
+  /** Enemy family for `bane` keywords; absent for heroes. */
+  family?: EnemyFamily
 }
 
 /** Master levers carried into a battle (combat resolves once, then the UI replays
@@ -444,6 +541,10 @@ export type CombatEvent = { seq: number; tick: number } & (
   | { kind: 'hp-cost'; unitId: string; amount: number; hpAfter: number }
   /** A low-Sanity hero panicked and lost its turn (Layer 3 §3.2). */
   | { kind: 'panic'; unitId: string }
+  /** An aegis charge absorbed a hit (no damage). */
+  | { kind: 'guard'; actorId: string; targetId: string }
+  /** A unit recovered HP (lifesteal). */
+  | { kind: 'heal'; unitId: string; amount: number; hpAfter: number }
   | { kind: 'death'; unitId: string }
   | { kind: 'mission'; note: string }
   | { kind: 'end'; outcome: CombatOutcome }
@@ -477,6 +578,10 @@ export interface BattleResult {
 export type SkillProgress =
   | { kind: 'level-up'; heroId: HeroId; skillId: string; level: number }
   | { kind: 'merge'; heroId: HeroId; skillId: string; from: readonly [string, string] }
+  /** A conditional skill unlocked (level/floor threshold). */
+  | { kind: 'unlock'; heroId: HeroId; skillId: string }
+  /** An achievement skill was earned in this battle. */
+  | { kind: 'achievement'; heroId: HeroId; skillId: string }
 
 // ── Floor resolution (tower → account) ───────────────────────────────────────
 
@@ -509,6 +614,8 @@ export interface HeroTemplate {
   growthGrades: GrowthGrades
   skillIds: string[]
   portraitToken: string
+  /** Authored engraving (4★+ cameos). */
+  engraving?: HeroEngraving
 }
 
 /** Enemy archetype. tower derives a statline as attrMult[attr] × level, then
@@ -521,6 +628,8 @@ export interface EnemyTemplate {
   keywords?: KeywordTag[]
   /** Targeting profile (Layer 0 class rules): e.g. 'archer' strikes the lowest-HP foe. */
   unitClass?: HeroClass | null
+  /** Family for `bane` keywords (e.g. Halgiraf is a dragon). */
+  family?: EnemyFamily
 }
 
 /** A hero-side NPC an anchor fields (e.g. the F15 escort target). */
@@ -553,6 +662,8 @@ export interface AnchorDef {
   waves: AnchorWaveSpec[][]
   /** Hero-side NPCs (e.g. the F15 escort target). */
   allies?: AnchorAllySpec[]
+  /** Materials granted on the FIRST clear only (e.g. F20's Book of Reverse Heaven). */
+  firstClearDrops?: Record<MaterialId, number>
 }
 
 export type SkillRegistry = Record<string, SkillDef>
@@ -567,9 +678,15 @@ export interface StoragePort {
   clear(key: string): void
 }
 
+export type SummonPool = 'normal' | 'advanced'
+
+/** A player-chosen Salvage rescue. */
+export type RescueChoice = { kind: 'skill'; skillId: string } | { kind: 'grade'; attr: AttrKey }
+
 export type Command =
   | { type: 'NEW_ACCOUNT'; seed: number; now?: number }
-  | { type: 'SUMMON' }
+  /** Mobius Summon: Normal (gold) or Advanced (gems); a 10-pull is discounted on Advanced. */
+  | { type: 'SUMMON'; pool?: SummonPool; count?: 1 | 10 }
   | { type: 'SET_PARTY'; slots: (HeroId | null)[]; lines: Line[] }
   | { type: 'ATTEMPT_FLOOR'; focus?: FocusDirective }
   /** Explicit world-time catch-up; advances the clock with no other state change. */
@@ -587,7 +704,18 @@ export type Command =
   /** Run today's Daily Dungeon (seeded combat; free attempts then gem-paid). */
   | { type: 'ATTEMPT_DAILY' }
   /** Synthesis (Layer 1 §4): destroy heroes to transfer traits or render materials. */
-  | { type: 'SYNTHESIZE'; mode: 'transfer' | 'salvage'; survivorId: HeroId | null; sacrificeIds: HeroId[] }
+  | {
+      type: 'SYNTHESIZE'
+      mode: 'transfer' | 'salvage'
+      survivorId: HeroId | null
+      sacrificeIds: HeroId[]
+      /** Salvage: what to rescue onto the survivor; omitted = the automatic rule. */
+      rescue?: RescueChoice
+    }
+  /** Transfer Station: move a skill from one living hero to another. */
+  | { type: 'TRANSFER_SKILL'; donorId: HeroId; recipientId: HeroId; skillId: string }
+  /** Transfer Station: fuse a merge early, or run a manual-only evolution, producing `result`. */
+  | { type: 'FUSE_SKILL'; heroId: HeroId; result: string }
   /** Equipment (Layer 1 §5): forge a graded item for a slot at the Smithy. */
   | { type: 'CRAFT_EQUIPMENT'; slot: EquipmentSlot }
   /** Equipment: equip an owned item onto a hero's matching slot. */

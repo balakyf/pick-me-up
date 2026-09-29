@@ -155,6 +155,7 @@ describe('core loop — end to end', () => {
       promotion: null,
       equipment: { weapon: null, armor: null, accessory: null },
       training: null,
+      engraving: null,
     }
     const state: GameState = {
       ...acct,

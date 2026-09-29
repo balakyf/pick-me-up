@@ -892,3 +892,81 @@ const GOLDEN = {
   ticksElapsed: 29,
   wavesCleared: 1,
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Conditional keywords (engravings / passives, Layer 1 completion)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('conditional keywords', () => {
+  /** One hero swing at a sturdy dummy; returns the first hit amount (or null on a guard). */
+  function firstHit(heroKw: KeywordTag[], enemyKw: KeywordTag[] = [], extra: Partial<CombatUnit> = {}, heroOpts: Partial<UnitOpts> = {}) {
+    const h = hero({ id: 'h1', stats: { spd: 200, pAtk: 100 }, keywords: heroKw, ...heroOpts })
+    const e = { ...enemy({ id: 'e1', stats: { maxHP: 100000, spd: 1 }, keywords: enemyKw }), ...extra }
+    const res = runBattle([h], encounter([[e]], mission(annihilate, 40)), 5)
+    const ev = res.log.events.find((x) => (x.kind === 'hit' || x.kind === 'guard') && x.actorId === 'h1')!
+    return { ev, res }
+  }
+  const baseline = () => (firstHit([]).ev as { amount: number }).amount
+
+  it('immune zeroes damage of its type; vulnerable multiplies its element', () => {
+    expect((firstHit([], [{ kind: 'immune', damageType: 'physical' }]).ev as { amount: number }).amount).toBe(0)
+    const vuln = firstHit([], [{ kind: 'vulnerable', element: 'physical' }]).ev as { amount: number }
+    expect(vuln.amount).toBe(Math.round(baseline() * TUNING.combat.vulnerableMult))
+  })
+
+  it('opener boosts only the first action', () => {
+    const { res } = firstHit([{ kind: 'opener', multiplier: 2 }])
+    const hits = res.log.events.filter((x) => x.kind === 'hit' && x.actorId === 'h1') as { amount: number }[]
+    expect(hits[0]!.amount).toBeGreaterThan(hits[1]!.amount * 1.7)
+  })
+
+  it('bane multiplies damage against its family only', () => {
+    const dragon = firstHit([{ kind: 'bane', family: 'dragon', multiplier: 1.5 }], [], { family: 'dragon' }).ev as { amount: number }
+    const beast = firstHit([{ kind: 'bane', family: 'dragon', multiplier: 1.5 }], [], { family: 'beast' }).ev as { amount: number }
+    expect(beast.amount).toBe(baseline())
+    expect(dragon.amount).toBeGreaterThan(beast.amount * 1.4)
+  })
+
+  it('guard reduces incoming damage; a ranged-only guard ignores melee', () => {
+    const guarded = firstHit([], [{ kind: 'guard', reduction: 0.5 }]).ev as { amount: number }
+    expect(guarded.amount).toBeLessThan(baseline() * 0.55)
+    const melee = firstHit([], [{ kind: 'guard', reduction: 0.5, vs: 'ranged' }]).ev as { amount: number }
+    expect(melee.amount).toBe(baseline())
+    const archer = firstHit([], [{ kind: 'guard', reduction: 0.5, vs: 'ranged' }], {}, { unitClass: 'archer' }).ev as { amount: number }
+    expect(archer.amount).toBeLessThan(baseline() * 0.55)
+  })
+
+  it('aegis negates the first hits with a guard event and no HP loss', () => {
+    const { res } = firstHit([], [{ kind: 'aegis', charges: 2 }])
+    const onEnemy = res.log.events.filter((x) => (x.kind === 'hit' || x.kind === 'guard') && x.actorId === 'h1')
+    expect(onEnemy[0]!.kind).toBe('guard')
+    expect(onEnemy[1]!.kind).toBe('guard')
+    expect(onEnemy[2]!.kind).toBe('hit')
+  })
+
+  it('lifesteal heals the attacker (never above max HP)', () => {
+    const h = hero({ id: 'h1', stats: { spd: 200, pAtk: 100, maxHP: 1000 }, hp: 500, keywords: [{ kind: 'lifesteal', fraction: 0.5 }] })
+    const e = enemy({ id: 'e1', stats: { maxHP: 100000, spd: 1 } })
+    const res = runBattle([h], encounter([[e]], mission(annihilate, 40)), 5)
+    const heals = res.log.events.filter((x) => x.kind === 'heal') as { amount: number; hpAfter: number }[]
+    expect(heals.length).toBeGreaterThan(0)
+    for (const x of heals) expect(x.hpAfter).toBeLessThanOrEqual(1000)
+  })
+
+  it('frenzy boosts damage only below its HP threshold', () => {
+    const kw: KeywordTag[] = [{ kind: 'frenzy', belowHpPct: 50, multiplier: 2 }]
+    const high = firstHit(kw).ev as { amount: number }
+    const low = firstHit(kw, [], {}, { hp: 10 }).ev as { amount: number }
+    expect(high.amount).toBe(baseline())
+    expect(low.amount).toBeGreaterThan(high.amount * 1.8)
+  })
+
+  it('no keyword draws RNG — rngDraws match an unkeyed replay', () => {
+    const plain = firstHit([]).res.log.rngDraws
+    const keyed = firstHit(
+      [{ kind: 'opener', multiplier: 2 }, { kind: 'lifesteal', fraction: 0.2 }],
+      [{ kind: 'guard', reduction: 0.2 }, { kind: 'aegis', charges: 1 }],
+    ).res.log.rngDraws
+    expect(keyed).toBe(plain)
+  })
+})

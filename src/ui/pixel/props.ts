@@ -49,6 +49,7 @@ export const PROP_FRAMES: Record<PropKind, number> = {
   fairy: 4,
   dummy: 1,
   drillBoard: 1,
+  plinth: 4,
 }
 
 const STONE = ramp('#4a4452', '#6e6678', '#8e869a')
@@ -450,6 +451,30 @@ function drillBoard(): PropSprite {
   return { bmp: outline(b, INK), dx: 0, dy: 1 }
 }
 
+/** A Transfer Station plinth: a carved pedestal with a slowly turning, floating crystal. */
+function plinth(f: number): PropSprite {
+  const b = createBitmap(16, 30)
+  const glow = [hex('#5ad8e6'), hex('#8ae8f0'), hex('#c8f6ff'), hex('#8ae8f0')][f % 4]!
+  const bob = [0, -1, -1, 0][f % 4]!
+  // pedestal
+  rect(b, 3, 20, 10, 9, STONE.m)
+  hline(b, 2, 20, 12, STONE.l)
+  hline(b, 2, 28, 12, STONE.d)
+  vline(b, 4, 21, 7, STONE.l)
+  vline(b, 11, 21, 7, STONE.d)
+  // runic band
+  hline(b, 5, 24, 6, glow)
+  // floating crystal
+  const cy = 6 + bob
+  for (let i = 0; i < 5; i++) hline(b, 8 - i, cy + i, i * 2 + 1, i < 2 ? hex('#c8f6ff') : hex('#5ab0d8'))
+  for (let i = 0; i < 6; i++) hline(b, 4 + i, cy + 5 + i, 9 - i * 2, i < 3 ? hex('#3a78b8') : hex('#2a4a88'))
+  set(b, 7, cy + 2, WHITE_PX)
+  // motes
+  set(b, 2 + (f % 3), 14 - (f % 2), glow)
+  set(b, 13 - (f % 3), 12 + (f % 2), glow)
+  return { bmp: outline(b, INK), dx: 0, dy: -14 }
+}
+
 const WHITE_PX = hex('#fff6e0')
 
 const DRAW: Record<PropKind, (f: number) => PropSprite> = {
@@ -475,6 +500,7 @@ const DRAW: Record<PropKind, (f: number) => PropSprite> = {
   fairy,
   dummy,
   drillBoard,
+  plinth,
 }
 
 export function drawProp(kind: PropKind, frame = 0): PropSprite {

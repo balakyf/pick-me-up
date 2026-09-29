@@ -50,10 +50,18 @@ interface MutUnit {
   currentSP: number
   actionGauge: number
   alive: boolean
+  /** Actions taken so far (the `opener` keyword boosts the first). */
+  actions: number
+  /** Remaining `aegis` charges (hits this unit will negate). */
+  aegis: number
 }
 
 function copyUnit(u: CombatUnit, spawnIndex: number, wave: number): MutUnit {
+  let aegis = 0
+  for (const k of u.keywords) if (k.kind === 'aegis') aegis += k.charges
   return {
+    actions: 0,
+    aegis,
     ref: u,
     id: u.id,
     side: u.side,
@@ -70,6 +78,9 @@ function copyUnit(u: CombatUnit, spawnIndex: number, wave: number): MutUnit {
 function byId(a: MutUnit, b: MutUnit): number {
   return a.id < b.id ? -1 : a.id > b.id ? 1 : 0
 }
+
+/** Guard reductions only ever shave off this much in total (never full immunity). */
+const MIN_GUARD_MULT = 0.25
 
 /** elementMult per Layer 0 §2.5. */
 function elementMult(attackEl: Element, defEl: Element): number {
@@ -209,11 +220,41 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
       damage *= 1 + encounter.focusBonus
     }
 
-    // ENRAGE: actor stat-spike past its timer.
+    // Actor keywords: ENRAGE past its timer, FRENZY while low, OPENER on the first
+    // action, BANE against a family. None draws RNG.
     for (const kw of actor.ref.keywords) {
       if (kw.kind === 'enrage' && tick >= kw.afterTick) {
         damage *= kw.multiplier
+      } else if (kw.kind === 'frenzy' && actor.currentHP * 100 < actor.ref.stats.maxHP * kw.belowHpPct) {
+        damage *= kw.multiplier
+      } else if (kw.kind === 'opener' && actor.actions === 0) {
+        damage *= kw.multiplier
+      } else if (kw.kind === 'bane' && target.ref.family === kw.family) {
+        damage *= kw.multiplier
       }
+    }
+
+    // Target keywords: IMMUNE to a damage type, VULNERABLE to an element, GUARD
+    // reductions (floored so stacked guards never reach immunity).
+    let guardMult = 1
+    const ranged = actor.ref.unitClass === 'archer' || actor.ref.unitClass === 'mage'
+    for (const kw of target.ref.keywords) {
+      if (kw.kind === 'immune' && kw.damageType === skill.damageType) {
+        damage = 0
+      } else if (kw.kind === 'vulnerable' && kw.element === el) {
+        damage *= C.vulnerableMult
+      } else if (kw.kind === 'guard' && (kw.vs === undefined || (kw.vs === 'ranged' ? ranged : kw.vs === el))) {
+        guardMult *= 1 - kw.reduction
+      }
+    }
+    damage *= Math.max(MIN_GUARD_MULT, guardMult)
+
+    // AEGIS: a charge negates the whole hit (the draws above are already spent, so the
+    // stream stays identical to an un-guarded replay).
+    if (target.aegis > 0) {
+      target.aegis--
+      emit({ kind: 'guard', actorId: actor.id, targetId: target.id })
+      return
     }
 
     const amount = Math.round(damage)
@@ -226,6 +267,18 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
       crit,
       hpAfter: target.currentHP,
     })
+
+    // LIFESTEAL: the actor recovers a share of what it dealt (capped at max HP).
+    if (actor.alive && amount > 0) {
+      for (const kw of actor.ref.keywords) {
+        if (kw.kind !== 'lifesteal') continue
+        const heal = Math.min(Math.round(amount * kw.fraction), actor.ref.stats.maxHP - actor.currentHP)
+        if (heal > 0) {
+          actor.currentHP += heal
+          emit({ kind: 'heal', unitId: actor.id, amount: heal, hpAfter: actor.currentHP })
+        }
+      }
+    }
 
     if (target.currentHP <= 0 && target.alive) {
       target.alive = false
@@ -417,6 +470,8 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
       payAndTally(actor, skill)
       resolveHit(actor, skill, target)
     }
+
+    actor.actions++
 
     // Deaths from this action may clear the wave / satisfy the mission.
     maybeAdvanceWave()

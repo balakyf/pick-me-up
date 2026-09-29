@@ -71,12 +71,22 @@ function cameraFor(px: number, py: number, vw: number, vh: number): { camX: numb
 }
 const MASTER_SPEED = 5.5 // tiles / s
 const HERO_SPEED = 2
-const PANEL_PLACES: PanelPlace[] = ['kitchen', 'tacticalCenter', 'promotionChamber', 'trainingCenter', 'synthesis', 'armory', 'daily']
+const PANEL_PLACES: PanelPlace[] = [
+  'kitchen',
+  'tacticalCenter',
+  'promotionChamber',
+  'trainingCenter',
+  'transferStation',
+  'synthesis',
+  'armory',
+  'daily',
+]
 export const PLACE_ICON: Record<PlaceId, string> = {
   kitchen: '🍲',
   tacticalCenter: '🗺',
   promotionChamber: '⛩',
   trainingCenter: '⚔',
+  transferStation: '⇄',
   synthesis: '⚗',
   armory: '⚒',
   daily: '🌀',
@@ -96,6 +106,7 @@ export const MENU_PLACES: PlaceId[] = [
   'tacticalCenter',
   'promotionChamber',
   'trainingCenter',
+  'transferStation',
   'synthesis',
   'armory',
   'daily',
@@ -219,6 +230,7 @@ function lockedRooms(state: GameState): RoomId[] {
   if (!dailyUnlocked(state)) out.push('daily')
   if (state.facilities.promotionChamber.level === 0) out.push('promotionChamber')
   if (state.facilities.trainingCenter.level === 0) out.push('training')
+  if (state.facilities.transferStation.level === 0) out.push('transfer')
   return out
 }
 

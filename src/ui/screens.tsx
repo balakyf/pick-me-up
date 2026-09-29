@@ -9,7 +9,7 @@ import { heroFrameUrl } from './pixel/sprites'
 import { cachedDataUrl } from './pixel/render'
 import { drawProp } from './pixel/props'
 import { scale } from './pixel/bitmap'
-import type { Element, HeroClass, SkillProgress, Star } from '../engine/types'
+import type { Element, HeroClass, SkillProgress, Star, SummonPool } from '../engine/types'
 import { SKILLS } from '../engine/content'
 
 export const PARTY_LINES: Line[] = ['front', 'front', 'mid', 'back', 'back']
@@ -73,32 +73,54 @@ export function TitleScreen({ store, hasSave }: { store: Store; hasSave: boolean
 }
 
 // ── Summon ───────────────────────────────────────────────────────────────────
-export function SummonScreen({ state, store }: { state: GameState; store: Store }) {
-  const [revealed, setRevealed] = useState<OwnedHero | null>(null)
-  const [err, setErr] = useState<string | null>(null)
-  const canAfford = state.gold >= SUMMON_COST
+const ADV = TUNING.gacha.advanced
 
-  function summonOne() {
+export function SummonScreen({ state, store }: { state: GameState; store: Store }) {
+  const [pool, setPool] = useState<SummonPool>('normal')
+  const [revealed, setRevealed] = useState<OwnedHero[]>([])
+  const [err, setErr] = useState<string | null>(null)
+
+  function pull(count: 1 | 10) {
     setErr(null)
     const prev = new Set(Object.keys(state.heroes))
     try {
-      const next = store.dispatch({ type: 'SUMMON' })
-      const newId = Object.keys(next.heroes).find((id) => !prev.has(id))
-      if (newId) setRevealed(next.heroes[newId as HeroId]!)
+      const next = store.dispatch({ type: 'SUMMON', pool, count })
+      setRevealed(
+        Object.keys(next.heroes)
+          .filter((id) => !prev.has(id))
+          .map((id) => next.heroes[id as HeroId]!),
+      )
     } catch (e) {
-      setErr(e instanceof Error ? e.message : 'Summon failed')
+      setErr(e instanceof Error ? e.message.replace(/^\w+: /, '') : 'Summon failed')
     }
   }
+
+  const canOne = pool === 'normal' ? state.gold >= SUMMON_COST : state.gems >= ADV.costGems
+  const canTen = state.gems >= ADV.tenPullGems
 
   return (
     <div className="screen">
       <h2>Mobius Summon</h2>
-      <p className="sub">Normal pool · {SUMMON_COST.toLocaleString()} Gold per pull · every hero is unique, no duplicates.</p>
+      <div className="summon-pools">
+        <button className={`btn sm ${pool === 'normal' ? 'primary' : ''}`} onClick={() => setPool('normal')}>
+          Normal · 1–3★
+        </button>
+        <button className={`btn sm ${pool === 'advanced' ? 'primary' : ''}`} onClick={() => setPool('advanced')}>
+          ♦ Advanced · 3–5★
+        </button>
+      </div>
+      <p className="sub">
+        {pool === 'normal'
+          ? `Normal pool · ${SUMMON_COST.toLocaleString()} Gold per pull · every hero is unique, no duplicates.`
+          : `Advanced pool · ${ADV.costGems} gems per pull (${ADV.tenPullGems.toLocaleString()} for ten) · 4★+ arrive with an exclusive weapon and an engraving.`}
+      </p>
 
       <div className="summon-stage">
-        {revealed ? (
-          <div className="reveal">
-            <HeroCard hero={revealed} showStats />
+        {revealed.length > 0 ? (
+          <div className={`reveal ${revealed.length > 1 ? 'reveal-many' : ''}`}>
+            {revealed.map((h) => (
+              <HeroCard key={h.id} hero={h} showStats={revealed.length === 1} />
+            ))}
           </div>
         ) : (
           <div className="orb">
@@ -106,14 +128,38 @@ export function SummonScreen({ state, store }: { state: GameState; store: Store 
           </div>
         )}
 
-        <div className="pity">
-          Quality floor: <b>{state.gacha.pity}</b> / {PITY_AT} dry pulls → guaranteed ★★★
-        </div>
+        {pool === 'normal' ? (
+          <div className="pity">
+            Quality floor: <b>{state.gacha.pity}</b> / {PITY_AT} dry pulls → guaranteed ★★★
+          </div>
+        ) : (
+          <div className="pity">
+            Quality floor: <b>{state.gacha.advPity4}</b> / {ADV.pityFloor4At} → ★★★★ · <b>{state.gacha.advPity5}</b> /{' '}
+            {ADV.pityFloor5At} → ★★★★★
+          </div>
+        )}
 
-        <button className="btn gold big" onClick={summonOne} disabled={!canAfford}>
-          Summon · {SUMMON_COST.toLocaleString()} Gold
-        </button>
-        {!canAfford && <div className="muted">Not enough Gold — clear tower floors to earn more.</div>}
+        <div className="summon-buttons">
+          {pool === 'normal' ? (
+            <button className="btn gold big" onClick={() => pull(1)} disabled={!canOne}>
+              Summon · {SUMMON_COST.toLocaleString()} Gold
+            </button>
+          ) : (
+            <>
+              <button className="btn gem big" onClick={() => pull(1)} disabled={!canOne}>
+                Summon · {ADV.costGems} ♦
+              </button>
+              <button className="btn gem big" onClick={() => pull(10)} disabled={!canTen}>
+                Summon ×10 · {ADV.tenPullGems.toLocaleString()} ♦
+              </button>
+            </>
+          )}
+        </div>
+        {!canOne && (
+          <div className="muted">
+            {pool === 'normal' ? 'Not enough Gold — clear tower floors to earn more.' : 'Not enough gems — the Friday Soulforge dungeon pays them.'}
+          </div>
+        )}
         {err && <div className="muted" style={{ color: 'var(--bad)' }}>{err}</div>}
       </div>
     </div>
@@ -238,9 +284,16 @@ export function PartyScreen({ state, store }: { state: GameState; store: Store }
 export function skillProgressLine(p: SkillProgress, state: GameState): string {
   const who = state.heroes[p.heroId]?.name.split(/\s+/)[0] ?? 'A hero'
   const name = (id: string) => SKILLS[id]?.name ?? id
-  return p.kind === 'level-up'
-    ? `▲ ${who}'s ${name(p.skillId)} reached Lv ${p.level}`
-    : `✦ ${who} fused ${name(p.from[0])} + ${name(p.from[1])} into ${name(p.skillId)}!`
+  switch (p.kind) {
+    case 'level-up':
+      return `▲ ${who}'s ${name(p.skillId)} reached Lv ${p.level}`
+    case 'merge':
+      return `✦ ${who} fused ${name(p.from[0])} + ${name(p.from[1])} into ${name(p.skillId)}!`
+    case 'unlock':
+      return `✧ ${who} awakened a new skill: ${name(p.skillId)}`
+    case 'achievement':
+      return `🏆 ${who} earned ${name(p.skillId)}!`
+  }
 }
 
 export function ResultsScreen({

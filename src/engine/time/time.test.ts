@@ -166,6 +166,7 @@ describe('advanceTime — promotion completion', () => {
       promotion: { completesAtWorld },
       equipment: { weapon: null, armor: null, accessory: null },
       training: null,
+      engraving: null,
     }
     return { ...acct, heroes: { [hero.id]: hero }, meta: { ...acct.meta, lastSeenAtWorld } }
   }

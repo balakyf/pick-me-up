@@ -67,6 +67,8 @@ export const TUNING = {
     modelAccuracy: false,
     /** Hard tick budget so a stalled battle always terminates. */
     maxTicks: 5000,
+    /** Damage multiplier a `vulnerable` keyword applies to hits of its element. */
+    vulnerableMult: 1.5,
   },
 
   cp: {
@@ -97,6 +99,31 @@ export const TUNING = {
     cameoChance: 0.35,
     /** Mage is gacha-only and rare; chance a 3★+ classed roll becomes a Mage. */
     mageChance: 0.08,
+    /** Advanced (gem) pool (Layer 1 §1.1–1.3). */
+    advanced: {
+      costGems: 150,
+      /** A 10-pull is discounted (canon 1,350). */
+      tenPullGems: 1350,
+      rates: { 3: 80, 4: 18, 5: 2 } as Record<number, number>,
+      /** The Nth consecutive pull without a 4★+ is lifted to 4★+. */
+      pityFloor4At: 30,
+      /** The Nth consecutive pull without a 5★ is lifted to 5★. */
+      pityFloor5At: 90,
+      /** Learnable skills a summoned 4★/5★ arrives with (on top of its class skill). */
+      extraSkills: { 4: 1, 5: 2 } as Record<number, number>,
+      /** Exclusive weapon grade a summoned 4★/5★ arrives with. */
+      weaponGrade: { 4: 'B', 5: 'A' } as Record<number, string>,
+    },
+  },
+
+  /** Engravings / Imprints (Layer 1 §5.4). */
+  engravings: {
+    /** Grade weights for a summoned engraving (a 5★ is lifted one grade). */
+    summonGradeWeights: { C: 50, B: 35, A: 15 } as Record<string, number>,
+    /** Chance a hero promoted into 4★+ without an engraving awakens one (at grade C). */
+    promotionAwakenChance: 0.3,
+    /** CP an engraving adds, by grade. */
+    cp: { C: 20, B: 40, A: 70, S: 110 } as Record<string, number>,
   },
 
   tower: {
@@ -150,7 +177,7 @@ export const TUNING = {
     /** Sanity is per-hero, 0..100; heroes summon at full. */
     sanityMax: 100,
     /** Facilities present at account creation. 0 = locked / not yet built. */
-    facilityStartLevels: { kitchen: 1, promotionChamber: 0, tacticalCenter: 1, trainingCenter: 0 },
+    facilityStartLevels: { kitchen: 1, promotionChamber: 0, tacticalCenter: 1, trainingCenter: 0, transferStation: 0 },
     /** Master Level — the lobby progression spine (Layer 3 §3.1). */
     master: {
       /** masterXpToNext(L) = round(coeff × L^exp); levels stop at `cap`. */
@@ -171,9 +198,15 @@ export const TUNING = {
       /** Master Level required to BUILD the Promotion Chamber (level 0 → 1). */
       chamberUnlockMasterLevel: 3,
       /** Master Level required for a facility's first build (level 0 → 1). Absent = ML1. */
-      unlockMasterLevel: { promotionChamber: 3, trainingCenter: 2 } as Record<string, number>,
+      unlockMasterLevel: { promotionChamber: 3, trainingCenter: 2, transferStation: 4 } as Record<string, number>,
       /** upgradeCost(level) = round(baseCost × costGrowth^level), in gold. */
-      baseCost: { kitchen: 800, promotionChamber: 1200, tacticalCenter: 1000, trainingCenter: 900 } as Record<string, number>,
+      baseCost: {
+        kitchen: 800,
+        promotionChamber: 1200,
+        tacticalCenter: 1000,
+        trainingCenter: 900,
+        transferStation: 1100,
+      } as Record<string, number>,
       costGrowth: 1.5,
       /** Build timer per TARGET level (world-time ms): ~`durationPerLevel × toLevel`. */
       durationPerLevel: 15 * 60_000,
@@ -222,8 +255,10 @@ export const TUNING = {
     },
     /** Promotion: the "raise, don't roll" engine (Layer 1 §3, lobby §3.3). */
     promotion: {
-      /** Slice star ceiling — 6★→7★ needs the out-of-slice Book of Reverse Heaven. */
-      maxStar: 6,
+      /** Star ceiling. 6★→7★ is paid with a Book of Reverse Heaven, not stones (§3.4). */
+      maxStar: 7,
+      /** The one item a 6★→7★ promotion consumes. */
+      bookId: 'bookOfReverseHeaven',
       /** Promotion Stones required per TARGET star (canon doubling curve). */
       stoneCost: { 2: 10, 3: 20, 4: 40, 5: 80, 6: 160 } as Record<number, number>,
       /** Element-matched Attribute Stones = stoneCost ÷ this (the canon ½). */
@@ -235,6 +270,7 @@ export const TUNING = {
         4: 60 * 60_000,
         5: 3 * 3_600_000,
         6: 6 * 3_600_000,
+        7: 12 * 3_600_000,
       } as Record<number, number>,
       /** Each Promotion Chamber level cuts the timer by this fraction… */
       chamberSpeedupPerLevel: 0.1,
@@ -249,8 +285,10 @@ export const TUNING = {
       unlockMasterLevel: 3,
       /** Transfer efficiency η — the upward-only grade-nudge magnitude (canon ≈10%). */
       transferEfficiency: 0.1,
-      /** Per-sacrifice chance (Transfer) to copy one skill the survivor lacks. */
-      skillCopyChance: 0.25,
+      /** Transfer efficiency for a 7★ survivor — the canon "absorption" engine (§4.3). */
+      transferEfficiency7: 0.25,
+      /** Per-sacrifice chance (Transfer) to copy the one missing skill drawn, by its grade. */
+      skillCopyChanceByGrade: { F: 0.35, E: 0.35, D: 0.3, C: 0.25, B: 0.18, A: 0.1, S: 0.06, U: 0.03 } as Record<string, number>,
       /** Sanity drained from the survivor per sacrifice (Transfer) or per rescue (Salvage). */
       survivorSanityCost: 15,
       /** Sanity hit to each OTHER living hero — the roster witnesses the loss. */
@@ -356,10 +394,25 @@ export const TUNING = {
       /** Gems to finish a drill immediately. */
       skipGemCost: 15,
     },
+    /** Passive skills gain this much use-XP per battle survived (they are never cast). */
+    passiveXpPerBattle: 1,
+    /** Transfer Station (Layer 1 §2.4 "crafted at the Transfer Station"; bible "skill transfer"). */
+    transfer: {
+      /** Highest transferable grade at a station level (highest threshold ≤ level wins). */
+      maxGradeThresholds: { 1: 'D', 3: 'C', 5: 'B', 7: 'A' } as Record<number, string>,
+      /** From this station level a transferred skill keeps its full level (else level − 1). */
+      keepLevelAt: 5,
+      /** Transfer gold = drillGold[grade] × this. */
+      transferMult: 3,
+      /** Fuse gold = drillGold[result grade] × this. */
+      fuseMult: 2,
+      /** A station fuse needs both merge inputs at ≥ recipe.minLevel − this. */
+      earlyFuseLevels: 1,
+    },
   },
 
   account: {
-    schemaVersion: 5,
+    schemaVersion: 6,
     /** Canon protagonist account id (display only). */
     defaultAccountId: '46631913',
     partySize: 5,

@@ -36,6 +36,8 @@ const DURATION: Record<CombatEvent['kind'], number> = {
   miss: 400,
   'hp-cost': 450,
   panic: 650,
+  guard: 420,
+  heal: 380,
   death: 600,
   mission: 900,
   end: 600,
@@ -96,7 +98,8 @@ export function BattleScene({ log, state, onDone }: { log: CombatLog; state: Gam
     }
     out.push(cur)
     for (const e of log.events) {
-      const keepSkill = e.kind === 'hit' || e.kind === 'miss' || e.kind === 'hp-cost'
+      const keepSkill =
+        e.kind === 'hit' || e.kind === 'miss' || e.kind === 'hp-cost' || e.kind === 'guard' || e.kind === 'heal'
       const next: Snap = {
         ...cur,
         hp: { ...cur.hp },
@@ -146,6 +149,15 @@ export function BattleScene({ log, state, onDone }: { log: CombatLog; state: Gam
         case 'panic':
           next.panic = e.unitId
           next.caption = `${nameOf(e.unitId)} panics and freezes!`
+          break
+        case 'guard':
+          next.actor = e.actorId
+          next.target = e.targetId
+          next.caption = `${nameOf(e.targetId)}'s scales turn the blow!`
+          break
+        case 'heal':
+          next.hp[e.unitId] = e.hpAfter
+          next.caption = cur.caption
           break
         case 'death':
           next.dead[e.unitId] = true
@@ -209,7 +221,7 @@ export function BattleScene({ log, state, onDone }: { log: CombatLog; state: Gam
 
   // Damage popups for the most recent few events (each animates once on mount).
   const popups = (atEnd ? [] : log.events.slice(Math.max(0, cursor - 3), cursor))
-    .filter((e) => e.kind === 'hit' || e.kind === 'miss')
+    .filter((e) => e.kind === 'hit' || e.kind === 'miss' || e.kind === 'guard' || e.kind === 'heal')
 
   const heroes = log.unitsInit.filter((u) => u.side === 'hero')
   const enemies = log.unitsInit.filter((u) => u.side === 'enemy')
@@ -277,11 +289,12 @@ export function BattleScene({ log, state, onDone }: { log: CombatLog; state: Gam
           })}
 
           {popups.map((e) => {
-            if (e.kind !== 'hit' && e.kind !== 'miss') return null
-            const p = pos[e.targetId]
+            if (e.kind !== 'hit' && e.kind !== 'miss' && e.kind !== 'guard' && e.kind !== 'heal') return null
+            const p = pos[e.kind === 'heal' ? e.unitId : e.targetId]
             if (!p) return null
-            const text = e.kind === 'miss' ? 'MISS' : String(e.amount)
-            const cls = e.kind === 'miss' ? 'miss' : e.crit ? 'crit' : ''
+            const text =
+              e.kind === 'miss' ? 'MISS' : e.kind === 'guard' ? 'GUARD' : e.kind === 'heal' ? `+${e.amount}` : String(e.amount)
+            const cls = e.kind === 'miss' || e.kind === 'guard' ? 'miss' : e.kind === 'heal' ? 'heal' : e.crit ? 'crit' : ''
             return (
               <div key={e.seq} className={`dmg ${cls}`} style={{ left: p.x, top: p.y - 34, zIndex: 999 }}>
                 {text}

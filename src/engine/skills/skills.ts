@@ -9,8 +9,20 @@
  * PURE and DETERMINISTIC: no RNG, integer/lookup math only, inputs never mutated.
  */
 
-import type { HeroId, HeroSkill, MergeRecipe, SkillDef, SkillEffect, SkillGrade, SkillProgress, SkillRegistry } from '../types'
-import { SKILLS, SKILL_MERGES } from '../content'
+import type {
+  DerivedStats,
+  HeroClass,
+  HeroId,
+  HeroSkill,
+  KeywordTag,
+  MergeRecipe,
+  SkillDef,
+  SkillEffect,
+  SkillGrade,
+  SkillProgress,
+  SkillRegistry,
+} from '../types'
+import { ACHIEVEMENTS, CLASS_SKILL, SKILLS, SKILL_MERGES, SKILL_UNLOCKS } from '../content'
 import { TUNING } from '../tuning'
 
 const T = TUNING.skills
@@ -35,10 +47,48 @@ export function hpCostAt(def: SkillDef, level: number): number {
   return def.hpCost + (def.hpCostPerLevel ?? 0) * (clampLevel(def, level) - 1)
 }
 
-/** The leveled effect the combat sim reads; null for an id the registry doesn't know. */
+/** Is this a passive skill (never cast)? */
+export function isPassive(id: string, registry: SkillRegistry = SKILLS): boolean {
+  return registry[id]?.passive !== undefined
+}
+
+/** A passive's magnitude at a level: base + perLevel × (level − 1), level clamped. */
+export function passiveMagnitude(def: SkillDef, level: number): number {
+  const p = def.passive
+  if (p === undefined) return 0
+  return Math.round((p.base + p.perLevel * (clampLevel(def, level) - 1)) * 1000) / 1000
+}
+
+/**
+ * The keywords and % stat bonuses a hero's passive skills lend its unit (Layer 1 §2.1):
+ * guard → `guard` keyword, bane → `bane` keyword, stat → a relative % bonus. PURE.
+ */
+export function passiveBonuses(
+  skills: readonly HeroSkill[],
+  registry: SkillRegistry = SKILLS,
+): { keywords: KeywordTag[]; statPct: Partial<Record<keyof DerivedStats, number>> } {
+  const keywords: KeywordTag[] = []
+  const statPct: Partial<Record<keyof DerivedStats, number>> = {}
+  for (const s of skills) {
+    const def = registry[s.id]
+    const p = def?.passive
+    if (def === undefined || p === undefined) continue
+    const m = passiveMagnitude(def, s.level)
+    if (p.kind === 'guard') {
+      keywords.push(p.vs === undefined ? { kind: 'guard', reduction: m } : { kind: 'guard', reduction: m, vs: p.vs })
+    } else if (p.kind === 'bane') {
+      keywords.push({ kind: 'bane', family: p.family, multiplier: Math.round((1 + m) * 1000) / 1000 })
+    } else {
+      statPct[p.stat] = (statPct[p.stat] ?? 0) + m
+    }
+  }
+  return { keywords, statPct }
+}
+
+/** The leveled effect the combat sim reads; null for an unknown id or a passive (never cast). */
 export function resolveSkillEffect(skill: HeroSkill, registry: SkillRegistry = SKILLS): SkillEffect | null {
   const def = registry[skill.id]
-  if (def === undefined) return null
+  if (def === undefined || def.passive !== undefined) return null
   const effect: SkillEffect = {
     id: def.id,
     name: def.name,
@@ -118,7 +168,35 @@ export function skillCp(skills: readonly HeroSkill[], registry: SkillRegistry = 
   return Math.round(skillScore(skills, registry) * T.cpPerSkillScore)
 }
 
-/** Level-ups and merges between two snapshots of one hero's skills (for results UI). */
+/**
+ * Conditional unlocks (Layer 1 §2.2): add every SKILL_UNLOCKS skill whose level (and
+ * floor) threshold the hero now meets and that it does not hold. Table order; Lv1.
+ */
+export function applyUnlocks(skills: readonly HeroSkill[], heroLevel: number, highestCleared: number): HeroSkill[] {
+  const out = skills.map((s) => ({ ...s }))
+  for (const u of SKILL_UNLOCKS) {
+    if (heroLevel < u.minLevel) continue
+    if (u.minFloorCleared !== undefined && highestCleared < u.minFloorCleared) continue
+    if (out.some((s) => s.id === u.skillId)) continue
+    out.push({ id: u.skillId, level: 1, xp: 0 })
+  }
+  return out
+}
+
+/** Did a won battle meet an achievement's condition? */
+export function achievementsEarned(won: boolean, floor: number | undefined, defeatedTargetTags: readonly string[]): string[] {
+  if (!won) return []
+  return ACHIEVEMENTS.filter((a) =>
+    a.condition.kind === 'defeat' ? defeatedTargetTags.includes(a.condition.targetTag) : a.condition.floor === floor,
+  ).map((a) => a.skillId)
+}
+
+/** Is this skill granted by a condition (unlock or achievement) rather than learned? */
+export function isConditionalSkill(id: string): boolean {
+  return SKILL_UNLOCKS.some((u) => u.skillId === id) || ACHIEVEMENTS.some((a) => a.skillId === id)
+}
+
+/** Level-ups, merges, unlocks and achievements between two snapshots of one hero's skills (for results UI). */
 export function diffSkills(
   heroId: HeroId,
   before: readonly HeroSkill[],
@@ -135,6 +213,8 @@ export function diffSkills(
     }
     const recipe = recipes.find((r) => r.result === s.id)
     if (recipe) out.push({ kind: 'merge', heroId, skillId: s.id, from: recipe.inputs })
+    else if (ACHIEVEMENTS.some((a) => a.skillId === s.id)) out.push({ kind: 'achievement', heroId, skillId: s.id })
+    else if (SKILL_UNLOCKS.some((u) => u.skillId === s.id)) out.push({ kind: 'unlock', heroId, skillId: s.id })
   }
   return out
 }
@@ -145,15 +225,48 @@ export function learnableSkillIds(registry: SkillRegistry = SKILLS): string[] {
 }
 
 /**
- * The post-combat skill fold for one surviving hero (tower + daily): award
- * use-XP for this battle's casts, then resolve merges. Returns the new skills and
+ * The skills a promotion may grant this hero, in priority order: its class's signature
+ * skill first (when it lacks it), else every learnable skill it lacks.
+ */
+export function promotionSkillPool(heroClass: HeroClass | null, known: ReadonlySet<string>): string[] {
+  const signature = heroClass !== null ? CLASS_SKILL[heroClass] : undefined
+  if (signature !== undefined && !known.has(signature)) return [signature]
+  return learnableSkillIds().filter((id) => !known.has(id))
+}
+
+/** What the post-combat fold needs to know beyond the casts. */
+export interface FoldContext {
+  /** The hero's level AFTER this battle's XP (for conditional unlocks). */
+  heroLevel: number
+  /** The account's highest cleared floor after this battle. */
+  highestCleared: number
+  /** Did the battle end in a win? (Achievements need one.) */
+  won: boolean
+  /** The tower floor fought (achievement conditions); undefined off-tower. */
+  floor?: number
+  defeatedTargetTags: readonly string[]
+}
+
+/**
+ * The post-combat skill fold for one surviving hero (tower + daily): award use-XP
+ * for this battle's casts (+ a flat per-battle XP to every passive), resolve merges,
+ * then add conditional unlocks and achievement skills. Returns the new skills and
  * the milestones reached (for the results screen).
  */
 export function foldBattleSkills(
   heroId: HeroId,
   skills: readonly HeroSkill[],
   casts: Readonly<Record<string, number>> | undefined,
+  ctx?: FoldContext,
 ): { skills: HeroSkill[]; progress: SkillProgress[] } {
-  const next = resolveMerges(awardSkillXp(skills, casts ?? {}))
+  const xp: Record<string, number> = { ...(casts ?? {}) }
+  for (const s of skills) if (isPassive(s.id)) xp[s.id] = (xp[s.id] ?? 0) + T.passiveXpPerBattle
+  let next = resolveMerges(awardSkillXp(skills, xp))
+  if (ctx !== undefined) {
+    next = applyUnlocks(next, ctx.heroLevel, ctx.highestCleared)
+    for (const id of achievementsEarned(ctx.won, ctx.floor, ctx.defeatedTargetTags)) {
+      if (!next.some((s) => s.id === id)) next.push({ id, level: 1, xp: 0 })
+    }
+  }
   return { skills: next, progress: diffSkills(heroId, skills, next) }
 }

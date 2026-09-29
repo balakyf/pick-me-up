@@ -35,6 +35,9 @@ const C = {
   sandM: hex('#b8966a'),
   sandL: hex('#cca87a'),
   sandD: hex('#9a7a52'),
+  crystalM: hex('#1e2244'),
+  crystalL: hex('#2c3464'),
+  crystalGlow: hex('#5ad8e6'),
   wallTop: hex('#241c30'),
   wallTopL: hex('#342a44'),
   brickM: hex('#5a4a5e'),
@@ -148,6 +151,19 @@ function floorTile(b: Bitmap, ch: TileChar, tx: number, ty: number) {
       for (let y = 1; y < TILE; y += 4) hline(b, ox, oy + y, TILE, (tx + ty) % 2 ? C.sandL : C.sandD)
       for (let i = 0; i < 3; i++) set(b, ox + r.int(0, 15), oy + r.int(0, 15), C.sandD)
       if (r.chance(0.2)) set(b, ox + r.int(2, 13), oy + r.int(2, 13), C.sandL)
+      break
+    case 'x':
+      // transfer-station crystal floor: dark hex-ish tiles with faint glowing seams
+      rect(b, ox, oy, TILE, TILE, C.crystalM)
+      hline(b, ox, oy + 15, TILE, C.wallTop)
+      vline(b, ox + 15, oy, TILE, C.wallTop)
+      rect(b, ox + 1, oy + 1, 6, 6, C.crystalL)
+      rect(b, ox + 8, oy + 8, 6, 6, C.crystalL)
+      if ((tx + ty) % 3 === 0) {
+        hline(b, ox + 2, oy + 7, 12, C.crystalGlow)
+      } else if (r.chance(0.25)) {
+        set(b, ox + r.int(2, 13), oy + r.int(2, 13), C.crystalGlow)
+      }
       break
     default:
       break

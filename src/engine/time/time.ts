@@ -56,7 +56,7 @@ export function advanceTime(state: GameState, nowWorld: number): GameState {
     }
     let next: OwnedHero = { ...hero, sanity: clampSanity(hero.sanity + regen) }
     if (next.promotion !== null && next.promotion.completesAtWorld <= nowWorld) {
-      next = completePromotion(next, state.seed)
+      next = completePromotion(next, state.seed, state.tower.highestCleared)
       promotionsCompleted++
     }
     if (next.training !== null && next.training.completesAtWorld <= nowWorld) {

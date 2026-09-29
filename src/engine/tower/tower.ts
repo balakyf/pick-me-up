@@ -408,6 +408,7 @@ export function playFloor(
   const partyCp = heroUnits.reduce((sum, u) => sum + u.cp, 0)
   const drain = sanityDrain(floorPower(floor, worldMult), partyCp, cleared, fallenSet.size > 0)
 
+  const highestAfter = cleared ? Math.max(state.tower.highestCleared, floor) : state.tower.highestCleared
   const nextHeroes: Record<HeroId, OwnedHero> = {}
   const skillProgress: SkillProgress[] = []
   for (const key of Object.keys(state.heroes) as HeroId[]) {
@@ -419,7 +420,14 @@ export function playFloor(
       // Deployed survivor: drain Sanity, grant XP on a clear, and auto-learn skills
       // from this battle's casts (level-ups, then merges — Layer 1 §2.4).
       const xp = xpAwarded > 0 ? applyXp(hero.xp, xpAwarded, hero.star) : hero.xp
-      const learned = foldBattleSkills(key, hero.skills, res.skillCasts[key as string])
+      // Conditional unlocks read the post-XP level; achievements need the win.
+      const learned = foldBattleSkills(key, hero.skills, res.skillCasts[key as string], {
+        heroLevel: xp.level,
+        highestCleared: highestAfter,
+        won: cleared,
+        floor,
+        defeatedTargetTags: res.defeatedTargetTags,
+      })
       skillProgress.push(...learned.progress)
       nextHeroes[key] = { ...hero, xp, sanity: clampSanity(hero.sanity - drain), skills: learned.skills }
     } else {
@@ -437,6 +445,13 @@ export function playFloor(
         heroUnits.map((u) => u.element),
       )
     : {}
+  // Authored first-clear drops (e.g. F20's Book of Reverse Heaven).
+  const firstDrops = firstClear ? ANCHORS[floor]?.firstClearDrops : undefined
+  if (firstDrops !== undefined) {
+    for (const id of Object.keys(firstDrops)) {
+      materialsAwarded[id] = (materialsAwarded[id] ?? 0) + firstDrops[id]!
+    }
+  }
   const nextMaterials: Record<MaterialId, number> = { ...state.materials }
   for (const id of Object.keys(materialsAwarded)) {
     nextMaterials[id] = (nextMaterials[id] ?? 0) + materialsAwarded[id]!

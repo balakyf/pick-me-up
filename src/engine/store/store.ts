@@ -30,7 +30,8 @@ import type {
   StoragePort,
 } from '../types'
 import { createAccount, persist, hydrate, DEFAULT_SAVE_KEY } from '../account'
-import { summon } from '../gacha'
+import { summon, summonMany } from '../gacha'
+import { transferSkill, fuseSkill } from '../transfer'
 import { playFloor } from '../tower'
 import { banquet } from '../kitchen'
 import { startPromotion, skipPromotion } from '../promotion'
@@ -102,7 +103,7 @@ export function reduce(state: GameState | null, cmd: Command, nowWorld: number =
 
   switch (cmd.type) {
     case 'SUMMON':
-      return summon(current).state
+      return summonMany(current, cmd.pool ?? 'normal', cmd.count ?? 1).state
 
     case 'SET_PARTY': {
       validateParty(cmd.slots, cmd.lines)
@@ -149,6 +150,12 @@ export function reduce(state: GameState | null, cmd: Command, nowWorld: number =
     case 'UNEQUIP_ITEM':
       return unequipItem(current, cmd.heroId, cmd.slot)
 
+    case 'TRANSFER_SKILL':
+      return transferSkill(current, cmd.donorId, cmd.recipientId, cmd.skillId)
+
+    case 'FUSE_SKILL':
+      return fuseSkill(current, cmd.heroId, cmd.result)
+
     case 'ADD_GOLD':
       // Testing-only cheat: grant free gold. Not part of the real economy.
       return { ...current, gold: current.gold + cmd.amount }
@@ -172,6 +179,18 @@ export function reduce(state: GameState | null, cmd: Command, nowWorld: number =
  */
 export function summonWithResult(state: GameState): { state: GameState; hero: OwnedHero } {
   return summon(state)
+}
+
+/**
+ * Like dispatching SUMMON { pool, count }, but also returns every hero pulled (a
+ * 10-pull shows ten). Throws when the batch is unaffordable.
+ */
+export function summonBatchWithResult(
+  state: GameState,
+  pool: 'normal' | 'advanced',
+  count: 1 | 10,
+): { state: GameState; heroes: OwnedHero[] } {
+  return summonMany(state, pool, count)
 }
 
 /**

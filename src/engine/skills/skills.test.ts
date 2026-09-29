@@ -11,6 +11,12 @@ import {
   skillCp,
   diffSkills,
   learnableSkillIds,
+  passiveBonuses,
+  applyUnlocks,
+  achievementsEarned,
+  foldBattleSkills,
+  promotionSkillPool,
+  isPassive,
 } from './skills'
 import { SKILLS, SKILL_MERGES } from '../content'
 import { TUNING } from '../tuning'
@@ -167,5 +173,74 @@ describe('diffSkills', () => {
 describe('learnableSkillIds', () => {
   it('is the original promotion pool, in registry order', () => {
     expect(learnableSkillIds()).toEqual(['power_strike', 'piercing_thrust', 'shadow_flurry', 'thunder_volley', 'arcane_burst'])
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Passives, conditional unlocks, achievements (Layer 1 completion)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('passive skills', () => {
+  it('are never cast (no SkillEffect) and scale with level', () => {
+    expect(isPassive('pain_tolerance')).toBe(true)
+    expect(resolveSkillEffect(hs('pain_tolerance'))).toBeNull()
+    const lv1 = passiveBonuses([hs('pain_tolerance', 1)]).keywords[0] as { reduction: number }
+    const lv4 = passiveBonuses([hs('pain_tolerance', 4)]).keywords[0] as { reduction: number }
+    expect(lv4.reduction).toBeGreaterThan(lv1.reduction)
+  })
+
+  it('resolve into guard / bane keywords and relative stat bonuses', () => {
+    const b = passiveBonuses([hs('projectile_defense'), hs('dragon_slayer'), hs('insight'), hs('battle_speed')])
+    expect(b.keywords).toContainEqual(expect.objectContaining({ kind: 'guard', vs: 'ranged' }))
+    expect(b.keywords).toContainEqual(expect.objectContaining({ kind: 'bane', family: 'dragon' }))
+    expect(b.statPct.critPct).toBeGreaterThan(0)
+    expect(b.statPct.spd).toBeGreaterThan(0)
+  })
+
+  it('gain use-XP each battle survived without being cast', () => {
+    const out = foldBattleSkills(H, [hs('pain_tolerance', 1, 0)], {})
+    expect(out.skills[0]).toEqual({ id: 'pain_tolerance', level: 1, xp: TUNING.skills.passiveXpPerBattle })
+  })
+})
+
+describe('conditional unlocks', () => {
+  it('fire at the canon levels (Throwing Defense Lv11, Incident Lv29) and Siman needs F15', () => {
+    expect(applyUnlocks([], 10, 0)).toEqual([])
+    expect(applyUnlocks([], 11, 0).map((s) => s.id)).toEqual(['projectile_defense'])
+    expect(applyUnlocks([], 15, 14).map((s) => s.id)).not.toContain('siman')
+    expect(applyUnlocks([], 15, 15).map((s) => s.id)).toContain('siman')
+    expect(applyUnlocks([], 29, 0).map((s) => s.id)).toContain('incident')
+  })
+
+  it('never duplicates a held skill', () => {
+    expect(applyUnlocks([hs('projectile_defense', 3)], 20, 0)).toEqual([hs('projectile_defense', 3)])
+  })
+
+  it('report as unlock progress in the post-combat fold', () => {
+    const out = foldBattleSkills(H, [], {}, { heroLevel: 11, highestCleared: 0, won: true, floor: 3, defeatedTargetTags: [] })
+    expect(out.progress).toEqual([{ kind: 'unlock', heroId: H, skillId: 'projectile_defense' }])
+  })
+})
+
+describe('achievements', () => {
+  it('Dragon Slayer needs a WIN that defeated Halgiraf; Guardian’s Oath needs the F15 clear', () => {
+    expect(achievementsEarned(true, 20, ['halgiraf'])).toContain('dragon_slayer')
+    expect(achievementsEarned(false, 20, ['halgiraf'])).toEqual([])
+    expect(achievementsEarned(true, 15, [])).toEqual(['guardians_oath'])
+  })
+
+  it('are bound (never trained) and reported as achievement progress', () => {
+    expect(SKILLS.dragon_slayer!.bound).toBe(true)
+    expect(SKILLS.dragon_slayer!.trainable).toBe(false)
+    const out = foldBattleSkills(H, [], {}, { heroLevel: 1, highestCleared: 20, won: true, floor: 20, defeatedTargetTags: ['halgiraf'] })
+    expect(out.progress).toContainEqual({ kind: 'achievement', heroId: H, skillId: 'dragon_slayer' })
+  })
+})
+
+describe('promotion skill pool', () => {
+  it('offers the class skill first, then the learnable pool', () => {
+    expect(promotionSkillPool('archer', new Set())).toEqual(['thunder_volley'])
+    expect(promotionSkillPool('archer', new Set(['thunder_volley']))).not.toContain('thunder_volley')
+    expect(promotionSkillPool(null, new Set())).toEqual(learnableSkillIds())
   })
 })

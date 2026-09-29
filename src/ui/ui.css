@@ -242,6 +242,7 @@ kbd {
 .syn-preview { font-size: 14px; margin: 8px 0; }
 .syn-actions { display: flex; gap: 8px; margin-top: 8px; }
 .arm-item { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border: 2px solid #3e3478; background: #120e2c; font-size: 14px; }
+.arm-item.bound { border-color: var(--gem); }
 .arm-hero { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 6px 0; }
 .arm-hero-name { min-width: 70px; font-size: 15px; font-weight: 600; }
 .arm-slot { font-size: 14px; }
@@ -316,6 +317,13 @@ span.arm-slot { padding: 2px 8px; border: 2px dashed #3e3478; color: var(--ink-f
 .skill-lv { color: var(--gold); font-variant-numeric: tabular-nums; font-size: 13px; }
 .skill-hp { color: var(--bad); font-size: 12px; }
 .skill-more { color: var(--ink-faint); font-size: 12px; }
+.skill-chip.passive { border-style: dashed; }
+.skill-bound { color: var(--gold); font-size: 12px; }
+.engraving { display: grid; grid-template-columns: 20px 1fr; align-items: center; gap: 6px; margin-top: 8px; font-size: 14px; background: #1a1030; border: 2px solid #6a4ad0; padding: 1px 6px 1px 2px; }
+.engraving .engr-grade { text-align: center; font-weight: 600; background: #6a4ad0; font-size: 12px; line-height: 16px; }
+.engraving.grade-A .engr-grade, .engraving.grade-S .engr-grade { background: var(--gold-deep); color: #2a1a04; }
+.engraving.grade-S { border-color: var(--gold); }
+.engr-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; color: #d8c8ff; }
 
 /* Summon */
 .summon-stage { display: flex; flex-direction: column; align-items: center; gap: 22px; padding: 20px; text-align: center; }
@@ -324,6 +332,9 @@ span.arm-slot { padding: 2px 8px; border: 2px dashed #3e3478; color: var(--ink-f
 @keyframes float { 0%,100% { transform: translateY(0) } 50% { transform: translateY(-6px) } }
 .reveal { animation: pop 0.45s steps(5) both; max-width: 240px; width: 100%; }
 @keyframes pop { 0% { transform: scale(0.4); opacity: 0; filter: brightness(4) } 100% { transform: scale(1); opacity: 1; filter: none } }
+.reveal.reveal-many { max-width: 100%; display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+.summon-pools { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; }
+.summon-buttons { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
 .pity { color: var(--ink-dim); font-size: 15px; }
 .pity b { color: var(--accent-2); }
 
@@ -421,6 +432,7 @@ span.arm-slot { padding: 2px 8px; border: 2px dashed #3e3478; color: var(--ink-f
 }
 .dmg.crit { color: var(--gold); font-size: 16px; }
 .dmg.miss { color: #b4c8e8; font-size: 10px; }
+.dmg.heal { color: var(--good); font-size: 11px; }
 @keyframes dmgPop {
   0% { transform: translate(-50%, 4px); opacity: 1 }
   20% { transform: translate(-50%, -6px) }

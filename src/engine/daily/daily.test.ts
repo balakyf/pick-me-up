@@ -33,6 +33,7 @@ function strongHero(id = 'h_str'): OwnedHero {
     promotion: null,
     equipment: { weapon: null, armor: null, accessory: null },
     training: null,
+    engraving: null,
   }
 }
 

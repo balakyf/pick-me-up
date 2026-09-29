@@ -156,3 +156,22 @@ describe('combat — NPC allies', () => {
     expect(r.outcome).toBe('wipe')
   })
 })
+
+describe('F20 — raid rewards (Layer 1 completion)', () => {
+  it('the first clear drops a Book of Reverse Heaven and teaches Dragon Slayer', () => {
+    const { state, result } = playFloor(onFloor(20, crusher))
+    expect(result.firstClear).toBe(true)
+    expect(result.materialsAwarded.bookOfReverseHeaven).toBe(1)
+    expect(state.materials.bookOfReverseHeaven).toBe(1)
+    const id = Object.keys(state.heroes)[0] as HeroId
+    expect(state.heroes[id]!.skills.map((s) => s.id)).toContain('dragon_slayer')
+    expect(result.skillProgress).toContainEqual({ kind: 'achievement', heroId: id, skillId: 'dragon_slayer' })
+  })
+
+  it('a repeat clear drops no second Book', () => {
+    const repeat = { ...onFloor(20, crusher), tower: { currentFloor: 20, highestCleared: 20, attemptIndex: 0 } }
+    const { result } = playFloor(repeat)
+    expect(result.cleared).toBe(true)
+    expect(result.materialsAwarded.bookOfReverseHeaven).toBeUndefined()
+  })
+})

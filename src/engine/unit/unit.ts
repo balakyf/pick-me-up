@@ -38,7 +38,20 @@ import {
 } from '../stats'
 import { applySanityPenalty } from '../kitchen'
 import { equipmentBonus } from '../equipment'
-import { resolveSkillEffect, skillCp } from '../skills'
+import { passiveBonuses, resolveSkillEffect, skillCp } from '../skills'
+import { engravingCp, engravingEffect } from '../engravings'
+import { TUNING } from '../tuning'
+
+/** Apply relative % bonuses to a stat block (rounded; CRIT re-capped). */
+function applyStatPct(stats: DerivedStats, pct: Partial<Record<keyof DerivedStats, number>>): DerivedStats {
+  const out = { ...stats }
+  for (const key of Object.keys(pct) as (keyof DerivedStats)[]) {
+    const p = pct[key]
+    if (p !== undefined && p !== 0) out[key] = Math.round(out[key] * (1 + p))
+  }
+  out.critPct = Math.min(out.critPct, TUNING.stats.derived.critCap)
+  return out
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Basic attack & skill resolution
@@ -107,8 +120,15 @@ export function buildCombatUnit(
   inventory: readonly EquipmentItem[] = [],
 ): CombatUnit {
   const level = hero.xp.level
+  // Engraving + passive skills: keyword tags and relative stat bonuses (Layer 1 §2/§5.4).
+  const engraving = engravingEffect(hero.engraving)
+  const passives = passiveBonuses(hero.skills, registry)
+  const pct: Partial<Record<keyof DerivedStats, number>> = { ...passives.statPct }
+  for (const [k, v] of Object.entries(engraving?.statPct ?? {}) as [keyof DerivedStats, number][]) {
+    pct[k] = (pct[k] ?? 0) + v
+  }
   // Low Sanity weakens the hero BEFORE the snapshot freezes (combat never recomputes).
-  const base = applySanityPenalty(deriveStatsForHero(hero, level), hero.sanity)
+  const base = applyStatPct(applySanityPenalty(deriveStatsForHero(hero, level), hero.sanity), pct)
   // Equipment adds a flat block ON TOP of the morale-adjusted base (gear is unaffected
   // by Sanity), and a weapon may override the wielder's element + carry keywords (§5.4).
   const gear = equipmentBonus(hero, inventory)
@@ -137,9 +157,9 @@ export function buildCombatUnit(
     actionGauge: 0,
     alive: true,
     skills: [basicAttackFor(hero, element), ...resolveHeroSkills(hero.skills, registry)],
-    keywords: [...gear.keywords],
-    // Skills add a CP term (Layer 1 §2.5): Σ gradeValue × level, weighted.
-    cp: combatPower(stats, skillCp(hero.skills, registry)),
+    keywords: [...gear.keywords, ...(engraving?.keywords ?? []), ...passives.keywords],
+    // Skills add a CP term (Layer 1 §2.5): Σ gradeValue × level, weighted; an engraving adds its own.
+    cp: combatPower(stats, skillCp(hero.skills, registry) + engravingCp(hero.engraving)),
     sourceHeroId: hero.id,
     // Carried for the combat panic check; enemies have no Sanity (field absent).
     sanity: hero.sanity,
@@ -215,6 +235,7 @@ export function buildEnemyUnit(
     keywords: [...(template.keywords ?? []), ...(opts?.keywords ?? [])],
     cp: combatPower(stats),
     targetTag: opts?.targetTag ?? template.id,
+    ...(template.family !== undefined ? { family: template.family } : {}),
   }
 }
 

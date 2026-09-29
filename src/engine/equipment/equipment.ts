@@ -96,6 +96,28 @@ function nextEquipmentId(inventory: readonly EquipmentItem[]): EquipmentId {
 }
 
 /**
+ * A 4★+ summon's bound exclusive weapon (Layer 1 §4.2 "arrives with … exclusive
+ * weapon"): the weapon stat block at `grade`, the hero's own element, and bound to
+ * that hero (only it may equip it). The id continues the inventory sequence. PURE.
+ */
+export function makeExclusiveWeapon(
+  inventory: readonly EquipmentItem[],
+  hero: OwnedHero,
+  grade: EquipmentGrade,
+): EquipmentItem {
+  const first = hero.name.split(/\s+/)[0] ?? hero.name
+  return {
+    id: nextEquipmentId(inventory),
+    slot: 'weapon',
+    grade,
+    name: `${first}'s Oath-${SLOT_NOUN.weapon}`,
+    statBonus: statBlockFor('weapon', grade),
+    element: hero.element,
+    exclusiveTo: hero.id,
+  }
+}
+
+/**
  * Forge one item for `slot` at the Master-Level grade. Validates the gate +
  * affordability, deducts gold + Promotion Stones, appends the item. PURE.
  * Throws on a closed gate or insufficient funds (same contract as promotion).
@@ -153,6 +175,9 @@ export function equipItem(state: GameState, heroId: HeroId, itemId: EquipmentId)
   if (!hero.alive) throw new Error(`equipItem: hero ${heroId} is not alive`)
   const item = state.inventory.find((i) => i.id === itemId)
   if (item === undefined) throw new Error(`equipItem: unknown item ${itemId}`)
+  if (item.exclusiveTo !== undefined && item.exclusiveTo !== heroId) {
+    throw new Error(`equipItem: ${itemId} is bound to another hero`)
+  }
 
   for (const [hid, h] of Object.entries(state.heroes) as [HeroId, OwnedHero][]) {
     if (hid === heroId) continue

@@ -1,8 +1,9 @@
 import type { Element, HeroClass, Star, OwnedHero } from '../engine/types'
 import { combatPowerForHero, gradeValueToLetter } from '../engine/stats'
 import { heroBustUrl } from './pixel/sprites'
-import { SKILLS } from '../engine/content'
+import { ENGRAVINGS, SKILLS } from '../engine/content'
 import { maxLevelFor, skillCp } from '../engine/skills'
+import { engravingCp } from '../engine/engravings'
 
 /** Visual tokens for elements. */
 export const ELEMENT_VIS: Record<Element, { glyph: string; color: string; label: string }> = {
@@ -42,7 +43,20 @@ export function classGlyph(c: HeroClass | null): string {
 
 /** Display CP — the same number the combat unit carries (stats + skills term). */
 export function cpOf(hero: OwnedHero): number {
-  return combatPowerForHero(hero, hero.xp.level, skillCp(hero.skills))
+  return combatPowerForHero(hero, hero.xp.level, skillCp(hero.skills) + engravingCp(hero.engraving))
+}
+
+/** A hero's engraving/imprint (4★+ identity layer) as a small graded badge. */
+export function EngravingBadge({ hero }: { hero: OwnedHero }) {
+  if (hero.engraving === null) return null
+  const def = ENGRAVINGS[hero.engraving.id]
+  if (!def) return null
+  return (
+    <div className={`engraving grade-${hero.engraving.grade}`} title={`${def.name} (${hero.engraving.grade}) — ${def.blurb}`}>
+      <span className="engr-grade">{hero.engraving.grade}</span>
+      <span className="engr-name">❖ {def.name}</span>
+    </div>
+  )
 }
 
 /** A hero's skills as `name · grade · Lv N` chips (read-only, Layer 1 §2). */
@@ -56,11 +70,16 @@ export function SkillList({ hero, max }: { hero: OwnedHero; max?: number }) {
         if (!def) return null
         const cap = maxLevelFor(def.grade)
         return (
-          <div key={s.id} className={`skill-chip grade-${def.grade}`} title={`${def.name} · grade ${def.grade} · Lv ${s.level}/${cap}`}>
+          <div
+            key={s.id}
+            className={`skill-chip grade-${def.grade} ${def.passive ? 'passive' : ''}`}
+            title={`${def.name} · grade ${def.grade} · Lv ${s.level}/${cap}${def.passive ? ' · passive' : ''}${def.bound ? ' · achievement (bound)' : ''}`}
+          >
             <span className="skill-grade">{def.grade}</span>
             <span className="skill-name">{def.name}</span>
             <span className="skill-lv">Lv {s.level}</span>
             {def.hpCost !== undefined && <span className="skill-hp" title="Costs HP to cast">♥</span>}
+            {def.bound && <span className="skill-bound" title="Achievement skill — bound to this hero">✦</span>}
           </div>
         )
       })}

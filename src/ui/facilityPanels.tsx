@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import type { GameState, OwnedHero, FacilityId, HeroId, EquipmentSlot, Command } from '../engine/types'
+import type { GameState, OwnedHero, FacilityId, HeroId, EquipmentSlot, Command, RescueChoice } from '../engine/types'
 import type { Store } from '../engine/store'
 import { TUNING } from '../engine/tuning'
 import { banquetWouldHelp } from '../engine/kitchen'
@@ -11,7 +11,8 @@ import { worldDayIndex, dailyDungeonFor, dailyUnlocked, dailyAttemptsLeft } from
 import type { DailyReward } from '../engine/daily'
 import { attemptDailyWithResult } from '../engine/store'
 import { toWorldTime } from '../engine/time'
-import { canSynthesize, synthesisPreview, synthesisUnlocked, type SynthesisInput } from '../engine/synthesis'
+import { canSynthesize, rescueOptions, synthesisPreview, synthesisUnlocked, type SynthesisInput } from '../engine/synthesis'
+import { fuseOptions, maxTransferGrade, transferCost, transferRefusal, transferredLevel } from '../engine/transfer'
 import { smithyUnlocked, forgeGrade, forgeCost, canCraft, itemName, equippedItemIds } from '../engine/equipment'
 import { Portrait, SkillList } from './bits'
 import { SKILLS } from '../engine/content'
@@ -151,7 +152,9 @@ function PromotionAction({ state, store }: { state: GameState; store: Store }) {
           <div key={h.id} className="promo-row">
             <span className="promo-name">{h.name.split(/\s+/)[0]} → {promotionTargetStar(h)}★</span>
             <span className="muted">
-              {cost.promotionStone}🪨 {cost[`attrStone_${h.element}`]}🔹
+              {Object.entries(cost)
+                .map(([k, v]) => `${v} ${matLabel(k)}`)
+                .join(' · ')}
             </span>
             <button
               className="btn sm"
@@ -248,7 +251,11 @@ function TacticalAction({ state }: { state: GameState }) {
 }
 
 const DAILY = TUNING.lobby.daily
-const MAT_LABEL: Record<string, string> = { promotionStone: '🪨 Stone', rankMaterial: '📦 Rank Mat' }
+const MAT_LABEL: Record<string, string> = {
+  promotionStone: '🪨 Stone',
+  rankMaterial: '📦 Rank Mat',
+  bookOfReverseHeaven: '📕 Book of Reverse Heaven',
+}
 const matLabel = (id: string): string =>
   MAT_LABEL[id] ?? (id.startsWith('attrStone_') ? `🔹 ${id.slice('attrStone_'.length)}` : id)
 
@@ -351,6 +358,7 @@ function SynthesisChamber({ state, store }: { state: GameState; store: Store }) 
   const [survivorId, setSurvivorId] = useState<HeroId | null>(null)
   const [sacrificeIds, setSacrificeIds] = useState<HeroId[]>([])
   const [confirming, setConfirming] = useState(false)
+  const [rescue, setRescue] = useState<RescueChoice | null>(null)
   const [err, setErr] = useState<string | null>(null)
 
   const unlocked = synthesisUnlocked(state)
@@ -369,25 +377,30 @@ function SynthesisChamber({ state, store }: { state: GameState; store: Store }) 
     )
   }
 
-  const reset = () => { setSacrificeIds([]); setSurvivorId(null); setConfirming(false); setErr(null) }
+  const reset = () => { setSacrificeIds([]); setSurvivorId(null); setConfirming(false); setRescue(null); setErr(null) }
   const toggleSac = (id: HeroId) => {
     setConfirming(false)
+    setRescue(null)
     setSacrificeIds((cur) => (cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]))
   }
   const chooseSurvivor = (id: HeroId) => {
     setConfirming(false)
+    setRescue(null)
     setSurvivorId((cur) => (cur === id ? null : id))
     setSacrificeIds((cur) => cur.filter((x) => x !== id)) // a survivor can't also be a sacrifice
   }
 
-  const input: SynthesisInput = { mode, survivorId, sacrificeIds }
+  const chosen = mode === 'salvage' && survivorId !== null && rescue !== null ? rescue : undefined
+  const input: SynthesisInput = { mode, survivorId, sacrificeIds, ...(chosen ? { rescue: chosen } : {}) }
   const valid = canSynthesize(state, input)
   const preview = valid ? synthesisPreview(state, input) : null
+  const rescueChoices = mode === 'salvage' && survivorId !== null ? rescueOptions(state, survivorId, sacrificeIds) : []
+  const rescueKey = (r: RescueChoice) => (r.kind === 'skill' ? `s:${r.skillId}` : `g:${r.attr}`)
 
   function run() {
     setErr(null)
     try {
-      store.dispatch({ type: 'SYNTHESIZE', mode, survivorId, sacrificeIds }, Date.now())
+      store.dispatch({ type: 'SYNTHESIZE', mode, survivorId, sacrificeIds, ...(chosen ? { rescue: chosen } : {}) }, Date.now())
       reset()
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'Synthesis failed')
@@ -433,6 +446,23 @@ function SynthesisChamber({ state, store }: { state: GameState; store: Store }) 
         </div>
       </div>
 
+      {rescueChoices.length > 0 && (
+        <div className="syn-section">
+          <div className="syn-label">Rescue (optional — else the first missing skill, then the best grade)</div>
+          <div className="syn-row">
+            {rescueChoices.map((r) => {
+              const key = rescueKey(r)
+              const on = rescue !== null && rescueKey(rescue) === key
+              return (
+                <button key={key} type="button" className={`btn sm ${on ? 'primary' : ''}`} onClick={() => setRescue(on ? null : r)}>
+                  {r.kind === 'skill' ? `✦ ${SKILLS[r.skillId]?.name ?? r.skillId}` : `▲ ${r.attr.toUpperCase()} grade`}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
       {preview && (
         <div className="syn-preview">
           {mode === 'transfer' ? (
@@ -440,7 +470,11 @@ function SynthesisChamber({ state, store }: { state: GameState; store: Store }) 
               {Object.keys(preview.gradeDeltas).length > 0
                 ? 'Grades ' + Object.entries(preview.gradeDeltas).map(([k, v]) => `${k} +${v}`).join(', ')
                 : 'No grade gain'}
-              {' · '}{Math.round(preview.skillCopyChance * 100)}% skill copy/sac
+              {' · '}
+              {preview.skillCopyOdds.length > 0
+                ? 'copy odds ' +
+                  preview.skillCopyOdds.map((o) => `${SKILLS[o.skillId]?.name ?? o.skillId} ${Math.round(o.chance * 100)}%`).join(', ')
+                : 'no skill to copy'}
             </span>
           ) : (
             <span>
@@ -545,8 +579,13 @@ function Armory({ state, store }: { state: GameState; store: Store }) {
             <span className="lr-empty">Nothing forged yet.</span>
           ) : (
             freeItems.map((it) => (
-              <span key={it.id} className="arm-item" title={`${it.name} · ${it.slot}`}>
+              <span
+                key={it.id}
+                className={`arm-item ${it.exclusiveTo ? 'bound' : ''}`}
+                title={`${it.name} · ${it.slot}${it.exclusiveTo ? ` · bound to ${state.heroes[it.exclusiveTo]?.name ?? 'its hero'}` : ''}`}
+              >
                 {SLOT_GLYPH[it.slot]} {it.name}
+                {it.exclusiveTo && ' 🔗'}
               </span>
             ))
           )}
@@ -562,7 +601,8 @@ function Armory({ state, store }: { state: GameState; store: Store }) {
             {EQUIP_SLOTS.map((slot) => {
               const wornId = h.equipment[slot]
               const worn = wornId ? state.inventory.find((i) => i.id === wornId) ?? null : null
-              const candidate = freeItems.find((i) => i.slot === slot) ?? null
+              const candidate =
+                freeItems.find((i) => i.slot === slot && (i.exclusiveTo === undefined || i.exclusiveTo === h.id)) ?? null
               if (worn) {
                 return (
                   <button
@@ -704,11 +744,130 @@ function TrainingAction({ state, store }: { state: GameState; store: Store }) {
   )
 }
 
+const TRANSFER = TUNING.skills.transfer
+
+/** The Transfer Station: move a skill between heroes, or fuse/evolve skills early. */
+function TransferAction({ state, store }: { state: GameState; store: Store }) {
+  const [tab, setTab] = useState<'transfer' | 'fuse'>('transfer')
+  const [donorId, setDonorId] = useState<HeroId | null>(null)
+  const [recipientId, setRecipientId] = useState<HeroId | null>(null)
+  const [fuserId, setFuserId] = useState<HeroId | null>(null)
+  const [err, setErr] = useState<string | null>(null)
+  const level = state.facilities.transferStation.level
+  const ceiling = maxTransferGrade(level)
+  const free = (Object.values(state.heroes) as OwnedHero[]).filter(
+    (h) => h.alive && h.promotion === null && h.training === null,
+  )
+  const donor = donorId ? free.find((h) => h.id === donorId) ?? null : null
+  const recipient = recipientId ? free.find((h) => h.id === recipientId) ?? null : null
+  const fuser = fuserId ? free.find((h) => h.id === fuserId) ?? null : null
+
+  function run(cmd: Command) {
+    setErr(null)
+    try {
+      store.dispatch(cmd, Date.now())
+    } catch (e) {
+      setErr(e instanceof Error ? e.message.replace(/^\w+: /, '') : 'Action failed')
+    }
+  }
+
+  if (ceiling === null) {
+    return <div className="lr-action-note">Build the Transfer Station to move and fuse skills.</div>
+  }
+
+  const chips = (selected: OwnedHero | null, pick: (id: HeroId | null) => void, exclude?: HeroId | null) => (
+    <div className="syn-row">
+      {free
+        .filter((h) => h.id !== exclude)
+        .map((h) => (
+          <HeroChip key={h.id} hero={h} selected={selected?.id === h.id} onClick={() => pick(selected?.id === h.id ? null : h.id)} />
+        ))}
+    </div>
+  )
+
+  return (
+    <div className="lr-action transfer-action">
+      <div className="ta-row"><span>Max transferable grade</span><span className="ta-val">{ceiling}</span></div>
+      <div className="ta-row">
+        <span>A moved skill arrives at</span>
+        <span className="ta-val">{level >= TRANSFER.keepLevelAt ? 'its full level' : 'one level lower'}</span>
+      </div>
+      <div className="syn-modes">
+        <button className={`btn sm ${tab === 'transfer' ? 'primary' : ''}`} onClick={() => setTab('transfer')}>⇄ Transfer</button>
+        <button className={`btn sm ${tab === 'fuse' ? 'primary' : ''}`} onClick={() => setTab('fuse')}>✦ Fuse &amp; evolve</button>
+      </div>
+
+      {tab === 'transfer' ? (
+        <>
+          <div className="syn-label">Donor (forgets the skill)</div>
+          {chips(donor, (id) => { setDonorId(id); setErr(null) }, recipientId)}
+          <div className="syn-label">Recipient</div>
+          {chips(recipient, (id) => { setRecipientId(id); setErr(null) }, donorId)}
+          {donor && recipient && (
+            <div className="drill-list">
+              {donor.skills.map((sk) => {
+                const def = SKILLS[sk.id]
+                if (!def) return null
+                const reason = transferRefusal(state, donor.id, recipient.id, sk.id)
+                return (
+                  <div key={sk.id} className={`drill-row ${reason ? 'off' : ''}`} title={reason ?? undefined}>
+                    <span className="skill-grade">{def.grade}</span>
+                    <span className="drill-name">
+                      {def.name} Lv{sk.level} → Lv{transferredLevel(sk.level, level)}
+                    </span>
+                    <span className="muted">{transferCost(sk.id).toLocaleString()} ◆</span>
+                    <button
+                      className="btn sm"
+                      disabled={reason !== null}
+                      onClick={() => run({ type: 'TRANSFER_SKILL', donorId: donor.id, recipientId: recipient.id, skillId: sk.id })}
+                    >
+                      Move
+                    </button>
+                  </div>
+                )
+              })}
+              {donor.skills.length === 0 && <div className="lr-empty">The donor has no skills.</div>}
+            </div>
+          )}
+        </>
+      ) : (
+        <>
+          <div className="syn-label">Hero</div>
+          {chips(fuser, (id) => { setFuserId(id); setErr(null) })}
+          {fuser && (
+            <div className="drill-list">
+              <SkillList hero={fuser} />
+              {fuseOptions(state, fuser.id).map((o) => {
+                const def = SKILLS[o.result]!
+                return (
+                  <div key={o.result} className={`drill-row ${o.ok ? '' : 'off'}`} title={o.reason ?? undefined}>
+                    <span className="skill-grade">{def.grade}</span>
+                    <span className="drill-name">
+                      {o.kind === 'evolve' ? 'Evolve' : 'Fuse'} {o.inputs.map((i) => SKILLS[i]?.name ?? i).join(' + ')} → {def.name}
+                    </span>
+                    <span className="muted">{o.cost.toLocaleString()} ◆</span>
+                    <button className="btn sm" disabled={!o.ok} onClick={() => run({ type: 'FUSE_SKILL', heroId: fuser.id, result: o.result })}>
+                      {o.kind === 'evolve' ? 'Evolve' : 'Fuse'}
+                    </button>
+                  </div>
+                )
+              })}
+              {fuseOptions(state, fuser.id).length === 0 && <div className="lr-empty">No recipe uses this hero’s skills yet.</div>}
+            </div>
+          )}
+        </>
+      )}
+      {err && <div className="lr-action-note" style={{ color: 'var(--bad)' }}>{err}</div>}
+    </div>
+  )
+}
+
 export type PanelPlace =
   | 'kitchen'
   | 'tacticalCenter'
   | 'promotionChamber'
   | 'trainingCenter'
+  | 'transferStation'
   | 'synthesis'
   | 'armory'
   | 'daily'
@@ -718,6 +877,7 @@ const BLURB: Record<PanelPlace, string> = {
   tacticalCenter: 'Maps, pins and the party board. Focus & overlook combat levers.',
   promotionChamber: 'A sealed marble chamber. Heroes at their star cap are raised past it here.',
   trainingCenter: 'Sand, straw dummies and a chalk drill board. Training sharpens skills — never stats or level.',
+  transferStation: 'Twin crystal plinths hum in the dark. A skill can leave one hero and settle in another here.',
   synthesis: 'The vats bubble. Heroes who enter do not come out whole.',
   armory: 'The Smithy forge and the equipment racks.',
   daily: "A rift that opens onto a different dungeon each world-day.",
@@ -733,7 +893,11 @@ export function PlacePanel({ place, state, store }: { place: PanelPlace; state: 
   return (
     <div className={`place-panel place-${place}`}>
       <p className="place-blurb">{BLURB[place]}</p>
-      {(place === 'kitchen' || place === 'tacticalCenter' || place === 'promotionChamber' || place === 'trainingCenter') && (
+      {(place === 'kitchen' ||
+        place === 'tacticalCenter' ||
+        place === 'promotionChamber' ||
+        place === 'trainingCenter' ||
+        place === 'transferStation') && (
         <div className="lr-lvl-row">
           <span className="lr-lvl">
             {state.facilities[place].level === 0 ? 'Not built' : `Facility Lv ${state.facilities[place].level}`}
@@ -768,6 +932,12 @@ export function PlacePanel({ place, state, store }: { place: PanelPlace; state: 
         <>
           <TrainingAction state={state} store={store} />
           <UpgradeControl state={state} store={store} facility="trainingCenter" />
+        </>
+      )}
+      {place === 'transferStation' && (
+        <>
+          <TransferAction state={state} store={store} />
+          <UpgradeControl state={state} store={store} facility="transferStation" />
         </>
       )}
       {place === 'synthesis' && <SynthesisChamber state={state} store={store} />}

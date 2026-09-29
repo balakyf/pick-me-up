@@ -120,6 +120,8 @@ export const ANCHORS: Record<number, AnchorDef> = {
     missionType: 'Subjugation',
     objectives: [{ kind: 'defeat', targetTag: 'halgiraf' }],
     timer: null,
+    // The raid boss's first-clear drop: the Book of Reverse Heaven (6★→7★, §3.4).
+    firstClearDrops: { bookOfReverseHeaven: 1 },
     waves: [
       [
         { templateId: 'soldier', count: 3 },

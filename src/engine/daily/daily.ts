@@ -184,9 +184,15 @@ export function attemptDaily(state: GameState, nowWorld: number): { state: GameS
     if (!survivorSet.has(id as string)) continue
     const h = heroes[id]!
     // Survivors auto-learn from their casts win or lose (Layer 1 §2.4); XP only on a win.
-    const learned = foldBattleSkills(id, h.skills, res.skillCasts[id as string])
-    skillProgress.push(...learned.progress)
     const xp = cleared && rewards.heroXp ? applyXp(h.xp, rewards.heroXp, h.star) : h.xp
+    // Level unlocks can fire here too; achievements are tower feats (no floor off-tower).
+    const learned = foldBattleSkills(id, h.skills, res.skillCasts[id as string], {
+      heroLevel: xp.level,
+      highestCleared: state.tower.highestCleared,
+      won: false,
+      defeatedTargetTags: [],
+    })
+    skillProgress.push(...learned.progress)
     heroes[id] = { ...h, xp, skills: learned.skills }
   }
 

@@ -14,7 +14,7 @@ import { createAccount } from '../account'
 import { levelCapForStar } from '../stats'
 import { makeSeed } from '../rng'
 import { SKILLS } from '../content'
-import { learnableSkillIds } from '../skills'
+import { isConditionalSkill, learnableSkillIds } from '../skills'
 import { TUNING } from '../tuning'
 import type { GameState, OwnedHero, HeroId, Star, Element, MaterialId } from '../types'
 
@@ -40,6 +40,7 @@ function cappedHero(overrides: Partial<OwnedHero> = {}): OwnedHero {
     promotion: null,
     equipment: { weapon: null, armor: null, accessory: null },
     training: null,
+    engraving: null,
     ...overrides,
   }
 }
@@ -183,25 +184,44 @@ describe('completePromotion', () => {
     }
   })
 
-  it('grants a learnable promotion skill the hero did not already have, at Lv1', () => {
-    const hero = cappedHero({ skills: [] })
+  /** The promotion grant, ignoring conditional unlocks the released levels trigger. */
+  const granted = (h: OwnedHero) => h.skills.filter((s) => !isConditionalSkill(s.id))
+
+  it("grants the hero's class skill first, at Lv1", () => {
+    const done = completePromotion(cappedHero({ skills: [] }), makeSeed(7))
+    expect(granted(done)).toEqual([{ id: 'power_strike', level: 1, xp: 0 }])
+  })
+
+  it('grants a learnable skill once the class skill is known', () => {
+    const hero = cappedHero({ skills: [{ id: 'power_strike', level: 1, xp: 0 }] })
     const done = completePromotion(hero, makeSeed(7))
-    expect(done.skills.length).toBe(1)
-    expect(learnableSkillIds()).toContain(done.skills[0]!.id)
-    expect(done.skills[0]).toMatchObject({ level: 1, xp: 0 })
+    const extra = granted(done).filter((s) => s.id !== 'power_strike')
+    expect(extra.length).toBe(1)
+    expect(learnableSkillIds()).toContain(extra[0]!.id)
+    expect(extra[0]).toMatchObject({ level: 1, xp: 0 })
   })
 
   it('never grants a merge-only skill', () => {
     for (let seed = 1; seed <= 40; seed++) {
-      const done = completePromotion(cappedHero({ skills: [] }), makeSeed(seed))
-      expect(SKILLS[done.skills[0]!.id]!.learnable).toBe(true)
+      const done = completePromotion(cappedHero({ skills: [], heroClass: null }), makeSeed(seed))
+      expect(SKILLS[granted(done)[0]!.id]!.learnable).toBe(true)
     }
   })
 
   it('no-ops the skill grant when the hero already knows every learnable skill', () => {
     const all = learnableSkillIds().map((id) => ({ id, level: 2, xp: 1 }))
     const done = completePromotion(cappedHero({ skills: all }), makeSeed(7))
-    expect(done.skills).toEqual(all)
+    expect(granted(done)).toEqual(all)
+  })
+
+  it('unlocks the level-gated skills the released levels reach (Lv29 → Incident, Lv11 → Throwing Defense)', () => {
+    const done = completePromotion(cappedHero({ skills: [] }), makeSeed(7))
+    const ids = done.skills.map((s) => s.id)
+    expect(ids).toContain('projectile_defense')
+    expect(ids).toContain('incident')
+    // Siman also needs F15 cleared.
+    expect(ids).not.toContain('siman')
+    expect(completePromotion(cappedHero({ skills: [] }), makeSeed(7), 15).skills.map((s) => s.id)).toContain('siman')
   })
 
   it('is deterministic in (hero, accountSeed)', () => {
@@ -247,5 +267,23 @@ describe('skipPromotion', () => {
     skipPromotion(state, 'h_p' as HeroId)
     expect(state.gems).toBe(100)
     expect(state.heroes['h_p' as HeroId]!.promotion).not.toBeNull()
+  })
+})
+
+describe('6★ → 7★ — the Book of Reverse Heaven', () => {
+  it('costs exactly one Book (no stones) and needs it to start', () => {
+    const six = cappedHero({ star: 6 as Star })
+    expect(promotionCost(six)).toEqual({ [P.bookId]: 1 })
+    expect(canPromote(six)).toBe(true)
+    expect(canAfford(stateWith(six), six)).toBe(false)
+    expect(canAfford(stateWith(six, { materials: { [P.bookId]: 1 } }), six)).toBe(true)
+    const started = startPromotion(stateWith(six, { materials: { [P.bookId]: 1 } }), six.id, 0)
+    expect(started.materials[P.bookId]).toBe(0)
+  })
+
+  it('reaches 7★ with the 7★ level cap; 7★ is the ceiling', () => {
+    const done = completePromotion(cappedHero({ star: 6 as Star }), makeSeed(3))
+    expect(done.star).toBe(7)
+    expect(canPromote({ ...done, xp: { ...done.xp, atCap: true } })).toBe(false)
   })
 })

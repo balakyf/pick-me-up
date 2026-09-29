@@ -25,6 +25,7 @@ export const ENEMY_TEMPLATES: Record<string, EnemyTemplate> = {
   goblin: {
     id: 'goblin',
     name: 'Goblin',
+    family: 'humanoid',
     element: 'physical',
     // Low across the board, slightly weighted to STR; the swarm trash mob.
     attrMult: { str: 0.7, agi: 0.6, vit: 0.6, int: 0.3, wil: 0.4 },
@@ -32,6 +33,7 @@ export const ENEMY_TEMPLATES: Record<string, EnemyTemplate> = {
   wolf: {
     id: 'wolf',
     name: 'Prairie Wolf',
+    family: 'beast',
     element: 'physical',
     // Fast beast: high AGI, modest STR, thin VIT/INT.
     attrMult: { str: 0.7, agi: 1.1, vit: 0.5, int: 0.2, wil: 0.4 },
@@ -39,6 +41,7 @@ export const ENEMY_TEMPLATES: Record<string, EnemyTemplate> = {
   harpy: {
     id: 'harpy',
     name: 'Harpy',
+    family: 'beast',
     element: 'wind',
     // Flying skirmisher: AGI focus, low VIT, a little INT for shrieks.
     attrMult: { str: 0.6, agi: 1.2, vit: 0.4, int: 0.5, wil: 0.4 },
@@ -48,6 +51,7 @@ export const ENEMY_TEMPLATES: Record<string, EnemyTemplate> = {
   skeleton: {
     id: 'skeleton',
     name: 'Skeleton',
+    family: 'undead',
     element: 'dark',
     // Undead: numerous, brittle (low VIT/HP), middling STR.
     attrMult: { str: 0.8, agi: 0.7, vit: 0.4, int: 0.3, wil: 0.5 },
@@ -55,6 +59,7 @@ export const ENEMY_TEMPLATES: Record<string, EnemyTemplate> = {
   soldier: {
     id: 'soldier',
     name: 'Human Soldier',
+    family: 'humanoid',
     element: 'physical',
     // Balanced trained infantry: solid STR/VIT, decent WIL.
     attrMult: { str: 1.0, agi: 0.8, vit: 1.0, int: 0.4, wil: 0.8 },
@@ -64,6 +69,7 @@ export const ENEMY_TEMPLATES: Record<string, EnemyTemplate> = {
   ogre_brute: {
     id: 'ogre_brute',
     name: 'Ogre Brute',
+    family: 'humanoid',
     element: 'physical',
     // Tank: huge VIT + STR, sluggish AGI.
     attrMult: { str: 1.6, agi: 0.4, vit: 1.8, int: 0.2, wil: 0.6 },
@@ -71,6 +77,7 @@ export const ENEMY_TEMPLATES: Record<string, EnemyTemplate> = {
   dark_mage: {
     id: 'dark_mage',
     name: 'Dark Disciple',
+    family: 'humanoid',
     element: 'dark',
     // Caster: high INT, low VIT/DEF — glass cannon.
     attrMult: { str: 0.3, agi: 0.7, vit: 0.5, int: 1.7, wil: 1.1 },
@@ -78,6 +85,7 @@ export const ENEMY_TEMPLATES: Record<string, EnemyTemplate> = {
   beast: {
     id: 'beast',
     name: 'Dire Beast',
+    family: 'beast',
     element: 'physical',
     // Pure speed bruiser: very high AGI, solid STR.
     attrMult: { str: 1.0, agi: 1.6, vit: 0.7, int: 0.2, wil: 0.5 },
@@ -89,6 +97,7 @@ export const ENEMY_TEMPLATES: Record<string, EnemyTemplate> = {
   assassin: {
     id: 'assassin',
     name: 'Assassin',
+    family: 'humanoid',
     element: 'dark',
     attrMult: { str: 0.9, agi: 1.7, vit: 0.6, int: 0.3, wil: 0.6 },
     unitClass: 'archer',
@@ -97,6 +106,7 @@ export const ENEMY_TEMPLATES: Record<string, EnemyTemplate> = {
   knight: {
     id: 'knight',
     name: 'Knight',
+    family: 'humanoid',
     element: 'physical',
     attrMult: { str: 1.3, agi: 0.6, vit: 1.7, int: 0.4, wil: 1.1 },
   },
@@ -107,6 +117,7 @@ export const ENEMY_TEMPLATES: Record<string, EnemyTemplate> = {
   black_priest: {
     id: 'black_priest',
     name: 'Black Priest',
+    family: 'humanoid',
     element: 'dark',
     // High everything (boss budget), INT/WIL leaning (a dark caster-priest).
     attrMult: { str: 1.4, agi: 1.2, vit: 2.0, int: 2.2, wil: 2.0 },
@@ -130,6 +141,7 @@ export const ENEMY_TEMPLATES: Record<string, EnemyTemplate> = {
   halgiraf: {
     id: 'halgiraf',
     name: 'Halgiraf',
+    family: 'dragon',
     element: 'dark',
     attrMult: { str: 2.2, agi: 0.9, vit: 3.4, int: 1.2, wil: 2.0 },
     keywords: [

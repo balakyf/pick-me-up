@@ -145,6 +145,7 @@ function midGameOf(acct: GameState): GameState {
     promotion: null,
     equipment: { weapon: null, armor: null, accessory: null },
     training: null,
+    engraving: null,
   }
   copy.heroes[fakeId] = fakeHero
   copy.tower.currentFloor = 7
@@ -484,7 +485,7 @@ describe('migrate — v4 → v5 (Training Center)', () => {
 
     const restored = loadState(v4Json)
 
-    expect(restored.schemaVersion).toBe(5)
+    expect(restored.schemaVersion).toBe(TUNING.account.schemaVersion)
     expect(restored.facilities.trainingCenter).toEqual({ level: 0, build: null })
     expect(Object.values(restored.heroes)[0]!.training).toBeNull()
     // v4 fields survive the upgrade.
@@ -495,5 +496,28 @@ describe('migrate — v4 → v5 (Training Center)', () => {
     const acct = createAccount(559, { now: 0 })
     expect(acct.facilities.trainingCenter).toEqual({ level: 0, build: null })
     expect(Object.values(acct.heroes).every((h) => h.training === null)).toBe(true)
+  })
+})
+
+describe('migrate — v5 → v6 (engravings, Advanced pool, Transfer Station)', () => {
+  it('adds a null engraving on every hero, zeroed Advanced counters and an unbuilt station', () => {
+    const v6 = createAccount(560, { now: 1000 })
+    const heroesV5 = Object.fromEntries(
+      Object.entries(v6.heroes).map(([id, h]) => {
+        const { engraving, ...rest } = h as unknown as Record<string, unknown>
+        return [id, rest]
+      }),
+    )
+    const { transferStation, ...facilitiesV5 } = v6.facilities
+    const v5Json = JSON.stringify({
+      schemaVersion: 5,
+      savedAt: 0,
+      state: { ...v6, schemaVersion: 5, heroes: heroesV5, facilities: facilitiesV5, gacha: { pity: 7, pullCount: 12 } },
+    })
+    const restored = loadState(v5Json)
+    expect(restored.schemaVersion).toBe(6)
+    expect(Object.values(restored.heroes).every((h) => h.engraving === null)).toBe(true)
+    expect(restored.gacha).toEqual({ pity: 7, pullCount: 12, advPity4: 0, advPity5: 0, advPullCount: 0 })
+    expect(restored.facilities.transferStation).toEqual({ level: 0, build: null })
   })
 })

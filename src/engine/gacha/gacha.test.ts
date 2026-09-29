@@ -13,9 +13,12 @@ import {
   buildOwnedHeroFromTemplate,
   rollSummon,
   summon,
+  rollAdvancedStar,
+  summonMany,
+  summonCost,
 } from './gacha'
 import { TUNING, STAR_ENVELOPES } from '../tuning'
-import { CAMEO_HEROES } from '../content'
+import { CAMEO_HEROES, ENGRAVINGS } from '../content'
 import { makeSeed, rngFor, createRng } from '../rng/rng'
 import type { GameState, Seed, HeroId, Star } from '../types'
 
@@ -41,6 +44,7 @@ function makeState(overrides: Partial<GameState> = {}): GameState {
       promotionChamber: { level: 0, build: null },
       tacticalCenter: { level: 1, build: null },
       trainingCenter: { level: 0, build: null },
+      transferStation: { level: 0, build: null },
     },
     dailies: { attemptsUsed: 0, lastResetWorldDay: 0 },
     heroes: {},
@@ -49,7 +53,7 @@ function makeState(overrides: Partial<GameState> = {}): GameState {
     consumedTemplateIds: [],
     party: { slots: [null, null, null, null, null], lines: ['front', 'front', 'mid', 'back', 'back'] },
     tower: { currentFloor: 1, highestCleared: 0, attemptIndex: 0 },
-    gacha: { pity: 0, pullCount: 0 },
+    gacha: { pity: 0, pullCount: 0, advPity4: 0, advPity5: 0, advPullCount: 0 },
     rng: { combatCounter: 0 },
   }
   return { ...base, ...overrides }
@@ -180,7 +184,7 @@ describe('Rising Quality Floor — simulated dry streaks', () => {
   it('forcing 49 dry pulls then pulling guarantees a 3 on the 50th (state-level)', () => {
     // Build a state already at pity 49 and assert the very next summon is 3.
     let state = makeState({ gold: TUNING.gacha.normalCostGold })
-    state = { ...state, gacha: { pity: 49, pullCount: state.gacha.pullCount } }
+    state = { ...state, gacha: { ...state.gacha, pity: 49 } }
     const { hero, state: next } = summon(state)
     expect(hero.star).toBe(3)
     // Payout resets pity to 0.
@@ -493,5 +497,82 @@ describe('summon — usedNames', () => {
     for (const n of procNames) {
       expect(last.usedNames).toContain(n)
     }
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Advanced (gem) pool — Layer 1 §1.1–1.3, the 4★+ kit (§4.2) and engravings (§5.4)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('Advanced pool', () => {
+  const ADV = TUNING.gacha.advanced
+
+  it('rolls only 3★–5★', () => {
+    for (let i = 0; i < 300; i++) {
+      const s = rollAdvancedStar(rngFor(makeSeed(9), 'adv-test', i), 0, 0).value
+      expect([3, 4, 5]).toContain(s)
+    }
+  })
+
+  it('lifts the 30th dry pull to 4★+ and the 90th to 5★', () => {
+    for (let i = 0; i < 50; i++) {
+      const r = rngFor(makeSeed(3), 'adv-pity', i)
+      expect(rollAdvancedStar(r, ADV.pityFloor4At - 1, 0).value).toBeGreaterThanOrEqual(4)
+      expect(rollAdvancedStar(r, 0, ADV.pityFloor5At - 1).value).toBe(5)
+    }
+  })
+
+  it('costs gems; the 10-pull is discounted', () => {
+    expect(summonCost('advanced', 1)).toEqual({ gold: 0, gems: ADV.costGems })
+    expect(summonCost('advanced', 10)).toEqual({ gold: 0, gems: ADV.tenPullGems })
+    expect(() => summonMany(makeState({ gems: ADV.costGems - 1 }), 'advanced', 1)).toThrow(/gems/)
+  })
+
+  it('a 10-pull pays once, adds ten unique heroes and advances only the Advanced counters', () => {
+    const s0 = makeState({ gems: ADV.tenPullGems })
+    const { state, heroes } = summonMany(s0, 'advanced', 10)
+    expect(state.gems).toBe(0)
+    expect(heroes).toHaveLength(10)
+    expect(new Set(heroes.map((h) => h.id)).size).toBe(10)
+    expect(state.gacha.advPullCount).toBe(10)
+    expect(state.gacha.pullCount).toBe(0)
+    expect(state.gacha.pity).toBe(0)
+  })
+
+  it('every 4★+ arrives with its class skill, an engraving and a bound exclusive weapon', () => {
+    // Force the floor so every pull is 4★+.
+    let state = makeState({ gems: 1_000_000, gacha: { pity: 0, pullCount: 0, advPity4: ADV.pityFloor4At, advPity5: 0, advPullCount: 0 } })
+    let seen = 0
+    for (let i = 0; i < 12; i++) {
+      state = { ...state, gacha: { ...state.gacha, advPity4: ADV.pityFloor4At } }
+      const { state: next, heroes } = summonMany(state, 'advanced', 1)
+      state = next
+      const h = heroes[0]!
+      expect(h.star).toBeGreaterThanOrEqual(4)
+      expect(h.engraving).not.toBeNull()
+      expect(ENGRAVINGS[h.engraving!.id]).toBeDefined()
+      const weapon = state.inventory.find((i) => i.id === h.equipment.weapon)!
+      expect(weapon.exclusiveTo).toBe(h.id)
+      expect(weapon.grade).toBe(ADV.weaponGrade[h.star])
+      if (h.origin === 'procedural' && h.heroClass !== null) {
+        expect(h.skills.length).toBe(1 + ADV.extraSkills[h.star]!)
+        seen++
+      }
+    }
+    expect(seen).toBeGreaterThan(0)
+  })
+
+  it('never disturbs the Normal stream', () => {
+    const plain = summon(makeState()).hero
+    const afterAdv = summonMany(makeState({ gems: ADV.costGems }), 'advanced', 1).state
+    const again = summon({ ...afterAdv, gold: TUNING.gacha.normalCostGold }).hero
+    expect(again.name).toBe(plain.name)
+    expect(again.star).toBe(plain.star)
+    expect(again.baseAttrs).toEqual(plain.baseAttrs)
+  })
+
+  it('normal pulls never carry an engraving', () => {
+    const { heroes } = runSummons(77, 60)
+    for (const h of heroes) expect(h.engraving).toBeNull()
   })
 })

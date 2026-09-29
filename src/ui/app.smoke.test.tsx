@@ -194,3 +194,29 @@ describe('App smoke', () => {
     expect(container.textContent).toContain('Unlocks at Master Lv 2')
   })
 })
+
+describe('App smoke — Layer 1 completion', () => {
+  it('the Transfer Station opens from the Menu, gated at Master Lv 4', () => {
+    mount()
+    act(() => {
+      getStore().dispatch({ type: 'NEW_ACCOUNT', seed: 33, now: 0 })
+    })
+    openPlace('Transfer Station')
+    expect(container.textContent).toContain('A skill can leave one hero')
+    expect(container.textContent).toContain('Build the Transfer Station')
+    expect(container.textContent).toContain('Unlocks at Master Lv 4')
+  })
+
+  it('the Summon screen offers the Advanced pool, disabled without gems', () => {
+    mount()
+    act(() => {
+      getStore().dispatch({ type: 'NEW_ACCOUNT', seed: 34, now: 0 })
+    })
+    openPlace('Mobius Summon')
+    clickButton('Advanced')
+    expect(container.textContent).toContain('Advanced pool')
+    const ten = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('Summon ×10'))
+    expect((ten as HTMLButtonElement).disabled).toBe(true)
+    expect(container.textContent).toContain('Not enough gems')
+  })
+})

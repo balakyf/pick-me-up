@@ -78,6 +78,7 @@ function makeHero(o: HeroOpts): OwnedHero {
     promotion: null,
     equipment: { weapon: null, armor: null, accessory: null },
     training: null,
+    engraving: null,
   }
 }
 
@@ -115,6 +116,7 @@ function makeState(o: StateOpts = {}): GameState {
       promotionChamber: { level: 0, build: null },
       tacticalCenter: { level: 1, build: null },
       trainingCenter: { level: 0, build: null },
+      transferStation: { level: 0, build: null },
     },
     dailies: { attemptsUsed: 0, lastResetWorldDay: 0 },
     heroes,
@@ -130,7 +132,7 @@ function makeState(o: StateOpts = {}): GameState {
       highestCleared: o.highestCleared ?? 0,
       attemptIndex: o.attemptIndex ?? 0,
     },
-    gacha: { pity: 0, pullCount: 0 },
+    gacha: { pity: 0, pullCount: 0, advPity4: 0, advPity5: 0, advPullCount: 0 },
     rng: { combatCounter: 0 },
   }
 }
