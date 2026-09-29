@@ -113,6 +113,16 @@ export const TUNING = {
     f5SurviveTicks: 1200,
     /** F10 Defend anchor wave count. */
     f10Waves: 3,
+    /** The climbable slice ends here (Act II summit: Halgiraf). */
+    sliceTopFloor: 20,
+    /** F15 Escort anchor: canon 15-minute assassination window → tick budget. */
+    f15SurviveTicks: 900,
+    /** Ruins filler (F11–19): chance a floor rolls a Survival mission instead of Subjugation. */
+    ruinsSurvivalChance: 0.3,
+    /** Ruins Survival filler: ticks to outlast. */
+    ruinsSurviveTicks: 700,
+    /** F20 Halgiraf: the boss enrages after this tick (the fight is a race). */
+    f20EnrageTick: 450,
   },
 
   economy: {

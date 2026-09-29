@@ -366,6 +366,8 @@ export interface CombatUnit {
   sanity?: number
   /** Stable enemy template id for Defeat(target) missions; absent for heroes. */
   targetTag?: string
+  /** A mission NPC on the hero side: targetable, never acts, not part of the party. */
+  isNpc?: boolean
 }
 
 /** Master levers carried into a battle (combat resolves once, then the UI replays
@@ -384,6 +386,8 @@ export type Objective =
   | { kind: 'survive'; ticks: number }
   | { kind: 'defend'; waves: number }
   | { kind: 'defeat'; targetTag: string }
+  /** Keep the tagged NPC ally alive; if it falls the mission FAILS. */
+  | { kind: 'protect'; targetTag: string }
 
 export interface Mission {
   type: string
@@ -406,6 +410,8 @@ export interface Encounter {
   focusBonus?: number
   /** Decides permadeath policy; combat only flags it. */
   encounterContext: 'tower'
+  /** Hero-side NPCs fielded by the mission (escort targets). Never act; not the party. */
+  allies?: CombatUnit[]
 }
 
 // ── Combat log (one schema; the producer's; UI replays it) ───────────────────
@@ -421,9 +427,12 @@ export interface CombatUnitInit {
   maxHP: number
   maxSP: number
   cp: number
+  /** Present (true) for mission NPC allies. */
+  isNpc?: boolean
 }
 
-export type CombatOutcome = 'win' | 'wipe' | 'timeout'
+/** `failed` = the mission was lost without a wipe (e.g. the escort target fell). */
+export type CombatOutcome = 'win' | 'wipe' | 'timeout' | 'failed'
 
 export type CombatEvent = { seq: number; tick: number } & (
   | { kind: 'battle-start'; heroIds: string[]; enemyIds: string[] }
@@ -510,6 +519,17 @@ export interface EnemyTemplate {
   element: Element
   attrMult: PrimaryAttrs
   keywords?: KeywordTag[]
+  /** Targeting profile (Layer 0 class rules): e.g. 'archer' strikes the lowest-HP foe. */
+  unitClass?: HeroClass | null
+}
+
+/** A hero-side NPC an anchor fields (e.g. the F15 escort target). */
+export interface AnchorAllySpec {
+  templateId: string
+  line: Line
+  /** Protect(target) objective subject. */
+  targetTag: string
+  levelBonus?: number
 }
 
 /** One enemy group inside an authored anchor wave. */
@@ -524,13 +544,15 @@ export interface AnchorWaveSpec {
   targetTag?: string
 }
 
-/** Authored set-piece floor (F5, F10). tower builds an Encounter from it. */
+/** Authored set-piece floor (every 5th). tower builds an Encounter from it. */
 export interface AnchorDef {
   floor: number
   missionType: string
   objectives: Objective[]
   timer: number | null
   waves: AnchorWaveSpec[][]
+  /** Hero-side NPCs (e.g. the F15 escort target). */
+  allies?: AnchorAllySpec[]
 }
 
 export type SkillRegistry = Record<string, SkillDef>

@@ -83,6 +83,24 @@ export const ENEMY_TEMPLATES: Record<string, EnemyTemplate> = {
     attrMult: { str: 1.0, agi: 1.6, vit: 0.7, int: 0.2, wil: 0.5 },
   },
 
+  // ── Ruins (F11-19) ───────────────────────────────────────────────────────
+  // Assassin (canon F15 "soldiers, assassins, mage, knight"): fast, crit-heavy, and
+  // hunts the weakest target (archer targeting) — the escort's natural predator.
+  assassin: {
+    id: 'assassin',
+    name: 'Assassin',
+    element: 'dark',
+    attrMult: { str: 0.9, agi: 1.7, vit: 0.6, int: 0.3, wil: 0.6 },
+    unitClass: 'archer',
+  },
+  // Knight: an elite plate-armoured soldier — slow, very durable.
+  knight: {
+    id: 'knight',
+    name: 'Knight',
+    element: 'physical',
+    attrMult: { str: 1.3, agi: 0.6, vit: 1.7, int: 0.4, wil: 1.1 },
+  },
+
   // ── Bosses ───────────────────────────────────────────────────────────────
   // Black Priest (canon Taoni F10 special target). Phased: untargetable until all
   // non-phased enemies in the wave are down — the wave must be cleared first.
@@ -105,6 +123,33 @@ export const ENEMY_TEMPLATES: Record<string, EnemyTemplate> = {
     // Catastrophically high everything.
     attrMult: { str: 3.0, agi: 2.5, vit: 4.0, int: 2.5, wil: 3.0 },
     keywords: [{ kind: 'enrage', afterTick: 300, multiplier: 5 }],
+  },
+  // Halgiraf, the half black dragon (canon F20 boss: "scale immunity … Goddess'
+  // Blessing (holy power on weapons) breaks it"). Light is the canon counter; he
+  // enrages if the raid drags on. Huge VIT — a raid-sized HP pool.
+  halgiraf: {
+    id: 'halgiraf',
+    name: 'Halgiraf',
+    element: 'dark',
+    attrMult: { str: 2.2, agi: 0.9, vit: 3.4, int: 1.2, wil: 2.0 },
+    keywords: [
+      { kind: 'vulnerable', element: 'light' },
+      { kind: 'enrage', afterTick: TUNING.tower.f20EnrageTick, multiplier: 2.5 },
+    ],
+  },
+}
+
+/**
+ * Hero-side mission NPCs (built like enemies, fielded on the party's side). They
+ * never act and are never part of the party — they exist to be protected.
+ */
+export const ALLY_TEMPLATES: Record<string, EnemyTemplate> = {
+  // Princess Priasis (canon Taoni F15 escort target) — fragile.
+  priasis: {
+    id: 'priasis',
+    name: 'Princess Priasis',
+    element: 'light',
+    attrMult: { str: 0.2, agi: 0.6, vit: 1.1, int: 0.8, wil: 0.9 },
   },
 }
 

@@ -35,9 +35,9 @@ import type {
   Seed,
   SkillProgress,
 } from '../types'
-import { buildCombatUnit, buildEnemyUnit } from '../unit'
+import { buildCombatUnit, buildEnemyUnit, buildAllyUnit } from '../unit'
 import { runBattle } from '../combat'
-import { ENEMY_TEMPLATES, ANCHORS, SKILLS } from '../content'
+import { ENEMY_TEMPLATES, ALLY_TEMPLATES, ANCHORS, SKILLS } from '../content'
 import { applyXp } from '../stats'
 import { clampSanity } from '../kitchen'
 import { attrStoneId } from '../promotion'
@@ -141,17 +141,24 @@ function worldMultFor(state: GameState): number {
 // Biome enemy pools (Layer 2 §3.1)
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** Prairie band (F1-9): the slice's filler pool for floors 1-10. */
+/** Act I — Prairie band (F1-9). */
 const PRAIRIE_POOL: readonly string[] = ['goblin', 'wolf', 'harpy']
+/** Act II — Ruins/City band (F11-19): undead, soldiers, casters, assassins, knights. */
+const RUINS_POOL: readonly string[] = ['skeleton', 'soldier', 'dark_mage', 'assassin', 'knight']
 
-/** Select the filler enemy pool for a floor by act band. The slice covers F1-10,
- *  which all fall in the Prairie band (F11+ Ruins come later). */
-function fillerPoolForFloor(_floor: number): EnemyTemplate[] {
-  return PRAIRIE_POOL.map((id) => ENEMY_TEMPLATES[id]!)
+/** Is this floor in the Ruins band (Act II)? */
+export function isRuinsFloor(floor: number): boolean {
+  return floor >= 11 && floor <= 20
+}
+
+/** Select the filler enemy pool for a floor by act band (Layer 2 §2.1). */
+export function fillerPoolForFloor(floor: number): EnemyTemplate[] {
+  const ids = isRuinsFloor(floor) ? RUINS_POOL : PRAIRIE_POOL
+  return ids.map((id) => ENEMY_TEMPLATES[id]!)
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Anchor encounter assembly (F5, F10)
+// Anchor encounter assembly (every 5th floor)
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
@@ -167,7 +174,7 @@ function buildAnchorEncounter(
   anchor: AnchorDef,
   floor: number,
   worldMult: number,
-): { waves: EnemyWave[]; mission: Mission } {
+): { waves: EnemyWave[]; mission: Mission; allies: CombatUnit[] } {
   const level = mobLevel(floor, worldMult)
   const waves: EnemyWave[] = []
 
@@ -199,7 +206,21 @@ function buildAnchorEncounter(
     timer: anchor.timer,
   }
 
-  return { waves, mission }
+  // Mission NPCs (escort targets) on the hero side.
+  const allies: CombatUnit[] = []
+  for (const [a, spec] of (anchor.allies ?? []).entries()) {
+    const template = ALLY_TEMPLATES[spec.templateId]
+    if (template === undefined) continue
+    allies.push(
+      buildAllyUnit(template, level, `a${floor}_${a}`, {
+        line: spec.line,
+        targetTag: spec.targetTag,
+        levelBonus: spec.levelBonus,
+      }),
+    )
+  }
+
+  return { waves, mission, allies }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -263,10 +284,24 @@ export function buildFillerEncounter(
     i++
   }
 
-  const mission: Mission = {
+  // Band-weighted mission (Layer 2 §4.4). Prairie floors are always Subjugation and
+  // draw nothing extra, so their encounters stay byte-identical; Ruins floors roll
+  // Survival some of the time.
+  let mission: Mission = {
     type: 'Subjugation',
     objectives: [{ kind: 'annihilate' }],
     timer: null,
+  }
+  if (isRuinsFloor(floor)) {
+    const roll = chance(r, T.ruinsSurvivalChance)
+    r = roll.rng
+    if (roll.value) {
+      mission = {
+        type: 'Survival',
+        objectives: [{ kind: 'survive', ticks: T.ruinsSurviveTicks }],
+        timer: T.ruinsSurviveTicks,
+      }
+    }
   }
 
   return { waves: [{ units }], mission }
@@ -289,7 +324,7 @@ export function buildEncounter(state: GameState, floor: number, focus?: FocusDir
   const rng = rngFor(state.seed, 'floor', floor)
 
   const anchor = ANCHORS[floor]
-  const built =
+  const built: { waves: EnemyWave[]; mission: Mission; allies?: CombatUnit[] } =
     anchor !== undefined
       ? buildAnchorEncounter(anchor, floor, worldMult)
       : buildFillerEncounter(floor, worldMult, rng)
@@ -300,6 +335,7 @@ export function buildEncounter(state: GameState, floor: number, focus?: FocusDir
     waves: built.waves,
     encounterContext: 'tower',
   }
+  if (built.allies !== undefined && built.allies.length > 0) enc.allies = built.allies
   if (focus !== undefined) {
     enc.focus = focus
     // Tactical Center amplifies the focus lever: a concentrate-fire bonus by level.

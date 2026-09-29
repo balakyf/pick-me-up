@@ -200,7 +200,8 @@ export function buildEnemyUnit(
     id: instanceId,
     name: template.name,
     side: 'enemy',
-    unitClass: null,
+    // A template may pick a targeting profile (e.g. assassins strike the weakest).
+    unitClass: template.unitClass ?? null,
     element: template.element,
     line: opts?.line ?? 'front',
     level: effLevel,
@@ -215,4 +216,23 @@ export function buildEnemyUnit(
     cp: combatPower(stats),
     targetTag: opts?.targetTag ?? template.id,
   }
+}
+
+/**
+ * Build a hero-side mission NPC (e.g. the F15 escort target) from an ally template:
+ * the same statline rules as an enemy, fielded on the party's side, flagged `isNpc`
+ * (targetable, never acts, never part of the party's XP/permadeath bookkeeping).
+ */
+export function buildAllyUnit(
+  template: EnemyTemplate,
+  level: number,
+  instanceId: string,
+  opts: { line: Line; targetTag: string; levelBonus?: number },
+): CombatUnit {
+  const base = buildEnemyUnit(template, level, instanceId, {
+    line: opts.line,
+    levelBonus: opts.levelBonus,
+    targetTag: opts.targetTag,
+  })
+  return { ...base, side: 'hero', unitClass: null, isNpc: true }
 }

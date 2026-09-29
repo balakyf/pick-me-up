@@ -111,14 +111,18 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
       maxHP: u.stats.maxHP,
       maxSP: u.maxSP,
       cp: u.cp,
+      ...(u.isNpc ? { isNpc: true } : {}),
     })
   }
+  const allyUnits = encounter.allies ?? []
   for (const h of heroUnits) snapshot(h)
+  for (const a of allyUnits) snapshot(a)
   for (const w of encounter.waves) for (const e of w.units) snapshot(e)
 
   // ── Spawn heroes (wave -1) + wave 0 ───────────────────────────────────────
   let spawnCounter = 0
-  const heroes: MutUnit[] = heroUnits.map((u) => copyUnit(u, spawnCounter++, -1))
+  // Mission NPC allies spawn after the party on the hero side (targetable, never act).
+  const heroes: MutUnit[] = [...heroUnits, ...allyUnits].map((u) => copyUnit(u, spawnCounter++, -1))
   const enemies: MutUnit[] = []
   let currentWave = 0
 
@@ -140,7 +144,12 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
   let outcome: CombatOutcome | null = null
 
   // ── Helpers over the live rosters ─────────────────────────────────────────
-  const livingHeroes = (): MutUnit[] => heroes.filter((h) => h.alive)
+  /** Everyone alive on the hero side, NPC allies included (what enemies can target). */
+  const livingHeroSide = (): MutUnit[] => heroes.filter((h) => h.alive)
+  /** The player's living heroes only — a wipe/survival is about the party, not NPCs. */
+  const livingHeroes = (): MutUnit[] => heroes.filter((h) => h.alive && !h.ref.isNpc)
+  /** Protect(target): is the tagged NPC ally still standing? */
+  const allyAlive = (tag: string): boolean => heroes.some((h) => h.ref.targetTag === tag && h.alive)
   const livingEnemiesInWave = (w: number): MutUnit[] => enemies.filter((e) => e.alive && e.wave === w)
   const livingEnemies = (): MutUnit[] => enemies.filter((e) => e.alive)
   const moreWavesToSpawn = (): boolean => currentWave < encounter.waves.length - 1
@@ -158,7 +167,7 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
 
   /** Living, targetable units on the side OPPOSITE the actor. */
   const targetableFoes = (actor: MutUnit): MutUnit[] => {
-    const foes = actor.side === 'hero' ? livingEnemies() : livingHeroes()
+    const foes = actor.side === 'hero' ? livingEnemies() : livingHeroSide()
     return foes.filter(isTargetable)
   }
 
@@ -327,8 +336,13 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
         return tick >= obj.ticks && livingHeroes().length > 0
       case 'defeat':
         return defeatedTargetTags.includes(obj.targetTag)
+      case 'protect':
+        return allyAlive(obj.targetTag)
     }
   }
+  /** A protect objective whose NPC has fallen loses the mission outright. */
+  const protectFailed = (): boolean =>
+    encounter.mission.objectives.some((o) => o.kind === 'protect' && !allyAlive(o.targetTag))
   const missionWon = (): boolean =>
     encounter.mission.objectives.length > 0 && encounter.mission.objectives.every(objectiveMet)
 
@@ -336,6 +350,10 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
     if (outcome !== null) return
     if (livingHeroes().length === 0) {
       outcome = 'wipe'
+      return
+    }
+    if (protectFailed()) {
+      outcome = 'failed'
       return
     }
     if (missionWon()) {
@@ -359,6 +377,8 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
   // One unit takes its action.
   const act = (actor: MutUnit): void => {
     if (!actor.alive || outcome !== null) return
+    // Mission NPCs (escort targets) never act — they only need protecting.
+    if (actor.ref.isNpc) return
 
     // PANIC (low Sanity): a hero below the panic threshold may lose its turn. The
     // draw is GATED on a positive chance, so a healthy hero never touches the rng —

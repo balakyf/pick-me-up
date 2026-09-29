@@ -3,8 +3,9 @@
  * each AnchorWaveSpec group becomes round(attrMult * (mobLevel + levelBonus))
  * enemies, chained as waves (clearing one spawns the next).
  *
- * In the slice we author F5 (Survival) and F10 (Defense). Every templateId here
- * MUST exist in ENEMY_TEMPLATES (asserted in tests).
+ * Act I: F5 (Survival), F10 (Defense). Act II: F15 (Escort), F20 (Subjugation).
+ * Every wave templateId MUST exist in ENEMY_TEMPLATES and every ally templateId in
+ * ALLY_TEMPLATES (asserted in tests).
  */
 
 import type { AnchorDef } from '../types'
@@ -80,6 +81,53 @@ export const ANCHORS: Record<number, AnchorDef> = {
           targetTag: 'black_priest',
           keywords: [{ kind: 'phased' }],
         },
+      ],
+    ],
+  },
+
+  // ── F15: Escort ────────────────────────────────────────────────────────────
+  // Canon Taoni F15: "Escort Princess Priasis — 15-min limit before assassination";
+  // Townia F15 Guard: "soldiers, assassins, mage, knight". Keep Priasis alive until
+  // the window closes. Assassins hunt the weakest target — her — so the party must
+  // cut them down first. If she falls, the mission FAILS (no clear).
+  15: {
+    floor: 15,
+    missionType: 'Escort',
+    objectives: [
+      { kind: 'survive', ticks: TUNING.tower.f15SurviveTicks },
+      { kind: 'protect', targetTag: 'priasis' },
+    ],
+    timer: TUNING.tower.f15SurviveTicks,
+    allies: [{ templateId: 'priasis', line: 'back', targetTag: 'priasis', levelBonus: 4 }],
+    waves: [
+      [
+        { templateId: 'soldier', count: 3 },
+        { templateId: 'assassin', count: 2 },
+      ],
+      [
+        { templateId: 'assassin', count: 3 },
+        { templateId: 'knight', count: 1 },
+        { templateId: 'dark_mage', count: 1 },
+      ],
+    ],
+  },
+
+  // ── F20: Subjugation — the half black dragon Halgiraf ─────────────────────
+  // Canon F20 boss. His guard falls first; then the dragon (light-vulnerable,
+  // enrages late). Defeat(halgiraf) is the win condition.
+  20: {
+    floor: 20,
+    missionType: 'Subjugation',
+    objectives: [{ kind: 'defeat', targetTag: 'halgiraf' }],
+    timer: null,
+    waves: [
+      [
+        { templateId: 'soldier', count: 3 },
+        { templateId: 'skeleton', count: 3 },
+      ],
+      [
+        { templateId: 'halgiraf', count: 1, levelBonus: 8, targetTag: 'halgiraf' },
+        { templateId: 'dark_mage', count: 2 },
       ],
     ],
   },
