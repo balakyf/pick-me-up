@@ -588,9 +588,23 @@ describe('migrate — v8 → v9 (PvP & social)', () => {
     const { worldSaved, ...towerV8 } = v9.tower
     const v8Json = JSON.stringify({ schemaVersion: 8, savedAt: 0, state: { ...rest, schemaVersion: 8, heroes: heroesV8, meta: metaV8, tower: towerV8 } })
     const restored = loadState(v8Json)
-    expect(restored.schemaVersion).toBe(9)
+    expect(restored.schemaVersion).toBe(TUNING.account.schemaVersion)
     expect(restored.pvp).toEqual(PVP_DEFAULTS())
     expect(Object.values(restored.heroes)[0]!.captiveOf).toBeNull()
     expect([restored.meta.piZeroSince, restored.meta.deleted, restored.tower.worldSaved]).toEqual([null, false, false])
+  })
+})
+
+describe('migrate — v9 → v10 (Quanton Life)', () => {
+  it('adds the Living Lobby buildings and a fresh life clock at the save’s world-time', () => {
+    const v10 = createAccount(564, { now: 1000 })
+    const { life, ...rest } = v10
+    const { dormitory, tavern, infirmary, garden, memorial, forge, library, watchtower, market, ...facV9 } = v10.facilities
+    const v9Json = JSON.stringify({ schemaVersion: 9, savedAt: 0, state: { ...rest, schemaVersion: 9, facilities: facV9 } })
+    const restored = loadState(v9Json)
+    expect(restored.schemaVersion).toBe(10)
+    expect(restored.facilities.dormitory.level).toBe(TUNING.lobby.facilityStartLevels.dormitory)
+    expect(restored.facilities.forge).toEqual({ level: 0, build: null })
+    expect(restored.life).toEqual(life)
   })
 })

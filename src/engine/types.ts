@@ -48,6 +48,16 @@ export type FacilityId =
   | 'trainingCenter'
   | 'transferStation'
   | 'hallOfMagic'
+  // The Living Lobby (schema v10): buildings heroes live and work in.
+  | 'dormitory'
+  | 'tavern'
+  | 'infirmary'
+  | 'garden'
+  | 'memorial'
+  | 'forge'
+  | 'library'
+  | 'watchtower'
+  | 'market'
 
 /** Material bucket key, e.g. 'promotionStone', 'attrStone_fire', 'rankMaterial'. */
 export type MaterialId = string
@@ -323,6 +333,202 @@ export interface OwnedHero extends Omit<Hero, 'skillIds'> {
   expedition: { completesAtWorld: number } | null
   /** Kidnapped by a raiding Master (Layer 4 §2): held until ransomed, rescued or synthesized. */
   captiveOf: CaptiveHold | null
+  /** Quanton Life (schema v10): needs, job, current activity, memories. Absent until the
+   *  life clock first sees the hero (a fresh summon) — read through life.lifeOf(). */
+  life?: HeroLife
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Quanton Life — the Living Lobby (schema v10)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type NeedKey = 'energy' | 'hunger' | 'social' | 'fun'
+export type Needs = Record<NeedKey, number>
+
+/** What a hero is doing with their time. The last four are pinned by other systems. */
+export type ActivityKind =
+  | 'sleep'
+  | 'eat'
+  | 'work'
+  | 'train'
+  | 'socialize'
+  | 'hobby'
+  | 'read'
+  | 'pray'
+  | 'mourn'
+  | 'heal'
+  | 'wander'
+  | 'promoting'
+  | 'drilling'
+  | 'away'
+  | 'captive'
+
+/** Where on the campus an activity happens (a building or an outdoor spot). */
+export type LifePlace =
+  | 'dormitory'
+  | 'hall'
+  | 'kitchen'
+  | 'forge'
+  | 'yard'
+  | 'tavern'
+  | 'library'
+  | 'promotion'
+  | 'memorial'
+  | 'infirmary'
+  | 'garden'
+  | 'market'
+  | 'watchtower'
+  | 'courtyard'
+  | 'rift'
+  | 'offsite'
+
+/** A building job a hero can be assigned to (one per hero). */
+export type JobId = 'blacksmith' | 'cook' | 'instructor' | 'scholar' | 'healer' | 'gardener' | 'merchant' | 'guard'
+
+export type MemoryKind =
+  | 'firstDay'
+  | 'floorCleared'
+  | 'floorLost'
+  | 'nearDeath'
+  | 'friendDied'
+  | 'comradeDied'
+  | 'befriended'
+  | 'rivalry'
+  | 'argued'
+  | 'gift'
+  | 'promoted'
+  | 'forged'
+  | 'jobTier'
+  | 'mourned'
+  | 'retreated'
+
+export interface Memory {
+  kind: MemoryKind
+  /** World-day index it happened. */
+  day: number
+  /** The other hero involved (a friend, a rival, the fallen). */
+  other?: HeroId
+  floor?: number
+  /** Free detail (an item name, a gift id, a job id). */
+  detail?: string
+  /** Salience 0..100 (decays with age when ranked). */
+  weight: number
+}
+
+export interface HeroActivity {
+  kind: ActivityKind
+  place: LifePlace
+  /** Absolute life slot at which the hero reconsiders. */
+  untilSlot: number
+  /** A companion (a chat partner, a sparring mate). */
+  with?: HeroId
+  /** Work that could not proceed (the smith has no materials). */
+  stalled?: boolean
+}
+
+export interface HeroLife {
+  needs: Needs
+  job: JobId | null
+  /** Work slots banked per job (the job's skill). */
+  jobXp: Partial<Record<JobId, number>>
+  doing: HeroActivity
+  memories: Memory[]
+  /** 0..100; a friend's death. Drives mourning, fades with time. */
+  grief: number
+  /** World-day the hero arrived in the waiting room. */
+  arrivedDay: number
+  /** Deepest floor the hero has fought on. */
+  bestFloor: number
+}
+
+/** A pair of heroes' history ("a|b", ids sorted). */
+export interface Relation {
+  affinity: number
+  /** Floors fought side by side. */
+  shared: number
+}
+
+export type ChronicleKind =
+  | 'friends'
+  | 'closeFriends'
+  | 'rivals'
+  | 'grudge'
+  | 'argument'
+  | 'forged'
+  | 'masterwork'
+  | 'jobTier'
+  | 'death'
+  | 'mourning'
+  | 'research'
+  | 'stalled'
+  | 'arrival'
+
+export interface ChronicleEntry {
+  /** World-time ms. */
+  at: number
+  kind: ChronicleKind
+  heroIds: HeroId[]
+  floor?: number
+  detail?: string
+}
+
+export type DeathCause = 'battle' | 'synthesis' | 'captor'
+
+/** A grave in the Memorial. */
+export interface FallenRecord {
+  heroId: HeroId
+  name: string
+  star: Star
+  level: number
+  heroClass: HeroClass | null
+  element: Element
+  portraitToken: string
+  cause: DeathCause
+  floor: number
+  /** World-day of death. */
+  day: number
+  daysServed: number
+  bestFloor: number
+  /** Ids of the friends left behind (affinity ≥ friend threshold at death). */
+  mourners: HeroId[]
+}
+
+/** Running totals since the Master last read Isel's letter. */
+export interface LifeTally {
+  jobGold: number
+  meals: number
+  forged: number
+  trainXp: number
+  research: number
+  healed: number
+}
+
+export type ForgeOrder = EquipmentSlot | 'auto'
+
+export interface LifeState {
+  /** Last absolute life slot simulated. */
+  slot: number
+  relations: Record<string, Relation>
+  chronicle: ChronicleEntry[]
+  memorial: FallenRecord[]
+  /** Prepared meals waiting in the kitchen. */
+  pantry: number
+  forge: {
+    order: ForgeOrder | null
+    /** The item being worked (grade + slot paid for), with work points done. */
+    wip: { slot: EquipmentSlot; grade: EquipmentGrade; progress: number } | null
+  }
+  /** Scholars' study of the current floor. */
+  research: { floor: number; points: number }
+  /** Guards on duty in the latest slot (feeds invasion defense). */
+  guardPower: number
+  tally: LifeTally
+  /** World-time the Master last read the letter. */
+  letterReadAt: number
+  /** Onboarding: the free tutorial 10-pull, and the first-steps checklist done so far. */
+  guide: { tutorialPull: boolean; done: string[] }
+  /** Advanced pulls taken today (the crystal's charge), and which world-day. */
+  crystal: { day: number; advancedPulls: number }
 }
 
 /** Where a captured hero is held and what it costs to get them back. */
@@ -544,6 +750,8 @@ export interface GameState {
   rng: RngCursors
   /** PvP and social (Layer 4; schema v9). */
   pvp: PvpState
+  /** Quanton Life: the living lobby (schema v10). */
+  life: LifeState
 }
 
 export interface SaveEnvelope {
@@ -932,5 +1140,11 @@ export type Command =
   | { type: 'EQUIP_ITEM'; heroId: HeroId; itemId: EquipmentId }
   /** Equipment: clear a hero's slot (the item returns to free inventory). */
   | { type: 'UNEQUIP_ITEM'; heroId: HeroId; slot: EquipmentSlot }
+  /** Quanton Life: give a hero a building job (null = relieve them). */
+  | { type: 'ASSIGN_JOB'; heroId: HeroId; job: JobId | null }
+  /** Quanton Life: what the smiths at the Forge work on (null = stand the forge down). */
+  | { type: 'SET_FORGE_ORDER'; order: ForgeOrder | null }
+  /** Quanton Life: the Master has read Isel's letter (the tally resets). */
+  | { type: 'READ_LETTER' }
   /** Testing-only: grant free gold. Not part of the real economy. */
   | { type: 'ADD_GOLD'; amount: number }

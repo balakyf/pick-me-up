@@ -61,6 +61,7 @@ import { startUpgrade, skipFacility } from '../facilities'
 import { startTraining, skipTraining } from '../training'
 import { attemptDaily, type DailyResult } from '../daily'
 import { advanceTime, toWorldTime } from '../time'
+import { assignJob, lifeOf, lifeReact } from '../life'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Guards
@@ -117,6 +118,18 @@ export function reduce(state: GameState | null, cmd: Command, nowWorld: number =
   if (cmd.type === 'NEW_ACCOUNT') {
     return createAccount(cmd.seed, { now: cmd.now })
   }
+  // Quanton Life: the waiting room reacts to what changed (graves, grief, memories).
+  if (cmd.type === 'ATTEMPT_FLOOR') {
+    const current = advanceTime(requireState(state, cmd.type), nowWorld)
+    if (current.meta.deleted) throw new Error('reduce: this waiting room has greyed and been deleted — start a new Master')
+    const r = playFloor(current, cmd.focus, cmd.ballista, cmd.subvert)
+    return lifeReact(state, r.state, cmd, nowWorld, r.result)
+  }
+  return lifeReact(state, reduceCore(state, cmd, nowWorld), cmd, nowWorld)
+}
+
+function reduceCore(state: GameState | null, cmd: Command, nowWorld: number): GameState {
+  if (cmd.type === 'NEW_ACCOUNT') return createAccount(cmd.seed, { now: cmd.now })
 
   // Every other command acts on an existing account, with world-time advanced first.
   const current = advanceTime(requireState(state, cmd.type), nowWorld)
@@ -240,6 +253,22 @@ export function reduce(state: GameState | null, cmd: Command, nowWorld: number =
     case 'SERVER_WAR':
       return serverWar(current, nowWorld).state
 
+    case 'ASSIGN_JOB':
+      return assignJob(current, cmd.heroId, cmd.job, lifeOf)
+
+    case 'SET_FORGE_ORDER':
+      return { ...current, life: { ...current.life, forge: { ...current.life.forge, order: cmd.order } } }
+
+    case 'READ_LETTER':
+      return {
+        ...current,
+        life: {
+          ...current.life,
+          letterReadAt: Math.max(nowWorld, current.meta.lastSeenAtWorld),
+          tally: { jobGold: 0, meals: 0, forged: 0, trainXp: 0, research: 0, healed: 0 },
+        },
+      }
+
     case 'ADD_GOLD':
       // Testing-only cheat: grant free gold. Not part of the real economy.
       return { ...current, gold: current.gold + cmd.amount }
@@ -262,7 +291,9 @@ export function reduce(state: GameState | null, cmd: Command, nowWorld: number =
  * if gold is insufficient.
  */
 export function summonWithResult(state: GameState): { state: GameState; hero: OwnedHero } {
-  return summon(state)
+  const r = summon(state)
+  const next = lifeReact(state, r.state, { type: 'SUMMON' }, 0)
+  return { state: next, hero: next.heroes[r.hero.id]! }
 }
 
 /**
@@ -274,7 +305,9 @@ export function summonBatchWithResult(
   pool: 'normal' | 'advanced',
   count: 1 | 10,
 ): { state: GameState; heroes: OwnedHero[] } {
-  return summonMany(state, pool, count)
+  const r = summonMany(state, pool, count)
+  const next = lifeReact(state, r.state, { type: 'SUMMON', pool, count }, 0)
+  return { state: next, heroes: r.heroes.map((h) => next.heroes[h.id] ?? h) }
 }
 
 /**
@@ -288,7 +321,8 @@ export function attemptFloorWithResult(
   ballista?: number,
   subvert?: boolean,
 ): { state: GameState; result: FloorResult } {
-  return playFloor(state, focus, ballista, subvert)
+  const r = playFloor(state, focus, ballista, subvert)
+  return { state: lifeReact(state, r.state, { type: 'ATTEMPT_FLOOR', focus, ballista, subvert }, 0, r.result), result: r.result }
 }
 
 /** Like RAID_RIVAL, but also returns the raid's outcome (loot, captive, battle log). */

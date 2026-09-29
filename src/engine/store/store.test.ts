@@ -25,6 +25,17 @@ import { startUpgrade, skipFacility } from '../facilities'
 import { craftEquipment, equipItem, unequipItem } from '../equipment'
 import { advanceTime } from '../time'
 import { levelCapForStar } from '../stats'
+
+/** The engine modules know nothing of Quanton Life; the reducer layers it on top. */
+function core(s: GameState): unknown {
+  const heroes: Record<string, unknown> = {}
+  for (const [id, h] of Object.entries(s.heroes)) {
+    const { life: _life, ...rest } = h
+    heroes[id] = rest
+  }
+  const { life: _l, ...rest } = s
+  return { ...rest, heroes }
+}
 import type {
   Command,
   EquipmentId,
@@ -121,7 +132,7 @@ describe('reduce — SUMMON', () => {
 
   it('matches gacha.summon(state).state exactly (delegation)', () => {
     const before = fundedAccount(11, 9000)
-    expect(reduce(before, { type: 'SUMMON' })).toEqual(summon(before).state)
+    expect(core(reduce(before, { type: 'SUMMON' }))).toEqual(core(summon(before).state))
   })
 
   it('throws when gold is insufficient (let gacha throw)', () => {
@@ -224,15 +235,13 @@ describe('reduce — ATTEMPT_FLOOR', () => {
 
   it('matches tower.playFloor(state).state exactly (delegation)', () => {
     const before = createAccount(7)
-    expect(reduce(before, { type: 'ATTEMPT_FLOOR' })).toEqual(playFloor(before).state)
+    expect(core(reduce(before, { type: 'ATTEMPT_FLOOR' }))).toEqual(core(playFloor(before).state))
   })
 
   it('threads the optional focus directive through to tower', () => {
     const before = createAccount(7)
     const focus = { focusEnemyId: 'e1_w0_0' }
-    expect(reduce(before, { type: 'ATTEMPT_FLOOR', focus })).toEqual(
-      playFloor(before, focus).state,
-    )
+    expect(core(reduce(before, { type: 'ATTEMPT_FLOOR', focus }))).toEqual(core(playFloor(before, focus).state))
   })
 
   it('throws when state is null', () => {
@@ -315,7 +324,7 @@ describe('summonWithResult / attemptFloorWithResult', () => {
     const before = createAccount(7)
     const focus = { focusEnemyId: 'e1_w0_0' }
     const { state } = attemptFloorWithResult(before, focus)
-    expect(state).toEqual(playFloor(before, focus).state)
+    expect(core(state)).toEqual(core(playFloor(before, focus).state))
   })
 })
 
@@ -574,7 +583,7 @@ describe('reduce — SKIP_TIMER', () => {
   it('gem-skips an in-flight promotion (delegates to skipPromotion)', () => {
     const promoting = startPromotion(promotableState(), 'h_promo' as HeroId, 0)
     const after = reduce(promoting, { type: 'SKIP_TIMER', kind: 'promotion', id: 'h_promo' }, 0)
-    expect(after).toEqual(skipPromotion(promoting, 'h_promo' as HeroId))
+    expect(core(after)).toEqual(core(skipPromotion(promoting, 'h_promo' as HeroId)))
     expect(after.heroes['h_promo' as HeroId]!.star).toBe(4)
     expect(after.heroes['h_promo' as HeroId]!.promotion).toBeNull()
   })
@@ -815,7 +824,7 @@ describe('reduce — Layer 1 completion commands', () => {
 
   it('a bare SUMMON is still one Normal pull', () => {
     const s0 = createAccount(3)
-    expect(reduce(s0, { type: 'SUMMON' })).toEqual(summon(s0).state)
+    expect(core(reduce(s0, { type: 'SUMMON' }))).toEqual(core(summon(s0).state))
   })
 
   it('TRANSFER_SKILL and FUSE_SKILL route to the Transfer Station', () => {

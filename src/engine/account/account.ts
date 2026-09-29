@@ -32,6 +32,7 @@ import { makeSeed } from '../rng/rng'
 import { buildOwnedHeroFromTemplate, HERO_V8_DEFAULTS } from '../gacha'
 import { CAMEO_HEROES } from '../content'
 import { toWorldTime } from '../time'
+import { defaultLifeState } from '../life/life'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Constants
@@ -149,6 +150,7 @@ export function createAccount(entropySeed: number, opts?: CreateAccountOpts): Ga
       trainingCenter: { level: TUNING.lobby.facilityStartLevels.trainingCenter, build: null },
       transferStation: { level: TUNING.lobby.facilityStartLevels.transferStation, build: null },
       hallOfMagic: { level: TUNING.lobby.facilityStartLevels.hallOfMagic, build: null },
+      ...LIFE_FACILITIES(),
     },
     dailies: { attemptsUsed: 0, lastResetWorldDay: 0 },
     heroes: { [STARTER_HERO_ID]: starter },
@@ -169,6 +171,24 @@ export function createAccount(entropySeed: number, opts?: CreateAccountOpts): Ga
     gacha: { pity: 0, pullCount: 0, advPity4: 0, advPity5: 0, advPullCount: 0 },
     rng: { combatCounter: 0 },
     pvp: PVP_DEFAULTS(),
+    life: defaultLifeState(toWorldTime(opts?.now ?? 0)),
+  }
+}
+
+/** The Living Lobby's buildings at their start levels (schema v10). */
+function LIFE_FACILITIES(): Pick<GameState['facilities'], 'dormitory' | 'tavern' | 'infirmary' | 'garden' | 'memorial' | 'forge' | 'library' | 'watchtower' | 'market'> {
+  const L = TUNING.lobby.facilityStartLevels
+  const f = (level: number) => ({ level, build: null })
+  return {
+    dormitory: f(L.dormitory),
+    tavern: f(L.tavern),
+    infirmary: f(L.infirmary),
+    garden: f(L.garden),
+    memorial: f(L.memorial),
+    forge: f(L.forge),
+    library: f(L.library),
+    watchtower: f(L.watchtower),
+    market: f(L.market),
   }
 }
 
@@ -363,6 +383,22 @@ function migrateV8toV9(envelope: SaveEnvelope): SaveEnvelope {
   }
 }
 
+/** v9 → v10: Quanton Life — the Living Lobby's buildings and the life clock. Heroes get
+ *  their life lazily (the clock creates it the first time it sees them). */
+function migrateV9toV10(envelope: SaveEnvelope): SaveEnvelope {
+  const s = envelope.state as unknown as GameState
+  return {
+    schemaVersion: 10,
+    savedAt: envelope.savedAt,
+    state: {
+      ...s,
+      schemaVersion: 10,
+      facilities: { ...LIFE_FACILITIES(), ...s.facilities },
+      life: defaultLifeState(s.meta.lastSeenAtWorld),
+    },
+  }
+}
+
 /**
  * Migrate a SaveEnvelope from `fromVersion` up to the current schema version.
  * Identity when already current; otherwise apply each version's upgrade step in
@@ -409,6 +445,10 @@ export function migrate(envelope: SaveEnvelope, fromVersion: number): SaveEnvelo
   if (v === 8) {
     env = migrateV8toV9(env)
     v = 9
+  }
+  if (v === 9) {
+    env = migrateV9toV10(env)
+    v = 10
   }
   if (v !== current) {
     throw new SaveLoadError(`migrate: no migration path from version ${fromVersion}`)

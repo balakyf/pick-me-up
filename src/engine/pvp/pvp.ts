@@ -222,7 +222,8 @@ function invasion(state: GameState, day: number, nowWorld: number): GameState {
   const raider = pickR.value
   const { units: rawDefense } = unitsFor(state, defenseSlots(state))
   // The Tactical Center coordinates the defense: defenders strike harder by its bonus.
-  const bonus = 1 + tacticalFocusBonus(state.facilities.tacticalCenter.level)
+  // Guards on the watchtower stiffen it further (Quanton Life jobs).
+  const bonus = 1 + tacticalFocusBonus(state.facilities.tacticalCenter.level) + (state.life?.guardPower ?? 0) * TUNING.life.jobs.guardDefensePerPower
   const defense = rawDefense.map((u) => ({ ...u, stats: { ...u.stats, pAtk: Math.round(u.stats.pAtk * bonus), mAtk: Math.round(u.stats.mAtk * bonus) } }))
   const ratio = nextFloat(r)
   const [lo, hi] = P.rivalCpRange as [number, number]

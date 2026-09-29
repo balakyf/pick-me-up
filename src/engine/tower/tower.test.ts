@@ -4,6 +4,7 @@
  * Vitest globals are enabled (describe/it/expect available without import).
  */
 
+import { defaultLifeState } from '../life'
 import { floorPower, mobLevel, buildEncounter, playFloor, sanityDrain, rollMaterialDrops, floorXp } from './tower'
 import { tacticalFocusBonus } from '../tactical'
 import { addMasterXp } from '../master'
@@ -126,6 +127,15 @@ function makeState(o: StateOpts = {}): GameState {
       trainingCenter: { level: 0, build: null },
       transferStation: { level: 0, build: null },
       hallOfMagic: { level: 0, build: null },
+      dormitory: { level: 1, build: null },
+      tavern: { level: 0, build: null },
+      infirmary: { level: 0, build: null },
+      garden: { level: 0, build: null },
+      memorial: { level: 1, build: null },
+      forge: { level: 0, build: null },
+      library: { level: 0, build: null },
+      watchtower: { level: 0, build: null },
+      market: { level: 0, build: null },
     },
     dailies: { attemptsUsed: 0, lastResetWorldDay: 0 },
     heroes,
@@ -148,6 +158,7 @@ function makeState(o: StateOpts = {}): GameState {
     },
     gacha: { pity: 0, pullCount: 0, advPity4: 0, advPity5: 0, advPullCount: 0 },
     rng: { combatCounter: 0 },
+    life: defaultLifeState(0),
     pvp: PVP_DEFAULTS(),
   }
 }

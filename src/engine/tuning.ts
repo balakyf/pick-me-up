@@ -443,6 +443,16 @@ export const TUNING = {
       trainingCenter: 0,
       transferStation: 0,
       hallOfMagic: 0,
+      // The Living Lobby: beds and a grave plot from day one; the rest are built.
+      dormitory: 1,
+      tavern: 0,
+      infirmary: 0,
+      garden: 0,
+      memorial: 1,
+      forge: 0,
+      library: 0,
+      watchtower: 0,
+      market: 0,
     },
     /** Master Level — the lobby progression spine (Layer 3 §3.1). */
     master: {
@@ -464,7 +474,19 @@ export const TUNING = {
       /** Master Level required to BUILD the Promotion Chamber (level 0 → 1). */
       chamberUnlockMasterLevel: 3,
       /** Master Level required for a facility's first build (level 0 → 1). Absent = ML1. */
-      unlockMasterLevel: { promotionChamber: 3, trainingCenter: 2, transferStation: 4, hallOfMagic: 6 } as Record<string, number>,
+      unlockMasterLevel: {
+        promotionChamber: 3,
+        trainingCenter: 2,
+        transferStation: 4,
+        hallOfMagic: 6,
+        tavern: 2,
+        garden: 2,
+        forge: 2,
+        infirmary: 3,
+        market: 4,
+        library: 5,
+        watchtower: 5,
+      } as Record<string, number>,
       /** upgradeCost(level) = round(baseCost × costGrowth^level), in gold. */
       baseCost: {
         kitchen: 800,
@@ -473,6 +495,16 @@ export const TUNING = {
         trainingCenter: 900,
         transferStation: 1100,
         hallOfMagic: 1500,
+        // Living Lobby buildings are the late-game gold sink (the balance pass left ~1M idle).
+        dormitory: 2500,
+        tavern: 3000,
+        infirmary: 4000,
+        garden: 2500,
+        memorial: 2000,
+        forge: 4000,
+        library: 5000,
+        watchtower: 5000,
+        market: 4500,
       } as Record<string, number>,
       costGrowth: 1.5,
       /** Build timer per TARGET level (world-time ms): ~`durationPerLevel × toLevel`. */
@@ -688,8 +720,93 @@ export const TUNING = {
     },
   },
 
+  /** Quanton Life — the Living Lobby (spec 2026-09-30). One slot = 30 world-minutes. */
+  life: {
+    slotMs: 30 * 60_000,
+    slotsPerDay: 48,
+    /** Longest absence simulated slot by slot (7 world-days); older time just passes. */
+    maxCatchUpSlots: 7 * 48,
+    /** Needs lost per awake slot (hunger, energy…) and what activities give back. */
+    decay: { energy: 2.2, hunger: 3, social: 1.6, fun: 1.4 },
+    refill: {
+      sleep: 7,
+      sleepFloor: 4.5, // no bed: a bedroll in the hall
+      eat: 42,
+      meal: 62, // a cooked meal from the pantry
+      socialize: 13,
+      hobby: 13,
+      read: 10,
+      socialAmbient: 3, // company while working/eating together
+    },
+    /** Sanity per slot: unmet needs wear on a hero, met needs mend them. */
+    sanity: {
+      perUnmetNeed: 0.35,
+      unmetBelow: 15,
+      contentAbove: 60,
+      content: 0.25,
+      noBed: 0.5,
+      mealBonus: 1.5,
+      pray: 2,
+      heal: 2.5,
+      healerPerPower: 3,
+      jobLike: 0.15,
+      jobDislike: 0.3,
+    },
+    /** World-hours (0..23.5) of the day's rhythm. */
+    hours: { workStart: 8, workEnd: 18, meals: [7, 12, 19], evening: 19 },
+    /** Beds: base + perLevel × Dormitory level. */
+    beds: { base: 4, perLevel: 4 },
+    /** Training in the Yard: share of a level's XP per slot, and the Instructor multiplier cap. */
+    train: { xpShare: 0.02, instructorPerPower: 0.5, instructorCap: 2.5 },
+    relation: {
+      friend: 30,
+      closeFriend: 60,
+      rival: -30,
+      grudge: -60,
+      socializeGain: 3,
+      ambientGain: 1.2,
+      chemistry: 2.5,
+      warmth: 1,
+      argueBase: 0.08,
+      argueLoss: 7,
+      sharedBattle: 4,
+      /** The relation map keeps at most this many pairs (weakest pruned). */
+      maxPairs: 800,
+      /** Pairs interacting per place per slot. */
+      pairsPerPlace: 6,
+    },
+    grief: { base: 30, perAffinity: 0.6, sanityBase: 10, sanityPerAffinity: 0.15, decay: 0.4, mourn: 6, healer: 3 },
+    memories: { max: 12 },
+    chronicleMax: 120,
+    /** Jobs: skill tiers (work slots banked), the per-tier multiplier, and outputs per work slot. */
+    jobs: {
+      tiers: [0, 40, 120, 300, 700],
+      perTier: 0.25,
+      /** Morale: aptitude at/above `likeAt` is a job they enjoy; below `dislikeAt` one they resent. */
+      likeAt: 1.15,
+      dislikeAt: 0.8,
+      cookMeals: 1.2,
+      pantryPerHero: 3,
+      gardenerGold: 12,
+      gardenerPantry: 0.3,
+      merchantGold: 10,
+      scholarResearch: 1,
+      scholarPi: 0.02,
+      /** Research points that let the scholars read a floor's weakness (a free peek). */
+      researchToStudy: 30,
+      /** Forge work points per item, by grade. */
+      forgeWork: { E: 12, D: 18, C: 26, B: 36, A: 50, S: 70, SS: 90, SSS: 120 } as Record<string, number>,
+      /** Masterwork chance per job tier × aptitude (one grade above the Master's cap). */
+      masterworkPerTier: 0.04,
+      /** Seat count per building level. */
+      seatsPerLevel: 1,
+      /** Invasion defense power per guard power point (fraction of rival CP). */
+      guardDefensePerPower: 0.04,
+    },
+  },
+
   account: {
-    schemaVersion: 9,
+    schemaVersion: 10,
     /** Canon protagonist account id (display only). */
     defaultAccountId: '46631913',
     partySize: 5,
