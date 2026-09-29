@@ -28,6 +28,7 @@ import type {
   FloorResult,
   FocusDirective,
   StoragePort,
+  BattleOrder,
   EquipmentId,
 } from '../types'
 import { createAccount, persist, hydrate, DEFAULT_SAVE_KEY } from '../account'
@@ -122,7 +123,7 @@ export function reduce(state: GameState | null, cmd: Command, nowWorld: number =
   if (cmd.type === 'ATTEMPT_FLOOR') {
     const current = advanceTime(requireState(state, cmd.type), nowWorld)
     if (current.meta.deleted) throw new Error('reduce: this waiting room has greyed and been deleted — start a new Master')
-    const r = playFloor(current, cmd.focus, cmd.ballista, cmd.subvert)
+    const r = playFloor(current, cmd.focus, cmd.ballista, cmd.subvert, cmd.orders)
     return lifeReact(state, r.state, cmd, nowWorld, r.result)
   }
   return lifeReact(state, reduceCore(state, cmd, nowWorld), cmd, nowWorld)
@@ -148,7 +149,7 @@ function reduceCore(state: GameState | null, cmd: Command, nowWorld: number): Ga
     }
 
     case 'ATTEMPT_FLOOR':
-      return playFloor(current, cmd.focus, cmd.ballista, cmd.subvert).state
+      return playFloor(current, cmd.focus, cmd.ballista, cmd.subvert, cmd.orders).state
 
     case 'TICK':
       return current
@@ -320,9 +321,10 @@ export function attemptFloorWithResult(
   focus?: FocusDirective,
   ballista?: number,
   subvert?: boolean,
+  orders?: BattleOrder[],
 ): { state: GameState; result: FloorResult } {
-  const r = playFloor(state, focus, ballista, subvert)
-  return { state: lifeReact(state, r.state, { type: 'ATTEMPT_FLOOR', focus, ballista, subvert }, 0, r.result), result: r.result }
+  const r = playFloor(state, focus, ballista, subvert, orders)
+  return { state: lifeReact(state, r.state, { type: 'ATTEMPT_FLOOR', focus, ballista, subvert, orders }, 0, r.result), result: r.result }
 }
 
 /** Like RAID_RIVAL, but also returns the raid's outcome (loot, captive, battle log). */
@@ -401,6 +403,12 @@ export interface Store {
   subscribe(fn: () => void): () => void
   /** Hydrate the current state from storage (null if nothing stored). */
   load(): GameState | null
+  /**
+   * Re-play the LAST dispatched command differently (mid-battle orders): the store kept
+   * the state from just before it, so this re-reduces from there. Only a floor attempt
+   * can be revised, and only until the next dispatch. Throws otherwise.
+   */
+  revise(cmd: Command): GameState
 }
 
 /**
@@ -414,6 +422,7 @@ export function createStore(opts: StoreOpts = {}): Store {
   const saveKey = opts.saveKey ?? DEFAULT_SAVE_KEY
 
   let current: GameState | null = null
+  let last: { before: GameState | null; nowReal: number; type: Command['type'] } | null = null
   const listeners = new Set<() => void>()
 
   function notify(): void {
@@ -426,11 +435,24 @@ export function createStore(opts: StoreOpts = {}): Store {
     },
 
     dispatch(cmd: Command, nowReal: number = 0): GameState {
+      const before = current
       const next = reduce(current, cmd, toWorldTime(nowReal))
+      last = cmd.type === 'ATTEMPT_FLOOR' ? { before, nowReal, type: cmd.type } : null
       current = next
       if (storage !== undefined) {
         persist(storage, next, saveKey)
       }
+      notify()
+      return next
+    },
+
+    revise(cmd: Command): GameState {
+      if (last === null || last.type !== cmd.type || cmd.type !== 'ATTEMPT_FLOOR') {
+        throw new Error('revise: only the floor attempt just dispatched can be revised')
+      }
+      const next = reduce(last.before, cmd, toWorldTime(last.nowReal))
+      current = next
+      if (storage !== undefined) persist(storage, next, saveKey)
       notify()
       return next
     },

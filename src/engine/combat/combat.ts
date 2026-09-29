@@ -156,6 +156,9 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
   const hasReach = encounter.mission.objectives.some((o) => o.kind === 'reach')
   let reachProgress = 0
   let outcome: CombatOutcome | null = null
+  // Focus / overlook start from the pre-battle directive; mid-battle orders may change them.
+  let focusEnemyId: string | undefined = encounter.focus?.focusEnemyId
+  let overlooked: string[] = encounter.focus?.overlookedAllyIds ?? []
 
   // ── Helpers over the live rosters ─────────────────────────────────────────
   /** Everyone alive on the hero side, NPC allies included (what enemies can target). */
@@ -219,7 +222,7 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
     if (
       actor.side === 'hero' &&
       encounter.focusBonus !== undefined &&
-      encounter.focus?.focusEnemyId === target.id
+      focusEnemyId === target.id
     ) {
       damage *= 1 + encounter.focusBonus
     }
@@ -308,7 +311,7 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
     // FOCUS: hero attackers force-prioritize a living, targetable focus enemy (a Wary,
     // defiant hero ignores the Master and picks its own target).
     if (actor.side === 'hero' && actor.ref.defiant !== true) {
-      const focusId = encounter.focus?.focusEnemyId
+      const focusId = focusEnemyId
       if (focusId !== undefined) {
         const focused = cands.find((e) => e.id === focusId)
         if (focused) return focused
@@ -325,8 +328,7 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
     // any non-overlooked ally lives (deterministic; no RNG). Falls back to the full
     // pool if every candidate is overlooked.
     if (actor.side === 'enemy') {
-      const overlooked = encounter.focus?.overlookedAllyIds
-      if (overlooked !== undefined && overlooked.length > 0) {
+      if (overlooked.length > 0) {
         const visible = cands.filter((c) => !overlooked.includes(c.id))
         if (visible.length > 0) cands = visible
       }
@@ -513,7 +515,19 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
 
   // ── ATB main loop ─────────────────────────────────────────────────────────
   const timer = encounter.mission.timer
+  const orders = [...(encounter.orders ?? [])].sort((a, b) => a.tick - b.tick)
+  let nextOrder = 0
   for (tick = 1; tick <= C.maxTicks; tick++) {
+    // The Master's orders land at the start of their tick (before anyone acts).
+    while (nextOrder < orders.length && orders[nextOrder]!.tick <= tick) {
+      const o = orders[nextOrder++]!
+      emit({ kind: 'order', order: o })
+      if (o.kind === 'retreat') outcome = 'retreat'
+      else if (o.kind === 'focus') focusEnemyId = o.enemyId
+      else if (o.kind === 'protect' && !overlooked.includes(o.allyId)) overlooked = [...overlooked, o.allyId]
+    }
+    if (outcome !== null) break
+
     // Fill action gauges for every living unit (stable order by id).
     const all = [...heroes, ...enemies].filter((u) => u.alive).sort(byId)
     for (const u of all) {

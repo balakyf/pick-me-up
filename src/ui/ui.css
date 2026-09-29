@@ -651,3 +651,39 @@ span.arm-slot { padding: 2px 8px; border: 2px dashed #3e3478; color: var(--ink-f
   .hud-mini { bottom: 64px; }
   .minimap { width: 120px; height: 87px; }
 }
+
+/* ── Battle: orders, the death moment, juice; the scouting report ───────────── */
+.battle-stage-wrap.shake { animation: stageShake 0.22s steps(4) 1; }
+.battle-stage-wrap.shake-heavy { animation: stageShakeHeavy 0.32s steps(6) 1; }
+@keyframes stageShake { 25% { transform: translate(-2px, 1px); } 50% { transform: translate(2px, -1px); } 75% { transform: translate(-1px, 0); } }
+@keyframes stageShakeHeavy { 16% { transform: translate(-4px, 2px); } 33% { transform: translate(4px, -2px); } 50% { transform: translate(-3px, -1px); } 66% { transform: translate(3px, 2px); } 83% { transform: translate(-1px, 0); } }
+.battle-stage-wrap.aiming { cursor: crosshair; }
+.bunit.aimable { cursor: pointer; filter: drop-shadow(0 0 2px #f2c75c); }
+.party-row.aimable, .foe-row.aimable { cursor: pointer; outline: 1px dashed var(--gold); }
+.foe-row { align-items: center; }
+.foe-row.hit .foe-name { color: var(--gold); }
+.foe-name { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.foe-hp { width: 70px; flex: none; }
+.order-bar { display: inline-flex; gap: 6px; align-items: center; padding-left: 10px; border-left: 2px solid var(--line); }
+.aim-hint { color: var(--gold); animation: blink 1s steps(2) infinite; }
+.death-card {
+  position: absolute; left: 50%; top: 18px; transform: translateX(-50%); z-index: 1000;
+  display: flex; gap: 8px; align-items: center; padding: 6px 10px; width: 300px;
+  background: #0c0814ee; border: 2px solid #8a7ad8; box-shadow: 0 0 0 2px #0a0714;
+  animation: deathIn 0.4s steps(4) both;
+}
+.death-card img { filter: grayscale(1) brightness(0.9); border: 1px solid #8a7ad8; }
+.death-name { color: #d8d0f0; font-size: 12px; font-weight: 600; }
+.death-words { color: #fff6e0; font-size: 11px; font-style: italic; }
+@keyframes deathIn { from { opacity: 0; transform: translateX(-50%) translateY(-6px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }
+
+.scout { max-width: 720px; margin: 0 auto 14px; padding: 10px 14px; }
+.threat-row { display: flex; align-items: center; gap: 10px; margin: 6px 0 2px; }
+.threat-label { font-weight: 700; min-width: 86px; }
+.threat-gauge { flex: 1; height: 8px; }
+.scout-enemies { display: flex; flex-direction: column; gap: 3px; margin: 8px 0 4px; }
+.scout-enemy { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 14px; }
+.el-dot { width: 9px; height: 9px; display: inline-block; border: 1px solid #0a0714; }
+.scout-notes { color: var(--accent-2); font-size: 12px; }
+.scout-warn { color: var(--warn); font-size: 13px; margin-top: 4px; }
+.scout-actions { margin-top: 8px; }

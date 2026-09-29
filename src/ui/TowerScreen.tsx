@@ -1,12 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
-import type { GameState, FloorResult, CombatLog } from '../engine/types'
+import type { GameState, FloorResult, CombatLog, BattleOrder } from '../engine/types'
+import { scoutFloor, suggestParty, type ScoutReport } from '../engine/scout'
+import { ordersAllowed } from '../engine/tower'
 import type { Store } from '../engine/store'
 import { attemptFloorWithResult, resolveEventWithResult } from '../engine/store'
 import { buildEncounter } from '../engine/tower'
 import { ACTS, ANCHORS, HIDDEN_OBJECTIVES, actForFloor } from '../engine/content'
 import { TUNING } from '../engine/tuning'
 import { EVENT_OPTION_LABEL, merchantPrice, treasureGold, type EventOutcome } from '../engine/events'
-import { BattleScene } from './battle/BattleScene'
+import { BattleScene, type BattleOrders } from './battle/BattleScene'
 import { ResultsScreen } from './screens'
 import { HeroCard } from './HeroCard'
 import { TimingGame } from './metaPanels'
@@ -210,6 +212,96 @@ function PeekLine({ preview }: { preview: ReturnType<typeof buildEncounter> }) {
   return <div className="peek-line">👁 {notes.size > 0 ? [...notes].join(' · ') : t('No special weakness — just steel and nerve.')}</div>
 }
 
+const THREAT_LABEL: Record<ScoutReport['threat'], string> = {
+  safe: 'Safe',
+  fair: 'Fair fight',
+  risky: 'Risky',
+  deadly: 'Deadly',
+}
+const THREAT_COLOR: Record<ScoutReport['threat'], string> = {
+  safe: 'var(--good)',
+  fair: 'var(--gold)',
+  risky: 'var(--warn)',
+  deadly: 'var(--bad)',
+}
+
+function keywordNote(k: ScoutReport['enemies'][number]['keywords'][number]): string | null {
+  switch (k.kind) {
+    case 'immune':
+      return t('immune to {what}', { what: t(k.damageType) })
+    case 'resist':
+      return t('resists {what}', { what: t(k.damageType) })
+    case 'vulnerable':
+      return t('weak to {what}', { what: t(ELEMENT_VIS[k.element].label) })
+    case 'looming':
+      return t('too strong to fight — finish first')
+    case 'phased':
+      return t('shielded until its guard falls')
+    case 'enrage':
+      return t('enrages after {n} ticks', { n: k.afterTick })
+    case 'aegis':
+      return t('shrugs off the first {n} hits', { n: k.charges })
+    default:
+      return null
+  }
+}
+
+/** The scouting report: who waits on the floor, and how the party measures up. */
+function ScoutPanel({ state, report, onSuggest }: { state: GameState; report: ScoutReport; onSuggest: () => void }) {
+  const pct = Math.min(100, (report.ratio / 2) * 100)
+  return (
+    <div className="pframe scout">
+      <div className="event-head">
+        <span className="event-kind">{t('Scouting report · F{n}', { n: report.floor })}</span>
+        <span className="muted">
+          {t(report.mission)} · {report.waves === 1 ? t('1 wave') : t('{n} waves', { n: report.waves })}
+        </span>
+      </div>
+      <div className="threat-row">
+        <span className="threat-label" style={{ color: THREAT_COLOR[report.threat] }}>
+          {t(THREAT_LABEL[report.threat])}
+        </span>
+        <span className="gauge threat-gauge">
+          <span style={{ width: `${pct}%`, background: THREAT_COLOR[report.threat] }} />
+        </span>
+        <span className="muted small">
+          {t('party {p} vs floor {f}', { p: Math.round(report.partyCp).toLocaleString(), f: Math.round(report.budget).toLocaleString() })}
+        </span>
+      </div>
+      <div className="muted small">
+        {report.expectedDeaths === 0
+          ? t('Parties this strong have come back whole.')
+          : t('Parties this strong lose about {n} heroes an attempt.', { n: report.expectedDeaths })}
+      </div>
+      <div className="scout-enemies">
+        {report.enemies.map((e) => {
+          const notes = report.studied || e.keywords.some((k) => k.kind === 'looming') ? e.keywords.map(keywordNote).filter(Boolean) : []
+          return (
+            <div key={`${e.name}|${e.level}`} className="scout-enemy">
+              <span className="el-dot" style={{ background: ELEMENT_VIS[e.element].color }} title={t(ELEMENT_VIS[e.element].label)} />
+              <b>{t(e.name)}</b>
+              {e.count > 1 && <span className="muted">×{e.count}</span>}
+              <span className="muted small">Lv{e.level}</span>
+              {e.target && <span className="chip">{t('target')}</span>}
+              {notes.length > 0 && <span className="scout-notes">{notes.join(' · ')}</span>}
+            </div>
+          )
+        })}
+      </div>
+      {!report.studied && (
+        <div className="muted small">{t('Weaknesses unknown — a Scholar in the Library can study this floor.')}</div>
+      )}
+      {report.immune.physical && <div className="scout-warn">⚠ {t('Most of this floor shrugs off physical blows — bring magic.')}</div>}
+      {report.immune.magic && <div className="scout-warn">⚠ {t('Most of this floor shrugs off magic — bring blades.')}</div>}
+      <div className="scout-actions">
+        <button className="pbtn sm" onClick={onSuggest} disabled={Object.values(state.heroes).filter((h) => h.alive).length === 0}>
+          ✦ {t('Suggest a party')}
+        </button>
+      </div>
+    </div>
+  )
+}
+
 /** The tower from outside: where the party stands on the spire of 100 floors. */
 function TowerExterior({ state }: { state: GameState }) {
   const tw = state.tower
@@ -235,6 +327,7 @@ export function TowerScreen({ state, store }: { state: GameState; store: Store }
   const [replay, setReplay] = useState<CombatLog | null>(null)
   const [err, setErr] = useState<string | null>(null)
   const [aiming, setAiming] = useState(false)
+  const [orders, setOrders] = useState<BattleOrders | null>(null)
   const [openActs, setOpenActs] = useState<Set<string>>(() => new Set([actForFloor(state.tower.currentFloor).id]))
 
   const current = state.tower.currentFloor
@@ -271,6 +364,29 @@ export function TowerScreen({ state, store }: { state: GameState; store: Store }
     store.dispatch({ type: 'ATTEMPT_FLOOR', ballista, subvert }) // advance the store identically (deterministic)
     setPending(result)
     setCombat(result.result.log)
+    // Mid-battle orders re-resolve the same fight from the same state (deterministic up to
+    // the order's tick) and revise the attempt the store just recorded.
+    const given: BattleOrder[] = []
+    setOrders({
+      left: ordersAllowed(pre),
+      give: (order) => {
+        try {
+          const next = [...given, order]
+          const r = attemptFloorWithResult(pre, undefined, ballista, subvert, next)
+          store.revise({ type: 'ATTEMPT_FLOOR', ballista, subvert, orders: next })
+          given.push(order)
+          setPending(r.result)
+          return r.result.result.log
+        } catch {
+          return null
+        }
+      },
+    })
+  }
+
+  function suggest() {
+    const p = suggestParty(state)
+    if (p.slots.some(Boolean)) store.dispatch({ type: 'SET_PARTY', slots: p.slots, lines: p.lines })
   }
 
   function resolve(option: string) {
@@ -302,6 +418,7 @@ export function TowerScreen({ state, store }: { state: GameState; store: Store }
 
   // Floor descriptions (anchors are labelled; the current floor gets a live preview).
   const preview = current <= MAX_FLOOR ? buildEncounter(state, current) : null
+  const report = current <= MAX_FLOOR && !event ? scoutFloor(state) : null
 
   return (
     <div className="screen">
@@ -341,6 +458,8 @@ export function TowerScreen({ state, store }: { state: GameState; store: Store }
 
       {event && <EventPanel state={state} onResolve={resolve} />}
       {err && <div className="muted" style={{ color: 'var(--bad)' }}>{err}</div>}
+
+      {report && <ScoutPanel state={state} report={report} onSuggest={suggest} />}
 
       {!deployable && !event && (
         <div className="empty" style={{ color: 'var(--warn)' }}>
@@ -427,7 +546,7 @@ export function TowerScreen({ state, store }: { state: GameState; store: Store }
           onCancel={() => setAiming(false)}
         />
       )}
-      {combat && <BattleScene log={combat} state={state} onDone={combatDone} />}
+      {combat && <BattleScene log={combat} state={state} onDone={combatDone} orders={orders ?? undefined} />}
       {showResult && pending && <ResultsScreen result={pending} state={state} onContinue={resultDone} />}
       {outcome && !replay && <EventOutcomeCard outcome={outcome} onReplay={setReplay} onClose={() => setOutcome(null)} />}
       {replay && <BattleScene log={replay} state={state} onDone={() => setReplay(null)} />}

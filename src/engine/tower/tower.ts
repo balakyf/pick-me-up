@@ -18,6 +18,7 @@
 
 import { TUNING } from '../tuning'
 import type {
+  BattleOrder,
   GameState,
   Encounter,
   EnemyWave,
@@ -470,13 +471,22 @@ export function buildEncounter(state: GameState, floor: number, focus?: FocusDir
  *      SURVIVING deployed hero, set every fallen hero alive=false (PERMADEATH).
  *   6. Advance position on a clear; else bump attemptIndex (position unchanged).
  */
+/** Mid-battle orders (focus / protect) the Master may give per battle: one, plus one per
+ *  two Tactical Center levels. Retreat is always possible. */
+export function ordersAllowed(state: GameState): number {
+  return 1 + Math.floor(state.facilities.tacticalCenter.level / 2)
+}
+
 export function playFloor(
   state: GameState,
   focus?: FocusDirective,
   ballista?: number,
   subvert?: boolean,
+  orders?: BattleOrder[],
 ): { state: GameState; result: FloorResult } {
   const floor = state.tower.currentFloor
+  const commands = (orders ?? []).filter((o) => o.kind !== 'retreat').length
+  if (commands > ordersAllowed(state)) throw new Error(`playFloor: the Tactical Center can relay only ${ordersAllowed(state)} orders a battle`)
   const worldMult = worldMultFor(state)
   if (state.tower.event !== null) {
     throw new Error(`playFloor: an event floor after F${state.tower.event.floor} is waiting to be resolved`)
@@ -539,6 +549,7 @@ export function playFloor(
       })),
     }
   }
+  if (orders && orders.length > 0) enc = { ...enc, orders }
   const res = runBattle(heroUnits, enc, combatSeed)
 
   // ── 4. Interpret. ───────────────────────────────────────────────────────────

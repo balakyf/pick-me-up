@@ -879,7 +879,19 @@ export interface Encounter {
   allies?: CombatUnit[]
   /** Label for the log/UI (defaults to 'tower'); combat only flags, never kills. */
   label?: string
+  /** The Master's mid-battle orders, each applied at the start of its tick. Combat is
+   *  deterministic, so re-resolving with an order replays the fight exactly up to it. */
+  orders?: BattleOrder[]
 }
+
+/** A mid-battle order (Living Lobby spec §6). */
+export type BattleOrder =
+  /** Pull the party out: the fight ends, survivors live, nothing is won. */
+  | { tick: number; kind: 'retreat' }
+  /** Every hero attacks this enemy while it lives. */
+  | { tick: number; kind: 'focus'; enemyId: string }
+  /** Enemies avoid this hero while anyone else stands. */
+  | { tick: number; kind: 'protect'; allyId: string }
 
 // ── Combat log (one schema; the producer's; UI replays it) ───────────────────
 
@@ -899,7 +911,7 @@ export interface CombatUnitInit {
 }
 
 /** `failed` = the mission was lost without a wipe (e.g. the escort target fell). */
-export type CombatOutcome = 'win' | 'wipe' | 'timeout' | 'failed'
+export type CombatOutcome = 'win' | 'wipe' | 'timeout' | 'failed' | 'retreat'
 
 export type CombatEvent = { seq: number; tick: number } & (
   | { kind: 'battle-start'; heroIds: string[]; enemyIds: string[] }
@@ -917,6 +929,8 @@ export type CombatEvent = { seq: number; tick: number } & (
   | { kind: 'heal'; unitId: string; amount: number; hpAfter: number }
   | { kind: 'death'; unitId: string }
   | { kind: 'mission'; note: string }
+  /** The Master gave an order (mid-battle). */
+  | { kind: 'order'; order: BattleOrder }
   | { kind: 'end'; outcome: CombatOutcome }
 )
 
@@ -1078,7 +1092,7 @@ export type Command =
   /** Mobius Summon: Normal (gold) or Advanced (gems); a 10-pull is discounted on Advanced. */
   | { type: 'SUMMON'; pool?: SummonPool; count?: 1 | 10 }
   | { type: 'SET_PARTY'; slots: (HeroId | null)[]; lines: Line[] }
-  | { type: 'ATTEMPT_FLOOR'; focus?: FocusDirective; ballista?: number; subvert?: boolean }
+  | { type: 'ATTEMPT_FLOOR'; focus?: FocusDirective; ballista?: number; subvert?: boolean; orders?: BattleOrder[] }
   /** Explicit world-time catch-up; advances the clock with no other state change. */
   | { type: 'TICK' }
   /** Kitchen Banquet: spend gold to restore Sanity across the living roster. */

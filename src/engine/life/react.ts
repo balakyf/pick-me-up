@@ -125,6 +125,7 @@ export function lifeReact(before: GameState | null, after: GameState, cmd: Comma
       const share = low.get(id) ?? 1
       if (share < 0.15) addMemory(l, { kind: 'nearDeath', day, floor: floor.floor, weight: 55 })
       else if (floor.cleared && (floor.firstClear || floor.floor % 5 === 0)) addMemory(l, { kind: 'floorCleared', day, floor: floor.floor, weight: floor.floor % 5 === 0 ? 45 : 25 })
+      else if (floor.result.outcome === 'retreat') addMemory(l, { kind: 'retreated', day, floor: floor.floor, weight: 35 })
       else if (!floor.cleared) addMemory(l, { kind: 'floorLost', day, floor: floor.floor, weight: 40 })
     }
     for (let i = 0; i < survivors.length; i++) {
