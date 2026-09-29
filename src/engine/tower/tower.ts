@@ -37,14 +37,15 @@ import type {
 } from '../types'
 import { buildCombatUnit, buildEnemyUnit, buildAllyUnit } from '../unit'
 import { runBattle } from '../combat'
-import { ENEMY_TEMPLATES, ALLY_TEMPLATES, ANCHORS, SKILLS } from '../content'
+import { ENEMY_TEMPLATES, ALLY_TEMPLATES, ANCHORS, SKILLS, HIDDEN_OBJECTIVES, actForFloor } from '../content'
 import { applyXp } from '../stats'
 import { clampSanity } from '../kitchen'
 import { attrStoneId } from '../promotion'
 import { tacticalFocusBonus } from '../tactical'
 import { addMasterXp } from '../master'
 import { foldBattleSkills } from '../skills'
-import { hash, rngFor, nextInt, chance, pick, type Rng } from '../rng/rng'
+import { hash, rngFor, nextInt, nextFloat, chance, pick, makeSeed, type Rng } from '../rng/rng'
+import type { HiddenObjective, LoopState, TowerEvent, TowerState, BattleResult } from '../types'
 
 const T = TUNING.tower
 const ECON = TUNING.economy
@@ -69,12 +70,24 @@ function powLoop(base: number, exp: number): number {
  * Strictly increasing in f (powerBase > 1, stepBonus >= 0, worldMult > 0).
  */
 export function floorPower(f: number, worldMult: number): number {
-  return T.base * powLoop(T.powerBase, f) * (1 + T.stepBonus * Math.floor(f / 5)) * worldMult
+  const early = Math.min(f, T.inflectionFloor)
+  const late = Math.max(0, f - T.inflectionFloor)
+  return (
+    T.base *
+    powLoop(T.powerBase, early) *
+    powLoop(T.latePowerBase, late) *
+    (1 + T.stepBonus * Math.floor(f / 5)) *
+    worldMult
+  )
 }
 
-/** The enemy level for filler/anchor mobs on a floor: round(f * perFloor * worldMult). */
+/**
+ * The enemy level for filler/anchor mobs on a floor: round(f × perFloor × worldMult),
+ * plus `inflectionLevelPerFloor` per floor past the F70 inflection (the curve steepens).
+ */
 export function mobLevel(f: number, worldMult: number): number {
-  return Math.round(f * T.mobLevelPerFloor * worldMult)
+  const inflection = Math.max(0, f - T.inflectionFloor) * T.inflectionLevelPerFloor
+  return Math.round((f * T.mobLevelPerFloor + inflection) * worldMult)
 }
 
 /**
@@ -141,20 +154,25 @@ function worldMultFor(state: GameState): number {
 // Biome enemy pools (Layer 2 §3.1)
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** Act I — Prairie band (F1-9). */
-const PRAIRIE_POOL: readonly string[] = ['goblin', 'wolf', 'harpy']
-/** Act II — Ruins/City band (F11-19): undead, soldiers, casters, assassins, knights. */
-const RUINS_POOL: readonly string[] = ['skeleton', 'soldier', 'dark_mage', 'assassin', 'knight']
-
 /** Is this floor in the Ruins band (Act II)? */
 export function isRuinsFloor(floor: number): boolean {
   return floor >= 11 && floor <= 20
 }
 
+/** Is this floor part of the Wailing Wall (F80–89, identical for every account)? */
+export function isWallFloor(floor: number): boolean {
+  return floor >= 80 && floor <= 89
+}
+
 /** Select the filler enemy pool for a floor by act band (Layer 2 §2.1). */
 export function fillerPoolForFloor(floor: number): EnemyTemplate[] {
-  const ids = isRuinsFloor(floor) ? RUINS_POOL : PRAIRIE_POOL
-  return ids.map((id) => ENEMY_TEMPLATES[id]!)
+  return actForFloor(floor).pool.map((id) => ENEMY_TEMPLATES[id]!)
+}
+
+/** Extra enemy levels on the looped F36–40 floors: each scar hardens them. */
+export function loopScarLevels(floor: number, loop: LoopState | null): number {
+  if (loop === null || floor < T.loop.start || floor > T.loop.gate) return 0
+  return loop.scars * T.loop.scarLevels
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -174,8 +192,10 @@ function buildAnchorEncounter(
   anchor: AnchorDef,
   floor: number,
   worldMult: number,
+  extraLevels = 0,
+  powerMult = 1,
 ): { waves: EnemyWave[]; mission: Mission; allies: CombatUnit[] } {
-  const level = mobLevel(floor, worldMult)
+  const level = mobLevel(floor, worldMult) + extraLevels
   const waves: EnemyWave[] = []
 
   for (let w = 0; w < anchor.waves.length; w++) {
@@ -193,6 +213,7 @@ function buildAnchorEncounter(
             levelBonus: spec.levelBonus,
             keywords: spec.keywords,
             targetTag: spec.targetTag,
+            ...(powerMult !== 1 ? { powerMult } : {}),
           }),
         )
       }
@@ -206,13 +227,15 @@ function buildAnchorEncounter(
     timer: anchor.timer,
   }
 
-  // Mission NPCs (escort targets) on the hero side.
+  // Mission NPCs (escort targets) on the hero side — at the floor's base level (an
+  // anchor scaled up to its budget doesn't make the escort sturdier).
+  const allyLevel = mobLevel(floor, worldMult)
   const allies: CombatUnit[] = []
   for (const [a, spec] of (anchor.allies ?? []).entries()) {
     const template = ALLY_TEMPLATES[spec.templateId]
     if (template === undefined) continue
     allies.push(
-      buildAllyUnit(template, level, `a${floor}_${a}`, {
+      buildAllyUnit(template, allyLevel, `a${floor}_${a}`, {
         line: spec.line,
         targetTag: spec.targetTag,
         levelBonus: spec.levelBonus,
@@ -221,6 +244,30 @@ function buildAnchorEncounter(
   }
 
   return { waves, mission, allies }
+}
+
+/**
+ * Above F20 an anchor is raised to its floor: while its total CP is below
+ * `floorPower × anchorBudgetMult`, every enemy grows elite (attributes ×elitePowerStep a
+ * step; levels stay canon). Acts I–II keep their authored statlines exactly.
+ * Deterministic; bounded.
+ */
+function buildScaledAnchor(
+  anchor: AnchorDef,
+  floor: number,
+  worldMult: number,
+  extraLevels: number,
+): { waves: EnemyWave[]; mission: Mission; allies: CombatUnit[] } {
+  let built = buildAnchorEncounter(anchor, floor, worldMult, extraLevels)
+  if (floor <= 20) return built
+  const target = floorPower(floor, worldMult) * T.anchorBudgetMult
+  const cpOf = (b: { waves: EnemyWave[] }) => b.waves.reduce((n, w) => n + w.units.reduce((m, u) => m + u.cp, 0), 0)
+  let mult = 1
+  for (let i = 0; i < 400 && cpOf(built) < target; i++) {
+    mult *= T.elitePowerStep
+    built = buildAnchorEncounter(anchor, floor, worldMult, extraLevels, mult)
+  }
+  return built
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -249,50 +296,34 @@ export function buildFillerEncounter(
   floor: number,
   worldMult: number,
   rng: Rng,
+  extraLevels = 0,
 ): { waves: EnemyWave[]; mission: Mission } {
   const pool = fillerPoolForFloor(floor)
   const budget = floorPower(floor, worldMult)
-  const level = mobLevel(floor, worldMult)
   const lowerBound = budget * (1 - T.budgetTolerance)
 
-  const units: CombatUnit[] = []
-  let totalCp = 0
-  let r = rng
-  let i = 0
-
-  // Bounded loop: each iteration adds >= 1 CP toward a finite budget, so this
-  // terminates well within the cap (the cap only guards against degenerate input).
-  while (i < 10000) {
-    // Deterministically pick a pool template (the floor rng drives the choice).
-    const idxDraw = nextInt(r, 0, pool.length - 1)
-    r = idxDraw.rng
-    const template = pool[idxDraw.value]!
-    const candidate = buildEnemyUnit(template, level, `e${floor}_w0_${i}`, {})
-
-    if (units.length > 0) {
-      // Already within tolerance → stop (don't risk overshooting the band).
-      if (totalCp >= lowerBound) break
-      // Stop if adding this enemy moves ΣCP strictly FURTHER from the budget than
-      // the current total already is (i.e. we are at the closest reachable point).
-      const distNow = Math.abs(budget - totalCp)
-      const distAfter = Math.abs(budget - (totalCp + candidate.cp))
-      if (distAfter > distNow) break
-    }
-
-    units.push(candidate)
-    totalCp += candidate.cp
-    i++
+  // Fill one wave; a wave that hits the unit cap still short of budget is refilled with
+  // elite enemies (late floors grow stronger, not more crowded). Early floors never
+  // reach the cap, so their draws are exactly as before.
+  const level = mobLevel(floor, worldMult) + extraLevels
+  let mult = 1
+  let fill = fillWave(pool, budget, lowerBound, level, floor, rng, mult)
+  for (let i = 0; i < 400 && fill.units.length >= T.fillerMaxUnits && fill.totalCp < lowerBound; i++) {
+    mult *= T.elitePowerStep
+    fill = fillWave(pool, budget, lowerBound, level, floor, rng, mult)
   }
+  const units = fill.units
+  let r = fill.rng
 
   // Band-weighted mission (Layer 2 §4.4). Prairie floors are always Subjugation and
-  // draw nothing extra, so their encounters stay byte-identical; Ruins floors roll
-  // Survival some of the time.
+  // draw nothing extra, so their encounters stay byte-identical.
   let mission: Mission = {
     type: 'Subjugation',
     objectives: [{ kind: 'annihilate' }],
     timer: null,
   }
-  if (isRuinsFloor(floor)) {
+  const mix = actForFloor(floor).missions
+  if (mix === 'ruins') {
     const roll = chance(r, T.ruinsSurvivalChance)
     r = roll.rng
     if (roll.value) {
@@ -302,9 +333,68 @@ export function buildFillerEncounter(
         timer: T.ruinsSurviveTicks,
       }
     }
+  } else if (mix === 'late') {
+    const roll = nextFloat(r)
+    r = roll.rng
+    if (roll.value < T.lateSurvivalChance) {
+      mission = { type: 'Survival', objectives: [{ kind: 'survive', ticks: T.lateSurviveTicks }], timer: T.lateSurviveTicks }
+    } else if (roll.value < T.lateSurvivalChance + T.lateEscapeChance) {
+      mission = { type: 'Escape', objectives: [{ kind: 'reach', distance: T.escapeDistance }], timer: null }
+    }
+  } else if (mix === 'coast') {
+    // Seizure: one of the enemies carries the cache; taking it wins the floor.
+    const roll = chance(r, 0.4)
+    r = roll.rng
+    if (roll.value && units.length > 0) {
+      units[units.length - 1] = { ...units[units.length - 1]!, targetTag: 'cache_bearer' }
+      mission = { type: 'Seizure', objectives: [{ kind: 'acquire', targetTag: 'cache_bearer' }], timer: null }
+    }
+  } else if (mix === 'wall') {
+    mission = { type: 'Conquest', objectives: [{ kind: 'annihilate' }], timer: null }
   }
 
   return { waves: [{ units }], mission }
+}
+
+/**
+ * The power-budget fill for one wave: repeatedly pick a pool enemy (the floor rng
+ * drives the choice) and add it until ΣCP lands within tolerance, adding one more
+ * would move it further from the budget, or the unit cap is reached. Always ≥ 1 unit.
+ */
+function fillWave(
+  pool: EnemyTemplate[],
+  budget: number,
+  lowerBound: number,
+  level: number,
+  floor: number,
+  rng: Rng,
+  powerMult = 1,
+): { units: CombatUnit[]; totalCp: number; rng: Rng } {
+  const units: CombatUnit[] = []
+  let totalCp = 0
+  let r = rng
+  let i = 0
+  while (i < 10000) {
+    if (units.length >= T.fillerMaxUnits) break
+    const idxDraw = nextInt(r, 0, pool.length - 1)
+    r = idxDraw.rng
+    const template = pool[idxDraw.value]!
+    const candidate = buildEnemyUnit(template, level, `e${floor}_w0_${i}`, powerMult !== 1 ? { powerMult } : {})
+
+    if (units.length > 0) {
+      // Already within tolerance → stop (don't risk overshooting the band).
+      if (totalCp >= lowerBound) break
+      // Stop if adding this enemy moves ΣCP strictly FURTHER from the budget.
+      const distNow = Math.abs(budget - totalCp)
+      const distAfter = Math.abs(budget - (totalCp + candidate.cp))
+      if (distAfter > distNow) break
+    }
+
+    units.push(candidate)
+    totalCp += candidate.cp
+    i++
+  }
+  return { units, totalCp, rng: r }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -321,13 +411,16 @@ export function buildFillerEncounter(
  */
 export function buildEncounter(state: GameState, floor: number, focus?: FocusDirective): Encounter {
   const worldMult = worldMultFor(state)
-  const rng = rngFor(state.seed, 'floor', floor)
+  // The Wailing Wall overrides the account seed: the same Fragment Series for everyone.
+  const seed = isWallFloor(floor) ? makeSeed(T.wallSeed) : state.seed
+  const rng = rngFor(seed, 'floor', floor)
+  const scar = loopScarLevels(floor, state.tower.loop)
 
   const anchor = ANCHORS[floor]
   const built: { waves: EnemyWave[]; mission: Mission; allies?: CombatUnit[] } =
     anchor !== undefined
-      ? buildAnchorEncounter(anchor, floor, worldMult)
-      : buildFillerEncounter(floor, worldMult, rng)
+      ? buildScaledAnchor(anchor, floor, worldMult, scar)
+      : buildFillerEncounter(floor, worldMult, rng, scar)
 
   const enc: Encounter = {
     floor,
@@ -368,6 +461,10 @@ export function playFloor(
 ): { state: GameState; result: FloorResult } {
   const floor = state.tower.currentFloor
   const worldMult = worldMultFor(state)
+  if (state.tower.event !== null) {
+    throw new Error(`playFloor: an event floor after F${state.tower.event.floor} is waiting to be resolved`)
+  }
+  if (floor > T.sliceTopFloor) throw new Error('playFloor: the summit has been reached')
 
   // ── 1. Build deployed hero units (skip empty slots, dead, and Sanity-0). ────
   const heroUnits: CombatUnit[] = []
@@ -457,27 +554,45 @@ export function playFloor(
     nextMaterials[id] = (nextMaterials[id] ?? 0) + materialsAwarded[id]!
   }
 
-  // ── 6. Advance tower position. ──────────────────────────────────────────────
-  const nextTower = cleared
-    ? {
-        currentFloor: floor + 1,
-        attemptIndex: 0,
-        highestCleared: Math.max(state.tower.highestCleared, floor),
-      }
-    : {
-        currentFloor: floor,
-        attemptIndex: state.tower.attemptIndex + 1,
-        highestCleared: state.tower.highestCleared,
-      }
+  // ── 6. Advance tower position (the F40 loop gate is the one rollback). ──────
+  const tower = nextTowerState(state.tower, floor, cleared)
+  const nextTower: TowerState = tower.state
 
-  // ── 6b. Master XP: floor clears feed the Master-Level spine (+first-clear bonus). ──
+  // ── 6b. Hidden objectives found on this attempt pay out once (Layer 2 §5.3). ───
+  const found = cleared ? hiddenObjectivesMet(floor, res, state.tower.hiddenFound) : []
+  let gold = state.gold + goldAwarded
+  let gems = state.gems
+  for (const h of found) {
+    gold += h.reward.gold ?? 0
+    gems += h.reward.gems ?? 0
+    for (const [id, n] of Object.entries(h.reward.materials ?? {})) nextMaterials[id] = (nextMaterials[id] ?? 0) + n
+  }
+  if (found.length > 0) nextTower.hiddenFound = [...nextTower.hiddenFound, ...found.map((h) => h.id)].sort()
+
+  // ── 6c. Event floors: a bonus after an anchor's first clear, the tournament after
+  //        F41, a recovery event after a battle that cost the main team (§5.1). ─────
+  let event: TowerEvent | null = null
+  const E = TUNING.events
+  if (fallenSet.size >= E.recoveryDeaths) event = { kind: 'recovery', floor, options: ['reinforcement', 'rest'] }
+  else if (firstClear && floor === 41) event = { kind: 'tournament', floor, options: [...TOURNAMENT_FORMATS] }
+  else if (firstClear && floor % 5 === 0 && floor < T.sliceTopFloor) {
+    event = { kind: 'bonus', floor, options: ['rest', 'treasure', 'merchant', 'gamble'] }
+  }
+  nextTower.event = event
+
+  // ── 6d. The world ends on the first clear of F90 (canon). ────────────────────
+  const worldEnded = cleared && floor === T.worldEndFloor && !state.tower.worldEnded
+  if (worldEnded) nextTower.worldEnded = true
+
+  // ── 6e. Master XP: floor clears feed the Master-Level spine (+first-clear bonus). ──
   const MASTER = TUNING.lobby.master
   const masterXpGain = cleared ? MASTER.xpPerFloorClear + (firstClear ? MASTER.xpPerFirstClear : 0) : 0
   const nextMeta = masterXpGain > 0 ? addMasterXp(state.meta, masterXpGain) : state.meta
 
   const nextState: GameState = {
     ...state,
-    gold: state.gold + goldAwarded,
+    gold,
+    gems,
     materials: nextMaterials,
     heroes: nextHeroes,
     tower: nextTower,
@@ -493,8 +608,82 @@ export function playFloor(
     materialsAwarded,
     fallenHeroIds: res.fallenHeroIds,
     skillProgress,
+    hiddenFound: found.map((h) => h.id),
+    event,
+    loopRollback: tower.rollback,
+    worldEnded,
     result: res,
   }
 
   return { state: nextState, result }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Tower position, the loop, and hidden objectives
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** The five canon tournament formats (F41/42). */
+export const TOURNAMENT_FORMATS = ['battle_royale', 'party_raid', 'team', 'pair', 'deathmatch'] as const
+
+/**
+ * The tower after one attempt. A clear advances one floor; a failure retries the same
+ * floor — except the F40 loop gate, which drops the room back to F31 and spends one of
+ * the loop's attempts (at zero the loop gains a scar and refills). Reaching F36 opens
+ * the loop; clearing F40 closes it. PURE.
+ */
+export function nextTowerState(
+  tower: TowerState,
+  floor: number,
+  cleared: boolean,
+): { state: TowerState; rollback: boolean } {
+  const L = T.loop
+  if (cleared) {
+    const currentFloor = floor + 1
+    let loop = tower.loop
+    if (floor === L.gate) loop = null
+    else if (currentFloor === L.start && loop === null) loop = { attemptsLeft: L.attempts, scars: 0 }
+    return {
+      rollback: false,
+      state: {
+        ...tower,
+        currentFloor,
+        attemptIndex: 0,
+        highestCleared: Math.max(tower.highestCleared, floor),
+        loop,
+        hiddenFound: [...tower.hiddenFound],
+      },
+    }
+  }
+  if (floor === L.gate && tower.loop !== null) {
+    const left = tower.loop.attemptsLeft - 1
+    const loop: LoopState = left > 0 ? { attemptsLeft: left, scars: tower.loop.scars } : { attemptsLeft: L.attempts, scars: tower.loop.scars + 1 }
+    return {
+      rollback: true,
+      state: { ...tower, currentFloor: L.fallbackTo, attemptIndex: 0, loop, hiddenFound: [...tower.hiddenFound] },
+    }
+  }
+  return {
+    rollback: false,
+    state: { ...tower, attemptIndex: tower.attemptIndex + 1, hiddenFound: [...tower.hiddenFound] },
+  }
+}
+
+/** Does a won battle meet a hidden objective's condition? */
+export function hiddenConditionMet(h: HiddenObjective, res: BattleResult): boolean {
+  const c = h.condition
+  switch (c.kind) {
+    case 'defeat':
+      return res.defeatedTargetTags.includes(c.targetTag)
+    case 'flawless':
+      return res.fallenHeroIds.length === 0
+    case 'swift':
+      return res.ticksElapsed <= c.ticks
+    case 'escortHp':
+      return (res.allyHpPct[c.targetTag] ?? 0) >= c.pct
+  }
+}
+
+/** The hidden objectives on `floor` this battle found for the first time. */
+export function hiddenObjectivesMet(floor: number, res: BattleResult, alreadyFound: readonly string[]): HiddenObjective[] {
+  return HIDDEN_OBJECTIVES.filter((h) => h.floor === floor && !alreadyFound.includes(h.id) && hiddenConditionMet(h, res))
 }

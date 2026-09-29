@@ -4,9 +4,12 @@
  *   F10    the falling city (dusk, burning skyline) — the first anchor wall
  *   F11–19 the ruined city (Act II)
  *   F20    Halgiraf's lair
- *   other  the tower's stone depths
+ *   F21–30 the swamp · F31–35 the drowned coast · F36–69 the Order's war camp
+ *   F70–79 the inflection's crimson sky · F80–89 the Wailing Wall
+ *   F90–99 the unfinished floors · F100 the summit
+ *   other  the tower's stone depths (tournaments)
  */
-import { createBitmap, ellipse, hex, hline, mix, rect, set, type Bitmap, type RGBA } from './bitmap'
+import { createBitmap, ellipse, hex, hline, mix, rect, set, vline, type Bitmap, type RGBA } from './bitmap'
 import { hashString, seededRand } from './rand'
 
 export const BG_W = 384
@@ -171,10 +174,133 @@ function lair(): Bitmap {
   return b
 }
 
+function swamp(): Bitmap {
+  // Act III: a drowned forest — hanging moss, reeds, still green water.
+  const b = createBitmap(BG_W, BG_H)
+  skyGradient(b, hex('#2a3a2a'), hex('#8aa07a'), HORIZON)
+  const r = seededRand(2121)
+  ridge(b, 'swamp-far', 96, 10, hex('#3a4e36'), 0.5)
+  for (let x = 4; x < BG_W; x += r.int(26, 44)) {
+    const h = r.int(50, 96)
+    rect(b, x, HORIZON - h, r.int(5, 9), h, hex('#2a2418'))
+    for (let i = 0; i < 6; i++) rect(b, x - 6 + r.int(0, 12), HORIZON - h + r.int(0, 30), 2, r.int(8, 18), hex('#5a7a3a')) // moss
+  }
+  for (let y = HORIZON; y < BG_H; y++) hline(b, 0, y, BG_W, Math.floor((y - HORIZON) / 5) % 2 ? hex('#3a5a3a') : hex('#44663e'))
+  for (let i = 0; i < 80; i++) {
+    const x = r.int(0, BG_W - 1)
+    const y = r.int(HORIZON + 2, BG_H - 4)
+    rect(b, x, y - 4, 1, 5, hex('#6a8a4a')) // reeds
+    if (r.chance(0.2)) set(b, x + 1, y - 5, hex('#c8a04a'))
+  }
+  hline(b, 0, HORIZON, BG_W, hex('#1e2a1e'))
+  return b
+}
+
+function coast(): Bitmap {
+  // Act IV: a drowned coast — a storm sea, a sunken temple on the horizon.
+  const b = createBitmap(BG_W, BG_H)
+  skyGradient(b, hex('#1e2a44'), hex('#6a8aa8'), HORIZON)
+  const r = seededRand(3535)
+  rect(b, 250, 60, 70, HORIZON - 60, hex('#3a4a5a'))
+  for (let x = 254; x < 316; x += 12) rect(b, x, 52, 6, HORIZON - 52, hex('#4a5a6a'))
+  rect(b, 244, 48, 82, 6, hex('#5a6a7a'))
+  for (let y = HORIZON; y < BG_H; y++) hline(b, 0, y, BG_W, Math.floor((y - HORIZON) / 4) % 2 ? hex('#1e4a6a') : hex('#2a5a7a'))
+  for (let i = 0; i < 90; i++) hline(b, r.int(0, BG_W - 8), r.int(HORIZON + 1, BG_H - 1), r.int(3, 8), hex('#7ab8d8')) // foam
+  hline(b, 0, HORIZON, BG_W, hex('#0e2a3a'))
+  return b
+}
+
+function warCamp(): Bitmap {
+  // Act V: the Order's war — banners, palisades, smoke under a grey sky.
+  const b = createBitmap(BG_W, BG_H)
+  skyGradient(b, hex('#3a3a44'), hex('#a09a94'), HORIZON)
+  const r = seededRand(4040)
+  ridge(b, 'war-far', 94, 12, hex('#5a5652'), 0.5)
+  for (let x = 0; x < BG_W; x += 8) rect(b, x, HORIZON - 26 - r.int(0, 4), 6, 30, hex('#5a4030')) // palisade
+  for (let x = 20; x < BG_W; x += r.int(60, 90)) {
+    vline(b, x, HORIZON - 70, 50, hex('#2a2018'))
+    rect(b, x + 1, HORIZON - 70, 16, 12, hex('#d0d0e0'))
+    rect(b, x + 5, HORIZON - 67, 8, 6, hex('#c8962a')) // the Order's sigil
+  }
+  for (let y = HORIZON; y < BG_H; y++) hline(b, 0, y, BG_W, Math.floor((y - HORIZON) / 7) % 2 ? hex('#5a4a3a') : hex('#665444'))
+  for (let i = 0; i < 60; i++) set(b, r.int(0, BG_W - 1), r.int(HORIZON + 2, BG_H - 1), hex('#3a2e24'))
+  hline(b, 0, HORIZON, BG_W, hex('#2a2018'))
+  return b
+}
+
+function crimson(): Bitmap {
+  // Act VI: the inflection — a crimson sky over a broken fortress.
+  const b = createBitmap(BG_W, BG_H)
+  skyGradient(b, hex('#2a0a14'), hex('#c04a3a'), HORIZON)
+  const r = seededRand(7070)
+  ridge(b, 'crimson-far', 90, 18, hex('#3a141a'), 0.55)
+  for (let x = 30; x < BG_W; x += r.int(70, 110)) {
+    const h = r.int(30, 60)
+    rect(b, x, HORIZON - h, 26, h, hex('#2a1418'))
+    for (let i = 0; i < 26; i += 6) rect(b, x + i, HORIZON - h - 5, 4, 5, hex('#2a1418'))
+  }
+  for (let y = HORIZON; y < BG_H; y++) hline(b, 0, y, BG_W, Math.floor((y - HORIZON) / 8) % 2 ? hex('#3a1a1a') : hex('#442020'))
+  for (let i = 0; i < 50; i++) set(b, r.int(0, BG_W - 1), r.int(HORIZON + 2, BG_H - 1), hex('#e8553b'))
+  hline(b, 0, HORIZON, BG_W, hex('#1a0a0e'))
+  return b
+}
+
+function wailingWall(): Bitmap {
+  // Act VII: the Wailing Wall — a black crystal cliff that fills the sky.
+  const b = createBitmap(BG_W, BG_H)
+  skyGradient(b, hex('#06040c'), hex('#2a1e4a'), HORIZON)
+  const r = seededRand(8080)
+  for (let x = 0; x < BG_W; x += r.int(8, 18)) {
+    const h = r.int(60, 112)
+    const w = r.int(8, 18)
+    for (let i = 0; i < h; i++) hline(b, x + Math.floor(i / 8), HORIZON - i, Math.max(1, w - Math.floor(i / 10)), i % 7 === 0 ? hex('#5a4a9a') : hex('#1a1030'))
+  }
+  for (let y = HORIZON; y < BG_H; y++) hline(b, 0, y, BG_W, Math.floor((y - HORIZON) / 6) % 2 ? hex('#140e24') : hex('#1a1230'))
+  for (let i = 0; i < 70; i++) set(b, r.int(0, BG_W - 1), r.int(HORIZON + 2, BG_H - 1), hex('#8a7ae0'))
+  hline(b, 0, HORIZON, BG_W, hex('#06040c'))
+  return b
+}
+
+function unfinished(): Bitmap {
+  // Act VIII: the unfinished floors — the world's texture tearing into void.
+  const b = createBitmap(BG_W, BG_H)
+  skyGradient(b, hex('#000000'), hex('#1a0a2a'), HORIZON)
+  const r = seededRand(9090)
+  for (let i = 0; i < 40; i++) {
+    const x = r.int(0, BG_W - 40)
+    const y = r.int(0, HORIZON - 10)
+    rect(b, x, y, r.int(10, 50), r.int(2, 6), r.chance(0.5) ? hex('#ff3aff') : hex('#3affff')) // glitch bars
+  }
+  for (let y = HORIZON; y < BG_H; y++) {
+    for (let x = 0; x < BG_W; x += 16) rect(b, x, y, 16, 1, ((x >> 4) + (y >> 3)) % 2 ? hex('#1a1030') : hex('#0e0a1a')) // grid floor
+  }
+  hline(b, 0, HORIZON, BG_W, hex('#ff3aff'))
+  return b
+}
+
+function summit(): Bitmap {
+  // F100: above the clouds, the tower's crown.
+  const b = createBitmap(BG_W, BG_H)
+  skyGradient(b, hex('#1a2a6a'), hex('#f0d8a0'), HORIZON)
+  const r = seededRand(100)
+  for (let i = 0; i < 12; i++) ellipse(b, r.int(-20, BG_W), r.int(HORIZON - 30, HORIZON), r.int(40, 90), r.int(10, 20), hex('#fff6e0'))
+  for (let y = HORIZON; y < BG_H; y++) hline(b, 0, y, BG_W, Math.floor((y - HORIZON) / 8) % 2 ? hex('#d6d2e2') : hex('#c8c2d6'))
+  for (let x = 0; x < BG_W; x += 32) vline(b, x, HORIZON, BG_H - HORIZON, hex('#c8a24a'))
+  hline(b, 0, HORIZON, BG_W, hex('#8a7a5a'))
+  return b
+}
+
 export function drawBattleBg(floor: number): Bitmap {
   if (floor >= 1 && floor <= 9) return prairie()
   if (floor === 10) return fallingCity()
   if (floor === 20) return lair()
   if (floor >= 11 && floor <= 19) return ruins()
+  if (floor >= 21 && floor <= 30) return swamp()
+  if (floor >= 31 && floor <= 35) return coast()
+  if (floor >= 36 && floor <= 69) return warCamp()
+  if (floor >= 70 && floor <= 79) return crimson()
+  if (floor >= 80 && floor <= 89) return wailingWall()
+  if (floor === 100) return summit()
+  if (floor >= 90 && floor <= 99) return unfinished()
   return depths()
 }

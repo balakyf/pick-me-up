@@ -119,7 +119,7 @@ export function createAccount(entropySeed: number, opts?: CreateAccountOpts): Ga
     usedNames: [],
     consumedTemplateIds: [STARTER_TEMPLATE_ID],
     party: { slots, lines },
-    tower: { currentFloor: 1, highestCleared: 0, attemptIndex: 0 },
+    tower: { currentFloor: 1, highestCleared: 0, attemptIndex: 0, event: null, loop: null, hiddenFound: [], worldEnded: false },
     gacha: { pity: 0, pullCount: 0, advPity4: 0, advPity5: 0, advPullCount: 0 },
     rng: { combatCounter: 0 },
   }
@@ -256,6 +256,21 @@ function migrateV5toV6(envelope: SaveEnvelope): SaveEnvelope {
   }
 }
 
+/** v6 → v7: the full climb — no event open, outside the loop, nothing hidden found yet. */
+function migrateV6toV7(envelope: SaveEnvelope): SaveEnvelope {
+  const s = envelope.state as unknown as Record<string, unknown>
+  const tower = s.tower as { currentFloor: number; highestCleared: number; attemptIndex: number }
+  return {
+    schemaVersion: 7,
+    savedAt: envelope.savedAt,
+    state: {
+      ...(s as unknown as GameState),
+      schemaVersion: 7,
+      tower: { ...tower, event: null, loop: null, hiddenFound: [], worldEnded: false },
+    },
+  }
+}
+
 /**
  * Migrate a SaveEnvelope from `fromVersion` up to the current schema version.
  * Identity when already current; otherwise apply each version's upgrade step in
@@ -290,6 +305,10 @@ export function migrate(envelope: SaveEnvelope, fromVersion: number): SaveEnvelo
   if (v === 5) {
     env = migrateV5toV6(env)
     v = 6
+  }
+  if (v === 6) {
+    env = migrateV6toV7(env)
+    v = 7
   }
   if (v !== current) {
     throw new SaveLoadError(`migrate: no migration path from version ${fromVersion}`)

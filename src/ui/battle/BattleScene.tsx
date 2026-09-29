@@ -67,13 +67,17 @@ function layout(log: CombatLog): Record<string, { x: number; y: number }> {
   const pos: Record<string, { x: number; y: number }> = {}
   for (const [key, units] of groups) {
     const side = key.split('|')[0]
-    const n = units.length
+    // A crowded enemy line splits into two ranks so late-floor waves stay readable.
+    const cols = side === 'enemy' && units.length > 3 ? 2 : 1
+    const n = Math.ceil(units.length / cols)
     const top = 134
     const bottom = 200
-    units.forEach((u, i) => {
+    units.forEach((u, idx) => {
+      const col = idx % cols
+      const i = Math.floor(idx / cols)
       const y = n === 1 ? 168 : top + ((bottom - top) * i) / (n - 1)
       const stagger = (i % 2) * 8
-      const x = side === 'hero' ? HERO_X[u.line] + stagger : ENEMY_X[u.line] - stagger
+      const x = side === 'hero' ? HERO_X[u.line] + stagger : ENEMY_X[u.line] - stagger - col * 34
       pos[u.id] = { x, y: Math.round(y) }
     })
   }

@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { createAccount } from '../account'
 import { summon } from '../gacha'
 import { playFloor } from '../tower'
+import { resolveEvent } from '../events'
 import { startPromotion } from '../promotion'
 import { advanceTime } from '../time'
 import { combatPowerForHero, levelCapForStar } from '../stats'
@@ -31,6 +32,15 @@ function summonMany(state: GameState, n: number): GameState {
   let s: GameState = { ...state, gold: 10_000_000 }
   for (let i = 0; i < n; i++) s = summon(s).state
   return s
+}
+
+/** Play the current floor, then close any event floor it opened (Rest) so the climb continues. */
+function playAndRest(s: GameState): ReturnType<typeof playFloor> {
+  const out = playFloor(s)
+  const ev = out.state.tower.event
+  if (ev === null) return out
+  const option = ev.options.includes('rest') ? 'rest' : ev.options[0]!
+  return { ...out, state: resolveEvent(out.state, option).state }
 }
 
 describe('core loop — end to end', () => {
@@ -81,7 +91,7 @@ describe('core loop — end to end', () => {
     while (s.tower.currentFloor <= 10 && attempts < 60) {
       attempts++
       const before = s.tower.currentFloor
-      const { state, result } = playFloor(s)
+      const { state, result } = playAndRest(s)
       s = state
       if (result.fallenHeroIds.length > 0) {
         trajectory.push(`F${before}: ${result.cleared ? 'WIN' : 'WIPE'} (lost ${result.fallenHeroIds.length})`)
@@ -108,7 +118,7 @@ describe('core loop — end to end', () => {
     let s = bestParty(summonMany(createAccount(555), 30))
     const dead = new Set<HeroId>()
     for (let i = 0; i < 20 && s.tower.currentFloor <= 10; i++) {
-      const { state, result } = playFloor(s)
+      const { state, result } = playAndRest(s)
       s = state
       for (const id of result.fallenHeroIds) dead.add(id)
       // every once-dead hero stays alive===false forever
@@ -123,7 +133,7 @@ describe('core loop — end to end', () => {
     let drained = false
     for (let i = 0; i < 5 && s.tower.currentFloor <= 10 && !drained; i++) {
       const deployed = s.party.slots.filter(Boolean) as HeroId[]
-      const { state, result } = playFloor(s)
+      const { state, result } = playAndRest(s)
       s = state
       for (const id of deployed) {
         const h = s.heroes[id]
@@ -178,7 +188,7 @@ describe('core loop — end to end', () => {
     const run = (): GameState => {
       let s = bestParty(summonMany(createAccount(2024), 20))
       for (let i = 0; i < 8 && s.tower.currentFloor <= 10; i++) {
-        s = playFloor(s).state
+        s = playAndRest(s).state
         s = bestParty(s)
         if ((Object.values(s.heroes) as OwnedHero[]).every((h) => !h.alive)) break
       }

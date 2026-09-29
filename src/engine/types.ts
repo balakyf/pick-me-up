@@ -320,13 +320,56 @@ export interface PartyState {
 }
 
 export interface TowerState {
-  /** Persistent per-account position, never reset. Starts at 1. */
+  /** Persistent per-account position (the F36–40 loop is the one rollback). Starts at 1. */
   currentFloor: number
   /** Highest floor cleared at least once; firstClear = (floor > highestCleared). */
   highestCleared: number
   /** Per-floor retry counter for the CURRENT floor; folded into the combat seed
    *  so each wipe-retry is independently reproducible. Reset to 0 on advance. */
   attemptIndex: number
+  /** An open event floor (bonus / recovery / tournament); the climb waits on it (schema v7). */
+  event: TowerEvent | null
+  /** The F36–40 looped mission, while inside it. */
+  loop: LoopState | null
+  /** Hidden objectives found so far (sorted ids). */
+  hiddenFound: string[]
+  /** F90 has been cleared: the world is gone (Layer 2 §1.3). */
+  worldEnded: boolean
+}
+
+/** The looped mission (canon F36–40: 5 attempts; failing F40 drops the room to F31). */
+export interface LoopState {
+  attemptsLeft: number
+  /** Times the attempts ran out; each hardens F36–40. */
+  scars: number
+}
+
+export type TowerEventKind = 'bonus' | 'recovery' | 'tournament'
+
+/** An event floor between regular floors (Layer 2 §5.1). `floor` = the floor it follows. */
+export interface TowerEvent {
+  kind: TowerEventKind
+  floor: number
+  options: string[]
+}
+
+/** Hidden objective condition (Layer 2 §5.3). */
+export type HiddenCondition =
+  | { kind: 'defeat'; targetTag: string }
+  | { kind: 'flawless' }
+  | { kind: 'swift'; ticks: number }
+  | { kind: 'escortHp'; targetTag: string; pct: number }
+
+export interface HiddenObjective {
+  id: string
+  floor: number
+  name: string
+  /** Shown to a Master with the half-Master sight (see TUNING). */
+  hint: string
+  condition: HiddenCondition
+  reward: { gems?: number; gold?: number; materials?: Record<MaterialId, number> }
+  /** A line of the world's truth (foreshadows F90). */
+  lore: string
 }
 
 export interface GachaState {
@@ -413,7 +456,7 @@ export type CombatSide = 'hero' | 'enemy'
 export type GuardSource = 'ranged' | Element
 
 /** Enemy families for `bane` (Dragon Slayer etc.). */
-export type EnemyFamily = 'dragon' | 'undead' | 'beast' | 'humanoid'
+export type EnemyFamily = 'dragon' | 'undead' | 'beast' | 'humanoid' | 'construct' | 'aquatic' | 'demon' | 'fragment'
 
 /** Conditional-effect keywords as data (Layer 0 §2.6). None of them draws RNG. */
 export type KeywordTag =
@@ -485,6 +528,10 @@ export type Objective =
   | { kind: 'defeat'; targetTag: string }
   /** Keep the tagged NPC ally alive; if it falls the mission FAILS. */
   | { kind: 'protect'; targetTag: string }
+  /** Cover `distance` steps: every hero action moves the party one step (escape/delivery). */
+  | { kind: 'reach'; distance: number }
+  /** Take the item the tagged carrier holds (met when the carrier falls). */
+  | { kind: 'acquire'; targetTag: string }
 
 export interface Mission {
   type: string
@@ -509,6 +556,8 @@ export interface Encounter {
   encounterContext: 'tower'
   /** Hero-side NPCs fielded by the mission (escort targets). Never act; not the party. */
   allies?: CombatUnit[]
+  /** Label for the log/UI (defaults to 'tower'); combat only flags, never kills. */
+  label?: string
 }
 
 // ── Combat log (one schema; the producer's; UI replays it) ───────────────────
@@ -566,6 +615,10 @@ export interface BattleResult {
   ticksElapsed: number
   wavesCleared: number
   defeatedTargetTags: string[]
+  /** Reach progress covered (steps); 0 when the mission has no reach objective. */
+  reachProgress: number
+  /** Final HP of each NPC ally by targetTag (for escort hidden objectives). */
+  allyHpPct: Record<string, number>
   survivorHeroIds: HeroId[]
   fallenHeroIds: HeroId[]
   /** Authored-skill casts per hero (heroId → skillId → count). Basic attacks and
@@ -596,6 +649,14 @@ export interface FloorResult {
   fallenHeroIds: HeroId[]
   /** Skill level-ups and merges earned by the survivors this attempt. */
   skillProgress: SkillProgress[]
+  /** Hidden objectives found on this attempt (ids). */
+  hiddenFound: string[]
+  /** An event floor this attempt opened (bonus / recovery / tournament), if any. */
+  event: TowerEvent | null
+  /** The F40 loop gate failed and sent the tower back to F31. */
+  loopRollback: boolean
+  /** This attempt cleared F90: the world ends. */
+  worldEnded: boolean
   result: BattleResult
 }
 
@@ -716,6 +777,8 @@ export type Command =
   | { type: 'TRANSFER_SKILL'; donorId: HeroId; recipientId: HeroId; skillId: string }
   /** Transfer Station: fuse a merge early, or run a manual-only evolution, producing `result`. */
   | { type: 'FUSE_SKILL'; heroId: HeroId; result: string }
+  /** Resolve the open event floor with one of its options. */
+  | { type: 'RESOLVE_EVENT'; option: string }
   /** Equipment (Layer 1 §5): forge a graded item for a slot at the Smithy. */
   | { type: 'CRAFT_EQUIPMENT'; slot: EquipmentSlot }
   /** Equipment: equip an owned item onto a hero's matching slot. */

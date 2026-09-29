@@ -220,3 +220,31 @@ describe('App smoke — Layer 1 completion', () => {
     expect(container.textContent).toContain('Not enough gems')
   })
 })
+
+describe('App smoke — the full climb', () => {
+  it('the Tower shows its acts, an open event blocks Enter, and resolving it continues', () => {
+    mount()
+    act(() => {
+      getStore().dispatch({ type: 'NEW_ACCOUNT', seed: 35, now: 0 })
+    })
+    // Put the account right after F5 with a bonus event open (as a first clear would), via a save.
+    const s = getStore().getState()!
+    const withEvent = {
+      ...s,
+      tower: { ...s.tower, currentFloor: 6, highestCleared: 5, event: { kind: 'bonus' as const, floor: 5, options: ['rest', 'treasure', 'merchant', 'gamble'] } },
+    }
+    window.localStorage.setItem('pmu.save.v1', JSON.stringify({ schemaVersion: withEvent.schemaVersion, savedAt: 0, state: withEvent }))
+    act(() => {
+      getStore().load()
+    })
+    openPlace('Tower Gate')
+    expect(container.textContent).toContain('Act VIII — The Unfinished Floors')
+    expect(container.textContent).toContain('Event Floor')
+    expect(container.textContent).toContain('Chronicle')
+    const enter = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('Enter'))
+    expect((enter as HTMLButtonElement).disabled).toBe(true)
+    clickButton('Treasure')
+    expect(getStore().getState()!.tower.event).toBeNull()
+    expect(container.textContent).toContain('Onward')
+  })
+})

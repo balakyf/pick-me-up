@@ -970,3 +970,43 @@ describe('conditional keywords', () => {
     expect(keyed).toBe(plain)
   })
 })
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Reach / Acquire objectives (Layer 2 full climb)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('reach and acquire objectives', () => {
+  it('reach: every hero action is a step; covering the distance wins without a kill', () => {
+    const h = hero({ id: 'h1', stats: { spd: 200, pAtk: 1 } })
+    const e = enemy({ id: 'e1', stats: { maxHP: 100000, spd: 10, pAtk: 1 } })
+    const res = runBattle([h], encounter([[e]], mission([{ kind: 'reach', distance: 5 }])), 3)
+    expect(res.outcome).toBe('win')
+    expect(res.reachProgress).toBe(5)
+    expect(res.defeatedTargetTags).toEqual([])
+  })
+
+  it('reach keeps counting once every enemy is down', () => {
+    const h = hero({ id: 'h1', stats: { spd: 200, pAtk: 500 } })
+    const e = enemy({ id: 'e1', stats: { maxHP: 10, spd: 1 } })
+    const res = runBattle([h], encounter([[e]], mission([{ kind: 'reach', distance: 6 }])), 3)
+    expect(res.outcome).toBe('win')
+    expect(res.reachProgress).toBe(6)
+  })
+
+  it('acquire: the carrier falling wins at once, even with others standing', () => {
+    const h = hero({ id: 'h1', stats: { spd: 200, pAtk: 500 } })
+    const carrier = enemy({ id: 'e1', stats: { maxHP: 10, spd: 1 }, targetTag: 'jewel' })
+    const guard = enemy({ id: 'e2', stats: { maxHP: 100000, spd: 1 } })
+    const res = runBattle([h], encounter([[carrier, guard]], mission([{ kind: 'acquire', targetTag: 'jewel' }])), 3)
+    expect(res.outcome).toBe('win')
+    expect(res.defeatedTargetTags).toEqual(['jewel'])
+  })
+
+  it('reports each NPC ally’s final HP percentage', () => {
+    const h = hero({ id: 'h1', stats: { spd: 200, pAtk: 500 } })
+    const npc = { ...hero({ id: 'n1', stats: { maxHP: 200 } }), isNpc: true, targetTag: 'vip', sourceHeroId: undefined }
+    const e = enemy({ id: 'e1', stats: { maxHP: 10, spd: 1 } })
+    const res = runBattle([h], encounter([[e]], mission(annihilate), { allies: [npc] }), 3)
+    expect(res.allyHpPct).toEqual({ vip: 100 })
+  })
+})

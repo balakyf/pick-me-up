@@ -32,6 +32,7 @@ import type {
 import { createAccount, persist, hydrate, DEFAULT_SAVE_KEY } from '../account'
 import { summon, summonMany } from '../gacha'
 import { transferSkill, fuseSkill } from '../transfer'
+import { resolveEvent, type EventOutcome } from '../events'
 import { playFloor } from '../tower'
 import { banquet } from '../kitchen'
 import { startPromotion, skipPromotion } from '../promotion'
@@ -156,6 +157,9 @@ export function reduce(state: GameState | null, cmd: Command, nowWorld: number =
     case 'FUSE_SKILL':
       return fuseSkill(current, cmd.heroId, cmd.result)
 
+    case 'RESOLVE_EVENT':
+      return resolveEvent(current, cmd.option).state
+
     case 'ADD_GOLD':
       // Testing-only cheat: grant free gold. Not part of the real economy.
       return { ...current, gold: current.gold + cmd.amount }
@@ -217,6 +221,18 @@ export function attemptDailyWithResult(
 ): { state: GameState; result: DailyResult } {
   const nowWorld = toWorldTime(nowReal)
   return attemptDaily(advanceTime(requireState(state, 'ATTEMPT_DAILY'), nowWorld), nowWorld)
+}
+
+/**
+ * Like dispatching RESOLVE_EVENT, but also returns what the event did (tournament
+ * rounds, loot, a recruit) for the UI. Runs the same advanceTime catch-up `reduce` does.
+ */
+export function resolveEventWithResult(
+  state: GameState | null,
+  option: string,
+  nowReal = 0,
+): { state: GameState; outcome: EventOutcome } {
+  return resolveEvent(advanceTime(requireState(state, 'RESOLVE_EVENT'), toWorldTime(nowReal)), option)
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

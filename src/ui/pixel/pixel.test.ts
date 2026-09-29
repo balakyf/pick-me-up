@@ -2,7 +2,8 @@ import { describe, it, expect } from 'vitest'
 import { createBitmap, rect, outline, get, hex, flipX, opaqueCount, CLEAR } from './bitmap'
 import { lookForHero, lookForMaster, type LookSource } from './look'
 import { drawHeroFrame, drawHeroBust, FRAME_W, FRAME_H, BUST } from './heroSprite'
-import { drawEnemy } from './enemySprite'
+import { drawEnemy, KNOWN_ENEMIES } from './enemySprite'
+import { drawBattleBg } from './battleBg'
 import { INK, CLASS_CLOTH, tame } from './palette'
 import { hashString } from './rand'
 import { ENEMY_TEMPLATES } from '../../engine/content'
@@ -131,6 +132,16 @@ describe('enemy sprites', () => {
       const b = drawEnemy(t.id, t.element)
       expect(opaqueCount(b), t.id).toBeGreaterThan(100)
     }
+  })
+
+  it('every template has a bespoke drawer (no silent fallbacks in the tower)', () => {
+    for (const t of Object.values(ENEMY_TEMPLATES)) expect(KNOWN_ENEMIES, t.id).toContain(t.id)
+  })
+
+  it('every act has its own battle backdrop', () => {
+    const seen = new Set<string>()
+    for (const f of [5, 10, 15, 20, 25, 33, 50, 75, 85, 95, 100]) seen.add(Array.from(drawBattleBg(f).px.slice(0, 4000)).join(','))
+    expect(seen.size).toBe(11)
   })
 
   it('unknown templates fall back to a generic figure instead of blank', () => {

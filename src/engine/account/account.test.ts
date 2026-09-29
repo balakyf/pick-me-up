@@ -515,9 +515,31 @@ describe('migrate — v5 → v6 (engravings, Advanced pool, Transfer Station)', 
       state: { ...v6, schemaVersion: 5, heroes: heroesV5, facilities: facilitiesV5, gacha: { pity: 7, pullCount: 12 } },
     })
     const restored = loadState(v5Json)
-    expect(restored.schemaVersion).toBe(6)
+    expect(restored.schemaVersion).toBe(TUNING.account.schemaVersion)
     expect(Object.values(restored.heroes).every((h) => h.engraving === null)).toBe(true)
     expect(restored.gacha).toEqual({ pity: 7, pullCount: 12, advPity4: 0, advPity5: 0, advPullCount: 0 })
     expect(restored.facilities.transferStation).toEqual({ level: 0, build: null })
+  })
+})
+
+describe('migrate — v6 → v7 (the full climb)', () => {
+  it('adds a closed event, no loop, nothing hidden found and a living world', () => {
+    const v7 = createAccount(561, { now: 1000 })
+    const v6Json = JSON.stringify({
+      schemaVersion: 6,
+      savedAt: 0,
+      state: { ...v7, schemaVersion: 6, tower: { currentFloor: 14, highestCleared: 13, attemptIndex: 2 } },
+    })
+    const restored = loadState(v6Json)
+    expect(restored.schemaVersion).toBe(7)
+    expect(restored.tower).toEqual({
+      currentFloor: 14,
+      highestCleared: 13,
+      attemptIndex: 2,
+      event: null,
+      loop: null,
+      hiddenFound: [],
+      worldEnded: false,
+    })
   })
 })

@@ -16,7 +16,7 @@ function onFloor(floor: number, hero: Partial<OwnedHero>, seed = 11): GameState 
     ...acct,
     heroes: { [id]: h },
     party: { slots: [id, null, null, null, null], lines: ['front', 'front', 'mid', 'back', 'back'] },
-    tower: { currentFloor: floor, highestCleared: floor - 1, attemptIndex: 0 },
+    tower: { currentFloor: floor, highestCleared: floor - 1, attemptIndex: 0, event: null, loop: null, hiddenFound: [], worldEnded: false },
   }
 }
 
@@ -57,8 +57,8 @@ describe('act bands', () => {
     for (let seed = 1; seed <= 20; seed++) expect(buildEncounter(onFloor(7, {}, seed), 7).mission.type).toBe('Subjugation')
   })
 
-  it('the slice now tops out at floor 20', () => {
-    expect(TUNING.tower.sliceTopFloor).toBe(20)
+  it('the tower now tops out at floor 100', () => {
+    expect(TUNING.tower.sliceTopFloor).toBe(100)
   })
 })
 
@@ -169,7 +169,7 @@ describe('F20 — raid rewards (Layer 1 completion)', () => {
   })
 
   it('a repeat clear drops no second Book', () => {
-    const repeat = { ...onFloor(20, crusher), tower: { currentFloor: 20, highestCleared: 20, attemptIndex: 0 } }
+    const repeat = { ...onFloor(20, crusher), tower: { currentFloor: 20, highestCleared: 20, attemptIndex: 0, event: null, loop: null, hiddenFound: [], worldEnded: false } }
     const { result } = playFloor(repeat)
     expect(result.cleared).toBe(true)
     expect(result.materialsAwarded.bookOfReverseHeaven).toBeUndefined()

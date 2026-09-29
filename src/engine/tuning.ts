@@ -140,8 +140,38 @@ export const TUNING = {
     f5SurviveTicks: 1200,
     /** F10 Defend anchor wave count. */
     f10Waves: 3,
-    /** The climbable slice ends here (Act II summit: Halgiraf). */
-    sliceTopFloor: 20,
+    /** The top of the tower: F100, the summit (Layer 2 §1.3). */
+    sliceTopFloor: 100,
+    /** F90: clearing it ends the world (canon). */
+    worldEndFloor: 90,
+    /** Past F70 (the inflection) mobs gain this many extra levels per floor. */
+    inflectionFloor: 70,
+    inflectionLevelPerFloor: 0.9,
+    /** Past the inflection the budget exponent eases to this (the LEVEL curve steepens
+     *  instead), so a maxed party can reach the summit. */
+    latePowerBase: 1.04,
+    /** A filler wave holds at most this many enemies; past it, enemies grow elite instead. */
+    fillerMaxUnits: 8,
+    /** Elite stat multiplier step when a capped filler wave (or an anchor) is short of budget. */
+    elitePowerStep: 1.08,
+    /** Anchors above F20 are raised until their ΣCP reaches budget × this. */
+    anchorBudgetMult: 1.1,
+    /** The Wailing Wall (F80–89) is built from this seed for every account (canon). */
+    wallSeed: 80_808_080,
+    /** Swamp/Order/Void filler: chance of a Survival / Escape mission instead of Subjugation. */
+    lateSurvivalChance: 0.2,
+    lateEscapeChance: 0.15,
+    /** Filler Escape: steps to cover; Survival: ticks to outlast. */
+    escapeDistance: 40,
+    lateSurviveTicks: 800,
+    /** Anchor timers and distances. */
+    f25EscapeDistance: 55,
+    f41ChaseTicks: 420,
+    f45DeliveryDistance: 60,
+    f65SurviveTicks: 1000,
+    f95SurviveTicks: 1200,
+    /** The looped mission (canon F36–40, 5 attempts; failing F40 drops the room to F31). */
+    loop: { start: 36, gate: 40, fallbackTo: 31, attempts: 5, scarLevels: 4 },
     /** F15 Escort anchor: canon 15-minute assassination window → tick budget. */
     f15SurviveTicks: 900,
     /** Ruins filler (F11–19): chance a floor rolls a Survival mission instead of Subjugation. */
@@ -150,6 +180,36 @@ export const TUNING = {
     ruinsSurviveTicks: 700,
     /** F20 Halgiraf: the boss enrages after this tick (the fight is a race). */
     f20EnrageTick: 450,
+  },
+
+  /** Event floors, hidden objectives and the tournament (Layer 2 §5). First-pass. */
+  events: {
+    /** Recovery event opens when one battle permadies at least this many heroes. */
+    recoveryDeaths: 3,
+    /** Rest: Sanity restored to every living hero. */
+    restSanity: 40,
+    /** Treasure: gold = treasureGoldPerFloor × floor, plus stones. */
+    treasureGoldPerFloor: 60,
+    treasureStones: 2,
+    /** Merchant: stones bought, and gold paid per stone. */
+    merchantStones: 4,
+    merchantGoldPerStone: 150,
+    /** Gamble: win chance; win = treasure × gambleWinMult; lose = −gambleSanity to the party. */
+    gambleChance: 0.5,
+    gambleWinMult: 3,
+    gambleSanity: 20,
+    /** Master Level from which hidden-objective hints are shown (the half-Master's sight). */
+    hiddenHintMasterLevel: 10,
+    /** Tournament (canon F41/42): three rounds against rivals at these CP ratios. */
+    tournament: {
+      rivalCpRatios: [0.8, 1.0, 1.2],
+      /** Rewards by rounds won (0..3). */
+      goldByWins: [300, 800, 1600, 3000],
+      gemsByWins: [0, 10, 25, 60],
+      stonesByWins: [0, 1, 3, 6],
+      /** Party Raid: the boss round's tick budget. */
+      raidTicks: 500,
+    },
   },
 
   economy: {
@@ -412,7 +472,7 @@ export const TUNING = {
   },
 
   account: {
-    schemaVersion: 6,
+    schemaVersion: 7,
     /** Canon protagonist account id (display only). */
     defaultAccountId: '46631913',
     partySize: 5,

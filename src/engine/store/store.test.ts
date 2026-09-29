@@ -12,6 +12,7 @@ import {
   summonWithResult,
   attemptFloorWithResult,
   attemptDailyWithResult,
+  resolveEventWithResult,
   createStore,
 } from './store'
 import { TUNING } from '../tuning'
@@ -612,7 +613,7 @@ function dailyReadyState(seed = 5): GameState {
     ...acct,
     heroes: { [hero.id]: hero },
     party: { slots: [hero.id, null, null, null, null], lines: ['front', 'front', 'mid', 'back', 'back'] },
-    tower: { currentFloor: 2, highestCleared: 1, attemptIndex: 0 },
+    tower: { currentFloor: 2, highestCleared: 1, attemptIndex: 0, event: null, loop: null, hiddenFound: [], worldEnded: false },
   }
 }
 
@@ -816,5 +817,18 @@ describe('reduce — Layer 1 completion commands', () => {
     const s1 = reduce(s0, { type: 'TRANSFER_SKILL', donorId: starter, recipientId: other.id, skillId: 'berserk' })
     expect(s1.heroes[other.id]!.skills.map((s) => s.id)).toEqual(['berserk'])
     expect(() => reduce(s1, { type: 'FUSE_SKILL', heroId: other.id, result: 'exceed' })).toThrow(/fuseSkill/)
+  })
+})
+
+describe('reduce — RESOLVE_EVENT', () => {
+  it('closes the open event and applies its option; resolveEventWithResult reports it', () => {
+    const base = createAccount(8)
+    const s0: GameState = { ...base, tower: { ...base.tower, event: { kind: 'bonus', floor: 5, options: ['rest', 'treasure', 'merchant', 'gamble'] } } }
+    const s1 = reduce(s0, { type: 'RESOLVE_EVENT', option: 'treasure' })
+    expect(s1.tower.event).toBeNull()
+    expect(s1.gold).toBeGreaterThan(s0.gold)
+    const r = resolveEventWithResult(s0, 'treasure')
+    expect(r.state).toEqual(s1)
+    expect(r.outcome.option).toBe('treasure')
   })
 })

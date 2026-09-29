@@ -201,16 +201,19 @@ export function buildEnemyUnit(
     levelBonus?: number
     keywords?: KeywordTag[]
     targetTag?: string
+    /** Elite multiplier on every attribute (late floors meet their budget this way). */
+    powerMult?: number
   },
 ): CombatUnit {
   const effLevel = level + (opts?.levelBonus ?? 0)
+  const k = effLevel * (opts?.powerMult ?? 1)
 
   const attrs: PrimaryAttrs = {
-    str: Math.round(template.attrMult.str * effLevel),
-    agi: Math.round(template.attrMult.agi * effLevel),
-    vit: Math.round(template.attrMult.vit * effLevel),
-    int: Math.round(template.attrMult.int * effLevel),
-    wil: Math.round(template.attrMult.wil * effLevel),
+    str: Math.round(template.attrMult.str * k),
+    agi: Math.round(template.attrMult.agi * k),
+    vit: Math.round(template.attrMult.vit * k),
+    int: Math.round(template.attrMult.int * k),
+    wil: Math.round(template.attrMult.wil * k),
   }
 
   const stats = deriveStats(attrs)

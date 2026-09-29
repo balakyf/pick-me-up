@@ -10,7 +10,7 @@ import { cachedDataUrl } from './pixel/render'
 import { drawProp } from './pixel/props'
 import { scale } from './pixel/bitmap'
 import type { Element, HeroClass, SkillProgress, Star, SummonPool } from '../engine/types'
-import { SKILLS } from '../engine/content'
+import { HIDDEN_OBJECTIVES, SKILLS } from '../engine/content'
 
 export const PARTY_LINES: Line[] = ['front', 'front', 'mid', 'back', 'back']
 const SUMMON_COST = TUNING.gacha.normalCostGold
@@ -334,6 +334,43 @@ export function ResultsScreen({
             {result.skillProgress.map((p, i) => (
               <div key={i} className={`sp-row ${p.kind}`}>{skillProgressLine(p, state)}</div>
             ))}
+          </div>
+        )}
+
+        {result.hiddenFound.length > 0 && (
+          <div className="skill-progress">
+            {result.hiddenFound.map((id) => {
+              const h = HIDDEN_OBJECTIVES.find((x) => x.id === id)
+              return (
+                <div key={id} className="sp-row achievement">
+                  ✧ Hidden objective: {h?.name ?? id}
+                  {h?.reward.gems ? ` · +${h.reward.gems} gems` : ''}
+                </div>
+              )
+            })}
+          </div>
+        )}
+
+        {result.worldEnded && (
+          <div className="world-ended pframe">
+            The ninetieth floor falls — and with it, the world beneath the tower. No one on its surface survives.
+          </div>
+        )}
+
+        {result.loopRollback && (
+          <div className="fallen">
+            <div className="ft">↺ The loop resets</div>
+            <div>The gate held. The waiting room drops back to floor {TUNING.tower.loop.fallbackTo}.</div>
+          </div>
+        )}
+
+        {result.event && (
+          <div className="muted" style={{ marginBottom: 10 }}>
+            {result.event.kind === 'tournament'
+              ? '🏆 A tournament gathers between the floors.'
+              : result.event.kind === 'recovery'
+                ? '✚ The tower offers a recovery floor.'
+                : '✦ An event floor opens before the next climb.'}
           </div>
         )}
 

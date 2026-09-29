@@ -52,7 +52,7 @@ function makeState(overrides: Partial<GameState> = {}): GameState {
     usedNames: [],
     consumedTemplateIds: [],
     party: { slots: [null, null, null, null, null], lines: ['front', 'front', 'mid', 'back', 'back'] },
-    tower: { currentFloor: 1, highestCleared: 0, attemptIndex: 0 },
+    tower: { currentFloor: 1, highestCleared: 0, attemptIndex: 0, event: null, loop: null, hiddenFound: [], worldEnded: false },
     gacha: { pity: 0, pullCount: 0, advPity4: 0, advPity5: 0, advPullCount: 0 },
     rng: { combatCounter: 0 },
   }

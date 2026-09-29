@@ -1,25 +1,191 @@
 import { useEffect, useRef, useState } from 'react'
 import type { GameState, FloorResult, CombatLog } from '../engine/types'
 import type { Store } from '../engine/store'
-import { attemptFloorWithResult } from '../engine/store'
+import { attemptFloorWithResult, resolveEventWithResult } from '../engine/store'
 import { buildEncounter } from '../engine/tower'
-import { ANCHORS } from '../engine/content'
+import { ACTS, ANCHORS, HIDDEN_OBJECTIVES, actForFloor } from '../engine/content'
 import { TUNING } from '../engine/tuning'
+import { EVENT_OPTION_LABEL, merchantPrice, treasureGold, type EventOutcome } from '../engine/events'
 import { BattleScene } from './battle/BattleScene'
 import { ResultsScreen } from './screens'
+import { HeroCard } from './HeroCard'
 
 const MAX_FLOOR = TUNING.tower.sliceTopFloor
+const EV = TUNING.events
 
-/** Acts of the climbable slice (Layer 2 §2.1 bands), bottom-up. */
-const ACTS: { title: string; subtitle: string; from: number; to: number }[] = [
-  { title: 'Act I — The Prairie', subtitle: 'goblins, wolves, harpies · the falling city at F10', from: 1, to: 10 },
-  { title: 'Act II — The Ruins', subtitle: 'undead, soldiers, assassins · Halgiraf at F20', from: 11, to: 20 },
-]
+/** One-line description of an event option (what the Master is choosing). */
+function optionBlurb(option: string, floor: number): string {
+  switch (option) {
+    case 'rest':
+      return `Every living hero recovers ${EV.restSanity} Sanity.`
+    case 'treasure':
+      return `A cache: ${treasureGold(floor).toLocaleString()} gold and ${EV.treasureStones} stones.`
+    case 'merchant':
+      return `Buy ${EV.merchantStones} Promotion Stones for ${merchantPrice().toLocaleString()} gold.`
+    case 'gamble':
+      return `A sealed door. ${Math.round(EV.gambleChance * 100)}%: a vault worth ×${EV.gambleWinMult} treasure. Otherwise the party loses ${EV.gambleSanity} Sanity.`
+    case 'reinforcement':
+      return 'A free Normal summon joins the roster.'
+    case 'battle_royale':
+      return 'Your party against three rival squads, back to back.'
+    case 'party_raid':
+      return 'Your party against a raid colossus, against the clock.'
+    case 'team':
+      return 'Three 5-on-5 rounds against rising rivals.'
+    case 'pair':
+      return 'Your two strongest heroes, three rounds.'
+    case 'deathmatch':
+      return 'Your single strongest hero, three duels.'
+    default:
+      return ''
+  }
+}
+
+const EVENT_TITLE = { bonus: 'Event Floor', recovery: 'Recovery', tournament: 'Tournament' } as const
+
+/** The open event floor: pick one option (the climb waits on it). */
+function EventPanel({ state, onResolve }: { state: GameState; onResolve: (option: string) => void }) {
+  const ev = state.tower.event!
+  return (
+    <div className="pframe event-panel">
+      <div className="event-head">
+        <span className="event-kind">{EVENT_TITLE[ev.kind]}</span>
+        <span className="muted">between F{ev.floor} and F{ev.floor + 1}</span>
+      </div>
+      <p className="muted" style={{ margin: '4px 0 10px' }}>
+        {ev.kind === 'tournament'
+          ? 'Masters from other worlds gather between the floors. Pick a format — no one dies here.'
+          : ev.kind === 'recovery'
+            ? 'The main team is gone. The tower offers a breather before the next floor.'
+            : 'A quiet floor between the fights. Choose how to spend it.'}
+      </p>
+      <div className="event-options">
+        {ev.options.map((o) => (
+          <button
+            key={o}
+            className="event-option"
+            onClick={() => onResolve(o)}
+            disabled={o === 'merchant' && state.gold < merchantPrice()}
+          >
+            <span className="eo-name">{EVENT_OPTION_LABEL[o] ?? o}</span>
+            <span className="eo-blurb">{optionBlurb(o, ev.floor)}</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+/** What an event just did. */
+function EventOutcomeCard({
+  outcome,
+  onReplay,
+  onClose,
+}: {
+  outcome: EventOutcome
+  onReplay: (log: CombatLog) => void
+  onClose: () => void
+}) {
+  const mats = Object.entries(outcome.materials)
+  return (
+    <div className="overlay">
+      <div className="result-card">
+        <div className={`big-outcome ${outcome.won === false || (outcome.wins !== undefined && outcome.wins === 0) ? 'lose' : 'win'}`}>
+          {EVENT_OPTION_LABEL[outcome.option] ?? outcome.option}
+        </div>
+        <div className="muted">{outcome.note}</div>
+        {outcome.rounds && (
+          <div className="tourney-rounds">
+            {outcome.rounds.map((r, i) => (
+              <button key={i} className={`tr-round ${r.won ? 'won' : 'lost'}`} onClick={() => onReplay(r.log)} title="Watch this round">
+                Round {i + 1} · {r.won ? 'won' : 'lost'} · rival CP {r.rivalCp.toLocaleString()} ▸
+              </button>
+            ))}
+            <div className="tr-placing">Placing: {outcome.placing} / 8</div>
+          </div>
+        )}
+        <div className="reward-row">
+          {outcome.gold !== 0 && (
+            <div className="r">
+              <div className="n" style={{ color: 'var(--gold)' }}>
+                {outcome.gold > 0 ? '+' : ''}
+                {outcome.gold.toLocaleString()}
+              </div>
+              <div className="l">Gold</div>
+            </div>
+          )}
+          {outcome.gems > 0 && (
+            <div className="r">
+              <div className="n" style={{ color: 'var(--gem)' }}>+{outcome.gems}</div>
+              <div className="l">Gems</div>
+            </div>
+          )}
+          {mats.map(([k, v]) => (
+            <div className="r" key={k}>
+              <div className="n">+{v}</div>
+              <div className="l">{k === 'promotionStone' ? 'Stones' : k}</div>
+            </div>
+          ))}
+          {outcome.sanity !== 0 && (
+            <div className="r">
+              <div className="n" style={{ color: outcome.sanity > 0 ? 'var(--good)' : 'var(--bad)' }}>
+                {outcome.sanity > 0 ? '+' : ''}
+                {outcome.sanity}
+              </div>
+              <div className="l">Sanity</div>
+            </div>
+          )}
+        </div>
+        {outcome.recruit && (
+          <div className="reveal" style={{ margin: '0 auto 12px' }}>
+            <HeroCard hero={outcome.recruit} />
+          </div>
+        )}
+        <button className="btn primary big" onClick={onClose}>
+          Onward ▸
+        </button>
+      </div>
+    </div>
+  )
+}
+
+/** The Chronicle: hidden objectives found (with their lore), and what is still unknown. */
+function Chronicle({ state }: { state: GameState }) {
+  const sight = state.meta.masterLevel >= EV.hiddenHintMasterLevel
+  const found = new Set(state.tower.hiddenFound)
+  return (
+    <div className="pframe chronicle">
+      <div className="event-head">
+        <span className="event-kind">Chronicle</span>
+        <span className="muted">
+          {found.size} / {HIDDEN_OBJECTIVES.length} truths
+        </span>
+      </div>
+      {HIDDEN_OBJECTIVES.map((h) => (
+        <div key={h.id} className={`chron-row ${found.has(h.id) ? 'found' : ''}`}>
+          <span className="chron-floor">F{h.floor}</span>
+          {found.has(h.id) ? (
+            <span>
+              <b>{h.name}</b> — <i>{h.lore}</i>
+            </span>
+          ) : (
+            <span className="muted">{sight ? `??? — ${h.hint}` : '??? (a hidden objective)'}</span>
+          )}
+        </div>
+      ))}
+      {!sight && <div className="muted" style={{ fontSize: 13 }}>From Master Lv {EV.hiddenHintMasterLevel} you sense what the floors are hiding.</div>}
+    </div>
+  )
+}
 
 export function TowerScreen({ state, store }: { state: GameState; store: Store }) {
   const [combat, setCombat] = useState<CombatLog | null>(null)
   const [pending, setPending] = useState<FloorResult | null>(null)
   const [showResult, setShowResult] = useState(false)
+  const [outcome, setOutcome] = useState<EventOutcome | null>(null)
+  const [replay, setReplay] = useState<CombatLog | null>(null)
+  const [err, setErr] = useState<string | null>(null)
+  const [openActs, setOpenActs] = useState<Set<string>>(() => new Set([actForFloor(state.tower.currentFloor).id]))
 
   const current = state.tower.currentFloor
   const currentRef = useRef<HTMLDivElement>(null)
@@ -27,19 +193,36 @@ export function TowerScreen({ state, store }: { state: GameState; store: Store }
   useEffect(() => {
     currentRef.current?.scrollIntoView?.({ block: 'center' })
   }, [current])
+  useEffect(() => {
+    setOpenActs((cur) => new Set([...cur, actForFloor(current).id]))
+  }, [current])
+
   const deployable = state.party.slots.some((id) => {
     const h = id ? state.heroes[id] : undefined
     return !!h && h.alive && h.sanity > 0 && h.training === null
   })
-  const beatGame = state.tower.highestCleared >= MAX_FLOOR
+  const summit = state.tower.highestCleared >= MAX_FLOOR
+  const event = state.tower.event
+  const loop = state.tower.loop
 
   function enter() {
-    if (!deployable || current > MAX_FLOOR) return
+    if (!deployable || current > MAX_FLOOR || event !== null) return
     const pre = store.getState()!
     const { result } = attemptFloorWithResult(pre) // capture the log for playback
     store.dispatch({ type: 'ATTEMPT_FLOOR' }) // advance the store identically (deterministic)
     setPending(result)
     setCombat(result.result.log)
+  }
+
+  function resolve(option: string) {
+    setErr(null)
+    try {
+      const { outcome: out } = resolveEventWithResult(store.getState(), option, Date.now())
+      store.dispatch({ type: 'RESOLVE_EVENT', option }, Date.now())
+      setOutcome(out)
+    } catch (e) {
+      setErr(e instanceof Error ? e.message.replace(/^\w+: /, '') : 'That failed')
+    }
   }
 
   function combatDone() {
@@ -50,6 +233,13 @@ export function TowerScreen({ state, store }: { state: GameState; store: Store }
     setShowResult(false)
     setPending(null)
   }
+  const toggleAct = (id: string) =>
+    setOpenActs((cur) => {
+      const next = new Set(cur)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
 
   // Floor descriptions (anchors are labelled; the current floor gets a live preview).
   const preview = current <= MAX_FLOOR ? buildEncounter(state, current) : null
@@ -58,34 +248,57 @@ export function TowerScreen({ state, store }: { state: GameState; store: Store }
     <div className="screen">
       <h2>The Tower</h2>
       <p className="sub">
-        100 floors of permadeath. Reach floor {MAX_FLOOR} in this slice. Falling heroes are gone for good.
+        100 floors of permadeath. Falling heroes are gone for good.
+        {state.tower.worldEnded && ' The world you climbed is gone.'}
       </p>
 
-      {beatGame && (
+      {summit && (
         <div className="result-card" style={{ marginTop: 0, marginBottom: 20 }}>
-          <div className="big-outcome win">SLICE CLEARED ✦</div>
-          <div className="muted">You conquered floors 1–{MAX_FLOOR}. The full 100-floor tower awaits in future builds.</div>
+          <div className="big-outcome win">SUMMIT ✦</div>
+          <div className="muted">Tell, the Architect, has fallen. You conquered all {MAX_FLOOR} floors.</div>
+        </div>
+      )}
+      {state.tower.worldEnded && !summit && (
+        <div className="pframe world-ended">
+          The ninetieth floor is behind you, and the world beneath it has ended. The climb goes on into floors that were never finished.
         </div>
       )}
 
-      {!deployable && (
+      {loop && (
+        <div className="pframe loop-banner">
+          <b>Looped mission</b> — F{TUNING.tower.loop.start}–{TUNING.tower.loop.gate}. Failing F{TUNING.tower.loop.gate} sends the room back
+          to F{TUNING.tower.loop.fallbackTo}. Attempts left: <b>{loop.attemptsLeft}</b>
+          {loop.scars > 0 && <> · scars: <b>{loop.scars}</b> (the loop has hardened)</>}
+        </div>
+      )}
+
+      {event && <EventPanel state={state} onResolve={resolve} />}
+      {err && <div className="muted" style={{ color: 'var(--bad)' }}>{err}</div>}
+
+      {!deployable && !event && (
         <div className="empty" style={{ color: 'var(--warn)' }}>
           No deployable heroes — set your Party (heroes in training or broken down can't fight).
         </div>
       )}
 
       <div className="tower">
-        {ACTS.flatMap((act) => [
-          ...Array.from({ length: act.to - act.from + 1 }, (_, i) => act.from + i),
-          `act:${act.title}`,
-        ]).map((f) => {
+        {ACTS.flatMap((act) => {
+          const open = openActs.has(act.id)
+          const floors = open ? Array.from({ length: act.to - act.from + 1 }, (_, i) => act.from + i) : []
+          return [...floors, `act:${act.id}`]
+        }).map((f) => {
           if (typeof f === 'string') {
-            const act = ACTS.find((a) => `act:${a.title}` === f)!
+            const act = ACTS.find((a) => `act:${a.id}` === f)!
+            const cleared = Math.max(0, Math.min(act.to, state.tower.highestCleared) - act.from + 1)
             return (
-              <div key={f} className="act-head">
-                <span className="act-title">{act.title}</span>
-                <span className="muted">{act.subtitle}</span>
-              </div>
+              <button key={f} className={`act-head ${openActs.has(act.id) ? 'open' : ''}`} onClick={() => toggleAct(act.id)}>
+                <span className="act-title">
+                  {openActs.has(act.id) ? '▾' : '▸'} {act.title}
+                </span>
+                <span className="muted">
+                  {act.subtitle} · {cleared}/{act.to - act.from + 1}
+                </span>
+              </button>
             )
           }
           const cleared = f <= state.tower.highestCleared
@@ -93,7 +306,7 @@ export function TowerScreen({ state, store }: { state: GameState; store: Store }
           const locked = f > current
           const anchor = ANCHORS[f]
           const cls = ['floor', cleared ? 'cleared' : '', isCurrent ? 'current' : '', locked ? 'locked' : ''].filter(Boolean).join(' ')
-          const mission = isCurrent && preview ? preview.mission.type : anchor ? anchor.missionType : 'Subjugation'
+          const mission = isCurrent && preview ? preview.mission.type : anchor ? anchor.missionType : 'Seeded floor'
           const enemyCount = isCurrent && preview ? preview.waves.reduce((n, w) => n + w.units.length, 0) : null
           return (
             <div key={f} className={cls} ref={isCurrent ? currentRef : undefined}>
@@ -101,6 +314,7 @@ export function TowerScreen({ state, store }: { state: GameState; store: Store }
               <div className="fdesc">
                 <div className="ft">
                   Floor {f} {anchor && <span className="anchor-badge">ANCHOR</span>}
+                  {f === TUNING.tower.worldEndFloor && <span className="anchor-badge danger">WORLD'S END</span>}
                 </div>
                 <div className="fs">
                   {mission}
@@ -109,7 +323,7 @@ export function TowerScreen({ state, store }: { state: GameState; store: Store }
                 </div>
               </div>
               {isCurrent && f <= MAX_FLOOR && (
-                <button className="btn primary" onClick={enter} disabled={!deployable}>
+                <button className="btn primary" onClick={enter} disabled={!deployable || event !== null}>
                   Enter ▸
                 </button>
               )}
@@ -118,8 +332,12 @@ export function TowerScreen({ state, store }: { state: GameState; store: Store }
         })}
       </div>
 
+      <Chronicle state={state} />
+
       {combat && <BattleScene log={combat} state={state} onDone={combatDone} />}
       {showResult && pending && <ResultsScreen result={pending} state={state} onContinue={resultDone} />}
+      {outcome && !replay && <EventOutcomeCard outcome={outcome} onReplay={setReplay} onClose={() => setOutcome(null)} />}
+      {replay && <BattleScene log={replay} state={state} onDone={() => setReplay(null)} />}
     </div>
   )
 }

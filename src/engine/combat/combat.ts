@@ -152,6 +152,9 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
 
   let wavesCleared = 0
   const defeatedTargetTags: string[] = []
+  // Reach(distance): steps the party has covered (every hero action is one step).
+  const hasReach = encounter.mission.objectives.some((o) => o.kind === 'reach')
+  let reachProgress = 0
   let outcome: CombatOutcome | null = null
 
   // ── Helpers over the live rosters ─────────────────────────────────────────
@@ -391,6 +394,10 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
         return defeatedTargetTags.includes(obj.targetTag)
       case 'protect':
         return allyAlive(obj.targetTag)
+      case 'reach':
+        return reachProgress >= obj.distance
+      case 'acquire':
+        return defeatedTargetTags.includes(obj.targetTag)
     }
   }
   /** A protect objective whose NPC has fallen loses the mission outright. */
@@ -449,6 +456,14 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
           return
         }
       }
+    }
+
+    // REACH: a hero's turn also presses the party one step toward the exit (even with
+    // nothing left to strike). Only reach missions count, so other replays are untouched.
+    if (hasReach && actor.side === 'hero') {
+      reachProgress++
+      evaluateState()
+      if (outcome !== null) return
     }
 
     const skill = chooseSkill(actor)
@@ -533,6 +548,14 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
     else fallenHeroIds.push(sid)
   }
 
+  const allyHpPct: Record<string, number> = {}
+  for (const h of heroes) {
+    const tag = h.ref.targetTag
+    if (h.ref.isNpc && tag !== undefined) {
+      allyHpPct[tag] = Math.round((Math.max(0, h.currentHP) / h.ref.stats.maxHP) * 100)
+    }
+  }
+
   const log: CombatLog = {
     seed,
     floor: encounter.floor,
@@ -548,6 +571,8 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
     ticksElapsed,
     wavesCleared,
     defeatedTargetTags,
+    reachProgress,
+    allyHpPct,
     survivorHeroIds,
     fallenHeroIds,
     skillCasts,
