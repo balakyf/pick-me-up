@@ -6,14 +6,16 @@ import { banquetWouldHelp } from '../engine/kitchen'
 import { canPromote, canAfford, promotionCost, promotionTargetStar } from '../engine/promotion'
 import { tacticalFocusBonus, tacticalOverlookSlots } from '../engine/tactical'
 import { masterXpToNext } from '../engine/master'
-import { upgradeCost, canUpgrade } from '../engine/facilities'
+import { upgradeCost, canUpgrade, unlockMasterLevel } from '../engine/facilities'
 import { worldDayIndex, dailyDungeonFor, dailyUnlocked, dailyAttemptsLeft } from '../engine/daily'
 import type { DailyReward } from '../engine/daily'
 import { attemptDailyWithResult } from '../engine/store'
 import { toWorldTime } from '../engine/time'
 import { canSynthesize, synthesisPreview, synthesisUnlocked, type SynthesisInput } from '../engine/synthesis'
 import { smithyUnlocked, forgeGrade, forgeCost, canCraft, itemName, equippedItemIds } from '../engine/equipment'
-import { Portrait } from './bits'
+import { Portrait, SkillList } from './bits'
+import { SKILLS } from '../engine/content'
+import { maxTrainableGrade, drillXp, trainingOptions } from '../engine/training'
 import { skillProgressLine } from './screens'
 
 /**
@@ -25,7 +27,11 @@ import { skillProgressLine } from './screens'
 const SANITY_MAX = TUNING.lobby.sanityMax
 
 /** Decide which room a hero is "in" right now. Cosmetic, deterministic. */
-export function roomFor(hero: OwnedHero, partyIds: Set<string>): 'kitchen' | 'promotionChamber' | 'tacticalCenter' | 'hall' {
+export function roomFor(
+  hero: OwnedHero,
+  partyIds: Set<string>,
+): 'kitchen' | 'promotionChamber' | 'tacticalCenter' | 'hall' | 'training' {
+  if (hero.training !== null) return 'training' // mid-drill → in the Training Yard
   if (hero.sanity < 60) return 'kitchen' // low morale → resting in the Kitchen
   if (hero.xp.atCap) return 'promotionChamber' // capped → waiting on promotion
   if (partyIds.has(hero.id)) return 'tacticalCenter' // on the active party → on duty
@@ -197,16 +203,17 @@ function UpgradeControl({ state, store, facility }: { state: GameState; store: S
   }
 
   const maxed = f.level >= FAC.maxLevel
-  const chamberLocked = facility === 'promotionChamber' && f.level === 0 && state.meta.masterLevel < FAC.chamberUnlockMasterLevel
+  const unlockAt = unlockMasterLevel(facility)
+  const chamberLocked = f.level === 0 && state.meta.masterLevel < unlockAt
   const mlCapped = !maxed && f.level >= state.meta.masterLevel
   const cost = upgradeCost(facility, f.level)
   const ok = canUpgrade(state, facility)
-  const isBuild = facility === 'promotionChamber' && f.level === 0
+  const isBuild = f.level === 0
 
   const note = maxed
     ? 'Max level reached.'
     : chamberLocked
-      ? `Unlocks at Master Lv ${FAC.chamberUnlockMasterLevel}.`
+      ? `Unlocks at Master Lv ${unlockAt}.`
       : mlCapped
         ? 'Raise Master Level to upgrade.'
         : state.gold < cost
@@ -595,12 +602,122 @@ function Armory({ state, store }: { state: GameState; store: Store }) {
   )
 }
 
-export type PanelPlace = 'kitchen' | 'tacticalCenter' | 'promotionChamber' | 'synthesis' | 'armory' | 'daily'
+const TRAIN = TUNING.skills.training
+
+/** The Training Center: drills in progress + a hero → skill drill picker. */
+function TrainingAction({ state, store }: { state: GameState; store: Store }) {
+  const [heroId, setHeroId] = useState<HeroId | null>(null)
+  const [err, setErr] = useState<string | null>(null)
+  const level = state.facilities.trainingCenter.level
+  const ceiling = maxTrainableGrade(level)
+  const nowWorld = toWorldTime(Date.now())
+  const living = (Object.values(state.heroes) as OwnedHero[]).filter((h) => h.alive)
+  const drilling = living.filter((h) => h.training !== null)
+  const free = living.filter((h) => h.training === null && h.promotion === null)
+  const selected = heroId && state.heroes[heroId] && free.some((h) => h.id === heroId) ? state.heroes[heroId]! : null
+
+  function run(cmd: Command) {
+    setErr(null)
+    try {
+      store.dispatch(cmd, Date.now())
+    } catch (e) {
+      setErr(e instanceof Error ? e.message.replace(/^\w+: /, '') : 'Action failed')
+    }
+  }
+
+  if (ceiling === null) {
+    return <div className="lr-action-note">Build the Training Center to start drills.</div>
+  }
+
+  return (
+    <div className="lr-action training-action">
+      <div className="ta-row"><span>Max trainable grade</span><span className="ta-val">{ceiling}</span></div>
+      <div className="ta-row"><span>Skill XP per drill</span><span className="ta-val">+{drillXp(level)}</span></div>
+      <div className="ta-row"><span>Drill length</span><span className="ta-val">{Math.round(TRAIN.drillDurationMs / 60_000)} world-min</span></div>
+
+      {drilling.length > 0 && (
+        <>
+          <h4 className="panel-sub">In the yard</h4>
+          {drilling.map((h) => (
+            <div key={h.id} className="promo-row">
+              <span className="promo-name">
+                {h.name.split(/\s+/)[0]} · {h.training!.mode === 'learn' ? 'learning' : 'refining'} {SKILLS[h.training!.skillId]?.name}
+              </span>
+              <span className="muted">{timeLeft(h.training!.completesAtWorld - nowWorld)}</span>
+              <button
+                className="btn gem sm"
+                onClick={() => run({ type: 'SKIP_TIMER', kind: 'training', id: h.id })}
+                disabled={state.gems < TRAIN.skipGemCost}
+                title={`Finish now for ${TRAIN.skipGemCost} gems`}
+              >
+                ⏩ {TRAIN.skipGemCost} ♦
+              </button>
+            </div>
+          ))}
+        </>
+      )}
+
+      <h4 className="panel-sub">New drill</h4>
+      {free.length === 0 ? (
+        <div className="lr-empty">Every hero is busy.</div>
+      ) : (
+        <div className="syn-row">
+          {free.map((h) => (
+            <button
+              key={h.id}
+              type="button"
+              className={`syn-chip ${selected?.id === h.id ? 'sel' : ''}`}
+              onClick={() => setHeroId(selected?.id === h.id ? null : h.id)}
+            >
+              <Portrait hero={h} size="sm" />
+              <span className="syn-chip-name">{h.name.split(/\s+/)[0]}</span>
+            </button>
+          ))}
+        </div>
+      )}
+      {selected && (
+        <div className="drill-list">
+          <SkillList hero={selected} />
+          {trainingOptions(state, selected.id).map((o) => {
+            const def = SKILLS[o.skillId]!
+            return (
+              <div key={o.skillId} className={`drill-row ${o.ok ? '' : 'off'}`} title={o.reason ?? undefined}>
+                <span className="skill-grade">{def.grade}</span>
+                <span className="drill-name">
+                  {o.mode === 'learn' ? 'Learn' : 'Refine'} {def.name}
+                </span>
+                <span className="muted">{o.cost.toLocaleString()} ◆</span>
+                <button
+                  className="btn sm"
+                  disabled={!o.ok}
+                  onClick={() => run({ type: 'TRAIN_SKILL', heroId: selected.id, skillId: o.skillId })}
+                >
+                  Train
+                </button>
+              </div>
+            )
+          })}
+        </div>
+      )}
+      {err && <div className="lr-action-note" style={{ color: 'var(--bad)' }}>{err}</div>}
+    </div>
+  )
+}
+
+export type PanelPlace =
+  | 'kitchen'
+  | 'tacticalCenter'
+  | 'promotionChamber'
+  | 'trainingCenter'
+  | 'synthesis'
+  | 'armory'
+  | 'daily'
 
 const BLURB: Record<PanelPlace, string> = {
   kitchen: 'A warm hearth and a long table. Heroes with frayed nerves come here to recover.',
   tacticalCenter: 'Maps, pins and the party board. Focus & overlook combat levers.',
   promotionChamber: 'A sealed marble chamber. Heroes at their star cap are raised past it here.',
+  trainingCenter: 'Sand, straw dummies and a chalk drill board. Training sharpens skills — never stats or level.',
   synthesis: 'The vats bubble. Heroes who enter do not come out whole.',
   armory: 'The Smithy forge and the equipment racks.',
   daily: "A rift that opens onto a different dungeon each world-day.",
@@ -616,7 +733,7 @@ export function PlacePanel({ place, state, store }: { place: PanelPlace; state: 
   return (
     <div className={`place-panel place-${place}`}>
       <p className="place-blurb">{BLURB[place]}</p>
-      {(place === 'kitchen' || place === 'tacticalCenter' || place === 'promotionChamber') && (
+      {(place === 'kitchen' || place === 'tacticalCenter' || place === 'promotionChamber' || place === 'trainingCenter') && (
         <div className="lr-lvl-row">
           <span className="lr-lvl">
             {state.facilities[place].level === 0 ? 'Not built' : `Facility Lv ${state.facilities[place].level}`}
@@ -645,6 +762,12 @@ export function PlacePanel({ place, state, store }: { place: PanelPlace; state: 
           <UpgradeControl state={state} store={store} facility="promotionChamber" />
           <h4 className="panel-sub">Waiting at the cap</h4>
           <Occupants heroes={here('promotionChamber')} empty="No one is waiting here." />
+        </>
+      )}
+      {place === 'trainingCenter' && (
+        <>
+          <TrainingAction state={state} store={store} />
+          <UpgradeControl state={state} store={store} facility="trainingCenter" />
         </>
       )}
       {place === 'synthesis' && <SynthesisChamber state={state} store={store} />}

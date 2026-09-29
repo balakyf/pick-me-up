@@ -2,8 +2,8 @@
  * The Lobby (waiting room) as a top-down tilemap — pure data + pathing.
  *
  * A Great Hall (summoning circle, roster lectern, the Tower Gate, the fairy Isel)
- * ringed by six rooms: Kitchen · Tactical Center · Promotion Chamber on top,
- * Synthesis Chamber · Armory · Daily-Dungeon portal below. Heroes wander inside
+ * ringed by seven rooms: Kitchen · Tactical Center · Promotion Chamber on top,
+ * Synthesis Chamber · Armory · Daily-Dungeon portal below, the Training Yard east. Heroes wander inside
  * the room their state puts them in; the Master walks everywhere.
  */
 
@@ -14,33 +14,34 @@ export const TILE = 16
  *  .  hall planks     ~  hall carpet
  *  k  kitchen tiles   t  tactical flagstones   p  promotion marble
  *  m  synthesis stone a  armory slate          d  daily-portal stone
+ *  r  training-yard sand
  */
 export const MAP_ROWS = [
-  '##############################',
-  '#kkkkkkkk#tttttttttt#pppppppp#',
-  '#kkkkkkkk#tttttttttt#pppppppp#',
-  '#kkkkkkkk#tttttttttt#pppppppp#',
-  '#kkkkkkkk#tttttttttt#pppppppp#',
-  '#kkkkkkkk#tttttttttt#pppppppp#',
-  '####..######....######..######',
-  '#............................#',
-  '#.........~~~~~~~~~~.........#',
-  '#.........~~~~~~~~~~.........G',
-  '#.........~~~~~~~~~~.........G',
-  '#.........~~~~~~~~~~.........#',
-  '#............................#',
-  '####..######....######..######',
-  '#mmmmmmmm#aaaaaaaaaa#dddddddd#',
-  '#mmmmmmmm#aaaaaaaaaa#dddddddd#',
-  '#mmmmmmmm#aaaaaaaaaa#dddddddd#',
-  '#mmmmmmmm#aaaaaaaaaa#dddddddd#',
-  '##############################',
+  '#######################################',
+  '#kkkkkkkk#tttttttttt#pppppppp##########',
+  '#kkkkkkkk#tttttttttt#pppppppp##########',
+  '#kkkkkkkk#tttttttttt#pppppppp##########',
+  '#kkkkkkkk#tttttttttt#pppppppp##########',
+  '#kkkkkkkk#tttttttttt#pppppppp##########',
+  '####..######....######..###############',
+  '#............................#rrrrrrrr#',
+  '#.........~~~~~~~~~~.........#rrrrrrrr#',
+  'G.........~~~~~~~~~~..........rrrrrrrr#',
+  'G.........~~~~~~~~~~..........rrrrrrrr#',
+  '#.........~~~~~~~~~~.........#rrrrrrrr#',
+  '#............................#rrrrrrrr#',
+  '####..######....######..###############',
+  '#mmmmmmmm#aaaaaaaaaa#dddddddd##########',
+  '#mmmmmmmm#aaaaaaaaaa#dddddddd##########',
+  '#mmmmmmmm#aaaaaaaaaa#dddddddd##########',
+  '#mmmmmmmm#aaaaaaaaaa#dddddddd##########',
+  '#######################################',
 ] as const
 
 export const MAP_W = MAP_ROWS[0].length
 export const MAP_H = MAP_ROWS.length
 
-export type TileChar = '#' | 'G' | '.' | '~' | 'k' | 't' | 'p' | 'm' | 'a' | 'd'
+export type TileChar = '#' | 'G' | '.' | '~' | 'k' | 't' | 'p' | 'm' | 'a' | 'd' | 'r'
 
 export function tileAt(x: number, y: number): TileChar {
   if (x < 0 || y < 0 || x >= MAP_W || y >= MAP_H) return '#'
@@ -55,7 +56,15 @@ export function isWallChar(c: TileChar): boolean {
 // Rooms (wander regions)
 // ─────────────────────────────────────────────────────────────────────────────
 
-export type RoomId = 'kitchen' | 'tacticalCenter' | 'promotionChamber' | 'hall' | 'synthesis' | 'armory' | 'daily'
+export type RoomId =
+  | 'kitchen'
+  | 'tacticalCenter'
+  | 'promotionChamber'
+  | 'hall'
+  | 'synthesis'
+  | 'armory'
+  | 'daily'
+  | 'training'
 
 export interface Rect {
   x: number
@@ -72,6 +81,7 @@ export const ROOMS: Record<RoomId, Rect> = {
   synthesis: { x: 1, y: 14, w: 8, h: 4 },
   armory: { x: 10, y: 14, w: 10, h: 4 },
   daily: { x: 21, y: 14, w: 8, h: 4 },
+  training: { x: 30, y: 7, w: 8, h: 6 },
 }
 
 export function roomAt(x: number, y: number): RoomId | null {
@@ -90,6 +100,7 @@ export type PlaceId =
   | 'kitchen'
   | 'tacticalCenter'
   | 'promotionChamber'
+  | 'trainingCenter'
   | 'synthesis'
   | 'armory'
   | 'daily'
@@ -120,6 +131,8 @@ export type PropKind =
   | 'banner'
   | 'torch'
   | 'fairy'
+  | 'dummy'
+  | 'drillBoard'
 
 export interface Prop {
   kind: PropKind
@@ -150,8 +163,8 @@ export const PROPS: Prop[] = [
   // Hall
   { kind: 'summonCrystal', x: 14, y: 9, w: 2, h: 1, place: 'summon' },
   { kind: 'lectern', x: 5, y: 9, w: 1, h: 1, place: 'roster' },
-  { kind: 'gate', x: 29, y: 9, w: 1, h: 2, place: 'tower' },
-  { kind: 'fairy', x: 27, y: 11, w: 1, h: 1, place: 'fairy' },
+  { kind: 'gate', x: 0, y: 9, w: 1, h: 2, place: 'tower' },
+  { kind: 'fairy', x: 3, y: 11, w: 1, h: 1, place: 'fairy' },
   { kind: 'plant', x: 1, y: 7, w: 1, h: 1 },
   { kind: 'plant', x: 28, y: 7, w: 1, h: 1 },
   { kind: 'plant', x: 1, y: 12, w: 1, h: 1 },
@@ -162,6 +175,14 @@ export const PROPS: Prop[] = [
   { kind: 'torch', x: 26, y: 6, w: 1, h: 1 },
   { kind: 'banner', x: 7, y: 6, w: 1, h: 1 },
   { kind: 'banner', x: 17, y: 6, w: 1, h: 1 },
+  // Training Yard (east of the hall)
+  { kind: 'drillBoard', x: 33, y: 6, w: 2, h: 1, place: 'trainingCenter' },
+  { kind: 'dummy', x: 32, y: 9, w: 1, h: 1, place: 'trainingCenter' },
+  { kind: 'dummy', x: 35, y: 9, w: 1, h: 1, place: 'trainingCenter' },
+  { kind: 'dummy', x: 33, y: 11, w: 1, h: 1, place: 'trainingCenter' },
+  { kind: 'weaponRack', x: 37, y: 7, w: 1, h: 1 },
+  { kind: 'torch', x: 31, y: 6, w: 1, h: 1 },
+  { kind: 'banner', x: 36, y: 6, w: 1, h: 1 },
   // Synthesis Chamber
   { kind: 'cauldron', x: 4, y: 15, w: 2, h: 1, place: 'synthesis' },
   { kind: 'shelves', x: 1, y: 14, w: 2, h: 1 },
@@ -179,6 +200,7 @@ export const PLACE_LABEL: Record<PlaceId, string> = {
   kitchen: 'Kitchen',
   tacticalCenter: 'Tactical Center',
   promotionChamber: 'Promotion Chamber',
+  trainingCenter: 'Training Center',
   synthesis: 'Synthesis Chamber',
   armory: 'Armory',
   daily: 'Daily Dungeon',

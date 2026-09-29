@@ -26,6 +26,7 @@ const PLACES: PlaceId[] = [
   'kitchen',
   'tacticalCenter',
   'promotionChamber',
+  'trainingCenter',
   'synthesis',
   'armory',
   'daily',
@@ -72,6 +73,11 @@ describe('lobby map', () => {
         if (p.y === 6 || p.y === 13) expect(ch, `${p.kind}@${p.x},${p.y}`).toBe('#')
       }
     }
+  })
+
+  it('the Training Yard connects to the hall and the Tower Gate sits on the west wall', () => {
+    expect(walkableTilesIn('training').length).toBeGreaterThan(20)
+    expect(propForPlace('tower').x).toBe(0)
   })
 
   it('findPath returns [] when already at the goal and null when unreachable', () => {

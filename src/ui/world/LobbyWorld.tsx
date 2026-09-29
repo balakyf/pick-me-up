@@ -70,11 +70,12 @@ function cameraFor(px: number, py: number, vw: number, vh: number): { camX: numb
 }
 const MASTER_SPEED = 5.5 // tiles / s
 const HERO_SPEED = 2
-const PANEL_PLACES: PanelPlace[] = ['kitchen', 'tacticalCenter', 'promotionChamber', 'synthesis', 'armory', 'daily']
+const PANEL_PLACES: PanelPlace[] = ['kitchen', 'tacticalCenter', 'promotionChamber', 'trainingCenter', 'synthesis', 'armory', 'daily']
 export const PLACE_ICON: Record<PlaceId, string> = {
   kitchen: '🍲',
   tacticalCenter: '🗺',
   promotionChamber: '⛩',
+  trainingCenter: '⚔',
   synthesis: '⚗',
   armory: '⚒',
   daily: '🌀',
@@ -93,6 +94,7 @@ export const MENU_PLACES: PlaceId[] = [
   'kitchen',
   'tacticalCenter',
   'promotionChamber',
+  'trainingCenter',
   'synthesis',
   'armory',
   'daily',
@@ -215,6 +217,7 @@ function lockedRooms(state: GameState): RoomId[] {
   if (!smithyUnlocked(state)) out.push('armory')
   if (!dailyUnlocked(state)) out.push('daily')
   if (state.facilities.promotionChamber.level === 0) out.push('promotionChamber')
+  if (state.facilities.trainingCenter.level === 0) out.push('training')
   return out
 }
 
@@ -500,7 +503,7 @@ export function LobbyWorld({
         const img = cachedCanvas(`prop|${p.kind}|${f}`, () => drawProp(p.kind, f).bmp)
         if (!img) continue
         const spr = propOffset(p.kind)
-        const wallMounted = p.y === 0 || p.kind === 'torch' || p.kind === 'banner' || p.kind === 'gate'
+        const wallMounted = p.y === 0 || p.kind === 'torch' || p.kind === 'banner' || p.kind === 'gate' || p.kind === 'drillBoard'
         list.push({
           y: wallMounted ? -1 : (p.y + p.h) * TILE,
           draw: () => ctx.drawImage(img, p.x * TILE + spr.dx - camX, p.y * TILE + spr.dy - camY),

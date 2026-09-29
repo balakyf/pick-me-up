@@ -298,6 +298,13 @@ span.arm-slot { padding: 2px 8px; border: 2px dashed #3e3478; color: var(--ink-f
 .statgrid .k { color: var(--ink-dim); }
 .statgrid .v { text-align: right; font-variant-numeric: tabular-nums; }
 
+/* Training Center */
+.training-action { display: flex; flex-direction: column; gap: 4px; }
+.drill-list { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; }
+.drill-row { display: grid; grid-template-columns: 20px 1fr auto auto; align-items: center; gap: 8px; font-size: 15px; }
+.drill-row.off { opacity: 0.55; }
+.drill-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
 /* Skills */
 .skill-list { display: flex; flex-direction: column; gap: 3px; margin-top: 10px; }
 .skill-list.empty-skills { color: var(--ink-faint); font-size: 13px; }

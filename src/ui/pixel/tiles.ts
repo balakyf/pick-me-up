@@ -32,6 +32,9 @@ const C = {
   dailyM: hex('#264654'),
   dailyL: hex('#305a6a'),
   mist: hex('#6ab4c8'),
+  sandM: hex('#b8966a'),
+  sandL: hex('#cca87a'),
+  sandD: hex('#9a7a52'),
   wallTop: hex('#241c30'),
   wallTopL: hex('#342a44'),
   brickM: hex('#5a4a5e'),
@@ -138,6 +141,13 @@ function floorTile(b: Bitmap, ch: TileChar, tx: number, ty: number) {
       vline(b, ox + 15, oy, TILE, C.wallTop)
       rect(b, ox + 2, oy + 2, 4, 1, C.dailyL)
       for (let i = 0; i < 3; i++) if (r.chance(0.5)) set(b, ox + r.int(0, 15), oy + r.int(0, 15), C.mist)
+      break
+    case 'r':
+      // raked training sand: soft stripes + pebbles
+      rect(b, ox, oy, TILE, TILE, C.sandM)
+      for (let y = 1; y < TILE; y += 4) hline(b, ox, oy + y, TILE, (tx + ty) % 2 ? C.sandL : C.sandD)
+      for (let i = 0; i < 3; i++) set(b, ox + r.int(0, 15), oy + r.int(0, 15), C.sandD)
+      if (r.chance(0.2)) set(b, ox + r.int(2, 13), oy + r.int(2, 13), C.sandL)
       break
     default:
       break

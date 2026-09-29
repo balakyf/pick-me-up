@@ -182,4 +182,15 @@ describe('App smoke', () => {
     expect(chips).toContain('DBerserkLv 1')
     expect(chips).toContain('DComposureLv 1')
   })
+
+  it('the Training Center opens from the Menu, gated at Master Lv 2', () => {
+    mount()
+    act(() => {
+      getStore().dispatch({ type: 'NEW_ACCOUNT', seed: 32, now: 0 })
+    })
+    openPlace('Training Center')
+    expect(container.textContent).toContain('never stats or level')
+    expect(container.textContent).toContain('Build the Training Center to start drills')
+    expect(container.textContent).toContain('Unlocks at Master Lv 2')
+  })
 })

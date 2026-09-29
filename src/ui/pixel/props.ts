@@ -47,6 +47,8 @@ export const PROP_FRAMES: Record<PropKind, number> = {
   banner: 1,
   torch: 3,
   fairy: 4,
+  dummy: 1,
+  drillBoard: 1,
 }
 
 const STONE = ramp('#4a4452', '#6e6678', '#8e869a')
@@ -410,6 +412,46 @@ function fairy(f: number): PropSprite {
   return { bmp: outline(b, INK), dx: 0, dy: -18 }
 }
 
+function dummy(): PropSprite {
+  const b = createBitmap(16, 28)
+  const straw = ramp('#8a6a2a', '#c8a04a', '#e8cc7a')
+  vline(b, 7, 14, 13, WOOD.d) // post
+  vline(b, 8, 14, 13, WOOD.m)
+  rect(b, 4, 26, 8, 2, WOOD.d) // base
+  hline(b, 2, 12, 12, WOOD.m) // arms
+  ellipse(b, 4, 10, 8, 10, straw.m) // body
+  vline(b, 5, 12, 6, straw.d)
+  vline(b, 10, 12, 6, straw.l)
+  hline(b, 4, 14, 8, hex('#7a1a2a')) // rope belt
+  ellipse(b, 5, 2, 6, 8, LINEN.m) // sack head
+  set(b, 6, 5, INK)
+  set(b, 9, 5, INK)
+  // painted target on the chest
+  ellipse(b, 6, 16, 4, 4, hex('#d0302a'))
+  set(b, 7, 17, WHITE_PX)
+  set(b, 8, 18, WHITE_PX)
+  return { bmp: outline(b, INK), dx: 0, dy: -12 }
+}
+
+function drillBoard(): PropSprite {
+  const b = createBitmap(32, 16)
+  rect(b, 1, 1, 30, 14, WOOD.d)
+  rect(b, 3, 3, 26, 10, hex('#2a3a2e')) // chalkboard
+  // chalk drill diagram: stick figure, arrows, tally marks
+  line(b, 6, 6, 6, 10, hex('#e8ece0'))
+  set(b, 6, 5, hex('#e8ece0'))
+  line(b, 6, 7, 9, 5, hex('#e8ece0'))
+  line(b, 11, 8, 17, 8, hex('#e8ece0'))
+  line(b, 15, 6, 17, 8, hex('#e8ece0'))
+  line(b, 15, 10, 17, 8, hex('#e8ece0'))
+  for (let i = 0; i < 4; i++) vline(b, 20 + i * 2, 5, 4, hex('#e8ece0'))
+  line(b, 19, 9, 27, 5, hex('#e8ece0'))
+  hline(b, 20, 11, 7, hex('#f2c75c'))
+  return { bmp: outline(b, INK), dx: 0, dy: 1 }
+}
+
+const WHITE_PX = hex('#fff6e0')
+
 const DRAW: Record<PropKind, (f: number) => PropSprite> = {
   hearth,
   table,
@@ -431,6 +473,8 @@ const DRAW: Record<PropKind, (f: number) => PropSprite> = {
   banner,
   torch,
   fairy,
+  dummy,
+  drillBoard,
 }
 
 export function drawProp(kind: PropKind, frame = 0): PropSprite {

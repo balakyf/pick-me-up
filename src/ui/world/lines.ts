@@ -23,7 +23,8 @@ function pick<T>(arr: T[], seed: string): T {
 export function heroLines(hero: OwnedHero, inParty: boolean): string[] {
   const first = hero.name.split(/\s+/)[0]
   let mood: string
-  if (hero.sanity < 30) mood = 'I… I can’t stop shaking. The tower— please. Just a little rest.'
+  if (hero.training) mood = `Again. And again. ${hero.training.mode === 'learn' ? 'This new form' : 'This technique'} is almost mine.`
+  else if (hero.sanity < 30) mood = 'I… I can’t stop shaking. The tower— please. Just a little rest.'
   else if (hero.sanity < 60) mood = 'I’m fine. Really. I just need a moment by the fire.'
   else if (hero.promotion) mood = 'They sealed me in the chamber for a while. I feel… different.'
   else if (hero.xp.atCap) mood = 'I’ve hit a wall, Master. Something in the Promotion Chamber could break it.'

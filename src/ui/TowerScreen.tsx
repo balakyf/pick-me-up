@@ -20,7 +20,10 @@ export function TowerScreen({ state, store }: { state: GameState; store: Store }
   useEffect(() => {
     currentRef.current?.scrollIntoView?.({ block: 'center' })
   }, [current])
-  const deployable = state.party.slots.some((id) => id && state.heroes[id]?.alive)
+  const deployable = state.party.slots.some((id) => {
+    const h = id ? state.heroes[id] : undefined
+    return !!h && h.alive && h.sanity > 0 && h.training === null
+  })
   const beatGame = state.tower.highestCleared >= MAX_FLOOR
 
   function enter() {
@@ -60,7 +63,7 @@ export function TowerScreen({ state, store }: { state: GameState; store: Store }
 
       {!deployable && (
         <div className="empty" style={{ color: 'var(--warn)' }}>
-          No living heroes deployed — set your Party before entering the tower.
+          No deployable heroes — set your Party (heroes in training or broken down can't fight).
         </div>
       )}
 
