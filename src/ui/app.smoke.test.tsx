@@ -169,4 +169,17 @@ describe('App smoke', () => {
     // …but a fresh ML1 account sees the forge locked (the Smithy opens at ML2).
     expect(container.textContent).toContain('Unlocks at Master Lv 2')
   })
+
+  it("the Roster lists each hero's skills with grade and level", () => {
+    mount()
+    act(() => {
+      getStore().dispatch({ type: 'NEW_ACCOUNT', seed: 31, now: 0 })
+    })
+    openPlace('Roster')
+    // The starter (Islat Han) owns Power Strike, Berserk and Composure at Lv1.
+    const chips = Array.from(container.querySelectorAll('.skill-chip')).map((c) => c.textContent)
+    expect(chips).toContain('CPower StrikeLv 1')
+    expect(chips).toContain('DBerserkLv 1')
+    expect(chips).toContain('DComposureLv 1')
+  })
 })

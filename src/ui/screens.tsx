@@ -9,7 +9,8 @@ import { heroFrameUrl } from './pixel/sprites'
 import { cachedDataUrl } from './pixel/render'
 import { drawProp } from './pixel/props'
 import { scale } from './pixel/bitmap'
-import type { Element, HeroClass, Star } from '../engine/types'
+import type { Element, HeroClass, SkillProgress, Star } from '../engine/types'
+import { SKILLS } from '../engine/content'
 
 export const PARTY_LINES: Line[] = ['front', 'front', 'mid', 'back', 'back']
 const SUMMON_COST = TUNING.gacha.normalCostGold
@@ -131,7 +132,7 @@ export function RosterScreen({ state }: { state: GameState }) {
   return (
     <div className="screen">
       <h2>Roster</h2>
-      <p className="sub">{heroes.length} heroes · {living} living · click a card for full stats.</p>
+      <p className="sub">{heroes.length} {heroes.length === 1 ? 'hero' : 'heroes'} · {living} living · click a card for full stats.</p>
       <div className="grid cards">
         {heroes.map((h) => (
           <HeroCard
@@ -233,6 +234,15 @@ export function PartyScreen({ state, store }: { state: GameState; store: Store }
 }
 
 // ── Results ──────────────────────────────────────────────────────────────────
+/** One line of skill news for the results screen. */
+export function skillProgressLine(p: SkillProgress, state: GameState): string {
+  const who = state.heroes[p.heroId]?.name.split(/\s+/)[0] ?? 'A hero'
+  const name = (id: string) => SKILLS[id]?.name ?? id
+  return p.kind === 'level-up'
+    ? `▲ ${who}'s ${name(p.skillId)} reached Lv ${p.level}`
+    : `✦ ${who} fused ${name(p.from[0])} + ${name(p.from[1])} into ${name(p.skillId)}!`
+}
+
 export function ResultsScreen({
   result,
   state,
@@ -260,6 +270,14 @@ export function ResultsScreen({
             <div className="l">XP each</div>
           </div>
         </div>
+
+        {result.skillProgress.length > 0 && (
+          <div className="skill-progress">
+            {result.skillProgress.map((p, i) => (
+              <div key={i} className={`sp-row ${p.kind}`}>{skillProgressLine(p, state)}</div>
+            ))}
+          </div>
+        )}
 
         {fallen.length > 0 && (
           <div className="fallen">

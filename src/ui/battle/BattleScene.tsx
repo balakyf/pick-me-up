@@ -5,7 +5,7 @@ import { drawBattleBg, BG_H, BG_W } from '../pixel/battleBg'
 import { cachedDataUrl } from '../pixel/render'
 import { enemySize, enemyUrl, heroBustUrl, heroFrameUrl } from '../pixel/sprites'
 import type { LookSource } from '../pixel/look'
-import { hpColor } from '../bits'
+import { ELEMENT_VIS, hpColor } from '../bits'
 
 /**
  * The battle as a side-view JRPG scene. The engine resolved the fight already;
@@ -21,6 +21,8 @@ interface Snap {
   target: string | null
   panic: string | null
   caption: string
+  /** The authored skill being cast this action (kept through its hits). */
+  skill: { name: string; color: string; caster: string } | null
 }
 
 const SPEEDS = [1, 2, 4] as const
@@ -32,6 +34,7 @@ const DURATION: Record<CombatEvent['kind'], number> = {
   act: 260,
   hit: 460,
   miss: 400,
+  'hp-cost': 450,
   panic: 650,
   death: 600,
   mission: 900,
@@ -89,10 +92,21 @@ export function BattleScene({ log, state, onDone }: { log: CombatLog; state: Gam
       target: null,
       panic: null,
       caption: `Floor ${log.floor}`,
+      skill: null,
     }
     out.push(cur)
     for (const e of log.events) {
-      const next: Snap = { ...cur, hp: { ...cur.hp }, dead: { ...cur.dead }, visible: { ...cur.visible }, actor: null, target: null, panic: null }
+      const keepSkill = e.kind === 'hit' || e.kind === 'miss' || e.kind === 'hp-cost'
+      const next: Snap = {
+        ...cur,
+        hp: { ...cur.hp },
+        dead: { ...cur.dead },
+        visible: { ...cur.visible },
+        actor: null,
+        target: null,
+        panic: null,
+        skill: keepSkill ? cur.skill : null,
+      }
       switch (e.kind) {
         case 'battle-start':
           for (const id of [...e.heroIds, ...e.enemyIds]) next.visible[id] = true
@@ -102,11 +116,17 @@ export function BattleScene({ log, state, onDone }: { log: CombatLog; state: Gam
           for (const id of e.enemyIds) next.visible[id] = true
           next.caption = `Wave ${e.wave + 1} appears!`
           break
-        case 'act':
+        case 'act': {
           next.actor = e.actorId
           next.target = e.targetId
           next.caption = `${nameOf(e.actorId)} — ${skillName(e.skillId)}`
+          const def = SKILLS[e.skillId]
+          if (def) {
+            const el = def.element ?? byId[e.actorId]?.element ?? 'physical'
+            next.skill = { name: def.name, color: ELEMENT_VIS[el].color, caster: e.actorId }
+          }
           break
+        }
         case 'hit':
           next.hp[e.targetId] = e.hpAfter
           next.actor = e.actorId
@@ -117,6 +137,11 @@ export function BattleScene({ log, state, onDone }: { log: CombatLog; state: Gam
           next.actor = e.actorId
           next.target = e.targetId
           next.caption = cur.caption
+          break
+        case 'hp-cost':
+          next.hp[e.unitId] = e.hpAfter
+          next.actor = e.unitId
+          next.caption = `${nameOf(e.unitId)} pays ${e.amount} HP!`
           break
         case 'panic':
           next.panic = e.unitId
@@ -201,6 +226,7 @@ export function BattleScene({ log, state, onDone }: { log: CombatLog; state: Gam
             const isHero = u.side === 'hero'
             const acting = snap.actor === u.id && (current?.kind === 'act' || current?.kind === 'hit' || current?.kind === 'miss')
             const hurt = snap.target === u.id && current?.kind === 'hit'
+            const skillHit = hurt && snap.skill !== null
             const dead = !!snap.dead[u.id]
             const size = isHero ? { w: 24, h: 32 } : enemySize(u.name, u.element)
             const src = isHero ? heroFrameUrl(heroSrc(u), 'left', acting ? 1 : 0) : enemyUrl(u.name, u.element)
@@ -212,8 +238,21 @@ export function BattleScene({ log, state, onDone }: { log: CombatLog; state: Gam
               <div
                 key={u.id}
                 className={cls}
-                style={{ left: p.x - size.w / 2, top: p.y - size.h, width: size.w, height: size.h, zIndex: p.y }}
+                style={{
+                  left: p.x - size.w / 2,
+                  top: p.y - size.h,
+                  width: size.w,
+                  height: size.h,
+                  zIndex: p.y,
+                  ...(skillHit ? { ['--skill-color' as string]: snap.skill!.color } : {}),
+                }}
               >
+                {skillHit && <div className="skill-flash" />}
+                {snap.skill && snap.skill.caster === u.id && (
+                  <div className="skill-banner" style={{ borderColor: snap.skill.color }}>
+                    {snap.skill.name}
+                  </div>
+                )}
                 <div className="bshadow" style={{ width: size.w * 0.7 }} />
                 {src && <img className="px bsprite" src={src} width={size.w} height={size.h} alt={u.name} />}
                 {!isHero && !dead && (

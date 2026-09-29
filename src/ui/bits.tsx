@@ -1,6 +1,8 @@
 import type { Element, HeroClass, Star, OwnedHero } from '../engine/types'
 import { combatPowerForHero, gradeValueToLetter } from '../engine/stats'
 import { heroBustUrl } from './pixel/sprites'
+import { SKILLS } from '../engine/content'
+import { maxLevelFor, skillCp } from '../engine/skills'
 
 /** Visual tokens for elements. */
 export const ELEMENT_VIS: Record<Element, { glyph: string; color: string; label: string }> = {
@@ -38,8 +40,33 @@ export function classGlyph(c: HeroClass | null): string {
   return c === null ? '—' : CLASS_VIS[c].glyph
 }
 
+/** Display CP — the same number the combat unit carries (stats + skills term). */
 export function cpOf(hero: OwnedHero): number {
-  return combatPowerForHero(hero, hero.xp.level)
+  return combatPowerForHero(hero, hero.xp.level, skillCp(hero.skills))
+}
+
+/** A hero's skills as `name · grade · Lv N` chips (read-only, Layer 1 §2). */
+export function SkillList({ hero, max }: { hero: OwnedHero; max?: number }) {
+  const shown = max !== undefined ? hero.skills.slice(0, max) : hero.skills
+  if (hero.skills.length === 0) return <div className="skill-list empty-skills">No skills yet</div>
+  return (
+    <div className="skill-list">
+      {shown.map((s) => {
+        const def = SKILLS[s.id]
+        if (!def) return null
+        const cap = maxLevelFor(def.grade)
+        return (
+          <div key={s.id} className={`skill-chip grade-${def.grade}`} title={`${def.name} · grade ${def.grade} · Lv ${s.level}/${cap}`}>
+            <span className="skill-grade">{def.grade}</span>
+            <span className="skill-name">{def.name}</span>
+            <span className="skill-lv">Lv {s.level}</span>
+            {def.hpCost !== undefined && <span className="skill-hp" title="Costs HP to cast">♥</span>}
+          </div>
+        )
+      })}
+      {max !== undefined && hero.skills.length > max && <div className="skill-more">+{hero.skills.length - max} more</div>}
+    </div>
+  )
 }
 
 /** Deterministic display color from a hero's portrait token (hex) or id. */

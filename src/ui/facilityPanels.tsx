@@ -14,6 +14,7 @@ import { toWorldTime } from '../engine/time'
 import { canSynthesize, synthesisPreview, synthesisUnlocked, type SynthesisInput } from '../engine/synthesis'
 import { smithyUnlocked, forgeGrade, forgeCost, canCraft, itemName, equippedItemIds } from '../engine/equipment'
 import { Portrait } from './bits'
+import { skillProgressLine } from './screens'
 
 /**
  * Facility panels — the rules-facing half of the Lobby. The walkable world
@@ -275,7 +276,9 @@ function DailyPortal({ state, store }: { state: GameState; store: Store }) {
       store.dispatch({ type: 'ATTEMPT_DAILY' }, now)
       setLast({
         cleared: result.cleared,
-        text: result.cleared ? `Cleared! ${rewardSummary(result.rewards)}` : 'Failed — no reward this run.',
+        text:
+          (result.cleared ? `Cleared! ${rewardSummary(result.rewards)}` : 'Failed — no reward this run.') +
+          result.skillProgress.map((p) => ` ${skillProgressLine(p, store.getState() ?? state)}`).join(''),
       })
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'Run failed')
