@@ -63,6 +63,7 @@ import { startTraining, skipTraining } from '../training'
 import { attemptDaily, type DailyResult } from '../daily'
 import { advanceTime, toWorldTime } from '../time'
 import { assignJob, lifeOf, lifeReact } from '../life'
+import { afterFloor, resolveBonusRoom, runRaid, runWeeklyTrial } from '../challenge'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Guards
@@ -123,7 +124,8 @@ export function reduce(state: GameState | null, cmd: Command, nowWorld: number =
   if (cmd.type === 'ATTEMPT_FLOOR') {
     const current = advanceTime(requireState(state, cmd.type), nowWorld)
     if (current.meta.deleted) throw new Error('reduce: this waiting room has greyed and been deleted — start a new Master')
-    const r = playFloor(current, cmd.focus, cmd.ballista, cmd.subvert, cmd.orders)
+    // Tower challenges: the Shrine's blessing is spent, an anchor may open a side room.
+    const r = afterFloor(playFloor(current, cmd.focus, cmd.ballista, cmd.subvert, cmd.orders))
     return lifeReact(state, r.state, cmd, nowWorld, r.result)
   }
   return lifeReact(state, reduceCore(state, cmd, nowWorld), cmd, nowWorld)
@@ -149,7 +151,7 @@ function reduceCore(state: GameState | null, cmd: Command, nowWorld: number): Ga
     }
 
     case 'ATTEMPT_FLOOR':
-      return playFloor(current, cmd.focus, cmd.ballista, cmd.subvert, cmd.orders).state
+      return afterFloor(playFloor(current, cmd.focus, cmd.ballista, cmd.subvert, cmd.orders)).state
 
     case 'TICK':
       return current
@@ -279,6 +281,15 @@ function reduceCore(state: GameState | null, cmd: Command, nowWorld: number): Ga
       // Testing-only cheat: grant free gold. Not part of the real economy.
       return { ...current, gold: current.gold + cmd.amount }
 
+    case 'BONUS_ROOM':
+      return resolveBonusRoom(current, cmd.choice).state
+
+    case 'TOWER_RAID':
+      return runRaid(current, cmd.floor, cmd.parties, cmd.crew, cmd.ballista, nowWorld).state
+
+    case 'WEEKLY_TRIAL':
+      return runWeeklyTrial(current, cmd.heroIds, nowWorld).state
+
     default: {
       // Exhaustiveness guard: a new Command variant must be handled here.
       const exhaustive: never = cmd
@@ -328,7 +339,7 @@ export function attemptFloorWithResult(
   subvert?: boolean,
   orders?: BattleOrder[],
 ): { state: GameState; result: FloorResult } {
-  const r = playFloor(state, focus, ballista, subvert, orders)
+  const r = afterFloor(playFloor(state, focus, ballista, subvert, orders))
   return { state: lifeReact(state, r.state, { type: 'ATTEMPT_FLOOR', focus, ballista, subvert, orders }, 0, r.result), result: r.result }
 }
 
@@ -385,6 +396,27 @@ export function resolveEventWithResult(
   nowReal = 0,
 ): { state: GameState; outcome: EventOutcome } {
   return resolveEvent(advanceTime(requireState(state, 'RESOLVE_EVENT'), toWorldTime(nowReal)), option)
+}
+
+/**
+ * Tower challenges: like dispatching BONUS_ROOM / TOWER_RAID / WEEKLY_TRIAL, but also
+ * returning what happened (loot, the raid's battles, the trial's score) for the UI. Each
+ * runs the same advanceTime catch-up `reduce` does, so the result matches the dispatch.
+ */
+export function bonusRoomWithResult(state: GameState | null, choice: string, nowReal = 0) {
+  return resolveBonusRoom(advanceTime(requireState(state, 'BONUS_ROOM'), toWorldTime(nowReal)), choice)
+}
+export function towerRaidWithResult(
+  state: GameState | null,
+  cmd: { floor: number; parties: HeroId[][]; crew: HeroId[]; ballista?: number },
+  nowReal = 0,
+) {
+  const nowWorld = toWorldTime(nowReal)
+  return runRaid(advanceTime(requireState(state, 'TOWER_RAID'), nowWorld), cmd.floor, cmd.parties, cmd.crew, cmd.ballista, nowWorld)
+}
+export function weeklyTrialWithResult(state: GameState | null, heroIds: HeroId[], nowReal = 0) {
+  const nowWorld = toWorldTime(nowReal)
+  return runWeeklyTrial(advanceTime(requireState(state, 'WEEKLY_TRIAL'), nowWorld), heroIds, nowWorld)
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

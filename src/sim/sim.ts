@@ -11,7 +11,7 @@
  * who uses every system, and a whale. Everything is seeded, so a run is repeatable.
  */
 import { TUNING } from '../engine/tuning'
-import type { GameState, HeroId, Line, OwnedHero, EquipmentSlot, Command, FloorResult } from '../engine/types'
+import type { GameState, HeroId, Line, OwnedHero, EquipmentSlot, Command, FloorResult, BonusRoomKind } from '../engine/types'
 import { reduce, attemptFloorWithResult } from '../engine/store'
 import { toWorldTime } from '../engine/time'
 import { combatPowerForHero } from '../engine/stats'
@@ -26,6 +26,7 @@ import { floorPower, buildEncounter } from '../engine/tower'
 import { ANCHORS } from '../engine/content'
 import { loginClaimed, packageRefusal } from '../engine/shop'
 import { crackRefusal, dispatchRefusal } from '../engine/rift'
+import { challengeOf } from '../engine/challenge'
 import { GIFTS, giftDelta } from '../engine/favor'
 
 export type ProfileId = 'casual' | 'engaged' | 'whale'
@@ -214,6 +215,7 @@ class Bot {
     this.trackInvasions()
     this.shop()
     this.resolveEvent()
+    this.sideRoom()
     this.buildFacilities()
     this.promote()
     this.summon()
@@ -455,7 +457,25 @@ class Bot {
         return
       }
       this.lastLoss = null
+      this.sideRoom()
     }
+  }
+
+  /** Tower challenges: an engaged player walks through the side door an anchor revealed. */
+  private sideRoom(): void {
+    if (!this.p.crack) return
+    const room = challengeOf(this.s).room
+    if (!room) return
+    const wants: Record<BonusRoomKind, string[]> = {
+      vault: ['take'],
+      lostHero: ['accept'],
+      training: ['train'],
+      mimic: ['fight'],
+      shrine: this.avgSanity() >= 70 ? ['accept'] : [],
+      merchant: this.s.gold > 50_000 ? ['stones', 'rank', 'gear', 'attr'] : [],
+    }
+    for (const c of wants[room.kind]) this.try({ type: 'BONUS_ROOM', choice: c })
+    if (challengeOf(this.s).room) this.try({ type: 'BONUS_ROOM', choice: 'leave' })
   }
 
   private rift(): void {

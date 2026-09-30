@@ -29,6 +29,7 @@ import { PixelWindow, Gauge } from '../kit'
 import { heroBustUrl } from '../pixel/sprites'
 import { JOB_NAME, accountDay, chronicleLine, diaryLine, groupedChronicle, placeName, shortName, speak, statusLine, tradeName } from './speech'
 import { t } from '../i18n/i18n'
+import { BondList } from '../bond/BondBadge'
 
 const first = (n: string) => n.split(/\s+/)[0] ?? n
 
@@ -295,6 +296,7 @@ export function HeroProfile({
                 {r.shared > 0 && <span className="muted small">{t('{n} floors together', { n: r.shared })}</span>}
               </div>
             ))}
+            <BondList state={state} hero={hero} onFind={onFind} />
             <h4 className="panel-sub">{t('Memories')}</h4>
             {salientMemories(life, today)
               .slice(0, 8)

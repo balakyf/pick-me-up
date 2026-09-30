@@ -24,6 +24,7 @@ import { upgradeCost as forgeUpgradeCost, upgradeOdds, upgradeRefusal } from '..
 import { upgradeEquipmentWithResult } from '../engine/store'
 import { t } from './i18n/i18n'
 import { DormitoryInfo, ForgeOrderSection, HereNow, KitchenPantry, LibraryInfo, MemorialPanel, StaffSection, WatchtowerInfo } from './life/lifePanels'
+import { WeeklyTrialLauncher } from './challenge/WeeklyTrial'
 
 /**
  * Facility panels — the rules-facing half of the Lobby. The walkable world
@@ -1080,6 +1081,7 @@ export function PlacePanel({
         </>
       )}
       {place === 'rift' && <RiftPanel state={state} store={store} />}
+      {place === 'rift' && state.meta.crackOpen && <WeeklyTrialLauncher state={state} store={store} />}
       {place === 'shop' && <ShopPanel state={state} store={store} />}
       {place === 'guild' && <GuildPanel state={state} store={store} />}
       {place === 'synthesis' && <SynthesisChamber state={state} store={store} />}

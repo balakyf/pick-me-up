@@ -14,12 +14,13 @@ import { TUNING } from '../tuning'
 import type { Command, DeathCause, FallenRecord, FloorResult, GameState, HeroId, HeroLife, OwnedHero, Relation } from '../types'
 import { addMemory, dayOfSlot, lifeOf, relationKey, slotOf, newHeroLife } from './life'
 import { personalityOf } from './personality'
+import { bondGriefMult } from '../challenge/bonds'
 
 const R = TUNING.life.relation
 const G = TUNING.life.grief
 
 function causeFor(cmd: Command): DeathCause {
-  if (cmd.type === 'ATTEMPT_FLOOR') return 'battle'
+  if (cmd.type === 'ATTEMPT_FLOOR' || cmd.type === 'TOWER_RAID' || cmd.type === 'BONUS_ROOM') return 'battle'
   if (cmd.type === 'SYNTHESIZE' || cmd.type === 'SYNTHESIZE_CAPTIVE') return 'synthesis'
   return 'captor'
 }
@@ -92,7 +93,7 @@ export function lifeReact(before: GameState | null, after: GameState, cmd: Comma
       element: was.element,
       portraitToken: was.portraitToken,
       cause,
-      floor: cause === 'battle' ? before.tower.currentFloor : life.bestFloor,
+      floor: cmd.type === 'TOWER_RAID' ? cmd.floor : cause === 'battle' ? before.tower.currentFloor : life.bestFloor,
       day,
       daysServed: Math.max(0, day - life.arrivedDay),
       bestFloor: Math.max(life.bestFloor, cause === 'battle' ? before.tower.currentFloor : 0),
@@ -106,9 +107,11 @@ export function lifeReact(before: GameState | null, after: GameState, cmd: Comma
       if (aff >= R.friend) {
         const p = personalityOf(oh)
         const l = lifeFor(o)
-        l.grief = Math.min(100, l.grief + G.base + aff * G.perAffinity)
+        // A bond sibling (summoned together) grieves harder.
+        const bm = bondGriefMult(after, id, o)
+        l.grief = Math.min(100, l.grief + (G.base + aff * G.perAffinity) * bm)
         addMemory(l, { kind: 'friendDied', day, other: id, floor: rec.floor, weight: 90 })
-        sanityDelta.set(o, (sanityDelta.get(o) ?? 0) - (G.sanityBase + aff * G.sanityPerAffinity) * (1 - p.courage * 0.4))
+        sanityDelta.set(o, (sanityDelta.get(o) ?? 0) - (G.sanityBase + aff * G.sanityPerAffinity) * bm * (1 - p.courage * 0.4))
       } else if (deployed.includes(o)) {
         addMemory(lifeFor(o), { kind: 'comradeDied', day, other: id, floor: rec.floor, weight: 60 })
       }

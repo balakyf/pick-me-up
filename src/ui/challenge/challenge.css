@@ -1,0 +1,89 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   Tower challenges: bond badges, the side room, the raid table, the weekly trial,
+   and the tower's look. Built on the tokens in ui.css.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Bonds ─────────────────────────────────────────────────────────────── */
+.bond-badge {
+  display: inline-block; margin-top: 4px; padding: 0 6px; font-size: 12px; white-space: nowrap;
+  color: #ffd9a0; background: #3a2412; border: 1px solid #b8862a; box-shadow: inset 0 0 0 1px #1a0e06;
+  max-width: 100%; overflow: hidden; text-overflow: ellipsis;
+}
+.bond-list { margin-top: 6px; }
+.bond-members { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 4px; }
+.bond-member.fallen { color: var(--ink-faint); text-decoration: line-through; cursor: default; }
+
+/* ── Hero chips (pickers) ──────────────────────────────────────────────── */
+.hero-chip {
+  display: flex; align-items: center; gap: 6px; padding: 3px 6px 3px 3px; min-width: 150px; max-width: 210px;
+  background: #120e2c; border: 2px solid #3e3478; color: var(--ink); font: inherit; text-align: left; cursor: pointer;
+  position: relative;
+}
+.hero-chip:hover:not(:disabled) { border-color: var(--accent-2); }
+.hero-chip.sel { border-color: var(--gold); background: #231a44; }
+.hero-chip .hc-body { display: flex; flex-direction: column; min-width: 0; line-height: 1.15; }
+.hero-chip .hc-name { font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hero-chip .hc-star { color: var(--gold); font-size: 12px; }
+.hero-chip .hc-meta { font-size: 12px; color: var(--ink-dim); white-space: nowrap; }
+.hero-chip .hc-tired { color: var(--warn); }
+.hero-chip .bond-badge { margin-top: 2px; font-size: 11px; }
+.hero-chip .hc-tag {
+  position: absolute; top: -8px; right: -6px; padding: 0 4px; font-size: 11px;
+  background: var(--gold); color: #2a1a04; border: 1px solid var(--rim-dark);
+}
+
+/* ── The side room and the challenge bar ────────────────────────────────── */
+.side-room { padding: 10px 14px; margin: 10px 0; border-color: #b8862a; }
+.side-room-choices { display: flex; flex-wrap: wrap; gap: 8px; align-items: stretch; }
+.side-room-choices .event-option { min-width: 180px; }
+.room-loot { margin: 14px 0 4px; display: grid; gap: 4px; font-size: 16px; }
+.challenge-bar { display: flex; flex-wrap: wrap; gap: 8px; padding: 8px 10px; margin: 10px 0; }
+
+/* ── The raid table ─────────────────────────────────────────────────────── */
+.raid-planner { display: grid; gap: 10px; }
+.raid-tabs { display: flex; flex-wrap: wrap; gap: 6px; }
+.raid-tab {
+  font: inherit; font-size: 14px; padding: 4px 10px; color: var(--ink); cursor: pointer;
+  background: #120e2c; border: 2px solid #3e3478;
+}
+.raid-tab.on { border-color: var(--gold); background: #2a2258; }
+.raid-tab:disabled { opacity: 0.45; cursor: not-allowed; }
+.raid-boss { padding: 8px 10px; background: #160f30; border: 2px solid #4a3e8e; display: grid; gap: 4px; }
+.raid-stakes { padding: 6px 10px; color: #ffc0c6; background: #3a0e18; border: 2px solid var(--bad); font-size: 14px; }
+.raid-rows { display: grid; gap: 6px; }
+.raid-row {
+  display: flex; gap: 10px; align-items: center; padding: 6px 8px; min-height: 52px; cursor: pointer;
+  background: #120e2c; border: 2px dashed #3e3478;
+}
+.raid-row.on { border-style: solid; border-color: var(--accent-2); background: #1c1640; }
+.raid-row-label { flex: 0 0 120px; font-weight: 600; }
+.raid-row-heroes { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.raid-break { font-size: 14px; color: var(--gold); }
+.raid-roster { display: flex; flex-wrap: wrap; gap: 6px; max-height: 240px; overflow-y: auto; padding: 8px 4px 4px; }
+.raid-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.raid-result { text-align: center; display: grid; gap: 8px; }
+.raid-result .big-outcome { font-size: 34px; font-weight: 600; letter-spacing: 2px; text-shadow: 3px 3px 0 var(--rim-dark); }
+.raid-hp { display: grid; gap: 6px; margin: 8px auto; width: min(640px, 100%); }
+.raid-hp-row { display: grid; grid-template-columns: 110px 1fr 70px minmax(120px, auto); gap: 8px; align-items: center; text-align: left; }
+.raid-hp-bar { position: relative; height: 12px; background: #0a0714; border: 2px solid var(--rim-dark); box-shadow: 0 0 0 1px #4a3e8e; }
+.raid-hp-bar .left { position: absolute; left: 0; top: 0; bottom: 0; background: var(--bad); }
+.raid-hp-bar .dealt { position: absolute; top: 0; bottom: 0; background: #ffe07a; opacity: 0.85; }
+
+/* ── The weekly trial ──────────────────────────────────────────────────── */
+.weekly { display: grid; gap: 8px; }
+.weekly-rule { padding: 8px 10px; background: #160f30; border: 2px solid #6a4ad0; display: grid; gap: 4px; }
+.weekly-rule-name { font-size: 18px; color: var(--accent-2); }
+.weekly-stats { display: flex; gap: 20px; }
+.weekly-thresholds { display: flex; flex-wrap: wrap; gap: 6px; }
+.weekly-thresholds .wt { padding: 2px 8px; font-size: 13px; border: 1px solid #3e3478; background: #120e2c; color: var(--ink-dim); }
+.weekly-thresholds .wt.done { border-color: var(--good); color: var(--good); }
+
+/* ── The tower's look ──────────────────────────────────────────────────── */
+.tower-exterior img { display: block; }
+.tower-exterior.arrived img { animation: tower-arrive 0.9s steps(6) 1; }
+@keyframes tower-arrive {
+  0% { filter: brightness(1.6) drop-shadow(0 0 6px #ffe07a); }
+  100% { filter: none; }
+}
+.tower-omen { max-width: 128px; margin: 4px auto 0; font-size: 11px; text-align: center; color: #d8a0a0; }
+.tower-omen.dead { color: #9a969c; }

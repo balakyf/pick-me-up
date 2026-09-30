@@ -48,6 +48,7 @@ import { foldBattleSkills } from '../skills'
 import { rebellionChance, withFavor } from '../favor'
 import { addPi } from '../interference'
 import { practice, woundBoss } from '../minigames'
+import { applyPartyBonuses } from '../challenge/bonds'
 import { hash, rngFor, nextInt, nextFloat, chance, pick, makeSeed, type Rng } from '../rng/rng'
 import type { HiddenObjective, LoopState, TowerEvent, TowerState, BattleResult } from '../types'
 
@@ -550,7 +551,8 @@ export function playFloor(
     }
   }
   if (orders && orders.length > 0) enc = { ...enc, orders }
-  const res = runBattle(heroUnits, enc, combatSeed)
+  // Tower challenges: bond set bonuses and the Cursed Shrine's blessing ride on the units.
+  const res = runBattle(applyPartyBonuses(heroUnits, state), enc, combatSeed)
 
   // ── 4. Interpret. ───────────────────────────────────────────────────────────
   const cleared = res.outcome === 'win'

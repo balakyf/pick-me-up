@@ -44,6 +44,7 @@ import { CAMEO_HEROES, CLASS_SKILL, NAME_POOLS, SKILLS } from '../content'
 import { heroSkillsFromIds, learnableSkillIds } from '../skills'
 import { rollEngraving } from '../engravings'
 import { makeExclusiveWeapon } from '../equipment'
+import { bindSummonBatch } from '../challenge/bonds'
 import {
   type Rng,
   type Draw,
@@ -578,7 +579,7 @@ export function summonMany(
       heroes.push(res.hero)
       cur = res.state
     }
-    return { state: cur, heroes }
+    return withBond(cur, heroes, pool)
   }
   let cur: GameState = { ...state, gems: state.gems - cost.gems }
   for (let i = 0; i < count; i++) {
@@ -589,7 +590,13 @@ export function summonMany(
   const day = worldDayOf(state)
   const used = state.life.crystal.day === day ? state.life.crystal.advancedPulls : 0
   cur = { ...cur, life: { ...cur.life, crystal: { day, advancedPulls: used + count } } }
-  return { state: cur, heroes }
+  return withBond(cur, heroes, pool)
+}
+
+/** A ten-pull may arrive as a bond group (tower challenges); the heroes carry their bond. */
+function withBond(state: GameState, heroes: OwnedHero[], pool: SummonPool): { state: GameState; heroes: OwnedHero[] } {
+  const next = bindSummonBatch(state, heroes, pool)
+  return next === state ? { state, heroes } : { state: next, heroes: heroes.map((h) => next.heroes[h.id] ?? h) }
 }
 
 /** The free tutorial ten-pull is still waiting. */
