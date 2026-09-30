@@ -49,6 +49,7 @@ function cappedHero(overrides: Partial<OwnedHero> = {}): OwnedHero {
     blessed: false,
     expedition: null,
     captiveOf: null,
+    bondGroup: null,
     ...overrides,
   }
 }

@@ -333,6 +333,8 @@ export interface OwnedHero extends Omit<Hero, 'skillIds'> {
   expedition: { completesAtWorld: number } | null
   /** Kidnapped by a raiding Master (Layer 4 §2): held until ransomed, rescued or synthesized. */
   captiveOf: CaptiveHold | null
+  /** The bond group this hero was summoned into (schema v11), or null. */
+  bondGroup: string | null
   /** Quanton Life (schema v10): needs, job, current activity, memories. Absent until the
    *  life clock first sees the hero (a fresh summon) — read through life.lifeOf(). */
   life?: HeroLife
@@ -720,6 +722,45 @@ export interface DailiesState {
   lastResetWorldDay: number
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Schema v11: the Enemy Codex, tower challenges, the estate
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** What the Master has learned about one enemy template. */
+export interface CodexEntry {
+  /** Times this enemy template was met in battle. */
+  seen: number
+  /** Times it was felled. */
+  defeated: number
+  /** Its resistances, immunities and weak element are known. */
+  studied: boolean
+}
+
+export interface CodexState {
+  /** Keyed by enemy template id. */
+  entries: Record<string, CodexEntry>
+}
+
+/** Heroes summoned already bound to one another (canon 인연: a band, twins…). */
+export interface BondGroup {
+  id: string
+  name: string
+  members: HeroId[]
+}
+
+export interface ChallengeState {
+  bondGroups: Record<string, BondGroup>
+  /** The weekly trial: which week it is, attempts spent, and the Master's best result. */
+  weekly: { week: number; attempts: number; best: number }
+}
+
+export interface EstateState {
+  /** Fallen heroes honoured with a statue in the Memorial. */
+  statues: HeroId[]
+  /** Decoration id → level. */
+  decor: Record<string, number>
+}
+
 /** THE canonical game state. Every module imports this; none redeclare it.
  *  All set-like fields are persisted as SORTED arrays for stable round-trips. */
 export interface GameState {
@@ -752,6 +793,12 @@ export interface GameState {
   pvp: PvpState
   /** Quanton Life: the living lobby (schema v10). */
   life: LifeState
+  /** The Enemy Codex (schema v11). */
+  codex: CodexState
+  /** Bond groups, event floors, raids and the weekly trial (schema v11). */
+  challenge: ChallengeState
+  /** Gold sinks once the buildings stand: statues, decorations, bounties (schema v11). */
+  estate: EstateState
 }
 
 export interface SaveEnvelope {

@@ -50,6 +50,7 @@ function makeHero(id: string, overrides: Partial<OwnedHero> = {}): OwnedHero {
     blessed: false,
     expedition: null,
     captiveOf: null,
+    bondGroup: null,
     ...overrides,
   }
 }

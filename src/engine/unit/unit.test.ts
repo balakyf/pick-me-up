@@ -67,6 +67,7 @@ function ownedFromTemplate(t: HeroTemplate, level = 1): OwnedHero {
     blessed: false,
     expedition: null,
     captiveOf: null,
+    bondGroup: null,
   }
 }
 
@@ -97,6 +98,7 @@ function makeWarrior(overrides: Partial<OwnedHero> = {}): OwnedHero {
     blessed: false,
     expedition: null,
     captiveOf: null,
+    bondGroup: null,
     ...overrides,
   }
 }

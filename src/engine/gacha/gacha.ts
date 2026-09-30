@@ -275,10 +275,10 @@ export function buildOwnedHeroFromTemplate(template: HeroTemplate, id: HeroId): 
 }
 
 /** The Layer 3 per-hero fields every fresh (or v7-migrated) hero starts with. */
-export function HERO_V8_DEFAULTS(): Pick<OwnedHero, 'favor' | 'bondTier' | 'ip' | 'gift' | 'blessed' | 'expedition' | 'captiveOf'> {
+export function HERO_V8_DEFAULTS(): Pick<OwnedHero, 'favor' | 'bondTier' | 'ip' | 'gift' | 'blessed' | 'expedition' | 'captiveOf' | 'bondGroup'> {
   const favor = TUNING.favor.start
   const bondTier = TUNING.favor.tierCeilings.findIndex((c) => favor <= c)
-  return { favor, bondTier, ip: 0, gift: { last: null, streak: 0 }, blessed: false, expedition: null, captiveOf: null }
+  return { favor, bondTier, ip: 0, gift: { last: null, streak: 0 }, blessed: false, expedition: null, captiveOf: null, bondGroup: null }
 }
 
 /** Build a fresh OwnedHero around an already-assembled static Hero: its innate

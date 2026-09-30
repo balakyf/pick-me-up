@@ -5,6 +5,9 @@
  */
 
 import { defaultLifeState } from '../life'
+import { defaultCodex } from '../codex'
+import { defaultChallenge } from '../challenge'
+import { defaultEstate } from '../estate'
 import {
   rollStar,
   rollClass,
@@ -70,6 +73,9 @@ function makeState(overrides: Partial<GameState> = {}): GameState {
     rng: { combatCounter: 0 },
     life: defaultLifeState(0),
     pvp: PVP_DEFAULTS(),
+    codex: defaultCodex(),
+    challenge: defaultChallenge(),
+    estate: defaultEstate(),
   }
   return { ...base, ...overrides }
 }

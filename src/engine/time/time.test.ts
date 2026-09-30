@@ -174,6 +174,7 @@ describe('advanceTime — promotion completion', () => {
       blessed: false,
       expedition: null,
       captiveOf: null,
+      bondGroup: null,
     }
     return { ...acct, heroes: { [hero.id]: hero }, meta: { ...acct.meta, lastSeenAtWorld } }
   }

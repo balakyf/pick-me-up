@@ -43,6 +43,7 @@ function strongHero(id = 'h_str'): OwnedHero {
     blessed: false,
     expedition: null,
     captiveOf: null,
+    bondGroup: null,
   }
 }
 

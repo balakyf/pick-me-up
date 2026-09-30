@@ -154,6 +154,7 @@ function midGameOf(acct: GameState): GameState {
     blessed: false,
     expedition: null,
     captiveOf: null,
+    bondGroup: null,
   }
   copy.heroes[fakeId] = fakeHero
   copy.tower.currentFloor = 7
@@ -602,9 +603,29 @@ describe('migrate — v9 → v10 (Quanton Life)', () => {
     const { dormitory, tavern, infirmary, garden, memorial, forge, library, watchtower, market, ...facV9 } = v10.facilities
     const v9Json = JSON.stringify({ schemaVersion: 9, savedAt: 0, state: { ...rest, schemaVersion: 9, facilities: facV9 } })
     const restored = loadState(v9Json)
-    expect(restored.schemaVersion).toBe(10)
+    expect(restored.schemaVersion).toBe(TUNING.account.schemaVersion)
     expect(restored.facilities.dormitory.level).toBe(TUNING.lobby.facilityStartLevels.dormitory)
     expect(restored.facilities.forge).toEqual({ level: 0, build: null })
     expect(restored.life).toEqual(life)
+  })
+})
+
+describe('migrate — v10 → v11 (codex, challenges, estate)', () => {
+  it('adds an empty codex, challenge and estate, and puts every hero outside any bond group', () => {
+    const v11 = createAccount(565, { now: 1000 })
+    const { codex, challenge, estate, ...rest } = v11
+    const heroesV10 = Object.fromEntries(
+      Object.entries(v11.heroes).map(([id, h]) => {
+        const { bondGroup, ...r } = h
+        return [id, r]
+      }),
+    )
+    const v10Json = JSON.stringify({ schemaVersion: 10, savedAt: 0, state: { ...rest, schemaVersion: 10, heroes: heroesV10 } })
+    const restored = loadState(v10Json)
+    expect(restored.schemaVersion).toBe(11)
+    expect(restored.codex).toEqual(codex)
+    expect(restored.challenge).toEqual(challenge)
+    expect(restored.estate).toEqual(estate)
+    expect(Object.values(restored.heroes).every((h) => h.bondGroup === null)).toBe(true)
   })
 })

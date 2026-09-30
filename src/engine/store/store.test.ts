@@ -560,6 +560,7 @@ function promotableState(seed = 5): GameState {
     blessed: false,
     expedition: null,
     captiveOf: null,
+    bondGroup: null,
   }
   return { ...acct, heroes: { [hero.id]: hero }, materials: { promotionStone: 999, attrStone_fire: 999 }, gems: 200 }
 }
@@ -631,6 +632,7 @@ function dailyReadyState(seed = 5): GameState {
     blessed: false,
     expedition: null,
     captiveOf: null,
+    bondGroup: null,
   }
   return {
     ...acct,

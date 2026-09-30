@@ -173,6 +173,7 @@ describe('core loop — end to end', () => {
       blessed: false,
       expedition: null,
       captiveOf: null,
+      bondGroup: null,
     }
     const state: GameState = {
       ...acct,

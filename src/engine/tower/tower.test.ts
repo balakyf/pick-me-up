@@ -5,6 +5,9 @@
  */
 
 import { defaultLifeState } from '../life'
+import { defaultCodex } from '../codex'
+import { defaultChallenge } from '../challenge'
+import { defaultEstate } from '../estate'
 import { floorPower, mobLevel, buildEncounter, playFloor, sanityDrain, rollMaterialDrops, floorXp } from './tower'
 import { tacticalFocusBonus } from '../tactical'
 import { addMasterXp } from '../master'
@@ -88,6 +91,7 @@ function makeHero(o: HeroOpts): OwnedHero {
     blessed: false,
     expedition: null,
     captiveOf: null,
+    bondGroup: null,
   }
 }
 
@@ -160,6 +164,9 @@ function makeState(o: StateOpts = {}): GameState {
     rng: { combatCounter: 0 },
     life: defaultLifeState(0),
     pvp: PVP_DEFAULTS(),
+    codex: defaultCodex(),
+    challenge: defaultChallenge(),
+    estate: defaultEstate(),
   }
 }
 

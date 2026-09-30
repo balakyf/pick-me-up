@@ -811,7 +811,7 @@ export const TUNING = {
   },
 
   account: {
-    schemaVersion: 10,
+    schemaVersion: 11,
     /** Canon protagonist account id (display only). */
     defaultAccountId: '46631913',
     partySize: 5,

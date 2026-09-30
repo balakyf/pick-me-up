@@ -33,6 +33,9 @@ import { buildOwnedHeroFromTemplate, HERO_V8_DEFAULTS } from '../gacha'
 import { CAMEO_HEROES } from '../content'
 import { toWorldTime } from '../time'
 import { defaultLifeState } from '../life/life'
+import { defaultCodex } from '../codex'
+import { defaultChallenge } from '../challenge'
+import { defaultEstate } from '../estate'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Constants
@@ -172,6 +175,9 @@ export function createAccount(entropySeed: number, opts?: CreateAccountOpts): Ga
     rng: { combatCounter: 0 },
     pvp: PVP_DEFAULTS(),
     life: defaultLifeState(toWorldTime(opts?.now ?? 0)),
+    codex: defaultCodex(),
+    challenge: defaultChallenge(),
+    estate: defaultEstate(),
   }
 }
 
@@ -399,6 +405,26 @@ function migrateV9toV10(envelope: SaveEnvelope): SaveEnvelope {
   }
 }
 
+/** v10 → v11: the Enemy Codex, tower challenges (bond groups, the weekly trial) and the
+ *  estate's gold sinks. Every hero starts outside any bond group. */
+function migrateV10toV11(envelope: SaveEnvelope): SaveEnvelope {
+  const s = envelope.state as unknown as GameState
+  const heroes: Record<string, OwnedHero> = {}
+  for (const [id, hero] of Object.entries(s.heroes)) heroes[id] = { ...hero, bondGroup: null }
+  return {
+    schemaVersion: 11,
+    savedAt: envelope.savedAt,
+    state: {
+      ...s,
+      schemaVersion: 11,
+      heroes: heroes as GameState['heroes'],
+      codex: defaultCodex(),
+      challenge: defaultChallenge(),
+      estate: defaultEstate(),
+    },
+  }
+}
+
 /**
  * Migrate a SaveEnvelope from `fromVersion` up to the current schema version.
  * Identity when already current; otherwise apply each version's upgrade step in
@@ -450,6 +476,10 @@ export function migrate(envelope: SaveEnvelope, fromVersion: number): SaveEnvelo
     env = migrateV9toV10(env)
     v = 10
   }
+  if (v === 10) {
+    env = migrateV10toV11(env)
+    v = 11
+  }
   if (v !== current) {
     throw new SaveLoadError(`migrate: no migration path from version ${fromVersion}`)
   }
@@ -486,6 +516,9 @@ function assertGameStateShape(state: unknown): asserts state is GameState {
     'tower',
     'gacha',
     'rng',
+    'codex',
+    'challenge',
+    'estate',
   ] as const
   for (const key of required) {
     if (!(key in state)) {
