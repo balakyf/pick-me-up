@@ -273,7 +273,7 @@ export function App() {
       ) : (
         <Scene key={epoch} title={t(SCENE_TITLE[view])} state={state} onBack={back} onMenu={openMenu}>
           {view === 'tower' && <TowerScreen state={state} store={store} />}
-          {view === 'summon' && <SummonScreen state={state} store={store} />}
+          {view === 'summon' && <SummonScreen state={state} store={store} onNavigate={navigate} />}
           {view === 'party' && <PartyScreen state={state} store={store} />}
           {view === 'roster' && <RosterScreen state={state} store={store} />}
         </Scene>

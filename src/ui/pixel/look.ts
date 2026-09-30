@@ -2,9 +2,15 @@
  * Hero "look": the visual genome of a hero — a pure function of its identity.
  *
  * Canon → visuals (see the pixel-art direction spec §3): 1★ are ordinary people,
- * 2★ rough mercenaries, 3★+ carry a class kit, 4★ add a cape, 5★+ add gold trim and
- * a circlet. The element tints trims/gems; a cameo's portraitToken becomes its
- * signature cloth colour.
+ * 2★ rough mercenaries, 3★+ carry a class kit (plate, mail + tabard, leathers +
+ * quiver, robe + collar, mask + scarf). Stars then escalate the regalia: 3★ a waist
+ * sash, 4★ a cape, 5★ gold trim + a chest gem (+ circlet), 6★ a faint aura, 7★ a
+ * glowing, twinkling aura. The element tints trims/gems; a cameo's portraitToken
+ * becomes its signature cloth colour.
+ *
+ * Two random streams: the FACE (skin, hair, eyes, marks) is rolled from identity
+ * alone, the KIT from identity + outfit — so a promotion re-dresses a hero (and
+ * visibly upgrades them) without ever changing who they are.
  */
 import type { Element, HeroClass, Star } from '../../engine/types'
 import { hex, type RGBA } from './bitmap'
@@ -48,6 +54,14 @@ export interface HeroLook {
   trim: boolean
   apron: boolean
   mark: FaceMark
+  /** 3★+: a coloured waist sash (knot + tail) */
+  sash?: boolean
+  /** 5★+: a gem brooch on the chest */
+  gem?: boolean
+  /** 6★ faint aura outline, 7★ a strong glow with twinkling sparkles */
+  aura?: 0 | 1 | 2
+  /** rogues: the scarf pulled up over the lower face */
+  mask?: boolean
 }
 
 export interface LookSource {
@@ -72,15 +86,22 @@ function outfitFor(star: Star, heroClass: HeroClass | null): Outfit {
 }
 
 export function lookForHero(h: LookSource): HeroLook {
-  const r = seededRand(hashString(`${h.id}|${h.name}`))
-  const outfit = outfitFor(h.star, h.heroClass)
-  const accent = ELEMENT_RAMP[h.element]
-
+  // The face: identity only (never depends on class or stars).
+  const face = seededRand(hashString(`${h.id}|${h.name}`))
   // Common hair colours dominate; fantasy tints (teal/rose) are rare.
-  const hairIdx = r.chance(0.12) ? r.int(7, HAIR.length - 1) : r.int(0, 6)
+  const hairIdx = face.chance(0.12) ? face.int(7, HAIR.length - 1) : face.int(0, 6)
+  const skin = face.pick(SKIN)
+  const hairStyle = face.pick(HAIR_STYLES)
+  const eyes = face.pick(EYES)
+  const mark: FaceMark = face.chance(0.45) ? face.pick(['freckles', 'scar', 'beard', 'mole', 'patch'] as const) : 'none'
+  const cloth2 = face.pick([LEATHER, ramp('#2a2430', '#3e3648', '#5a5068'), ramp('#3a2e1e', '#5a4a2e', '#7a6644')])
+
+  const outfit = outfitFor(h.star, h.heroClass)
+  // The kit: identity + outfit, so a class change re-rolls gear but not the face.
+  const r = seededRand(hashString(`${h.id}|${h.name}|kit|${outfit}`))
+  const accent = ELEMENT_RAMP[h.element]
   const token = tokenColor(h.portraitToken)
   const baseCloth = CLASS_CLOTH[outfit]!
-  // The token colours the cloth for classed heroes; commoners keep earthy garb.
   // Every summoned hero carries its own token colour; classed heroes wear it
   // proudly, commoners in a washed-out, earthy version.
   const cloth = token
@@ -88,11 +109,11 @@ export function lookForHero(h: LookSource): HeroLook {
       ? rampFrom(tame(token, 0.3, 0.62, 0.32, 0.5))
       : rampFrom(tame(token, 0.12, 0.3, 0.3, 0.45))
     : baseCloth
-  const cloth2 = r.pick([LEATHER, ramp('#2a2430', '#3e3648', '#5a5068'), ramp('#3a2e1e', '#5a4a2e', '#7a6644')])
 
   let headgear: Headgear = 'none'
   let weapon: Weapon = 'none'
   let shield = false
+  let mask = false
   switch (outfit) {
     case 'peasant':
       headgear = r.chance(0.2) ? 'bandana' : 'none'
@@ -104,36 +125,38 @@ export function lookForHero(h: LookSource): HeroLook {
     case 'warrior':
       weapon = 'sword'
       shield = r.chance(0.7)
-      headgear = r.chance(0.35) ? 'helm' : 'none'
+      headgear = r.chance(0.45) ? 'helm' : 'none'
       break
     case 'spearman':
       weapon = 'spear'
-      headgear = r.chance(0.6) ? 'plumedHelm' : 'none'
+      headgear = r.chance(0.55) ? 'plumedHelm' : 'none'
       break
     case 'thief':
       weapon = 'daggers'
-      headgear = r.pick(['hood', 'bandana', 'none'] as const)
+      headgear = r.pick(['hood', 'hood', 'bandana', 'none'] as const)
+      mask = r.chance(0.75)
       break
     case 'archer':
       weapon = 'bow'
-      headgear = r.chance(0.4) ? 'hood' : 'none'
+      headgear = r.chance(0.55) ? 'hood' : 'none'
       break
     case 'mage':
       weapon = 'staff'
-      headgear = r.pick(['hat', 'hood', 'none'] as const)
+      headgear = r.pick(['hat', 'hat', 'hood', 'none'] as const)
       break
     case 'master':
       break
   }
+  const apron = outfit === 'peasant' && r.chance(0.5)
   if (h.star >= 5 && headgear === 'none') headgear = 'circlet'
 
   const capeColor = h.star >= 5 ? ramp('#5a0e1e', '#9a1a2e', '#d0404a') : rampFrom(accent.d)
 
   return {
-    skin: r.pick(SKIN),
+    skin,
     hair: HAIR[hairIdx]!,
-    hairStyle: r.pick(HAIR_STYLES),
-    eyes: r.pick(EYES),
+    hairStyle,
+    eyes,
     outfit,
     cloth,
     cloth2,
@@ -144,8 +167,12 @@ export function lookForHero(h: LookSource): HeroLook {
     shield,
     cape: h.star >= 4 ? capeColor : null,
     trim: h.star >= 5,
-    apron: outfit === 'peasant' && r.chance(0.5),
-    mark: r.chance(0.45) ? r.pick(['freckles', 'scar', 'beard', 'mole', 'patch'] as const) : 'none',
+    apron,
+    mark,
+    sash: h.star >= 3,
+    gem: h.star >= 5,
+    aura: h.star >= 7 ? 2 : h.star >= 6 ? 1 : 0,
+    mask,
   }
 }
 

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { sfx } from './audio/sound'
-import { drawSummonCircle } from './pixel/summonFx'
+import { SummonReveal, type RevealAgain } from './summon/SummonReveal'
 import { shownStar } from '../engine/shop'
 import { crystalChargeLeft, mercySummonAvailable, tutorialPullAvailable } from '../engine/gacha'
 import type { GameState, HeroId, Line, OwnedHero, FloorResult } from '../engine/types'
@@ -80,57 +80,19 @@ export function TitleScreen({ store, hasSave }: { store: Store; hasSave: boolean
 // ── Summon ───────────────────────────────────────────────────────────────────
 const ADV = TUNING.gacha.advanced
 
-/** The summoning ritual: the circle wakes, a pillar of light in the (shown) rarity's colour, a flash. */
-function SummonRitual({ heroes, masterLevel, onDone }: { heroes: OwnedHero[]; masterLevel: number; onDone: () => void }) {
-  const best = Math.max(...heroes.map((h) => shownStar(h, masterLevel))) as Star
-  const tint = STAR_COLOR[best]
-  useEffect(() => {
-    sfx('summon')
-    // The build-up: white light first, then each pillar takes its colour — the best last.
-    const reveal = setTimeout(() => sfx(best >= 5 ? 'legend' : best >= 4 ? 'rare' : 'levelup'), 1900)
-    const done = setTimeout(onDone, 2900)
-    return () => {
-      clearTimeout(reveal)
-      clearTimeout(done)
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-  const circle = cachedDataUrl(`circle|${tint}`, () => scale(drawSummonCircle(tint), 3))
-  return (
-    <div className="ritual" onClick={onDone} style={{ ['--beam' as string]: tint }} title={t('Click to skip')}>
-      <div className="ritual-beams">
-        {heroes.map((h, i) => {
-          const star = shownStar(h, masterLevel)
-          const isBest = star === best
-          return (
-            <span
-              key={h.id}
-              className={`ritual-beam ${isBest && best >= 4 ? 'rare' : ''}`}
-              style={{
-                ['--final' as string]: STAR_COLOR[star as Star],
-                animationDelay: `${0.5 + i * 0.05}s, ${1.2 + (isBest ? 0.5 : i * 0.04)}s`,
-              }}
-            />
-          )
-        })}
-      </div>
-      {circle && <img className="px ritual-circle" src={circle} width={288} height={168} alt="" />}
-      <div className="ritual-flash" />
-      <div className="ritual-stars" style={{ color: tint }}>
-        {Array.from({ length: best }, (_, i) => (
-          <span key={i} className="ritual-star" style={{ animationDelay: `${1.9 + i * 0.12}s` }}>
-            ★
-          </span>
-        ))}
-      </div>
-    </div>
-  )
-}
-
-export function SummonScreen({ state, store }: { state: GameState; store: Store }) {
+export function SummonScreen({
+  state,
+  store,
+  onNavigate,
+}: {
+  state: GameState
+  store: Store
+  /** Lets the reveal's lineup jump to the Party Board / Registry. */
+  onNavigate?: (view: 'party' | 'roster') => void
+}) {
   const [pool, setPool] = useState<SummonPool>('normal')
   const [revealed, setRevealed] = useState<OwnedHero[]>([])
-  const [ritual, setRitual] = useState<OwnedHero[] | null>(null)
+  const [ritual, setRitual] = useState<{ heroes: OwnedHero[]; count: 1 | 10; nonce: number } | null>(null)
   const [err, setErr] = useState<string | null>(null)
 
   function pull(count: 1 | 10) {
@@ -142,7 +104,7 @@ export function SummonScreen({ state, store }: { state: GameState; store: Store 
         .filter((id) => !prev.has(id))
         .map((id) => next.heroes[id as HeroId]!)
       setRevealed([])
-      setRitual(pulled)
+      setRitual({ heroes: pulled, count, nonce: (ritual?.nonce ?? 0) + 1 })
     } catch (e) {
       setErr(t(e instanceof Error ? e.message.replace(/^\w+: /, '') : 'Summon failed'))
     }
@@ -154,6 +116,23 @@ export function SummonScreen({ state, store }: { state: GameState; store: Store 
   const canOne = pool === 'normal' ? state.gold >= SUMMON_COST || mercy : state.gems >= ADV.costGems && charge >= 1
   const canTen = state.gems >= ADV.tenPullGems && charge >= 10
   const canTenNormal = tutorial || state.gold >= SUMMON_COST * 10
+
+  /** The lineup's "summon again": same pool, same count, priced from the current state. */
+  function againFor(count: 1 | 10): RevealAgain {
+    const onClick = () => pull(count)
+    if (pool === 'normal') {
+      return count === 10
+        ? { label: t('Summon ×10 · {gold} Gold', { gold: (SUMMON_COST * 10).toLocaleString() }), disabled: !canTenNormal, onClick }
+        : {
+            label: mercy ? t('Summon · free (the crystal takes pity)') : t('Summon · {SUMMON_COST} Gold', { SUMMON_COST: SUMMON_COST.toLocaleString() }),
+            disabled: !canOne,
+            onClick,
+          }
+    }
+    return count === 10
+      ? { label: t('Summon ×10 · {tenPullGems} ♦', { tenPullGems: ADV.tenPullGems.toLocaleString() }), disabled: !canTen, onClick }
+      : { label: t('Summon · {costGems} ♦', { costGems: ADV.costGems }), disabled: !canOne, onClick }
+  }
 
   return (
     <div className="screen">
@@ -234,13 +213,16 @@ export function SummonScreen({ state, store }: { state: GameState; store: Store 
         {err && <div className="muted" style={{ color: 'var(--bad)' }}>{err}</div>}
       </div>
       {ritual && (
-        <SummonRitual
-          heroes={ritual}
+        <SummonReveal
+          key={ritual.nonce}
+          heroes={ritual.heroes}
           masterLevel={state.meta.masterLevel}
-          onDone={() => {
-            setRevealed(ritual)
+          onClose={() => {
+            setRevealed(ritual.heroes)
             setRitual(null)
           }}
+          onNavigate={onNavigate}
+          again={againFor(ritual.count)}
         />
       )}
     </div>

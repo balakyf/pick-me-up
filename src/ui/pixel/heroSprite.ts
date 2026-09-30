@@ -6,10 +6,18 @@
  *
  * Everything is hand-placed pixel geometry parameterised by a HeroLook, then run
  * through the universal outline pass. Pure: same look ⇒ identical pixels.
+ *
+ * Class kits read at a glance (plate + pauldrons + greaves; mail + tabard; leather
+ * jerkin + quiver; robe + high collar; mask + scarf), and star regalia stack on top
+ * (sash → cape → trim + gem → aura). A 7★ aura's sparkles move with the walk frame,
+ * so it twinkles wherever the hero walks.
  */
 import {
+  CLEAR,
+  clone,
   createBitmap,
   ellipse,
+  get,
   flipX,
   hline,
   line,
@@ -20,6 +28,7 @@ import {
   set,
   vline,
   hex,
+  withAlpha,
   type Bitmap,
   type RGBA,
 } from './bitmap'
@@ -50,7 +59,94 @@ export function drawHeroFrame(L: HeroLook, dir: Dir, frame: WalkFrame): Bitmap {
   if (dir === 'down') drawFront(b, L, frame)
   else if (dir === 'up') drawBack(b, L, frame)
   else drawSide(b, L, frame)
-  return outline(b, INK)
+  return applyAura(outline(b, INK), L, frame)
+}
+
+// ── star regalia ─────────────────────────────────────────────────────────────
+
+/** 6★ wear a pale-gold halo; 7★ glow in their element's own light. */
+function auraColor(L: HeroLook): RGBA {
+  return L.aura === 2 ? L.accent.l : GOLD.l
+}
+
+/** One translucent ring around everything opaque (4-neighbourhood, like the ink pass). */
+function glowRing(b: Bitmap, c: RGBA): Bitmap {
+  const out = clone(b)
+  for (let y = 0; y < b.h; y++) {
+    for (let x = 0; x < b.w; x++) {
+      if (get(b, x, y) !== CLEAR) continue
+      if (get(b, x - 1, y) || get(b, x + 1, y) || get(b, x, y - 1) || get(b, x, y + 1)) out.px[y * b.w + x] = c
+    }
+  }
+  return out
+}
+
+/** Sparkle anchors as fractions of the bitmap; each walk frame lights a different third. */
+const SPARKLES: [number, number][] = [
+  [0.1, 0.18], [0.88, 0.1], [0.08, 0.66], [0.9, 0.5], [0.14, 0.38], [0.86, 0.82],
+]
+
+/**
+ * 6★: a faint outline aura. 7★: a stronger double ring plus 4-point sparkles whose
+ * positions depend on `phase` (the walk frame), so the glow shimmers as they move.
+ * Sparkles only land on empty/aura pixels — never over the hero.
+ */
+export function applyAura(b: Bitmap, L: HeroLook, phase: number): Bitmap {
+  if (!L.aura) return b
+  const c = auraColor(L)
+  let o = glowRing(b, withAlpha(c, L.aura === 2 ? 0xb4 : 0x6c))
+  if (L.aura === 1) return o
+  o = glowRing(o, withAlpha(c, 0x46))
+  SPARKLES.forEach(([fx, fy], i) => {
+    if (i % 3 !== phase % 3) return
+    const x = Math.round(fx * (b.w - 1))
+    const y = Math.round(fy * (b.h - 1))
+    const put = (px: number, py: number, col: RGBA) => {
+      if (get(b, px, py) === CLEAR) set(o, px, py, col)
+    }
+    put(x, y, WHITE)
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) put(x + dx, y + dy, withAlpha(c, 0xd0))
+  })
+  return o
+}
+
+/** 3★+: a waist sash in the element colour, knotted at one hip with a hanging tail. */
+function waistSash(b: Bitmap, L: HeroLook, y: number, front: boolean) {
+  hline(b, 8, y, 8, L.accent.m)
+  if (front) {
+    set(b, 14, y, L.accent.l)
+    vline(b, 14, y + 1, 3, L.accent.d)
+    vline(b, 15, y + 1, 2, L.accent.m)
+  } else {
+    vline(b, 9, y + 1, 3, L.accent.d)
+    vline(b, 8, y + 1, 2, L.accent.m)
+  }
+}
+
+/** Where each outfit's belt line sits (the sash replaces it). Robes carry their own sash. */
+function beltY(L: HeroLook): number | null {
+  switch (L.outfit) {
+    case 'peasant':
+      return 21
+    case 'merc':
+    case 'thief':
+      return 23
+    case 'mage':
+    case 'master':
+      return null
+    default:
+      return 22
+  }
+}
+
+/** 5★+: a gem brooch at the breast, set in gold. */
+function gemFront(b: Bitmap, L: HeroLook, x: number, y: number) {
+  set(b, x, y, L.accent.l)
+  set(b, x + 1, y, L.accent.m)
+  set(b, x, y + 1, L.accent.m)
+  set(b, x + 1, y + 1, L.accent.d)
+  set(b, x - 1, y, GOLD.m)
+  set(b, x + 2, y + 1, GOLD.d)
 }
 
 // ── shared bits ──────────────────────────────────────────────────────────────
@@ -67,6 +163,16 @@ function legsFrontBack(b: Bitmap, L: HeroLook, frame: WalkFrame) {
   set(b, 8, 28 - lUp, BOOT.l)
   rect(b, 13, 28 - rUp, 3, 2, BOOT.m)
   set(b, 15, 28 - rUp, BOOT.l)
+  if (L.outfit === 'warrior') {
+    // steel greaves over the shins, sabatons on the boots
+    const m = L.metal
+    rect(b, 9, 26, 2, 2 - lUp, m.m)
+    set(b, 9, 26, m.l)
+    rect(b, 13, 26, 2, 2 - rUp, m.m)
+    set(b, 13, 26, m.l)
+    hline(b, 8, 28 - lUp, 3, m.d)
+    hline(b, 13, 28 - rUp, 3, m.d)
+  }
 }
 
 /** Torso for down/up views. `front` adds belt buckles, aprons, lapels… */
@@ -124,6 +230,8 @@ function torsoFront(b: Bitmap, L: HeroLook, front: boolean) {
       rect(b, 8, 16, 8, 7, L.metal.m)
       vline(b, 15, 16, 7, L.metal.d)
       rect(b, 9, 17, 2, 2, L.metal.l)
+      hline(b, 8, 20, 8, L.metal.d) // the breastplate's lower lame
+      hline(b, 9, 16, 6, L.metal.l) // gorget rim
       if (front) {
         rect(b, 11, 18, 2, 5, c.m) // tabard
         set(b, 11, 19, L.accent.m)
@@ -135,11 +243,18 @@ function torsoFront(b: Bitmap, L: HeroLook, front: boolean) {
       return
     }
     case 'spearman': {
-      rect(b, 8, 16, 8, 8, c.m)
-      vline(b, 15, 16, 8, c.d)
-      vline(b, 8, 16, 8, c.l)
-      for (const x of [9, 11, 13]) for (const y of [18, 20]) set(b, x, y, L.metal.l)
-      hline(b, 8, 23, 8, LEATHER.d)
+      // light mail (a steel checker) under a long cloth tabard, belted
+      for (let y = 16; y <= 23; y++) for (let x = 8; x <= 15; x++) set(b, x, y, (x + y) % 2 ? L.metal.m : L.metal.d)
+      rect(b, 10, 16, 4, 10, c.m)
+      vline(b, 10, 16, 10, c.l)
+      vline(b, 13, 16, 10, c.d)
+      if (front) {
+        set(b, 11, 18, L.accent.l)
+        set(b, 12, 18, L.accent.m)
+        set(b, 11, 19, L.accent.m)
+        set(b, 12, 19, L.accent.d)
+      }
+      hline(b, 8, 22, 8, LEATHER.d)
       return
     }
     case 'thief': {
@@ -147,15 +262,28 @@ function torsoFront(b: Bitmap, L: HeroLook, front: boolean) {
       vline(b, 15, 16, 8, c.d)
       hline(b, 8, 23, 8, LEATHER.d)
       rect(b, 8, 16, 8, 2, L.accent.m) // scarf
-      if (front) rect(b, 14, 18, 2, 3, L.accent.d)
-      else rect(b, 10, 18, 2, 4, L.accent.d)
+      if (front) {
+        rect(b, 14, 18, 2, 3, L.accent.d)
+        line(b, 8, 18, 13, 23, LEATHER.d) // blade harness
+        rect(b, 9, 23, 2, 2, LEATHER.m) // belt pouch
+        set(b, 9, 23, LEATHER.l)
+      } else rect(b, 10, 18, 2, 4, L.accent.d)
       return
     }
     case 'archer': {
+      // a shirt under a laced leather jerkin; the quiver rides the right shoulder
       rect(b, 8, 16, 8, 9, c.m)
       vline(b, 15, 16, 9, c.d)
-      vline(b, 8, 16, 9, c.l)
-      line(b, front ? 15 : 8, 16, front ? 8 : 15, 23, LEATHER.m) // quiver strap
+      rect(b, 9, 17, 6, 7, LEATHER.m)
+      vline(b, 14, 17, 7, LEATHER.d)
+      vline(b, 9, 17, 7, LEATHER.l)
+      if (front) {
+        set(b, 11, 17, c.l)
+        set(b, 12, 17, c.l)
+        set(b, 11, 19, LINEN.d)
+        set(b, 12, 20, LINEN.d)
+      }
+      line(b, front ? 8 : 15, 16, front ? 15 : 8, 23, LINEN.d) // quiver strap
       hline(b, 8, 22, 8, LEATHER.d)
       return
     }
@@ -165,19 +293,30 @@ function torsoFront(b: Bitmap, L: HeroLook, front: boolean) {
 function armsFront(b: Bitmap, L: HeroLook, frame: WalkFrame) {
   const swingL = frame === 1 ? 1 : frame === 2 ? -1 : 0
   const swingR = -swingL
-  const sleeve = L.cloth
+  const o = L.outfit
+  const sleeve = o === 'warrior' ? L.metal : o === 'thief' ? { ...L.cloth, m: L.cloth.d, d: INK } : L.cloth
   const armDraw = (x: number, dy: number) => {
-    rect(b, x, 16 + Math.max(0, dy), 2, 6, sleeve.m)
-    vline(b, x, 16 + Math.max(0, dy), 6, sleeve.d)
-    rect(b, x, 22 + dy, 2, 2, L.skin.m)
+    const top = 16 + Math.max(0, dy)
+    rect(b, x, top, 2, 6, sleeve.m)
+    vline(b, x, top, 6, sleeve.d)
+    if (o === 'spearman') for (let y = top; y < top + 6; y++) set(b, x + ((y + 1) % 2), y, L.metal.m) // mail sleeves
+    if (o === 'archer') rect(b, x, top + 4, 2, 2, LEATHER.m) // bracers
+    if (o === 'thief') set(b, x + 1, top + 4, LINEN.d) // wrapped forearms
+    if (o === 'warrior') {
+      rect(b, x, 22 + dy, 2, 2, L.metal.m) // gauntlets
+      set(b, x, 22 + dy, L.metal.l)
+    } else rect(b, x, 22 + dy, 2, 2, L.skin.m)
   }
   armDraw(6, swingL)
   armDraw(16, swingR)
-  if (L.outfit === 'warrior' || L.outfit === 'spearman') {
-    rect(b, 5, 16, 3, 2, L.metal.m)
-    set(b, 5, 16, L.metal.l)
-    rect(b, 16, 16, 3, 2, L.metal.m)
-    set(b, 18, 17, L.metal.d)
+  if (o === 'warrior') {
+    // broad pauldrons
+    roundRect(b, 4, 15, 4, 4, L.metal.m)
+    hline(b, 5, 15, 2, L.metal.l)
+    hline(b, 4, 18, 4, L.metal.d)
+    roundRect(b, 16, 15, 4, 4, L.metal.m)
+    hline(b, 17, 15, 2, L.metal.l)
+    hline(b, 16, 18, 4, L.metal.d)
   }
   if (L.outfit === 'mage') {
     // wide sleeves
@@ -386,12 +525,38 @@ function shieldFront(b: Bitmap, L: HeroLook, dy: number) {
 function drawFront(b: Bitmap, L: HeroLook, frame: WalkFrame) {
   if (L.cape) capeBehind(b, L.cape)
   hairBackLayerFront(b, L)
+  if (L.outfit === 'archer') {
+    // fletchings peeking over the right shoulder
+    vline(b, 3, 13, 2, LINEN.m)
+    vline(b, 4, 11, 4, LINEN.l)
+    vline(b, 5, 12, 3, L.accent.m)
+    rect(b, 3, 15, 3, 2, LEATHER.d)
+  }
   if (L.outfit !== 'mage') legsFrontBack(b, L, frame)
   else legsFrontBack(b, L, 0)
   torsoFront(b, L, true)
+  const by = beltY(L)
+  if (L.sash && by !== null) waistSash(b, L, by, true)
   if (L.trim && L.outfit !== 'mage') hline(b, 8, 16, 8, GOLD.m)
+  if (L.gem) gemFront(b, L, 11, 17)
   armsFront(b, L, frame)
   faceFront(b, L)
+  if (L.mask) {
+    // the scarf pulled up over nose and mouth
+    rect(b, 7, 12, 10, 4, L.accent.d)
+    hline(b, 7, 12, 10, L.accent.m)
+    set(b, 6, 12, L.accent.m)
+    set(b, 17, 12, L.accent.d)
+    set(b, 11, 14, L.accent.m)
+  }
+  if (L.outfit === 'mage') {
+    // a high, flared collar framing the jaw
+    const col = L.trim ? GOLD.m : L.cloth.l
+    set(b, 6, 14, col)
+    rect(b, 6, 15, 3, 1, col)
+    set(b, 17, 14, L.cloth.m)
+    rect(b, 15, 15, 3, 1, L.cloth.m)
+  }
   if (L.headgear !== 'hood' && L.headgear !== 'helm' && L.headgear !== 'plumedHelm') hairCapFront(b, L)
   headgearFront(b, L)
   const handDy = frame === 1 ? 1 : frame === 2 ? -1 : 0
@@ -414,6 +579,8 @@ function drawBack(b: Bitmap, L: HeroLook, frame: WalkFrame) {
   }
   legsFrontBack(b, L, L.outfit === 'mage' ? 0 : frame)
   torsoFront(b, L, false)
+  const by = beltY(L)
+  if (L.sash && by !== null) waistSash(b, L, by, false)
   armsFront(b, L, frame === 1 ? 2 : frame === 2 ? 1 : 0)
   // weapons slung on the back
   if (L.weapon === 'sword' || L.weapon === 'club') {
@@ -533,6 +700,16 @@ function drawSide(b: Bitmap, L: HeroLook, frame: WalkFrame) {
     rect(b, 9, 28, 3, 2, BOOT.m)
     if (frame !== 0) rect(b, frame === 1 ? 7 : 12, 28, 3, 2, BOOT.d)
   }
+  if (L.outfit === 'warrior') {
+    // greaves: the shins turn to steel (near leg bright, far leg shadowed)
+    for (let y = 26; y <= 27; y++) {
+      for (let x = 7; x <= 15; x++) {
+        const p = get(b, x, y)
+        if (p === pants.m) set(b, x, y, L.metal.m)
+        else if (p === pants.d) set(b, x, y, L.metal.d)
+      }
+    }
+  }
   // torso
   switch (L.outfit) {
     case 'mage':
@@ -554,7 +731,14 @@ function drawSide(b: Bitmap, L: HeroLook, frame: WalkFrame) {
     case 'warrior':
       rect(b, 9, 16, 6, 7, L.metal.m)
       vline(b, 9, 17, 3, L.metal.l)
+      hline(b, 9, 20, 6, L.metal.d)
       rect(b, 9, 23, 6, 2, c.d)
+      break
+    case 'spearman':
+      for (let y = 16; y <= 23; y++) for (let x = 9; x <= 14; x++) set(b, x, y, (x + y) % 2 ? L.metal.m : L.metal.d)
+      rect(b, 8, 16, 2, 10, c.m) // the tabard's front panel
+      vline(b, 8, 16, 10, c.l)
+      hline(b, 9, 22, 6, LEATHER.d)
       break
     case 'merc':
       rect(b, 9, 16, 6, 8, LEATHER.m)
@@ -570,17 +754,35 @@ function drawSide(b: Bitmap, L: HeroLook, frame: WalkFrame) {
       rect(b, 9, 16, 6, 8, c.m)
       rect(b, 9, 16, 6, 2, L.accent.m)
       rect(b, 15, 17, 2, 3, L.accent.d)
+      rect(b, 9, 22, 2, 2, LEATHER.m) // belt pouch
       break
     default:
       rect(b, 9, 16, 6, 8, c.m)
       vline(b, 14, 16, 8, c.d)
       vline(b, 9, 16, 8, c.l)
       if (L.outfit === 'archer') {
-        rect(b, 14, 14, 3, 8, LEATHER.m) // quiver
-        hline(b, 14, 13, 3, LINEN.l)
+        rect(b, 9, 17, 5, 6, LEATHER.m) // jerkin
+        vline(b, 9, 17, 6, LEATHER.l)
+        rect(b, 14, 13, 3, 9, LEATHER.m) // quiver
+        vline(b, 16, 14, 8, LEATHER.d)
+        hline(b, 14, 12, 3, LINEN.l)
+        set(b, 15, 11, L.accent.m)
       }
   }
+  {
+    const by = beltY(L)
+    if (L.sash && by !== null) {
+      hline(b, 9, by, 6, L.accent.m)
+      vline(b, 15, by, 3, L.accent.d) // the tail streams behind
+      set(b, 16, by + 2, L.accent.m)
+    }
+  }
   if (L.trim && L.outfit !== 'mage') hline(b, 9, 16, 6, GOLD.m)
+  if (L.gem) {
+    set(b, 9, 17, L.accent.l)
+    set(b, 9, 18, L.accent.d)
+    set(b, 10, 17, GOLD.m)
+  }
   // head
   roundRect(b, 6, 5, 12, 11, s.m)
   vline(b, 17, 6, 9, s.d)
@@ -591,6 +793,17 @@ function drawSide(b: Bitmap, L: HeroLook, frame: WalkFrame) {
   set(b, 8, 11, L.eyes)
   set(b, 7, 11, INK)
   set(b, 9, 12, blush(s))
+  if (L.mask) {
+    rect(b, 5, 12, 7, 4, L.accent.d)
+    hline(b, 5, 12, 7, L.accent.m)
+    set(b, 5, 11, L.accent.m) // over the nose
+  }
+  if (L.outfit === 'mage') {
+    const col = L.trim ? GOLD.m : c.l
+    vline(b, 14, 13, 3, col) // the collar stands up behind the jaw
+    set(b, 15, 14, c.m)
+    set(b, 15, 15, c.m)
+  }
   // hair
   const covered = L.headgear === 'hood' || L.headgear === 'helm' || L.headgear === 'plumedHelm'
   if (!covered) {
@@ -664,7 +877,14 @@ function drawSide(b: Bitmap, L: HeroLook, frame: WalkFrame) {
   const sleeve = L.outfit === 'warrior' || L.outfit === 'spearman' ? L.metal : L.cloth
   rect(b, ax, 16, 2, 6, sleeve.d)
   vline(b, ax, 16, 6, sleeve.m)
-  rect(b, ax, 22, 2, 2, s.m)
+  if (L.outfit === 'spearman') for (let y = 16; y < 22; y++) set(b, ax + (y % 2), y, L.metal.l)
+  if (L.outfit === 'archer') rect(b, ax, 20, 2, 2, LEATHER.m)
+  if (L.outfit === 'warrior') {
+    rect(b, ax, 22, 2, 2, L.metal.m) // gauntlet
+    roundRect(b, ax - 1, 15, 4, 4, L.metal.m) // pauldron
+    hline(b, ax, 15, 2, L.metal.l)
+    hline(b, ax - 1, 18, 4, L.metal.d)
+  } else rect(b, ax, 22, 2, 2, s.m)
   const hx = ax
   const hy = 22
   switch (L.weapon) {
@@ -782,17 +1002,45 @@ export function drawHeroBust(L: HeroLook): Bitmap {
       break
   }
 
+  bustOverFace(b, L)
+
   // hair / headgear
   const covered = L.headgear === 'hood' || L.headgear === 'helm' || L.headgear === 'plumedHelm'
   if (!covered) bustHair(b, L)
   bustHeadgear(b, L)
 
-  return outline(b, INK)
+  return applyAura(outline(b, INK), L, 0)
+}
+
+/** Kit pieces that sit in front of the face: a rogue's mask, a mage's standing collar. */
+function bustOverFace(b: Bitmap, L: HeroLook) {
+  const a = L.accent
+  if (L.mask) {
+    rect(b, 8, 16, 16, 2, a.d)
+    rect(b, 9, 18, 14, 2, a.d)
+    rect(b, 11, 20, 10, 2, a.d) // down over the chin (and any beard)
+    hline(b, 8, 16, 16, a.m)
+    set(b, 16, 17, a.m) // the nose under the cloth
+    line(b, 12, 18, 14, 20, mix(a.d, INK, 0.3)) // folds
+    line(b, 20, 18, 18, 20, mix(a.d, INK, 0.3))
+  }
+  if (L.outfit === 'mage') {
+    const c = L.cloth
+    const edge = L.trim ? GOLD.m : c.l
+    // two stiff collar wings rising either side of the jaw
+    for (let i = 0; i < 5; i++) {
+      hline(b, 7, 18 + i, 1 + i, i === 0 ? edge : c.l)
+      set(b, 7 + i, 18 + i, edge)
+      hline(b, 24 - i, 18 + i, 1 + i, i === 0 ? edge : c.m)
+      set(b, 24 - i, 18 + i, edge)
+    }
+  }
 }
 
 function bustTorso(b: Bitmap, L: HeroLook) {
   const c = L.cloth
-  const base = L.outfit === 'merc' ? LEATHER : L.outfit === 'warrior' ? L.metal : c
+  const a = L.accent
+  const base = L.outfit === 'merc' ? LEATHER : L.outfit === 'warrior' || L.outfit === 'spearman' ? L.metal : c
   roundRect(b, 3, 23, 26, 9, base.m)
   hline(b, 4, 31, 24, base.d)
   vline(b, 28, 24, 8, base.d)
@@ -800,16 +1048,31 @@ function bustTorso(b: Bitmap, L: HeroLook) {
   switch (L.outfit) {
     case 'warrior':
       rect(b, 11, 25, 10, 7, c.m)
-      vline(b, 15, 26, 5, L.accent.m)
-      hline(b, 13, 28, 6, L.accent.m)
+      vline(b, 15, 26, 5, a.m)
+      hline(b, 13, 28, 6, a.m)
       ellipse(b, 1, 22, 9, 6, L.metal.m)
       ellipse(b, 22, 22, 9, 6, L.metal.d)
       set(b, 4, 23, L.metal.l)
+      // rivets and a steel gorget over the throat
+      set(b, 6, 26, L.metal.l)
+      set(b, 25, 26, L.metal.m)
+      rect(b, 12, 21, 8, 3, L.metal.m)
+      hline(b, 12, 21, 8, L.metal.l)
+      hline(b, 12, 23, 8, L.metal.d)
       break
     case 'spearman':
-      ellipse(b, 1, 22, 9, 6, L.metal.m)
-      ellipse(b, 22, 22, 9, 6, L.metal.d)
-      for (const x of [11, 15, 19]) set(b, x, 28, L.metal.l)
+      // light mail everywhere, a long tabard down the middle with its device
+      for (let y = 24; y <= 31; y++) for (let x = 4; x <= 27; x++) if ((x + y) % 2 === 0) set(b, x, y, mix(L.metal.m, L.metal.d, 0.5))
+      rect(b, 11, 23, 10, 9, c.m)
+      vline(b, 11, 23, 9, c.l)
+      vline(b, 20, 23, 9, c.d)
+      hline(b, 12, 23, 8, LEATHER.d)
+      set(b, 15, 26, a.l)
+      set(b, 16, 26, a.m)
+      rect(b, 14, 27, 4, 2, a.m)
+      set(b, 14, 27, a.l)
+      set(b, 15, 29, a.d)
+      set(b, 16, 29, a.d)
       break
     case 'mage':
       line(b, 11, 23, 15, 28, L.accent.m)
@@ -817,12 +1080,26 @@ function bustTorso(b: Bitmap, L: HeroLook) {
       vline(b, 15, 28, 4, L.accent.m)
       break
     case 'thief':
-      rect(b, 10, 20, 12, 5, L.accent.m)
-      hline(b, 10, 24, 12, L.accent.d)
+      rect(b, 10, 20, 12, 5, a.m)
+      hline(b, 10, 24, 12, a.d)
+      // dark leathers with a harness of throwing knives
+      line(b, 5, 25, 11, 31, LEATHER.d)
+      for (const [x, y] of [[6, 26], [8, 28], [10, 30]] as const) set(b, x, y, L.metal.l)
       break
     case 'archer':
-      line(b, 6, 24, 24, 31, LEATHER.m)
+      // a laced leather jerkin over the shirt; the quiver over the right shoulder
+      rect(b, 9, 24, 14, 8, LEATHER.m)
+      vline(b, 9, 24, 8, LEATHER.l)
+      vline(b, 22, 24, 8, LEATHER.d)
+      rect(b, 14, 23, 4, 2, c.l)
+      for (const y of [26, 28, 30]) hline(b, 15, y, 2, LINEN.d)
+      line(b, 6, 24, 24, 31, LINEN.d)
       line(b, 6, 25, 23, 31, LEATHER.d)
+      rect(b, 2, 21, 6, 3, LEATHER.d)
+      vline(b, 3, 18, 3, LINEN.m)
+      vline(b, 4, 16, 5, LINEN.l)
+      vline(b, 5, 17, 4, a.m)
+      vline(b, 6, 18, 3, LINEN.l)
       break
     case 'merc':
       rect(b, 13, 24, 6, 8, c.m)
@@ -843,10 +1120,27 @@ function bustTorso(b: Bitmap, L: HeroLook) {
       set(b, 16, 30, GOLD.m)
       break
   }
+  // 3★ sash across the chest (the archer's strap and the mage's robe already cross it)
+  if (L.sash && L.outfit !== 'archer' && L.outfit !== 'mage') {
+    for (let i = 0; i < 8; i++) {
+      set(b, 23 - i, 24 + i, a.m)
+      set(b, 24 - i, 24 + i, a.m)
+      set(b, 25 - i, 24 + i, a.d)
+    }
+  }
   if (L.trim) hline(b, 4, 23, 24, GOLD.m)
   if (L.cape) {
     rect(b, 6, 25, 2, 2, GOLD.m)
     rect(b, 24, 25, 2, 2, GOLD.m)
+  }
+  if (L.gem) {
+    // the brooch on the gold collar line
+    set(b, 15, 23, a.l)
+    set(b, 16, 23, a.m)
+    set(b, 15, 24, a.m)
+    set(b, 16, 24, a.d)
+    set(b, 14, 24, GOLD.m)
+    set(b, 17, 24, GOLD.d)
   }
 }
 

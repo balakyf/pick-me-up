@@ -159,7 +159,7 @@ export function Portrait({ hero, size = 'card' }: { hero: OwnedHero; size?: 'car
     )
   }
   return (
-    <div className="portrait" style={{ background: portraitBg(hero) }}>
+    <div className={`portrait${hero.star >= 7 ? ' aura-glow' : ''}`} style={{ background: portraitBg(hero) }}>
       {src ? <img className="px" src={src} alt={hero.name} /> : <span>{initials(hero.name)}</span>}
       <span className="p-el">{ELEMENT_VIS[hero.element].glyph}</span>
     </div>

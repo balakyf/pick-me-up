@@ -23,6 +23,10 @@ export type Sfx =
   | 'legend'
   | 'levelup'
   | 'fail'
+  // the summon reveal: the pillar rises, surges a tier (the tease), the card turns
+  | 'charge'
+  | 'surge'
+  | 'flip'
 
 export type Music = 'lobby' | 'battle' | 'none'
 
@@ -161,6 +165,15 @@ export function sfx(name: Sfx): void {
       return
     case 'fail':
       return tone(NOTE(55), 0.3, 'square', 0, 0.35, NOTE(45))
+    case 'charge':
+      tone(NOTE(48), 0.8, 'triangle', 0, 0.35, NOTE(72))
+      return noise(0.5, 0.1, 0.12)
+    case 'surge':
+      noise(0.12, 0, 0.3)
+      return tone(NOTE(72), 0.28, 'square', 0, 0.4, NOTE(84))
+    case 'flip':
+      noise(0.05, 0, 0.25)
+      return tone(NOTE(79), 0.08, 'triangle', 0.03, 0.35)
   }
 }
 
