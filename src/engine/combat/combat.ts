@@ -26,8 +26,22 @@ import type {
 import { TUNING, ELEMENT_ADVANTAGE } from '../tuning'
 import { createRng, makeSeed, nextFloat, chance, type Rng } from '../rng'
 import { panicChance } from '../kitchen'
+import {
+  coverFor,
+  depthDamageMult,
+  followUpCandidates,
+  followUpSkill,
+  healMult,
+  missChance,
+  pairKey,
+  rivalOf,
+  type DepthContext,
+} from '../depth/combatDepth'
+import { modEnrageTick, modSpeed } from '../depth/floorMods'
+import { DEPTH } from '../depth/depthTuning'
 
 const C = TUNING.combat
+const DEPTH_RIVAL_IGNORE = DEPTH.bonds.rivalIgnoreFocus
 
 /** `Omit` that distributes over a union (the built-in collapses `CombatEvent`'s
  *  variant union because seq/tick sit in an intersection over it). */
@@ -123,6 +137,7 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
       maxSP: u.maxSP,
       cp: u.cp,
       ...(u.isNpc ? { isNpc: true } : {}),
+      ...(u.templateId !== undefined ? { templateId: u.templateId } : {}),
     })
   }
   const allyUnits = encounter.allies ?? []
@@ -149,6 +164,13 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
     heroIds: heroes.map((h) => h.id),
     enemyIds: wave0.map((e) => e.id),
   })
+
+  // COMBAT DEPTH: the party's bonds and the floor's conditions (announced up front).
+  const depth: DepthContext = { bonds: encounter.bonds ?? [], mods: encounter.modifiers ?? [] }
+  if (depth.mods.length > 0) emit({ kind: 'floor-mods', modifiers: [...depth.mods] })
+  const everyone = (): MutUnit[] => [...heroes, ...enemies]
+  /** Close-friend pairs that already spent their cover this battle. */
+  const coversUsed = new Set<string>()
 
   let wavesCleared = 0
   const defeatedTargetTags: string[] = []
@@ -198,6 +220,19 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
     const def = physical ? tStats.pDef : tStats.mDef
     const el: Element = skill.element ?? actor.ref.element
 
+    // (0) MISS (fog, a grudge at the actor's side): the roll is gated on a positive chance,
+    //     so a battle without them keeps its exact draw order.
+    const pMiss = depth.bonds.length > 0 || depth.mods.length > 0 ? missChance(depth, actor, everyone()) : 0
+    if (pMiss > 0) {
+      const m = chance(rng, pMiss)
+      rng = m.rng
+      rngDraws++
+      if (m.value) {
+        emit({ kind: 'miss', actorId: actor.id, targetId: target.id })
+        return
+      }
+    }
+
     // (1) crit roll
     const critDraw = chance(rng, aStats.critPct / 100)
     rng = critDraw.rng
@@ -230,7 +265,7 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
     // Actor keywords: ENRAGE past its timer, FRENZY while low, OPENER on the first
     // action, BANE against a family. None draws RNG.
     for (const kw of actor.ref.keywords) {
-      if (kw.kind === 'enrage' && tick >= kw.afterTick) {
+      if (kw.kind === 'enrage' && tick >= modEnrageTick(depth.mods, kw.afterTick)) {
         damage *= kw.multiplier
       } else if (kw.kind === 'frenzy' && actor.currentHP * 100 < actor.ref.stats.maxHP * kw.belowHpPct) {
         damage *= kw.multiplier
@@ -257,6 +292,8 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
       }
     }
     damage *= Math.max(MIN_GUARD_MULT, guardMult)
+    // Formation, rivalry and the floor's conditions (all 1 in a plain battle).
+    damage *= depthDamageMult(depth, actor, target, el, everyone())
 
     // AEGIS: a charge negates the whole hit (the draws above are already spent, so the
     // stream stays identical to an un-guarded replay).
@@ -267,6 +304,19 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
     }
 
     const amount = Math.round(damage)
+    // COVER: a close friend on a neighbouring line may take a killing blow in their
+    // friend's place (once per pair a battle; rolled only when the chance exists).
+    const cover = coverFor(depth, target, amount, everyone(), coversUsed)
+    if (cover !== null) {
+      const c = chance(rng, cover.chance)
+      rng = c.rng
+      rngDraws++
+      if (c.value) {
+        coversUsed.add(pairKey(cover.unit.id, target.id))
+        emit({ kind: 'cover', unitId: cover.unit.id, allyId: target.id, actorId: actor.id })
+        target = cover.unit as MutUnit
+      }
+    }
     target.currentHP -= amount
     emit({
       kind: 'hit',
@@ -281,7 +331,7 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
     if (actor.alive && amount > 0) {
       for (const kw of actor.ref.keywords) {
         if (kw.kind !== 'lifesteal') continue
-        const heal = Math.min(Math.round(amount * kw.fraction), actor.ref.stats.maxHP - actor.currentHP)
+        const heal = Math.min(Math.round(amount * kw.fraction * healMult(depth, actor)), actor.ref.stats.maxHP - actor.currentHP)
         if (heal > 0) {
           actor.currentHP += heal
           emit({ kind: 'heal', unitId: actor.id, amount: heal, hpAfter: actor.currentHP })
@@ -304,7 +354,10 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
   const frontMost = (cands: MutUnit[]): MutUnit =>
     cands.reduce((best, c) => (c.spawnIndex < best.spawnIndex ? c : best))
 
+  /** Set when the last target pick was a rival chasing their own kill (the rival's id). */
+  let chasing: string | null = null
   const pickSingleTarget = (actor: MutUnit): MutUnit | null => {
+    chasing = null
     let cands = targetableFoes(actor)
     if (cands.length === 0) return null
 
@@ -314,7 +367,17 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
       const focusId = focusEnemyId
       if (focusId !== undefined) {
         const focused = cands.find((e) => e.id === focusId)
-        if (focused) return focused
+        // RIVALRY: a hero whose rival fights beside them may chase a kill of their own.
+        const rival = focused && cands.length > 1 ? rivalOf(depth, actor, everyone()) : null
+        if (focused && rival !== null) {
+          const d = chance(rng, DEPTH_RIVAL_IGNORE)
+          rng = d.rng
+          rngDraws++
+          if (d.value) {
+            chasing = rival.id
+            cands = cands.filter((c) => c.id !== focusId)
+          } else return focused
+        } else if (focused) return focused
       }
     }
 
@@ -447,6 +510,21 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
     }
   }
 
+  /** FOLLOW-UP: after `actor` strikes, one friend may press the attack on `target`
+   *  (never chains; rolled only for a hero with friends in the party). */
+  const followUp = (actor: MutUnit, target: MutUnit): void => {
+    if (!target.alive || !actor.alive) return
+    for (const f of followUpCandidates(depth, actor, everyone())) {
+      const d = chance(rng, f.chance)
+      rng = d.rng
+      rngDraws++
+      if (!d.value) continue
+      emit({ kind: 'followup', unitId: f.unit.id, allyId: actor.id, targetId: target.id })
+      resolveHit(f.unit as MutUnit, followUpSkill(f.unit.ref, BASIC_ATTACK), target)
+      return
+    }
+  }
+
   // One unit takes its action.
   const act = (actor: MutUnit): void => {
     if (!actor.alive || outcome !== null) return
@@ -455,7 +533,7 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
     // A looming unit sleeps until its enrage tick: it wakes, and then it is too late.
     if (isLooming(actor)) {
       const wake = actor.ref.keywords.find((k) => k.kind === 'enrage')
-      if (wake !== undefined && wake.kind === 'enrage' && tick < wake.afterTick) return
+      if (wake !== undefined && wake.kind === 'enrage' && tick < modEnrageTick(depth.mods, wake.afterTick)) return
     }
 
     // PANIC (low Sanity): a hero below the panic threshold may lose its turn. The
@@ -498,12 +576,17 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
         if (!t.alive) continue
         resolveHit(actor, skill, t)
       }
+      // A sweep is pressed on the front-most foe still standing.
+      const standing = targets.find((t) => t.alive)
+      if (standing !== undefined) followUp(actor, standing)
     } else {
       const target = pickSingleTarget(actor)
       if (target === null) return // no valid target → action fizzles, SP retained
+      if (chasing !== null) emit({ kind: 'rivalry', unitId: actor.id, rivalId: chasing, targetId: target.id })
       emit({ kind: 'act', actorId: actor.id, skillId: skill.id, targetId: target.id })
       payAndTally(actor, skill)
       resolveHit(actor, skill, target)
+      followUp(actor, target)
     }
 
     actor.actions++
@@ -531,7 +614,7 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
     // Fill action gauges for every living unit (stable order by id).
     const all = [...heroes, ...enemies].filter((u) => u.alive).sort(byId)
     for (const u of all) {
-      u.actionGauge += u.ref.stats.spd
+      u.actionGauge += modSpeed(depth.mods, u.ref.stats.spd)
     }
 
     // Everyone whose gauge >= actionGaugeMax acts this tick. Process highest

@@ -23,6 +23,8 @@ import { SKILLS } from '../content'
 import { applyXp, xpToNext } from '../stats'
 import { foldBattleSkills } from '../skills'
 import { hash, rngFor } from '../rng/rng'
+import { withBonds } from '../depth'
+import { recordBattle } from '../codex'
 import type {
   GameState,
   OwnedHero,
@@ -200,7 +202,7 @@ export function attemptDaily(state: GameState, nowWorld: number): { state: GameS
   const partyLevel = deployedIds.reduce((n, id) => n + state.heroes[id]!.xp.level, 0) / deployedIds.length
   const floor = dailyFloor(state, partyLevel)
   const built = buildFillerEncounter(floor, worldMult, rngFor(state.seed, 'daily', dayIndex, attempt))
-  const enc: Encounter = { floor, mission: built.mission, waves: built.waves, encounterContext: 'tower' }
+  const enc: Encounter = withBonds({ floor, mission: built.mission, waves: built.waves, encounterContext: 'tower' }, state, deployedIds)
   const res = runBattle(heroUnits, enc, hash(state.seed, 'daily', dayIndex, attempt))
 
   const cleared = res.outcome === 'win'
@@ -238,6 +240,7 @@ export function attemptDaily(state: GameState, nowWorld: number): { state: GameS
     materials,
     heroes,
     dailies: { ...state.dailies, attemptsUsed: state.dailies.attemptsUsed + 1 },
+    codex: recordBattle(state.codex, res.log),
   }
 
   return {

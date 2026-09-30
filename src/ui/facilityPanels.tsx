@@ -23,6 +23,7 @@ import { GuildPanel } from './pvpPanels'
 import { upgradeCost as forgeUpgradeCost, upgradeOdds, upgradeRefusal } from '../engine/minigames'
 import { upgradeEquipmentWithResult } from '../engine/store'
 import { t } from './i18n/i18n'
+import { CodexButton } from './codex/CodexWindow'
 import { DormitoryInfo, ForgeOrderSection, HereNow, KitchenPantry, LibraryInfo, MemorialPanel, StaffSection, WatchtowerInfo } from './life/lifePanels'
 
 /**
@@ -1124,6 +1125,7 @@ export function PlacePanel({
       {place === 'library' && (
         <>
           <LibraryInfo state={state} />
+          <CodexButton state={state} />
           <UpgradeControl state={state} store={store} facility="library" />
           <StaffSection state={state} store={store} job="scholar" onProfile={onProfile} />
           <HereNow state={state} place="library" onProfile={onProfile} />

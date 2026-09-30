@@ -1,0 +1,78 @@
+/**
+ * French for combat depth: bonds in battle, formation, floor modifiers, the Enemy Codex.
+ */
+export const FR_COMBAT_DEPTH: Record<string, string> = {
+  // ── Battle captions ────────────────────────────────────────────────────────
+  '{name} throws themself in front of {friend}!': '{name} se jette devant {friend} !',
+  '{name} follows up for {friend}!': '{name} enchaîne après {friend} !',
+  '{name} ignores the order — no kill goes to {rival}!': '{name} ignore l’ordre — pas question de laisser la victime à {rival} !',
+
+  // ── Floor modifiers ────────────────────────────────────────────────────────
+  Fog: 'Brouillard',
+  'Blood Moon': 'Lune de sang',
+  'Holy Ground': 'Terre sainte',
+  Miasma: 'Miasme',
+  Gale: 'Bourrasque',
+  Frost: 'Givre',
+  'Every blow has a {n}% chance to miss — both sides.': 'Chaque coup a {n} % de chances de manquer — des deux côtés.',
+  'Enemies deal +{n}% damage and enrage sooner.': 'Les ennemis infligent +{n} % de dégâts et entrent en rage plus tôt.',
+  'Light strikes +{n}%, dark strikes −{n}%.': 'Coups de lumière +{n} %, coups de ténèbres −{n} %.',
+  'All healing is halved.': 'Tous les soins sont réduits de moitié.',
+  'Everyone acts {n}% faster.': 'Tout le monde agit {n} % plus vite.',
+  'Fire strikes −{n}%, water strikes +{n}%.': 'Coups de feu −{n} %, coups d’eau +{n} %.',
+  'Floor conditions': 'Conditions de l’étage',
+
+  // ── Bonds & formation ──────────────────────────────────────────────────────
+  'Close friend': 'Ami proche',
+  Friend: 'Ami',
+  Rival: 'Rival',
+  Grudge: 'Rancune',
+  'Bonds & formation': 'Liens et formation',
+  'how this party fights together': 'comment cette équipe se bat ensemble',
+  'No bonds in this party yet — heroes who live and fight together grow close.':
+    'Aucun lien dans cette équipe pour l’instant — les héros qui vivent et se battent ensemble se rapprochent.',
+  'may take a killing blow for the other ({n}%)': 'peut encaisser un coup fatal à la place de l’autre ({n} %)',
+  'too far apart to cover each other': 'trop éloignés pour se couvrir',
+  'follow-ups {n}%': 'enchaînements {n} %',
+  '+{n}% damage, competing for kills · may ignore a focus order': '+{n} % de dégâts, à qui achèvera le plus · peut ignorer un ordre de cible',
+  '−{n}% accuracy beside them': '−{n} % de précision à ses côtés',
+  '+{n}% damage from here': '+{n} % de dégâts d’ici',
+  '−{n}% damage here — fights best at the {line}': '−{n} % de dégâts ici — meilleure position : {line}',
+  'sheltered by the front line: −{n}% damage taken': 'abrité par la ligne avant : −{n} % de dégâts subis',
+  'backed by the mid line: −{n}% damage taken': 'soutenu par la ligne du milieu : −{n} % de dégâts subis',
+  'support: +{n}% healing': 'soutien : +{n} % de soins',
+  'no formation effect': 'aucun effet de formation',
+
+  // ── The Enemy Codex ────────────────────────────────────────────────────────
+  'Enemy Codex': 'Bestiaire',
+  'What the Master knows of the tower’s enemies': 'Ce que le Maître sait des ennemis de la tour',
+  'Met {n} of {m} · studied {k}': 'Rencontrés {n} sur {m} · étudiés {k}',
+  All: 'Tous',
+  'Not yet met. Climb on.': 'Pas encore rencontré. Continuez l’ascension.',
+  studied: 'étudié',
+  'Met in {n} battles · felled {k}': 'Rencontré en {n} combats · abattu {k} fois',
+  'floors: {list}': 'étages : {list}',
+  Element: 'Élément',
+  'Weak to': 'Faible contre',
+  'nothing in particular': 'rien de particulier',
+  'Weaknesses unknown — fell it {n} more times, or have its floor scouted.':
+    'Faiblesses inconnues — abattez-le encore {n} fois, ou faites étudier son étage.',
+  'In the Enemy Codex': 'Dans le Bestiaire',
+  'beaten by {what}': 'vaincu par {what}',
+  'no elemental weakness': 'aucune faiblesse élémentaire',
+  Dragon: 'Dragon',
+  Undead: 'Mort-vivant',
+  Beast: 'Bête',
+  Humanoid: 'Humanoïde',
+  Construct: 'Artefact',
+  Aquatic: 'Aquatique',
+  Demon: 'Démon',
+  Fragment: 'Fragment',
+  'Unknown kind': 'Espèce inconnue',
+  'armoured: −{n}% damage taken': 'cuirassé : −{n} % de dégâts subis',
+  'shrugs off ranged blows: −{n}%': 'encaisse les coups à distance : −{n} %',
+  'frenzied below {n}% HP': 'frénétique sous {n} % de PV',
+  'its first strike lands hard': 'son premier coup frappe fort',
+  'drinks the blood it spills': 'boit le sang qu’il verse',
+  'slayer of the {what}': 'fléau des {what}',
+}
