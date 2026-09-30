@@ -33,8 +33,8 @@ export const FR_BUILD: Record<string, string> = {
     'La Taverne et le Jardin s’ouvrent au niveau de Maître 2 : terminez d’abord un étage ou deux. Puis appuyez sur 🔨 Construire, en haut à droite.',
   'Press 🔨 Build (top right), or walk to a dirt lot marked with a hammer and use its signpost.':
     'Appuyez sur 🔨 Construire (en haut à droite), ou marchez jusqu’à un terrain marqué d’un marteau et utilisez son panneau.',
-  '↑↓←→ / WASD / ZQSD · E interact · click to walk · H heroes · B build · N map · M menu':
-    '↑↓←→ / WASD / ZQSD · E interagir · cliquer pour marcher · H héros · B construire · N carte · M menu',
+  '↑↓←→ / WASD / ZQSD · E interact · click to walk · H heroes · B build · N map · −/+ zoom · M menu':
+    '↑↓←→ / WASD / ZQSD · E interagir · cliquer pour marcher · H héros · B construire · N carte · −/+ zoom · M menu',
   // Availability shared across the estate and the tower
   Bounty: 'Prime',
   'Burnt out': 'Épuisé',

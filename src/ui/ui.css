@@ -991,3 +991,17 @@ kbd.bkey {
 @media (prefers-reduced-motion: reduce) {
   .bg-layer { animation: none !important; }
 }
+
+/* ── Isel's advice (life/Advisor.tsx) ─────────────────────────────────────── */
+.advice-list { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 6px; }
+.advice { display: grid; grid-template-columns: 32px 1fr auto; gap: 10px; align-items: center; padding: 6px 8px; background: #1b1540; border: 2px solid var(--rim-dark); }
+.advice-icon { display: grid; place-items: center; width: 32px; height: 32px; font-size: 18px; background: #120e2c; }
+.advice-body { display: grid; gap: 2px; min-width: 0; font-size: 14px; }
+.advice-actions { display: flex; gap: 4px; flex-wrap: wrap; justify-content: flex-end; }
+.advice-promote, .advice-fillParty, .advice-tired { border-color: #6b5a1e; }
+.staff-best { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; margin: 4px 0 6px; padding: 4px 8px; background: #1b1540; border-left: 3px solid var(--gold); font-size: 13px; }
+@media (max-width: 560px) { .advice { grid-template-columns: 32px 1fr; } .advice-actions { grid-column: 1 / -1; justify-content: flex-start; } }
+.hud-zoom { right: 12px; bottom: 150px; display: flex; flex-direction: column; gap: 4px; }
+.hud-zoom .pbtn { min-width: 44px; }
+@media (max-width: 720px) { .hud-zoom { bottom: 170px; } }
+@media (max-width: 640px) { .hud-zoom { bottom: 205px; } }

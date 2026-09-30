@@ -193,3 +193,26 @@ describe('heroes on the campus', () => {
       }
   })
 })
+
+describe('lobby zoom', () => {
+  it('steps through the zoom levels and stops at the ends', async () => {
+    const { stepZoom, ZOOM_STEPS } = await import('./LobbyWorld')
+    expect(stepZoom(1, 1)).toBe(1.5)
+    expect(stepZoom(1, -1)).toBe(0.75)
+    expect(stepZoom(3, 1)).toBe(4)
+    expect(stepZoom(ZOOM_STEPS[ZOOM_STEPS.length - 1]!, 1)).toBe(4)
+    expect(stepZoom(ZOOM_STEPS[0], -1)).toBe(0.5)
+    // From an auto-fit ×3, zooming out goes to the next step down.
+    expect(stepZoom(3, -1)).toBe(2)
+  })
+
+  it('zoomed out shows more of the estate, never more than all of it', async () => {
+    const { fitViewport } = await import('./LobbyWorld')
+    const near = fitViewport(1200, 800, 3)
+    const far = fitViewport(1200, 800, 0.5)
+    expect(far.w).toBeGreaterThan(near.w)
+    expect(far.w).toBeLessThanOrEqual(80 * 16)
+    expect(far.h).toBeLessThanOrEqual(58 * 16)
+    expect(far.zoom).toBe(0.5)
+  })
+})

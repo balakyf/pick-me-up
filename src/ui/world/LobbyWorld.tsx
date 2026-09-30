@@ -18,6 +18,7 @@ import {
   PROPS,
   ROOMS,
   TILE,
+  ZONES,
   buildingAt,
   facingToward,
   findPath,
@@ -40,6 +41,8 @@ import { activityKey, isOffsite, spotFor, type Spot } from './heroAgent'
 import { accountDay, conversation, pairLines, speak, statusLine } from '../life/speech'
 import { HeroProfile, HeroTracker, LetterWindow, letterReady } from '../life/lifeWindows'
 import { FirstSteps } from '../life/FirstSteps'
+import { AdviceWindow, useAdvice } from '../life/Advisor'
+import { drawBuildingSign, drawZoneSign, ZONE_SIGN } from './roofSigns'
 import { PlacePanel, type PanelPlace } from '../facilityPanels'
 import { DialogBox, Gauge, PixelWindow, type DialogScript } from '../kit'
 import { canvasAvailable, cachedCanvas } from '../pixel/render'
@@ -77,8 +80,39 @@ interface Viewport {
   zoom: number
 }
 
-/** Integer zoom that fits the preferred view; phones get ×2 with a narrower view. */
-export function fitViewport(W: number, H: number): Viewport {
+/** The Master's zoom steps (screen pixels per world pixel); null = fit automatically. */
+export const ZOOM_STEPS = [0.5, 0.75, 1, 1.5, 2, 3, 4] as const
+const ZOOM_KEY = 'pmu.lobbyZoom'
+
+function loadZoom(): number | null {
+  try {
+    const v = Number(window.localStorage.getItem(ZOOM_KEY))
+    return (ZOOM_STEPS as readonly number[]).includes(v) ? v : null
+  } catch {
+    return null
+  }
+}
+
+/** One zoom step in (dir 1) or out (dir −1) from the current scale. */
+export function stepZoom(current: number, dir: 1 | -1): number {
+  const steps = ZOOM_STEPS as readonly number[]
+  if (dir > 0) return steps.find((s) => s > current + 1e-6) ?? steps[steps.length - 1]!
+  return [...steps].reverse().find((s) => s < current - 1e-6) ?? steps[0]!
+}
+
+/**
+ * The viewport for a window: at a chosen scale, the view is as much of the estate as the
+ * window holds (zoomed out, you see more); with no choice, an integer zoom that fits the
+ * preferred view (phones get ×2 with a narrower view).
+ */
+export function fitViewport(W: number, H: number, scale: number | null = null): Viewport {
+  if (scale !== null) {
+    return {
+      w: Math.max(TILE * 4, Math.min(MAP_W * TILE, Math.floor(W / scale))),
+      h: Math.max(TILE * 4, Math.min(MAP_H * TILE, Math.floor(H / scale))),
+      zoom: scale,
+    }
+  }
   let zoom = Math.floor(Math.min(W / VIEW_W, H / VIEW_H))
   if (zoom < 2) zoom = W >= 360 ? 2 : 1
   const w = Math.min(MAP_W * TILE, VIEW_W, Math.floor(W / zoom))
@@ -435,6 +469,8 @@ export function LobbyWorld({
   const [clock, setClock] = useState(() => toWorldTime(Date.now()))
   const [following, setFollowing] = useState<string | null>(null)
   const [board, setBoard] = useState(false)
+  const [adviceOpen, setAdviceOpen] = useState(false)
+  const advice = useAdvice(state)
 
   // Live world state for the game loop (never React state: 60 fps mutation).
   const world = useRef({
@@ -451,7 +487,7 @@ export function LobbyWorld({
   const stateRef = useRef(state)
   stateRef.current = state
   const modalRef = useRef(false)
-  modalRef.current = openPlace !== null || dialog !== null || profile !== null || tracker || letter || board
+  modalRef.current = openPlace !== null || dialog !== null || profile !== null || tracker || letter || board || adviceOpen
 
   // Pump the world clock (timers finish, heroes live, Sanity regenerates) while in the lobby.
   useEffect(() => {
@@ -508,18 +544,31 @@ export function LobbyWorld({
     }
   }, [state])
 
-  // Fit the stage to the window at an integer zoom (crisp pixels).
+  // Fit the stage to the window: the Master's chosen zoom, else an integer auto-fit.
+  const [zoomPick, setZoomPick] = useState<number | null>(() => (typeof window !== 'undefined' ? loadZoom() : null))
   useEffect(() => {
     const fit = () => {
       const el = stageRef.current
       const W = el?.clientWidth || window.innerWidth
       const H = el?.clientHeight || window.innerHeight
-      setVp(fitViewport(W, H))
+      setVp(fitViewport(W, H, zoomPick))
     }
     fit()
     window.addEventListener('resize', fit)
     return () => window.removeEventListener('resize', fit)
-  }, [])
+  }, [zoomPick])
+  const setZoom = (z: number | null) => {
+    setZoomPick(z)
+    try {
+      if (z === null) window.localStorage.removeItem(ZOOM_KEY)
+      else window.localStorage.setItem(ZOOM_KEY, String(z))
+    } catch {
+      /* a remembered zoom is only a convenience */
+    }
+  }
+  const zoomBy = (dir: 1 | -1) => setZoom(stepZoom(vpRef.current.zoom, dir))
+  const zoomByRef = useRef(zoomBy)
+  zoomByRef.current = zoomBy
 
   function talkTo(id: string) {
     const st = stateRef.current
@@ -623,6 +672,12 @@ export function LobbyWorld({
         setBoard(true)
       } else if (k === 'n') {
         setShowMap((v) => !v)
+      } else if (k === '-' || k === '_') {
+        zoomByRef.current(-1)
+      } else if (k === '+' || k === '=') {
+        zoomByRef.current(1)
+      } else if (k === '0') {
+        setZoom(null)
       }
     }
     const up = (e: KeyboardEvent) => {
@@ -944,9 +999,18 @@ export function LobbyWorld({
               const sm = cachedCanvas(`smoke|${roofFrame % 15}`, () => smoke(roofFrame % 15))
               if (sm) ctx.drawImage(sm, rx + Math.round(b.rect.w * TILE * 0.78) - 2 - camX, ry - 18 - camY)
             }
+            if (next > 0.5) drawBuildingSign(ctx, b, rx - camX, ry - camY, vpRef.current.zoom, site ? (building ? 'building' : 'site') : 'built')
             ctx.globalAlpha = 1
           },
         })
+      }
+      // Name plaques for the open-air places (drawn at the top of their ground).
+      for (const z of ZONES) {
+        const info = ZONE_SIGN[z.id]
+        if (!info) continue
+        const zs = info.room ? sites.get(info.room) : undefined
+        const zState = zs ? (zs.status === 'building' ? 'building' : 'site') : 'built'
+        list.push({ y: z.rect.y * TILE + TILE, draw: () => drawZoneSign(ctx, z, camX, camY, vpRef.current.zoom, zState) })
       }
       // The estate: decorations, statues, the season on the ground, the trees and the roofs.
       list.push(...estateDrawables(ctx, st, toWorldTime(Date.now()), w.time, { camX, camY, VW, VH }, w.roofAlpha, inside))
@@ -1123,8 +1187,24 @@ export function LobbyWorld({
         height={vp.h}
         style={{ width: vp.w * vp.zoom, height: vp.h * vp.zoom }}
         onPointerDown={onPointerDown}
+        onWheel={(e) => {
+          if (modalRef.current || Math.abs(e.deltaY) < 1) return
+          zoomBy(e.deltaY > 0 ? -1 : 1)
+        }}
         aria-label="The waiting room"
       />
+
+      <div className="hud hud-zoom" role="group" aria-label={t('Zoom')}>
+        <button className="pbtn sm" onClick={() => zoomBy(1)} title={t('Zoom in (+)')} disabled={vp.zoom >= ZOOM_STEPS[ZOOM_STEPS.length - 1]!}>
+          ＋
+        </button>
+        <button className="pbtn sm ghost" onClick={() => setZoom(null)} title={t('Fit to the window (0)')}>
+          {zoomPick === null ? t('Auto') : `×${vp.zoom}`}
+        </button>
+        <button className="pbtn sm" onClick={() => zoomBy(-1)} title={t('Zoom out (−)')} disabled={vp.zoom <= ZOOM_STEPS[0]}>
+          －
+        </button>
+      </div>
 
       <div className="hud hud-tl">
         <img className="px hud-bust" src={masterBustUrl(state.accountId)} width={48} height={48} alt="" />
@@ -1156,6 +1236,10 @@ export function LobbyWorld({
             🎁 {t('Daily')}
           </button>
         )}
+        <button className="pbtn cb-hud" onClick={() => setAdviceOpen(true)} title={t('Isel’s advice: who suits which job, who needs rest, what to do next')}>
+          💡 {t('Advice')}
+          {advice.tips.length > 0 && <span className="badge">{advice.tips.length}</span>}
+        </button>
         <button className="pbtn cb-hud" onClick={() => setBoard(true)} title={t('Construction: build and upgrade (B)')}>
           🔨 {t('Build')}
           {buildable > 0 && <span className="badge">{buildable}</span>}
@@ -1202,7 +1286,7 @@ export function LobbyWorld({
         </div>
       )}
       <div className="hud hud-help">
-        {t('↑↓←→ / WASD / ZQSD · E interact · click to walk · H heroes · B build · N map · M menu')} · {t('? all keys')}
+        {t('↑↓←→ / WASD / ZQSD · E interact · click to walk · H heroes · B build · N map · −/+ zoom · M menu')} · {t('? all keys')}
         <button className="pbtn sm ghost" onClick={() => setShowMap((v) => !v)} style={{ marginLeft: 6 }}>
           🗺
         </button>
@@ -1222,6 +1306,22 @@ export function LobbyWorld({
             setBoard(false)
             setFollowing(null)
             goTo({ kind: 'prop', prop: propForPlace(place) })
+          }}
+        />
+      )}
+      {adviceOpen && (
+        <AdviceWindow
+          state={state}
+          store={store}
+          tips={advice.tips}
+          onDismiss={advice.dismiss}
+          onProfile={(id) => setProfile(id)}
+          onClose={() => setAdviceOpen(false)}
+          onPlace={(p) => {
+            setAdviceOpen(false)
+            if (p === 'party') onNavigate('party')
+            else if (p === 'build') setBoard(true)
+            else setOpenPlace(p)
           }}
         />
       )}

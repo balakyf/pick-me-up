@@ -467,6 +467,8 @@ export interface Store {
    * can be revised, and only until the next dispatch. Throws otherwise.
    */
   revise(cmd: Command): GameState
+  /** Erase the save: forget the current state, clear storage and notify (back to the title). */
+  reset(): void
 }
 
 /**
@@ -520,6 +522,13 @@ export function createStore(opts: StoreOpts = {}): Store {
       return () => {
         listeners.delete(fn)
       }
+    },
+
+    reset(): void {
+      current = null
+      last = null
+      if (storage !== undefined) storage.clear(saveKey)
+      notify()
     },
 
     load(): GameState | null {

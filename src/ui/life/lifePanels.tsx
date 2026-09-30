@@ -22,7 +22,7 @@ import {
 } from '../../engine/life'
 import { forgeCost, forgeGrade, smithyUnlocked } from '../../engine/equipment'
 import { heroBustUrl } from '../pixel/sprites'
-import { JOB_NAME, accountDay, lastWords, shortName, statusLine } from './speech'
+import { JOB_NAME, accountDay, lastWords, shortName, statusLine, tradeName } from './speech'
 import { JOB_BLURB, JOB_ICON } from './lifeWindows'
 import { t } from '../i18n/i18n'
 
@@ -65,6 +65,8 @@ export function StaffSection({ state, store, job, onProfile }: { state: GameStat
   const candidates = Object.values(state.heroes)
     .filter((h) => h.alive && lifeOf(h).job !== job)
     .sort((a, b) => aptitude(b, job) - aptitude(a, job))
+  // The best-suited hero who has no job yet (taking someone off another job is the Master's call).
+  const best = candidates.find((h) => lifeOf(h).job === null && !h.captiveOf)
   return (
     <div className="staff">
       <h4 className="panel-sub">
@@ -95,6 +97,20 @@ export function StaffSection({ state, store, job, onProfile }: { state: GameStat
           </div>
         )
       })}
+      {open && holders.length < seats && best && aptitude(best, job) >= 1 && (
+        <div className="staff-best">
+          <span>
+            💡 {t('Best fit:')} <b>{shortName(state, best.id)}</b>
+          </span>
+          <span className="muted">
+            {[tradeName(personalityOf(best).background), t('aptitude {a}', { a: aptitude(best, job).toFixed(2) })].filter(Boolean).join(' · ')}
+            {jobFeeling(best, job) === 'likes' && ` · ${t('would enjoy it')}`}
+          </span>
+          <button className="pbtn sm" onClick={() => dispatch(best.id, job)}>
+            {t('Assign')}
+          </button>
+        </div>
+      )}
       {open && holders.length < seats && (
         <div className="staff-assign">
           <select className="pinput" value={pick} onChange={(e) => setPick(e.target.value)}>

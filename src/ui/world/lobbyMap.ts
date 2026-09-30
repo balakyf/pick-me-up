@@ -82,6 +82,23 @@ export type BuildingId =
   | 'synthesis'
   | 'infirmary'
 
+/** The emblem painted on each building's sign (and shown in its name plate). */
+export const BUILDING_ICON: Record<BuildingId, string> = {
+  dormitory: '🛏️',
+  tacticalCenter: '🗺️',
+  promotionChamber: '⭐',
+  transfer: '🔀',
+  watchtower: '🔭',
+  kitchen: '🍲',
+  tavern: '🍺',
+  hall: '💎',
+  library: '📚',
+  magic: '🔮',
+  armory: '⚒️',
+  synthesis: '⚗️',
+  infirmary: '🏥',
+}
+
 export interface Building {
   id: BuildingId
   rect: Rect
@@ -94,13 +111,13 @@ export interface Building {
 }
 
 export const BUILDINGS: Building[] = [
-  { id: 'dormitory', rect: { x: 2, y: 2, w: 18, h: 11 }, floor: 'w', doors: [{ x: 10, y: 12 }, { x: 11, y: 12 }], roof: '#5a6e9a', label: 'Dormitory' },
-  { id: 'tacticalCenter', rect: { x: 22, y: 3, w: 12, h: 9 }, floor: 't', doors: [{ x: 27, y: 11 }, { x: 28, y: 11 }], roof: '#4a5a4a', label: 'Tactical Center' },
-  { id: 'promotionChamber', rect: { x: 45, y: 3, w: 12, h: 9 }, floor: 'p', doors: [{ x: 50, y: 11 }, { x: 51, y: 11 }], roof: '#c8b890', label: 'Promotion Chamber' },
-  { id: 'transfer', rect: { x: 59, y: 3, w: 10, h: 8 }, floor: 'x', doors: [{ x: 63, y: 10 }], roof: '#3a4a7a', label: 'Transfer Station' },
-  { id: 'watchtower', rect: { x: 71, y: 2, w: 7, h: 8 }, floor: 'o', doors: [{ x: 74, y: 9 }], roof: '#6a4a3a', label: 'Watchtower' },
-  { id: 'kitchen', rect: { x: 2, y: 16, w: 14, h: 10 }, floor: 'k', doors: [{ x: 15, y: 20 }, { x: 15, y: 21 }], roof: '#9a4a2a', chimney: true, label: 'Kitchen' },
-  { id: 'tavern', rect: { x: 2, y: 28, w: 14, h: 10 }, floor: 'v', doors: [{ x: 15, y: 32 }, { x: 15, y: 33 }], roof: '#7a3a4a', chimney: true, label: 'Tavern' },
+  { id: 'dormitory', rect: { x: 2, y: 2, w: 18, h: 11 }, floor: 'w', doors: [{ x: 10, y: 12 }, { x: 11, y: 12 }], roof: '#5b86d6', label: 'Dormitory' },
+  { id: 'tacticalCenter', rect: { x: 22, y: 3, w: 12, h: 9 }, floor: 't', doors: [{ x: 27, y: 11 }, { x: 28, y: 11 }], roof: '#7d8a3a', label: 'Tactical Center' },
+  { id: 'promotionChamber', rect: { x: 45, y: 3, w: 12, h: 9 }, floor: 'p', doors: [{ x: 50, y: 11 }, { x: 51, y: 11 }], roof: '#e0b64a', label: 'Promotion Chamber' },
+  { id: 'transfer', rect: { x: 59, y: 3, w: 10, h: 8 }, floor: 'x', doors: [{ x: 63, y: 10 }], roof: '#36a7c9', label: 'Transfer Station' },
+  { id: 'watchtower', rect: { x: 71, y: 2, w: 7, h: 8 }, floor: 'o', doors: [{ x: 74, y: 9 }], roof: '#b8573a', label: 'Watchtower' },
+  { id: 'kitchen', rect: { x: 2, y: 16, w: 14, h: 10 }, floor: 'k', doors: [{ x: 15, y: 20 }, { x: 15, y: 21 }], roof: '#e07a36', chimney: true, label: 'Kitchen' },
+  { id: 'tavern', rect: { x: 2, y: 28, w: 14, h: 10 }, floor: 'v', doors: [{ x: 15, y: 32 }, { x: 15, y: 33 }], roof: '#b23a52', chimney: true, label: 'Tavern' },
   {
     id: 'hall',
     rect: { x: 28, y: 16, w: 24, h: 16 },
@@ -115,14 +132,14 @@ export const BUILDINGS: Building[] = [
       { x: 51, y: 23 },
       { x: 51, y: 24 },
     ],
-    roof: '#5a2e5e',
+    roof: '#7b3a92',
     label: 'Great Hall',
   },
-  { id: 'library', rect: { x: 55, y: 31, w: 10, h: 9 }, floor: 'l', doors: [{ x: 59, y: 31 }], roof: '#4a3a2a', label: 'Library' },
-  { id: 'magic', rect: { x: 67, y: 31, w: 11, h: 10 }, floor: 'h', doors: [{ x: 72, y: 31 }], roof: '#2a2a5a', label: 'Hall of Magic' },
-  { id: 'armory', rect: { x: 2, y: 41, w: 14, h: 10 }, floor: 'a', doors: [{ x: 15, y: 45 }, { x: 15, y: 46 }], roof: '#3a3a3e', chimney: true, label: 'Forge' },
-  { id: 'synthesis', rect: { x: 19, y: 42, w: 10, h: 8 }, floor: 'm', doors: [{ x: 23, y: 42 }], roof: '#3a2a4e', label: 'Synthesis Chamber' },
-  { id: 'infirmary', rect: { x: 66, y: 44, w: 12, h: 9 }, floor: 'i', doors: [{ x: 71, y: 44 }], roof: '#a8a8b8', label: 'Infirmary' },
+  { id: 'library', rect: { x: 55, y: 31, w: 10, h: 9 }, floor: 'l', doors: [{ x: 59, y: 31 }], roof: '#8c5a2e', label: 'Library' },
+  { id: 'magic', rect: { x: 67, y: 31, w: 11, h: 10 }, floor: 'h', doors: [{ x: 72, y: 31 }], roof: '#4646c8', label: 'Hall of Magic' },
+  { id: 'armory', rect: { x: 2, y: 41, w: 14, h: 10 }, floor: 'a', doors: [{ x: 15, y: 45 }, { x: 15, y: 46 }], roof: '#5a616c', chimney: true, label: 'Forge' },
+  { id: 'synthesis', rect: { x: 19, y: 42, w: 10, h: 8 }, floor: 'm', doors: [{ x: 23, y: 42 }], roof: '#c04a8a', label: 'Synthesis Chamber' },
+  { id: 'infirmary', rect: { x: 66, y: 44, w: 12, h: 9 }, floor: 'i', doors: [{ x: 71, y: 44 }], roof: '#ecebf2', label: 'Infirmary' },
 ]
 
 export type ZoneId = 'yard' | 'market' | 'garden' | 'memorial' | 'daily' | 'courtyard'

@@ -301,15 +301,7 @@ export function drawRoof(bld: Building, frame: number): Bitmap {
   hline(b, 0, body - 1, w, ink)
   for (let y = body; y < h; y++) hline(b, 0, y, w, hex(`#0c0814${(0x70 - (y - body) * 0x16).toString(16).padStart(2, '0')}`))
   hline(b, 0, 0, w, ink)
-  // A dormer window on the front slope.
-  const cx = Math.round(w / 2)
-  const dy = ridge + 4
-  rect(b, cx - 7, dy, 14, 11, dark)
-  rect(b, cx - 8, dy - 2, 16, 3, light) // its little roof
-  rect(b, cx - 5, dy + 2, 10, 7, hex('#2a2440'))
-  vline(b, cx, dy + 2, 7, dark)
-  hline(b, cx - 5, dy + 5, 10, dark)
-  set(b, cx - 4, dy + 3, hex('#5a5480'))
+  // (The front slope's centre is left clear: the building's name sign hangs there.)
   if (bld.chimney) {
     const x = Math.round(w * 0.78)
     rect(b, x, 1, 8, ridge + 2, hex('#6e4a3a'))

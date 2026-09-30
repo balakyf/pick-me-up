@@ -143,8 +143,10 @@ function GameMenu({
             <button
               className="pbtn danger"
               onClick={() => {
-                window.localStorage.removeItem('pmu.save.v1')
-                location.reload()
+                // Reset in place: a reload let the lobby's clock re-save the old game first.
+                store.reset()
+                setConfirmReset(false)
+                onClose()
               }}
             >
               {t('Erase')}
@@ -236,8 +238,8 @@ export function App() {
           <button
             className="btn primary big"
             onClick={() => {
-              window.localStorage.removeItem('pmu.save.v1')
-              location.reload()
+              store.reset()
+              setView('lobby')
             }}
           >
             {t('Begin again as a new Master')}

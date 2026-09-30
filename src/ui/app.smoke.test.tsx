@@ -439,3 +439,51 @@ describe('App smoke — French', () => {
     }
   })
 })
+
+describe('App smoke — New game from the Menu', () => {
+  it('Erase really erases: back to the title, and the lobby clock cannot re-save the old game', () => {
+    vi.useFakeTimers({ now: 1000 })
+    try {
+      mount()
+      act(() => {
+        getStore().dispatch({ type: 'NEW_ACCOUNT', seed: 4242, now: 0 })
+      })
+      expect(window.localStorage.getItem('pmu.save.v1')).not.toBeNull()
+      clickButton('Menu')
+      clickButton('New game')
+      clickButton('Erase')
+      act(() => {
+        vi.advanceTimersByTime(5000) // any leftover lobby ticks
+      })
+      expect(getStore().getState()).toBeNull()
+      expect(window.localStorage.getItem('pmu.save.v1')).toBeNull()
+      expect(container.textContent).toContain('Begin')
+      // And a fresh Master starts from nothing.
+      clickButton('Begin')
+      expect(getStore().getState()!.tower.highestCleared).toBe(0)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+})
+
+describe('App smoke — Isel’s advice', () => {
+  it('suggests who suits which job, and Assign puts them to work', () => {
+    mount()
+    act(() => {
+      getStore().dispatch({ type: 'NEW_ACCOUNT', seed: 77, now: 0 })
+      getStore().dispatch({ type: 'ADD_GOLD', amount: 30_000 })
+      for (let i = 0; i < 9; i++) getStore().dispatch({ type: 'SUMMON' })
+    })
+    clickButton('Advice')
+    expect(container.textContent).toContain('Isel’s advice')
+    expect(container.textContent).toMatch(/would make a good \w+ in the/)
+    const row = Array.from(container.querySelectorAll('li.advice-job'))[0] as HTMLElement
+    const assign = Array.from(row.querySelectorAll('button')).find((b) => b.textContent === 'Assign') as HTMLButtonElement
+    act(() => {
+      assign.click()
+    })
+    const employed = Object.values(getStore().getState()!.heroes).filter((h) => h.life?.job)
+    expect(employed.length).toBeGreaterThan(0)
+  })
+})
