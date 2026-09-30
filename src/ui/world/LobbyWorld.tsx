@@ -46,6 +46,9 @@ import { canvasAvailable, cachedCanvas } from '../pixel/render'
 import { renderLobbyBase, drawSummonCircle } from '../pixel/tiles'
 import { PROP_FRAMES, drawEmote, drawProp, type EmoteKind } from '../pixel/props'
 import { ROOF_LIFT, blanket, drawRoof, smoke } from '../pixel/campusProps'
+import { drawLot, drawSign, drawSiteFrame, drawSiteMarker, type SiteMarker } from '../pixel/siteArt'
+import { gatedRooms, siteRooms, buildableCount } from './sites'
+import { ConstructionBoard } from './ConstructionBoard'
 import { heroBustUrl, heroFrameCanvas, iselBustUrl, masterBustUrl, masterFrameCanvas } from '../pixel/sprites'
 import type { Dir, WalkFrame } from '../pixel/heroSprite'
 import { hashString } from '../pixel/rand'
@@ -333,6 +336,46 @@ function lockedRooms(state: GameState): RoomId[] {
   return out
 }
 
+const SIGN = drawSign()
+
+/** A marker over one unbuilt place, in world pixels (the bubble's tip). */
+interface Marker {
+  kind: SiteMarker
+  x: number
+  y: number
+  text: string
+}
+
+/** Markers for every construction site and every place still waiting on a level. */
+export function siteMarkers(state: GameState): Marker[] {
+  const at = (room: RoomId, place: PlaceId) => {
+    const b = BUILDINGS.find((bb) => bb.id === room)
+    if (b) return { x: (b.rect.x + b.rect.w / 2) * TILE, y: b.rect.y * TILE - ROOF_LIFT - 2 }
+    const p = propForPlace(place)
+    return { x: (p.x + p.w / 2) * TILE, y: p.y * TILE - 10 }
+  }
+  const out: Marker[] = []
+  for (const site of siteRooms(state).values()) {
+    const name = tr(site.label)
+    const kind: SiteMarker = site.status === 'ready' ? 'build' : site.status === 'building' ? 'building' : site.status === 'short' ? 'short' : 'locked'
+    const text =
+      kind === 'build'
+        ? tr('Build the {name} here', { name })
+        : kind === 'building'
+          ? tr('{name} · under construction', { name })
+          : kind === 'short'
+            ? tr('{name} · {cost} gold', { name, cost: (site.cost ?? 0).toLocaleString() })
+            : site.unlockAt !== null && state.meta.masterLevel < site.unlockAt
+              ? tr('{name} · Master Lv {n}', { name, n: site.unlockAt })
+              : tr('{name} · not yet', { name })
+    out.push({ kind, ...at(site.room, site.place), text })
+  }
+  for (const g of gatedRooms(state)) {
+    out.push({ kind: 'locked', ...at(g.room, g.place), text: `${tr(g.label)} · ${tr(g.reason.key, { n: g.reason.n })}` })
+  }
+  return out
+}
+
 /** Darkness 0..1 by hour of the world day (dusk 17–20, dawn 5–7). */
 export function darknessAt(hour: number): number {
   if (hour >= 7 && hour < 17) return 0
@@ -390,6 +433,7 @@ export function LobbyWorld({
   const [showMap, setShowMap] = useState(() => typeof window === 'undefined' || window.innerWidth >= 720)
   const [clock, setClock] = useState(() => toWorldTime(Date.now()))
   const [following, setFollowing] = useState<string | null>(null)
+  const [board, setBoard] = useState(false)
 
   // Live world state for the game loop (never React state: 60 fps mutation).
   const world = useRef({
@@ -406,7 +450,7 @@ export function LobbyWorld({
   const stateRef = useRef(state)
   stateRef.current = state
   const modalRef = useRef(false)
-  modalRef.current = openPlace !== null || dialog !== null || profile !== null || tracker || letter
+  modalRef.current = openPlace !== null || dialog !== null || profile !== null || tracker || letter || board
 
   // Pump the world clock (timers finish, heroes live, Sanity regenerates) while in the lobby.
   useEffect(() => {
@@ -571,6 +615,8 @@ export function LobbyWorld({
         onMenu()
       } else if (k === 'h') {
         setTracker(true)
+      } else if (k === 'b') {
+        setBoard(true)
       } else if (k === 'n') {
         setShowMap((v) => !v)
       }
@@ -760,12 +806,19 @@ export function LobbyWorld({
         ctx.globalAlpha = 1
       }
 
-      // locked (unbuilt) places sit in darkness
+      // Unbuilt places: a yard or garden is a staked dirt lot, a building a dark shell
+      // under its timber frame; places waiting on a level sit in darkness.
+      const sites = siteRooms(st)
       for (const room of lockedRooms(st)) {
         const r = ROOMS[room]
-        ctx.fillStyle = 'rgba(8,4,16,0.55)'
+        const zone = sites.has(room) && !BUILDINGS.some((b) => b.id === room)
+        const lot = zone ? cachedCanvas(`lot|${room}`, () => drawLot(r, room)) : null
+        if (lot) ctx.drawImage(lot, r.x * TILE - camX, r.y * TILE - camY)
+        ctx.fillStyle = zone ? 'rgba(8,4,16,0.25)' : 'rgba(8,4,16,0.55)'
         ctx.fillRect(r.x * TILE - camX, r.y * TILE - camY, r.w * TILE, r.h * TILE)
       }
+      const siteRects = [...sites.keys()].map((room) => ROOMS[room])
+      const inSite = (x: number, y: number) => siteRects.some((r) => x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h)
 
       // y-sorted props, graves, characters and roofs
       type Drawable = { y: number; draw: () => void }
@@ -780,6 +833,20 @@ export function LobbyWorld({
         if (!img) continue
         const spr = propOffset(p.kind)
         const wallMounted = isWallChar(tileAt(p.x, p.y)) || p.kind === 'torch' || p.kind === 'banner'
+        if (inSite(p.x, p.y)) {
+          // Not built yet: the furniture is only a blueprint; the counter is a signpost.
+          const sign = p.place ? cachedCanvas('site|sign', () => drawSign().bmp) : null
+          list.push({
+            y: (p.y + p.h) * TILE,
+            draw: () => {
+              ctx.globalAlpha = 0.28
+              ctx.drawImage(img, ox + spr.dx - camX, oy + spr.dy - camY)
+              ctx.globalAlpha = 1
+              if (sign) ctx.drawImage(sign, ox + SIGN.dx - camX, oy + SIGN.dy - camY)
+            },
+          })
+          continue
+        }
         list.push({
           y: wallMounted ? (p.y + 0.5) * TILE : (p.y + p.h) * TILE,
           draw: () => ctx.drawImage(img, ox + spr.dx - camX, oy + spr.dy - camY),
@@ -858,14 +925,18 @@ export function LobbyWorld({
         const rx = b.rect.x * TILE
         const ry = b.rect.y * TILE - ROOF_LIFT
         if (!onScreen(rx, ry, b.rect.w * TILE)) continue
-        const roof = cachedCanvas(`roof|${b.id}`, () => drawRoof(b, 0))
+        const site = sites.get(b.id)
+        const building = site?.status === 'building'
+        const roof = site
+          ? cachedCanvas(`site|frame|${b.id}|${building}`, () => drawSiteFrame(b, building))
+          : cachedCanvas(`roof|${b.id}`, () => drawRoof(b, 0))
         list.push({
           y: (b.rect.y + b.rect.h - 1) * TILE + 1,
           draw: () => {
             if (!roof) return
             ctx.globalAlpha = next
             ctx.drawImage(roof, rx - camX, ry - camY)
-            if (b.chimney) {
+            if (b.chimney && !site) {
               const sm = cachedCanvas(`smoke|${roofFrame % 15}`, () => smoke(roofFrame % 15))
               if (sm) ctx.drawImage(sm, rx + Math.round(b.rect.w * TILE * 0.78) - 2 - camX, ry - 18 - camY)
             }
@@ -875,6 +946,29 @@ export function LobbyWorld({
       }
       list.sort((a, b) => a.y - b.y)
       for (const d of list) d.draw()
+
+      // Markers over every unbuilt place: a hammer (build here), a padlock (not yet), an
+      // hourglass (under way). Labels show once the Master is close enough to read them.
+      const bob = Math.round(Math.sin(w.time * 3) * 1.5)
+      ctx.font = '8px "Pixelify Sans", monospace'
+      ctx.textAlign = 'center'
+      for (const mk of siteMarkers(st)) {
+        const mx = mk.x - camX
+        const my = mk.y - camY + bob
+        if (mx < -40 || my < -40 || mx > VW + 40 || my > VH + 40) continue
+        const icon = cachedCanvas(`site|marker|${mk.kind}`, () => drawSiteMarker(mk.kind))
+        if (icon) ctx.drawImage(icon, Math.round(mx - 7), Math.round(my - 16))
+        const near = Math.abs(mk.x / TILE - m.x) + Math.abs(mk.y / TILE - m.y) < 16
+        if (near) {
+          const text = mk.text
+          const tw = ctx.measureText(text).width
+          ctx.fillStyle = 'rgba(20,12,32,0.8)'
+          ctx.fillRect(Math.round(mx - tw / 2 - 3), Math.round(my - 28), Math.ceil(tw + 6), 10)
+          ctx.fillStyle = mk.kind === 'build' ? '#ffe07a' : '#e8e0f0'
+          ctx.fillText(text, Math.round(mx), Math.round(my - 20))
+        }
+      }
+      ctx.textAlign = 'start'
 
       // ── day and night
       const hour = hourOfWorld(toWorldTime(Date.now()))
@@ -902,7 +996,7 @@ export function LobbyWorld({
         }
         // lit windows on the roofs
         for (const b of BUILDINGS) {
-          if (b === inside) continue
+          if (b === inside || sites.has(b.id)) continue
           const cx = (b.rect.x + b.rect.w / 2) * TILE - camX
           const cy = b.rect.y * TILE - ROOF_LIFT + Math.round(((b.rect.h - 1) * TILE + ROOF_LIFT) * 0.36) + 9 - camY
           const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, 14)
@@ -1008,6 +1102,7 @@ export function LobbyWorld({
   const living = Object.values(state.heroes).filter((h) => h.alive).length
   const hour = hourOfWorld(clock)
   const followedHero = following ? state.heroes[following as OwnedHero['id']] : null
+  const buildable = buildableCount(state)
   const hasLetter = letterReady(state, clock, 20 * 60_000 * TUNING.time.worldTimeFactor)
 
   return (
@@ -1051,6 +1146,10 @@ export function LobbyWorld({
             🎁 {t('Daily')}
           </button>
         )}
+        <button className="pbtn cb-hud" onClick={() => setBoard(true)} title={t('Construction: build and upgrade (B)')}>
+          🔨 {t('Build')}
+          {buildable > 0 && <span className="badge">{buildable}</span>}
+        </button>
         <button className="pbtn" onClick={() => setTracker(true)} title={t('Where is everyone? (H)')}>
           👥 {t('Heroes')}
         </button>
@@ -1093,7 +1192,7 @@ export function LobbyWorld({
         </div>
       )}
       <div className="hud hud-help">
-        {t('↑↓←→ / WASD / ZQSD · E interact · click to walk · H heroes · N map · M menu')}
+        {t('↑↓←→ / WASD / ZQSD · E interact · click to walk · H heroes · B build · N map · M menu')}
         <button className="pbtn sm ghost" onClick={() => setShowMap((v) => !v)} style={{ marginLeft: 6 }}>
           🗺
         </button>
@@ -1103,6 +1202,18 @@ export function LobbyWorld({
         <PixelWindow title={tr(PLACE_LABEL[openPlace])} icon={PLACE_ICON[openPlace]} onClose={() => setOpenPlace(null)}>
           <PlacePanel place={openPlace} state={state} store={store} onFindHero={findHero} onProfile={(id) => setProfile(id)} />
         </PixelWindow>
+      )}
+      {board && (
+        <ConstructionBoard
+          state={state}
+          store={store}
+          onClose={() => setBoard(false)}
+          onGo={(place) => {
+            setBoard(false)
+            setFollowing(null)
+            goTo({ kind: 'prop', prop: propForPlace(place) })
+          }}
+        />
       )}
       {tracker && <HeroTracker state={state} onClose={() => setTracker(false)} onFind={findHero} onProfile={(id) => setProfile(id)} />}
       {profile && state.heroes[profile as OwnedHero['id']] && (
@@ -1180,6 +1291,12 @@ function drawMinimap(
     const inParty = st.party.slots.includes(hw.id as OwnedHero['id'])
     x.fillStyle = inParty ? '#f2c75c' : '#8ae0ff'
     x.fillRect(hw.x * 2, hw.y * 2, 2, 2)
+  }
+  // Unbuilt places: gold where a build can start now, grey where it waits.
+  for (const site of siteRooms(st).values()) {
+    const r = ROOMS[site.room]
+    x.fillStyle = site.status === 'ready' ? '#ffe07a' : site.status === 'building' ? '#9ad4ff' : '#8e94aa'
+    x.fillRect((r.x + r.w / 2) * 2 - 2, (r.y + r.h / 2) * 2 - 2, 4, 4)
   }
   x.fillStyle = '#ffffff'
   x.fillRect(m.x * 2 - 1, m.y * 2 - 1, 4, 4)

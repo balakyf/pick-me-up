@@ -107,7 +107,7 @@ function BanquetAction({ state, store }: { state: GameState; store: Store }) {
 const SKIP_GEMS = TUNING.lobby.promotion.skipGemCost
 
 /** Human-readable "time left" for a promotion countdown (cosmetic; whole units). */
-function timeLeft(ms: number): string {
+export function timeLeft(ms: number): string {
   if (ms <= 0) return t('finishing…')
   const mins = Math.ceil(ms / 60_000)
   if (mins < 60) return t('{m}m left', { m: mins })

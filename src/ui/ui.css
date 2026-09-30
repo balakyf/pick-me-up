@@ -706,3 +706,28 @@ span.arm-slot { padding: 2px 8px; border: 2px dashed #3e3478; color: var(--ink-f
 .guide-list li.next { color: var(--ink); font-weight: 600; }
 .guide-hint { font-style: italic; color: #d8d0f0; margin-bottom: 6px; }
 @media (max-width: 720px) { .hud-guide { top: auto; bottom: 170px; width: 220px; } }
+
+/* ── Construction Board (world/ConstructionBoard.tsx) ───────────────────────── */
+.cb-hud { position: relative; }
+.cb-hud .badge {
+  position: absolute; top: -6px; right: -6px; min-width: 16px; height: 16px; padding: 0 4px;
+  border-radius: 8px; background: var(--gold); color: #1b1225; font-size: 11px; line-height: 16px; font-weight: 600;
+  animation: blink 1.2s steps(2) infinite;
+}
+.cb-ml { margin: 0 0 10px; font-size: 14px; }
+.cb-section h4 { margin: 12px 0 6px; font-size: 15px; color: var(--gold); letter-spacing: 0.5px; }
+.cb-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.cb-row {
+  display: flex; align-items: center; gap: 10px; padding: 6px 8px;
+  background: var(--panel-2); border: 2px solid var(--line);
+}
+.cb-row.cb-ready { border-color: var(--gold-deep); }
+.cb-row.cb-locked { opacity: 0.75; }
+.cb-icon { width: 22px; text-align: center; font-size: 16px; }
+.cb-name { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+.cb-status { font-size: 13px; color: var(--ink-dim); }
+.cb-foot { margin-top: 12px; font-size: 13px; }
+@media (max-width: 520px) {
+  .cb-row { flex-wrap: wrap; }
+  .cb-name { flex-basis: calc(100% - 40px); }
+}

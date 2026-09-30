@@ -6,12 +6,14 @@
 import { useState } from 'react'
 import type { GameState } from '../../engine/types'
 import type { Store } from '../../engine/store'
+import { TUNING } from '../../engine/tuning'
 import { t } from '../i18n/i18n'
 
 export interface GuideStep {
   id: string
   label: string
-  hint: string
+  /** What to do next; may read the state (e.g. a step still gated by Master Level). */
+  hint: string | ((s: GameState) => string)
   done: (s: GameState) => boolean
 }
 
@@ -54,7 +56,10 @@ export const GUIDE_STEPS: GuideStep[] = [
   {
     id: 'build',
     label: 'Build something new',
-    hint: 'A Tavern or a Garden: step into the dark, unbuilt place and build it.',
+    hint: (s) =>
+      s.meta.masterLevel < TUNING.lobby.facilities.unlockMasterLevel.tavern!
+        ? 'The Tavern and the Garden open at Master Lv 2: clear a floor or two first. Then press 🔨 Build, top right.'
+        : 'Press 🔨 Build (top right), or walk to a dirt lot marked with a hammer and use its signpost.',
     done: (s) => BUILDINGS.some((b) => s.facilities[b].level > 0 || s.facilities[b].build !== null),
   },
 ]
@@ -82,7 +87,7 @@ export function FirstSteps({ state, store }: { state: GameState; store: Store })
               </li>
             ))}
           </ul>
-          {next && <div className="guide-hint">{t(next.hint)}</div>}
+          {next && <div className="guide-hint">{t(typeof next.hint === 'string' ? next.hint : next.hint(state))}</div>}
           <button className="pbtn sm ghost" onClick={() => store.dispatch({ type: 'GUIDE_STEP', step: 'dismissed' })}>
             {t('I know my way')}
           </button>
