@@ -38,7 +38,21 @@ import {
 } from '../stats'
 import { applySanityPenalty } from '../kitchen'
 import { equipmentBonus } from '../equipment'
-import { resolveSkillEffect, skillCp } from '../skills'
+import { passiveBonuses, resolveSkillEffect, skillCp } from '../skills'
+import { engravingCp, engravingEffect } from '../engravings'
+import { favorStatMult, isDefiant } from '../favor'
+import { TUNING } from '../tuning'
+
+/** Apply relative % bonuses to a stat block (rounded; CRIT re-capped). */
+function applyStatPct(stats: DerivedStats, pct: Partial<Record<keyof DerivedStats, number>>): DerivedStats {
+  const out = { ...stats }
+  for (const key of Object.keys(pct) as (keyof DerivedStats)[]) {
+    const p = pct[key]
+    if (p !== undefined && p !== 0) out[key] = Math.round(out[key] * (1 + p))
+  }
+  out.critPct = Math.min(out.critPct, TUNING.stats.derived.critCap)
+  return out
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Basic attack & skill resolution
@@ -107,8 +121,20 @@ export function buildCombatUnit(
   inventory: readonly EquipmentItem[] = [],
 ): CombatUnit {
   const level = hero.xp.level
+  // Engraving + passive skills: keyword tags and relative stat bonuses (Layer 1 §2/§5.4).
+  const engraving = engravingEffect(hero.engraving)
+  const passives = passiveBonuses(hero.skills, registry)
+  const pct: Partial<Record<keyof DerivedStats, number>> = { ...passives.statPct }
+  for (const [k, v] of Object.entries(engraving?.statPct ?? {}) as [keyof DerivedStats, number][]) {
+    pct[k] = (pct[k] ?? 0) + v
+  }
+  // Favor (Layer 3 §C1): a warm bond lifts every stat a little; a Wary hero is sluggish.
+  const favorMult = favorStatMult(hero.favor ?? TUNING.favor.start)
+  if (favorMult !== 1) {
+    for (const k of ['maxHP', 'pAtk', 'mAtk', 'pDef', 'mDef', 'spd'] as const) pct[k] = (pct[k] ?? 0) + (favorMult - 1)
+  }
   // Low Sanity weakens the hero BEFORE the snapshot freezes (combat never recomputes).
-  const base = applySanityPenalty(deriveStatsForHero(hero, level), hero.sanity)
+  const base = applyStatPct(applySanityPenalty(deriveStatsForHero(hero, level), hero.sanity), pct)
   // Equipment adds a flat block ON TOP of the morale-adjusted base (gear is unaffected
   // by Sanity), and a weapon may override the wielder's element + carry keywords (§5.4).
   const gear = equipmentBonus(hero, inventory)
@@ -137,12 +163,20 @@ export function buildCombatUnit(
     actionGauge: 0,
     alive: true,
     skills: [basicAttackFor(hero, element), ...resolveHeroSkills(hero.skills, registry)],
-    keywords: [...gear.keywords],
-    // Skills add a CP term (Layer 1 §2.5): Σ gradeValue × level, weighted.
-    cp: combatPower(stats, skillCp(hero.skills, registry)),
+    keywords: [
+      ...gear.keywords,
+      ...(engraving?.keywords ?? []),
+      ...passives.keywords,
+      // Guarantee an action (Layer 3 §D2): a blessed hero's first strike lands hard.
+      ...(hero.blessed ? [{ kind: 'opener' as const, multiplier: TUNING.intervention.guaranteeMult }] : []),
+    ],
+    // Skills add a CP term (Layer 1 §2.5): Σ gradeValue × level, weighted; an engraving adds its own.
+    cp: combatPower(stats, skillCp(hero.skills, registry) + engravingCp(hero.engraving)),
     sourceHeroId: hero.id,
     // Carried for the combat panic check; enemies have no Sanity (field absent).
     sanity: hero.sanity,
+    // A Wary hero ignores the Master's focus directive.
+    ...(isDefiant(hero.favor ?? TUNING.favor.start) ? { defiant: true } : {}),
   }
 }
 
@@ -181,16 +215,19 @@ export function buildEnemyUnit(
     levelBonus?: number
     keywords?: KeywordTag[]
     targetTag?: string
+    /** Elite multiplier on every attribute (late floors meet their budget this way). */
+    powerMult?: number
   },
 ): CombatUnit {
   const effLevel = level + (opts?.levelBonus ?? 0)
+  const k = effLevel * (opts?.powerMult ?? 1)
 
   const attrs: PrimaryAttrs = {
-    str: Math.round(template.attrMult.str * effLevel),
-    agi: Math.round(template.attrMult.agi * effLevel),
-    vit: Math.round(template.attrMult.vit * effLevel),
-    int: Math.round(template.attrMult.int * effLevel),
-    wil: Math.round(template.attrMult.wil * effLevel),
+    str: Math.round(template.attrMult.str * k),
+    agi: Math.round(template.attrMult.agi * k),
+    vit: Math.round(template.attrMult.vit * k),
+    int: Math.round(template.attrMult.int * k),
+    wil: Math.round(template.attrMult.wil * k),
   }
 
   const stats = deriveStats(attrs)
@@ -200,7 +237,8 @@ export function buildEnemyUnit(
     id: instanceId,
     name: template.name,
     side: 'enemy',
-    unitClass: null,
+    // A template may pick a targeting profile (e.g. assassins strike the weakest).
+    unitClass: template.unitClass ?? null,
     element: template.element,
     line: opts?.line ?? 'front',
     level: effLevel,
@@ -214,5 +252,25 @@ export function buildEnemyUnit(
     keywords: [...(template.keywords ?? []), ...(opts?.keywords ?? [])],
     cp: combatPower(stats),
     targetTag: opts?.targetTag ?? template.id,
+    ...(template.family !== undefined ? { family: template.family } : {}),
   }
+}
+
+/**
+ * Build a hero-side mission NPC (e.g. the F15 escort target) from an ally template:
+ * the same statline rules as an enemy, fielded on the party's side, flagged `isNpc`
+ * (targetable, never acts, never part of the party's XP/permadeath bookkeeping).
+ */
+export function buildAllyUnit(
+  template: EnemyTemplate,
+  level: number,
+  instanceId: string,
+  opts: { line: Line; targetTag: string; levelBonus?: number },
+): CombatUnit {
+  const base = buildEnemyUnit(template, level, instanceId, {
+    line: opts.line,
+    levelBonus: opts.levelBonus,
+    targetTag: opts.targetTag,
+  })
+  return { ...base, side: 'hero', unitClass: null, isNpc: true }
 }

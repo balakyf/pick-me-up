@@ -5,6 +5,7 @@
  */
 import type { GameState, OwnedHero } from '../../engine/types'
 import { hashString } from '../pixel/rand'
+import { t } from '../i18n/i18n'
 
 const COMMONER_JOBS = ['farmer', 'carpenter', 'baker', 'fisher', 'weaver', 'shepherd', 'miller', 'tanner']
 
@@ -23,18 +24,20 @@ function pick<T>(arr: T[], seed: string): T {
 export function heroLines(hero: OwnedHero, inParty: boolean): string[] {
   const first = hero.name.split(/\s+/)[0]
   let mood: string
-  if (hero.sanity < 30) mood = 'I… I can’t stop shaking. The tower— please. Just a little rest.'
-  else if (hero.sanity < 60) mood = 'I’m fine. Really. I just need a moment by the fire.'
-  else if (hero.promotion) mood = 'They sealed me in the chamber for a while. I feel… different.'
-  else if (hero.xp.atCap) mood = 'I’ve hit a wall, Master. Something in the Promotion Chamber could break it.'
-  else if (inParty) mood = 'Party’s ready. Say the word and we climb.'
+  if (hero.training)
+    mood = hero.training.mode === 'learn' ? t('Again. And again. This new form is almost mine.') : t('Again. And again. This technique is almost mine.')
+  else if (hero.sanity < 30) mood = t('I… I can’t stop shaking. The tower— please. Just a little rest.')
+  else if (hero.sanity < 60) mood = t('I’m fine. Really. I just need a moment by the fire.')
+  else if (hero.promotion) mood = t('They sealed me in the chamber for a while. I feel… different.')
+  else if (hero.xp.atCap) mood = t('I’ve hit a wall, Master. Something in the Promotion Chamber could break it.')
+  else if (inParty) mood = t('Party’s ready. Say the word and we climb.')
   else if (hero.heroClass === null && hero.star <= 1)
-    mood = `I was a ${pick(COMMONER_JOBS, hero.id)} back home. Why was I the one summoned?`
-  else if (hero.heroClass === null) mood = 'Coin is coin. Point me at something and I’ll hit it.'
-  else mood = pick(CLASS_LINES[hero.heroClass]!, hero.id)
+    mood = t('I was a {job} back home. Why was I the one summoned?', { job: t(pick(COMMONER_JOBS, hero.id)) })
+  else if (hero.heroClass === null) mood = t('Coin is coin. Point me at something and I’ll hit it.')
+  else mood = t(pick(CLASS_LINES[hero.heroClass]!, hero.id))
 
-  const cls = hero.heroClass ? hero.heroClass[0]!.toUpperCase() + hero.heroClass.slice(1) : 'Classless'
-  const status = `${first} · ${hero.star}★ ${cls} · Lv ${hero.xp.level} · Sanity ${hero.sanity}/100`
+  const cls = t(hero.heroClass ? hero.heroClass[0]!.toUpperCase() + hero.heroClass.slice(1) : 'Classless')
+  const status = `${first} · ${hero.star}★ ${cls} · Lv ${hero.xp.level} · ${t('Sanity')} ${hero.sanity}/100`
   return [mood, status]
 }
 
@@ -44,11 +47,31 @@ export function iselLines(state: GameState): string[] {
   const deployed = state.party.slots.some((id) => id && state.heroes[id]?.alive)
   let tip: string
   if (living.length === 0) tip = 'You have no heroes left… The Mobius crystal in the hall can call new ones.'
-  else if (!deployed) tip = 'No one climbs without orders. The party board hangs in the Tactical Center.'
+  else if (!deployed) tip = 'No one climbs without orders. The party board hangs in the Tactical Center, on the north road.'
   else if (living.some((h) => h.sanity < 60)) tip = 'Some of your heroes look pale. A banquet in the Kitchen would do them good.'
-  else if (state.tower.highestCleared === 0) tip = 'The Tower Gate is at the east end of the hall. Floor 1 is waiting.'
-  else if (living.some((h) => h.xp.atCap)) tip = 'A hero has reached their star cap. The Promotion Chamber is north-east.'
+  else if (state.tower.highestCleared === 0) tip = 'The Tower Gate stands in the north wall, up the avenue from the hall. Floor 1 is waiting.'
+  else if (living.some((h) => h.xp.atCap)) tip = 'A hero has reached their star cap. The Promotion Chamber is on the north road.'
+  else if (!living.some((h) => h.life?.job)) tip = 'Idle hands, Master. Give someone a job — a cook in the Kitchen, a smith at the Forge. Open their Profile.'
+  else if (state.life.memorial.length > 0 && living.some((h) => (h.life?.grief ?? 0) > 50))
+    tip = 'Some of them still visit the Memorial every day. Grief passes faster with a healer in the Infirmary.'
   else if (state.gold >= 3000) tip = 'The Mobius crystal hums. You could afford another summon.'
-  else tip = `Floor ${state.tower.currentFloor} is next. Every hero who falls there is gone for good — remember that.`
-  return ['Welcome back, Master. I am Isel — I keep this waiting room in order.', tip]
+  else tip = t('Floor {n} is next. Every hero who falls there is gone for good — remember that.', { n: state.tower.currentFloor })
+  return [t('Welcome back, Master. I am Isel — I keep this waiting room in order.'), t(tip)]
+}
+
+const BANTER: string[][] = [
+  ['Heard the tower goes all the way to a hundred.', 'Then we climb a hundred.'],
+  ['Do you ever dream about home?', 'Every night. Then I wake up here.'],
+  ['The Master looked tired today.', 'Aren’t we all.'],
+  ['That goblin on floor three nearly had me.', 'Nearly is a good word.'],
+  ['Who cooks tonight?', 'Not you. Never again.'],
+  ['Isel smiles too much.', 'Fairies always do. Keep your purse close.'],
+  ['Did you see the new one from the crystal?', 'Another stranger with a sad story.'],
+  ['My sword arm aches.', 'Then use the other one.'],
+]
+
+/** A two-line exchange for two idle heroes chatting (stable for a while, then rotates). */
+export function banterLines(aId: string, bId: string, bucket: number): [string, string] {
+  const pair = BANTER[hashString(`${aId}|${bId}|${bucket}`) % BANTER.length]!
+  return [t(pair[0]!), t(pair[1]!)]
 }

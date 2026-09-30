@@ -29,9 +29,10 @@ import type {
   HeroTemplate,
 } from '../types'
 import { makeSeed } from '../rng/rng'
-import { buildOwnedHeroFromTemplate } from '../gacha'
+import { buildOwnedHeroFromTemplate, HERO_V8_DEFAULTS } from '../gacha'
 import { CAMEO_HEROES } from '../content'
 import { toWorldTime } from '../time'
+import { defaultLifeState } from '../life/life'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Constants
@@ -77,6 +78,42 @@ function findStarterTemplate(): HeroTemplate {
   return template
 }
 
+/** The Layer 3 meta fields a fresh (or v7-migrated) account starts with. */
+function META_V8_DEFAULTS(): Omit<GameState['meta'], 'masterLevel' | 'masterXp' | 'lastSeenAtWorld'> {
+  return {
+    pi: 0,
+    login: { lastDay: -1, streak: 0 },
+    monthly: null,
+    wallet: { spentUsd: 0, purchases: {} },
+    skill: { blacksmith: TUNING.minigames.startSkill, ballista: TUNING.minigames.startSkill },
+    crackOpen: false,
+    revealedHidden: [],
+    peekedFloors: [],
+    nudge: false,
+    piZeroSince: null,
+    deleted: false,
+  }
+}
+
+/** A fresh (or v8-migrated) account's PvP/social state (Layer 4). */
+export function PVP_DEFAULTS(): GameState['pvp'] {
+  return {
+    defense: [null, null, null, null, null],
+    shieldUntil: 0,
+    lastInvasionDay: -1,
+    rating: TUNING.pvp.startRating,
+    log: [],
+    captives: [],
+    raided: [],
+    raidWeek: -1,
+    guild: null,
+    guildAidDay: -1,
+    guildRaidWeek: -1,
+    warWeek: -1,
+    war: { wins: 0, losses: 0 },
+  }
+}
+
 /**
  * Build a brand-new account's GameState (Layer 3 bootstrap). PURE: a given
  * (entropySeed, opts) always yields a deep-equal GameState.
@@ -105,11 +142,15 @@ export function createAccount(entropySeed: number, opts?: CreateAccountOpts): Ga
     gems: TUNING.lobby.startingGems,
     materials: {},
     inventory: [],
-    meta: { masterLevel: 1, masterXp: 0, lastSeenAtWorld: toWorldTime(opts?.now ?? 0) },
+    meta: { masterLevel: 1, masterXp: 0, lastSeenAtWorld: toWorldTime(opts?.now ?? 0), ...META_V8_DEFAULTS() },
     facilities: {
       kitchen: { level: TUNING.lobby.facilityStartLevels.kitchen, build: null },
       promotionChamber: { level: TUNING.lobby.facilityStartLevels.promotionChamber, build: null },
       tacticalCenter: { level: TUNING.lobby.facilityStartLevels.tacticalCenter, build: null },
+      trainingCenter: { level: TUNING.lobby.facilityStartLevels.trainingCenter, build: null },
+      transferStation: { level: TUNING.lobby.facilityStartLevels.transferStation, build: null },
+      hallOfMagic: { level: TUNING.lobby.facilityStartLevels.hallOfMagic, build: null },
+      ...LIFE_FACILITIES(),
     },
     dailies: { attemptsUsed: 0, lastResetWorldDay: 0 },
     heroes: { [STARTER_HERO_ID]: starter },
@@ -117,9 +158,37 @@ export function createAccount(entropySeed: number, opts?: CreateAccountOpts): Ga
     usedNames: [],
     consumedTemplateIds: [STARTER_TEMPLATE_ID],
     party: { slots, lines },
-    tower: { currentFloor: 1, highestCleared: 0, attemptIndex: 0 },
-    gacha: { pity: 0, pullCount: 0 },
+    tower: {
+      currentFloor: 1,
+      highestCleared: 0,
+      attemptIndex: 0,
+      event: null,
+      loop: null,
+      hiddenFound: [],
+      worldEnded: false,
+      worldSaved: false,
+    },
+    gacha: { pity: 0, pullCount: 0, advPity4: 0, advPity5: 0, advPullCount: 0 },
     rng: { combatCounter: 0 },
+    pvp: PVP_DEFAULTS(),
+    life: defaultLifeState(toWorldTime(opts?.now ?? 0)),
+  }
+}
+
+/** The Living Lobby's buildings at their start levels (schema v10). */
+function LIFE_FACILITIES(): Pick<GameState['facilities'], 'dormitory' | 'tavern' | 'infirmary' | 'garden' | 'memorial' | 'forge' | 'library' | 'watchtower' | 'market'> {
+  const L = TUNING.lobby.facilityStartLevels
+  const f = (level: number) => ({ level, build: null })
+  return {
+    dormitory: f(L.dormitory),
+    tavern: f(L.tavern),
+    infirmary: f(L.infirmary),
+    garden: f(L.garden),
+    memorial: f(L.memorial),
+    forge: f(L.forge),
+    library: f(L.library),
+    watchtower: f(L.watchtower),
+    market: f(L.market),
   }
 }
 
@@ -155,12 +224,14 @@ function migrateV1toV2(envelope: SaveEnvelope): SaveEnvelope {
       heroes,
       gems: TUNING.lobby.startingGems,
       materials: {},
-      meta: { masterLevel: 1, masterXp: 0, lastSeenAtWorld: toWorldTime(createdAt) },
+      // v2 meta only; the Layer 3 fields are added by the v7 → v8 step.
+      meta: { masterLevel: 1, masterXp: 0, lastSeenAtWorld: toWorldTime(createdAt) } as GameState['meta'],
+      // v2 facilities only; the Training Center is added by the v4 → v5 step.
       facilities: {
         kitchen: { level: TUNING.lobby.facilityStartLevels.kitchen, build: null },
         promotionChamber: { level: TUNING.lobby.facilityStartLevels.promotionChamber, build: null },
         tacticalCenter: { level: TUNING.lobby.facilityStartLevels.tacticalCenter, build: null },
-      },
+      } as GameState['facilities'],
       dailies: { attemptsUsed: 0, lastResetWorldDay: 0 },
     },
   }
@@ -207,6 +278,127 @@ function migrateV3toV4(envelope: SaveEnvelope): SaveEnvelope {
   }
 }
 
+/** v4 → v5: the Training Center (unbuilt) and an idle drill slot on every hero. */
+function migrateV4toV5(envelope: SaveEnvelope): SaveEnvelope {
+  const s = envelope.state as unknown as Record<string, unknown>
+  const oldHeroes = s.heroes as Record<string, OwnedHero>
+  const heroes: Record<string, OwnedHero> = {}
+  for (const [id, hero] of Object.entries(oldHeroes)) heroes[id] = { ...hero, training: null }
+  const facilities = s.facilities as GameState['facilities']
+  return {
+    schemaVersion: 5,
+    savedAt: envelope.savedAt,
+    state: {
+      ...(s as unknown as GameState),
+      schemaVersion: 5,
+      heroes,
+      facilities: {
+        ...facilities,
+        trainingCenter: { level: TUNING.lobby.facilityStartLevels.trainingCenter, build: null },
+      },
+    },
+  }
+}
+
+/** v5 → v6: engravings (none yet), the Advanced pool counters, and the Transfer Station (unbuilt). */
+function migrateV5toV6(envelope: SaveEnvelope): SaveEnvelope {
+  const s = envelope.state as unknown as Record<string, unknown>
+  const oldHeroes = s.heroes as Record<string, OwnedHero>
+  const heroes: Record<string, OwnedHero> = {}
+  for (const [id, hero] of Object.entries(oldHeroes)) heroes[id] = { ...hero, engraving: null }
+  const facilities = s.facilities as GameState['facilities']
+  const gacha = s.gacha as { pity: number; pullCount: number }
+  return {
+    schemaVersion: 6,
+    savedAt: envelope.savedAt,
+    state: {
+      ...(s as unknown as GameState),
+      schemaVersion: 6,
+      heroes,
+      gacha: { pity: gacha.pity, pullCount: gacha.pullCount, advPity4: 0, advPity5: 0, advPullCount: 0 },
+      facilities: {
+        ...facilities,
+        transferStation: { level: TUNING.lobby.facilityStartLevels.transferStation, build: null },
+      },
+    },
+  }
+}
+
+/** v6 → v7: the full climb — no event open, outside the loop, nothing hidden found yet. */
+function migrateV6toV7(envelope: SaveEnvelope): SaveEnvelope {
+  const s = envelope.state as unknown as Record<string, unknown>
+  const tower = s.tower as { currentFloor: number; highestCleared: number; attemptIndex: number }
+  return {
+    schemaVersion: 7,
+    savedAt: envelope.savedAt,
+    state: {
+      ...(s as unknown as GameState),
+      schemaVersion: 7,
+      // v7 tower fields only; `worldSaved` is added by the v8 → v9 step.
+      tower: { ...tower, event: null, loop: null, hiddenFound: [], worldEnded: false } as unknown as GameState['tower'],
+    },
+  }
+}
+
+/** v7 → v8: the meta-economy — favor/IP/gifts on heroes, PI and the shop on the account. */
+function migrateV7toV8(envelope: SaveEnvelope): SaveEnvelope {
+  const s = envelope.state as unknown as Record<string, unknown>
+  const oldHeroes = s.heroes as Record<string, OwnedHero>
+  const heroes: Record<string, OwnedHero> = {}
+  for (const [id, hero] of Object.entries(oldHeroes)) heroes[id] = { ...hero, ...HERO_V8_DEFAULTS() }
+  const meta = s.meta as GameState['meta']
+  const facilities = s.facilities as GameState['facilities']
+  return {
+    schemaVersion: 8,
+    savedAt: envelope.savedAt,
+    state: {
+      ...(s as unknown as GameState),
+      schemaVersion: 8,
+      heroes,
+      meta: { masterLevel: meta.masterLevel, masterXp: meta.masterXp, lastSeenAtWorld: meta.lastSeenAtWorld, ...META_V8_DEFAULTS() },
+      facilities: { ...facilities, hallOfMagic: { level: TUNING.lobby.facilityStartLevels.hallOfMagic, build: null } },
+    },
+  }
+}
+
+/** v8 → v9: PvP & social — the pvp state, captive holds, the lifecycle clock, F90's fork. */
+function migrateV8toV9(envelope: SaveEnvelope): SaveEnvelope {
+  const s = envelope.state as unknown as Record<string, unknown>
+  const oldHeroes = s.heroes as Record<string, OwnedHero>
+  const heroes: Record<string, OwnedHero> = {}
+  for (const [id, hero] of Object.entries(oldHeroes)) heroes[id] = { ...hero, captiveOf: null }
+  const meta = s.meta as GameState['meta']
+  const tower = s.tower as GameState['tower']
+  return {
+    schemaVersion: 9,
+    savedAt: envelope.savedAt,
+    state: {
+      ...(s as unknown as GameState),
+      schemaVersion: 9,
+      heroes,
+      meta: { ...meta, piZeroSince: null, deleted: false },
+      tower: { ...tower, worldSaved: false },
+      pvp: PVP_DEFAULTS(),
+    },
+  }
+}
+
+/** v9 → v10: Quanton Life — the Living Lobby's buildings and the life clock. Heroes get
+ *  their life lazily (the clock creates it the first time it sees them). */
+function migrateV9toV10(envelope: SaveEnvelope): SaveEnvelope {
+  const s = envelope.state as unknown as GameState
+  return {
+    schemaVersion: 10,
+    savedAt: envelope.savedAt,
+    state: {
+      ...s,
+      schemaVersion: 10,
+      facilities: { ...LIFE_FACILITIES(), ...s.facilities },
+      life: defaultLifeState(s.meta.lastSeenAtWorld),
+    },
+  }
+}
+
 /**
  * Migrate a SaveEnvelope from `fromVersion` up to the current schema version.
  * Identity when already current; otherwise apply each version's upgrade step in
@@ -233,6 +425,30 @@ export function migrate(envelope: SaveEnvelope, fromVersion: number): SaveEnvelo
   if (v === 3) {
     env = migrateV3toV4(env)
     v = 4
+  }
+  if (v === 4) {
+    env = migrateV4toV5(env)
+    v = 5
+  }
+  if (v === 5) {
+    env = migrateV5toV6(env)
+    v = 6
+  }
+  if (v === 6) {
+    env = migrateV6toV7(env)
+    v = 7
+  }
+  if (v === 7) {
+    env = migrateV7toV8(env)
+    v = 8
+  }
+  if (v === 8) {
+    env = migrateV8toV9(env)
+    v = 9
+  }
+  if (v === 9) {
+    env = migrateV9toV10(env)
+    v = 10
   }
   if (v !== current) {
     throw new SaveLoadError(`migrate: no migration path from version ${fromVersion}`)
@@ -282,6 +498,12 @@ function assertGameStateShape(state: unknown): asserts state is GameState {
   for (const [id, hero] of Object.entries(state.heroes)) {
     if (!isPlainObject(hero) || !Array.isArray(hero.skills)) {
       throw new SaveLoadError(`loadState: hero '${id}' is missing its skills list`)
+    }
+    if (!('training' in hero)) {
+      throw new SaveLoadError(`loadState: hero '${id}' is missing its training slot`)
+    }
+    if (!('engraving' in hero)) {
+      throw new SaveLoadError(`loadState: hero '${id}' is missing its engraving slot`)
     }
   }
 }

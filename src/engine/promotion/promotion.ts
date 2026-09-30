@@ -9,15 +9,19 @@
  *
  * Everything here is PURE and DETERMINISTIC. The on-complete re-roll is seeded by
  * (accountSeed, heroId, oldStar) so an "offline" promotion that finishes inside
- * `time.advanceTime` replays identically. Slice ceiling is 6★ — 6★→7★ needs the
- * out-of-slice Book of Reverse Heaven.
+ * `time.advanceTime` replays identically. 6★→7★ is paid with a Book of Reverse Heaven
+ * (§3.4) instead of stones. A promotion also evolves the hero's engraving one grade —
+ * or, on reaching 4★+ without one, may awaken it (§5.4) — and checks conditional
+ * skill unlocks against the newly released levels (§2.2).
  */
 
 import { TUNING } from '../tuning'
 import { envelopeForStar, levelCapForStar, applyXp } from '../stats'
 import { rollAttributes } from '../gacha'
-import { learnableSkillIds } from '../skills'
-import { rngFor, pick } from '../rng'
+import { applyUnlocks, promotionSkillPool } from '../skills'
+import { evolveEngraving } from '../engravings'
+import { rngFor, pick, chance, weightedPick } from '../rng'
+import { ENGRAVINGS } from '../content'
 import type {
   GameState,
   OwnedHero,
@@ -28,6 +32,7 @@ import type {
   PrimaryAttrs,
   GrowthGrades,
   Seed,
+  HeroClass,
 } from '../types'
 
 const P = TUNING.lobby.promotion
@@ -42,9 +47,11 @@ export function attrStoneId(element: Element): MaterialId {
   return `attrStone_${element}`
 }
 
-/** Material cost to promote a hero: Promotion Stones + element Attribute Stones. */
+/** Material cost to promote a hero: Promotion Stones + element Attribute Stones, or —
+ *  for 6★→7★ — one Book of Reverse Heaven. */
 export function promotionCost(hero: OwnedHero): Record<MaterialId, number> {
   const target = promotionTargetStar(hero)
+  if (target === 7) return { [P.bookId]: 1 }
   const stones = P.stoneCost[target] ?? 0
   return {
     promotionStone: stones,
@@ -54,13 +61,40 @@ export function promotionCost(hero: OwnedHero): Record<MaterialId, number> {
 
 /** Gate: a living hero at its level cap, below the ceiling, with no promotion in flight. */
 export function canPromote(hero: OwnedHero): boolean {
-  return hero.alive && hero.xp.atCap && hero.star < P.maxStar && hero.promotion === null
+  return hero.alive && hero.xp.atCap && hero.star < P.maxStar && hero.promotion === null && !hero.expedition && !hero.captiveOf
 }
 
 /** True when the account holds enough of every material the promotion costs. */
 export function canAfford(state: GameState, hero: OwnedHero): boolean {
+  return promotionPayment(state, hero) !== null
+}
+
+/**
+ * What a promotion actually takes from the storeroom: its cost, with any shortfall of
+ * the element-matched Attribute Stones made up 1:1 by Rank Materials (the canon
+ * "upgrade stones" — they fit any element). Null when even that can't cover it.
+ */
+export function promotionPayment(state: GameState, hero: OwnedHero): Record<MaterialId, number> | null {
   const cost = promotionCost(hero)
-  return Object.keys(cost).every((id) => (state.materials[id] ?? 0) >= cost[id]!)
+  const pay: Record<MaterialId, number> = {}
+  let rankNeeded = 0
+  for (const id of Object.keys(cost)) {
+    const need = cost[id]!
+    const have = state.materials[id] ?? 0
+    if (id.startsWith('attrStone_') && have < need) {
+      pay[id] = have
+      rankNeeded += need - have
+    } else if (have < need) {
+      return null
+    } else {
+      pay[id] = need
+    }
+  }
+  if (rankNeeded > 0) {
+    if ((state.materials.rankMaterial ?? 0) < rankNeeded) return null
+    pay.rankMaterial = rankNeeded
+  }
+  return pay
 }
 
 /**
@@ -89,9 +123,9 @@ export function startPromotion(state: GameState, heroId: HeroId, nowWorld: numbe
     throw new Error(`startPromotion: insufficient materials for ${heroId}`)
   }
 
-  const cost = promotionCost(hero)
+  const pay = promotionPayment(state, hero)!
   const materials: Record<MaterialId, number> = { ...state.materials }
-  for (const id of Object.keys(cost)) materials[id] = (materials[id] ?? 0) - cost[id]!
+  for (const id of Object.keys(pay)) materials[id] = (materials[id] ?? 0) - pay[id]!
 
   const completesAtWorld =
     nowWorld + promotionDuration(promotionTargetStar(hero), state.facilities.promotionChamber.level)
@@ -118,7 +152,10 @@ function mergeUpward<T extends PrimaryAttrs | GrowthGrades>(old: T, rolled: T): 
  * in the new envelope UPWARD-ONLY into the hero's bases/grades, and grants one skill
  * the hero lacked. Clears the in-flight timer. PURE — returns a fresh OwnedHero.
  */
-export function completePromotion(hero: OwnedHero, accountSeed: Seed): OwnedHero {
+/** The classes a classless hero can grow into (mage is gacha-only, canon). */
+const CLASS_CHANGE_OPTIONS: readonly HeroClass[] = ['warrior', 'spearman', 'thief', 'archer']
+
+export function completePromotion(hero: OwnedHero, accountSeed: Seed, highestCleared = 0): OwnedHero {
   const newStar = promotionTargetStar(hero)
   let rng = rngFor(accountSeed, 'promotion', hero.id, hero.star)
 
@@ -127,15 +164,42 @@ export function completePromotion(hero: OwnedHero, accountSeed: Seed): OwnedHero
   const baseAttrs = mergeUpward(hero.baseAttrs, rolled.baseAttrs)
   const growthGrades = mergeUpward(hero.growthGrades, rolled.grades)
 
-  // Grant one learnable skill the hero does not already know, at Lv1 (no-op if it
-  // knows them all). Merge-only skills are never handed out by promotion.
+  // Class change (canon: Islat Han, "Warrior class (formerly Novice)"): a classless hero
+  // reaching 3★ takes up a common class. Never mage — mages come only from the gacha.
+  // Its own rng stream, so every other promotion draw is unchanged.
+  let heroClass = hero.heroClass
+  if (heroClass === null && newStar >= TUNING.lobby.promotion.classChangeStar) {
+    heroClass = pick(rngFor(accountSeed, 'class-change', hero.id), CLASS_CHANGE_OPTIONS).value
+  }
+
+  // Grant one skill the hero does not already know, at Lv1: its class's signature skill
+  // first, else a learnable skill (no-op if it knows them all). Merge-only skills are
+  // never handed out by promotion.
   let skills = hero.skills
   const known = new Set(hero.skills.map((s) => s.id))
-  const missing = learnableSkillIds().filter((id) => !known.has(id))
+  const missing = promotionSkillPool(heroClass, known)
   if (missing.length > 0) {
     const drew = pick(rng, missing)
     rng = drew.rng
     skills = [...hero.skills, { id: drew.value, level: 1, xp: 0 }]
+  }
+
+  // Engraving evolution (각인 진화): one grade up; a hero reaching 4★+ without one may
+  // awaken a grade-C engraving. The awaken draws come last, so earlier rolls are stable.
+  let engraving = hero.engraving
+  if (engraving !== null) {
+    engraving = evolveEngraving(engraving)
+  } else if (newStar >= 4) {
+    const awaken = chance(rng, TUNING.engravings.promotionAwakenChance)
+    rng = awaken.rng
+    if (awaken.value) {
+      const which = weightedPick(
+        rng,
+        Object.values(ENGRAVINGS).map((d) => ({ item: d.id, weight: d.weight })),
+      )
+      rng = which.rng
+      engraving = { id: which.value, grade: 'C' }
+    }
   }
 
   // Lift the cap and release held XP into the newly available levels.
@@ -144,8 +208,11 @@ export function completePromotion(hero: OwnedHero, accountSeed: Seed): OwnedHero
     hero.xp.heldXp,
     newStar,
   )
+  skills = applyUnlocks(skills, xp.level, highestCleared)
 
-  return { ...hero, star: newStar, baseAttrs, growthGrades, skills, xp, promotion: null }
+  // Rank deepens the hero's connection with the Master: Intervention Points (Layer 3 §D2).
+  const ip = (hero.ip ?? 0) + TUNING.intervention.perPromotion
+  return { ...hero, heroClass, star: newStar, baseAttrs, growthGrades, skills, xp, engraving, ip, promotion: null }
 }
 
 /**
@@ -164,6 +231,6 @@ export function skipPromotion(state: GameState, heroId: HeroId): GameState {
   return {
     ...state,
     gems: state.gems - P.skipGemCost,
-    heroes: { ...state.heroes, [heroId]: completePromotion(hero, state.seed) },
+    heroes: { ...state.heroes, [heroId]: completePromotion(hero, state.seed, state.tower.highestCleared) },
   }
 }

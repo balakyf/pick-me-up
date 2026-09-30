@@ -12,6 +12,7 @@ import {
   CLASS_CLOTH,
   ELEMENT_RAMP,
   EYES,
+  GOLD,
   HAIR,
   LEATHER,
   SKIN,
@@ -189,6 +190,50 @@ export function iselLook(): HeroLook {
     shield: false,
     cape: null,
     trim: true,
+    apron: false,
+    mark: 'none',
+  }
+}
+
+/** Princess Priasis (canon Taoni F15 escort target): gold hair, white-and-gold gown. */
+export function priasisLook(): HeroLook {
+  return {
+    skin: SKIN[4]!,
+    hair: HAIR[4]!,
+    hairStyle: 'long',
+    eyes: hex('#2a6ab8'),
+    outfit: 'mage',
+    cloth: ramp('#a8a0b8', '#ece6f4', '#ffffff'),
+    cloth2: ramp('#a8a0b8', '#ece6f4', '#ffffff'),
+    metal: STEEL,
+    accent: ELEMENT_RAMP.light,
+    headgear: 'circlet',
+    weapon: 'none',
+    shield: false,
+    cape: ramp('#6a1424', '#9a1a2e', '#d0404a'),
+    trim: true,
+    apron: false,
+    mark: 'none',
+  }
+}
+
+/** The F45 courier carrying the key (a plain traveller with a satchel). */
+export function keyBearerLook(): HeroLook {
+  return {
+    skin: SKIN[2]!,
+    hair: HAIR[1]!,
+    hairStyle: 'short',
+    eyes: hex('#5a3418'),
+    outfit: 'peasant',
+    cloth: ramp('#4a3a1e', '#7a6a3a', '#a8985a'),
+    cloth2: ramp('#4a2a1a', '#7a4a2a', '#a8703e'),
+    metal: STEEL,
+    accent: GOLD,
+    headgear: 'hood',
+    weapon: 'none',
+    shield: false,
+    cape: null,
+    trim: false,
     apron: false,
     mark: 'none',
   }

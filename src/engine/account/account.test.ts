@@ -15,6 +15,7 @@ import {
   hydrate,
   SaveLoadError,
   DEFAULT_SAVE_KEY,
+  PVP_DEFAULTS,
 } from './account'
 import { TUNING } from '../tuning'
 import { makeSeed } from '../rng/rng'
@@ -71,7 +72,7 @@ describe('createAccount — defaults', () => {
     expect(acct.accountId).toBe('46631913')
     expect(acct.accountId).toBe(TUNING.account.defaultAccountId)
     expect(acct.worldGrade).toBe('C')
-    expect(acct.gold).toBe(3000)
+    expect(acct.gold).toBe(TUNING.economy.startingGold)
     expect(acct.gold).toBe(TUNING.economy.startingGold)
     expect(acct.tower.currentFloor).toBe(1)
     expect(acct.tower.highestCleared).toBe(0)
@@ -144,6 +145,15 @@ function midGameOf(acct: GameState): GameState {
     sanity: 100,
     promotion: null,
     equipment: { weapon: null, armor: null, accessory: null },
+    training: null,
+    engraving: null,
+    favor: 35,
+    bondTier: 1,
+    ip: 0,
+    gift: { last: null, streak: 0 },
+    blessed: false,
+    expedition: null,
+    captiveOf: null,
   }
   copy.heroes[fakeId] = fakeHero
   copy.tower.currentFloor = 7
@@ -441,7 +451,7 @@ describe('migrate — v3 → v4', () => {
 
     const restored = loadState(v3Json)
 
-    expect(restored.schemaVersion).toBe(4)
+    expect(restored.schemaVersion).toBe(TUNING.account.schemaVersion) // chained v3→v4→v5
     const hero = Object.values(restored.heroes)[0]!
     expect(hero.skills).toEqual([
       { id: 'power_strike', level: 1, xp: 0 },
@@ -462,5 +472,139 @@ describe('migrate — v3 → v4', () => {
     )
     const json = JSON.stringify({ schemaVersion: 4, savedAt: 0, state: { ...acct, heroes: broken } })
     expect(() => loadState(json)).toThrow(SaveLoadError)
+  })
+})
+
+describe('migrate — v4 → v5 (Training Center)', () => {
+  it('adds an unbuilt Training Center and an idle drill slot on every hero', () => {
+    const v5 = createAccount(558, { now: 1000 })
+    const heroesV4 = Object.fromEntries(
+      Object.entries(v5.heroes).map(([id, h]) => {
+        const { training, ...rest } = h as unknown as Record<string, unknown>
+        return [id, rest]
+      }),
+    )
+    const { trainingCenter, ...facilitiesV4 } = v5.facilities
+    const v4Json = JSON.stringify({
+      schemaVersion: 4,
+      savedAt: 0,
+      state: { ...v5, schemaVersion: 4, heroes: heroesV4, facilities: facilitiesV4 },
+    })
+
+    const restored = loadState(v4Json)
+
+    expect(restored.schemaVersion).toBe(TUNING.account.schemaVersion)
+    expect(restored.facilities.trainingCenter).toEqual({ level: 0, build: null })
+    expect(Object.values(restored.heroes)[0]!.training).toBeNull()
+    // v4 fields survive the upgrade.
+    expect(Object.values(restored.heroes)[0]!.skills.length).toBeGreaterThan(0)
+  })
+
+  it('fresh accounts start with the Training Center unbuilt and no drills', () => {
+    const acct = createAccount(559, { now: 0 })
+    expect(acct.facilities.trainingCenter).toEqual({ level: 0, build: null })
+    expect(Object.values(acct.heroes).every((h) => h.training === null)).toBe(true)
+  })
+})
+
+describe('migrate — v5 → v6 (engravings, Advanced pool, Transfer Station)', () => {
+  it('adds a null engraving on every hero, zeroed Advanced counters and an unbuilt station', () => {
+    const v6 = createAccount(560, { now: 1000 })
+    const heroesV5 = Object.fromEntries(
+      Object.entries(v6.heroes).map(([id, h]) => {
+        const { engraving, ...rest } = h as unknown as Record<string, unknown>
+        return [id, rest]
+      }),
+    )
+    const { transferStation, ...facilitiesV5 } = v6.facilities
+    const v5Json = JSON.stringify({
+      schemaVersion: 5,
+      savedAt: 0,
+      state: { ...v6, schemaVersion: 5, heroes: heroesV5, facilities: facilitiesV5, gacha: { pity: 7, pullCount: 12 } },
+    })
+    const restored = loadState(v5Json)
+    expect(restored.schemaVersion).toBe(TUNING.account.schemaVersion)
+    expect(Object.values(restored.heroes).every((h) => h.engraving === null)).toBe(true)
+    expect(restored.gacha).toEqual({ pity: 7, pullCount: 12, advPity4: 0, advPity5: 0, advPullCount: 0 })
+    expect(restored.facilities.transferStation).toEqual({ level: 0, build: null })
+  })
+})
+
+describe('migrate — v6 → v7 (the full climb)', () => {
+  it('adds a closed event, no loop, nothing hidden found and a living world', () => {
+    const v7 = createAccount(561, { now: 1000 })
+    const v6Json = JSON.stringify({
+      schemaVersion: 6,
+      savedAt: 0,
+      state: { ...v7, schemaVersion: 6, tower: { currentFloor: 14, highestCleared: 13, attemptIndex: 2 } },
+    })
+    const restored = loadState(v6Json)
+    expect(restored.schemaVersion).toBe(TUNING.account.schemaVersion)
+    expect(restored.tower).toEqual({
+      currentFloor: 14,
+      highestCleared: 13,
+      attemptIndex: 2,
+      event: null,
+      loop: null,
+      hiddenFound: [],
+      worldEnded: false,
+      worldSaved: false,
+    })
+  })
+})
+
+describe('migrate — v7 → v8 (the meta-economy)', () => {
+  it('adds favor/IP/gift fields to heroes, PI and the shop to meta, and the Hall of Magic', () => {
+    const v8 = createAccount(562, { now: 1000 })
+    const heroesV7 = Object.fromEntries(
+      Object.entries(v8.heroes).map(([id, h]) => {
+        const { favor, bondTier, ip, gift, blessed, expedition, ...rest } = h
+        return [id, rest]
+      }),
+    )
+    const { hallOfMagic, ...facilitiesV7 } = v8.facilities
+    const meta = { masterLevel: 4, masterXp: 12, lastSeenAtWorld: 99 }
+    const v7Json = JSON.stringify({ schemaVersion: 7, savedAt: 0, state: { ...v8, schemaVersion: 7, heroes: heroesV7, facilities: facilitiesV7, meta } })
+    const restored = loadState(v7Json)
+    expect(restored.schemaVersion).toBe(TUNING.account.schemaVersion)
+    const h = Object.values(restored.heroes)[0]!
+    expect([h.favor, h.ip, h.blessed, h.expedition]).toEqual([TUNING.favor.start, 0, false, null])
+    expect(restored.meta.masterLevel).toBe(4)
+    expect(restored.meta.pi).toBe(0)
+    expect(restored.meta.wallet).toEqual({ spentUsd: 0, purchases: {} })
+    expect(restored.facilities.hallOfMagic).toEqual({ level: 0, build: null })
+  })
+})
+
+describe('migrate — v8 → v9 (PvP & social)', () => {
+  it('adds the pvp state, captive holds, the lifecycle clock and F90’s fork', () => {
+    const v9 = createAccount(563, { now: 1000 })
+    const { pvp, ...rest } = v9
+    const heroesV8 = Object.fromEntries(Object.entries(v9.heroes).map(([id, h]) => {
+      const { captiveOf, ...r } = h
+      return [id, r]
+    }))
+    const { piZeroSince, deleted, ...metaV8 } = v9.meta
+    const { worldSaved, ...towerV8 } = v9.tower
+    const v8Json = JSON.stringify({ schemaVersion: 8, savedAt: 0, state: { ...rest, schemaVersion: 8, heroes: heroesV8, meta: metaV8, tower: towerV8 } })
+    const restored = loadState(v8Json)
+    expect(restored.schemaVersion).toBe(TUNING.account.schemaVersion)
+    expect(restored.pvp).toEqual(PVP_DEFAULTS())
+    expect(Object.values(restored.heroes)[0]!.captiveOf).toBeNull()
+    expect([restored.meta.piZeroSince, restored.meta.deleted, restored.tower.worldSaved]).toEqual([null, false, false])
+  })
+})
+
+describe('migrate — v9 → v10 (Quanton Life)', () => {
+  it('adds the Living Lobby buildings and a fresh life clock at the save’s world-time', () => {
+    const v10 = createAccount(564, { now: 1000 })
+    const { life, ...rest } = v10
+    const { dormitory, tavern, infirmary, garden, memorial, forge, library, watchtower, market, ...facV9 } = v10.facilities
+    const v9Json = JSON.stringify({ schemaVersion: 9, savedAt: 0, state: { ...rest, schemaVersion: 9, facilities: facV9 } })
+    const restored = loadState(v9Json)
+    expect(restored.schemaVersion).toBe(10)
+    expect(restored.facilities.dormitory.level).toBe(TUNING.lobby.facilityStartLevels.dormitory)
+    expect(restored.facilities.forge).toEqual({ level: 0, build: null })
+    expect(restored.life).toEqual(life)
   })
 })

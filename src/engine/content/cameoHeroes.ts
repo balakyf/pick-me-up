@@ -114,4 +114,32 @@ export const CAMEO_HEROES: HeroTemplate[] = [
     skillIds: ['thunder_volley'],
     portraitToken: '#f1c40f',
   },
+
+  // ── 4★ cameos (Advanced pool only; arrive with an engraving) ─────────────
+  // Anasis — bearer of True Black Dragon's Blood (canon A → S engraving).
+  {
+    templateId: 'anasis',
+    name: 'Anasis',
+    star: 4,
+    heroClass: 'warrior',
+    element: 'dark',
+    baseAttrs: { str: 36, agi: 28, vit: 38, int: 22, wil: 30 },
+    growthGrades: { str: 7, agi: 5, vit: 8, int: 3, wil: 6 },
+    skillIds: ['power_strike', 'sword_soul'],
+    portraitToken: '#1b1b2f',
+    engraving: { id: 'black_dragon_blood', grade: 'A' },
+  },
+  // Kishasha — heir of the Beast King (canon beast transformation).
+  {
+    templateId: 'kishasha',
+    name: 'Kishasha',
+    star: 4,
+    heroClass: 'thief',
+    element: 'earth',
+    baseAttrs: { str: 32, agi: 38, vit: 27, int: 20, wil: 24 },
+    growthGrades: { str: 6, agi: 8, vit: 5, int: 3, wil: 4 },
+    skillIds: ['shadow_flurry', 'berserk'],
+    portraitToken: '#c0712f',
+    engraving: { id: 'beast_king_heir', grade: 'B' },
+  },
 ]

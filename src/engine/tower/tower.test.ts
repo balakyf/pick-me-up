@@ -4,12 +4,14 @@
  * Vitest globals are enabled (describe/it/expect available without import).
  */
 
-import { floorPower, mobLevel, buildEncounter, playFloor, sanityDrain, rollMaterialDrops } from './tower'
+import { defaultLifeState } from '../life'
+import { floorPower, mobLevel, buildEncounter, playFloor, sanityDrain, rollMaterialDrops, floorXp } from './tower'
 import { tacticalFocusBonus } from '../tactical'
 import { addMasterXp } from '../master'
+import { PVP_DEFAULTS } from '../account'
 import { TUNING } from '../tuning'
 import { ANCHORS, ENEMY_TEMPLATES } from '../content'
-import { combatPower, deriveStatsForHero } from '../stats'
+import { combatPower, deriveStatsForHero, applyXp, xpToNext } from '../stats'
 import { buildEnemyUnit } from '../unit'
 import { makeSeed } from '../rng/rng'
 import type {
@@ -77,6 +79,15 @@ function makeHero(o: HeroOpts): OwnedHero {
     sanity: o.sanity ?? 100,
     promotion: null,
     equipment: { weapon: null, armor: null, accessory: null },
+    training: null,
+    engraving: null,
+    favor: 35,
+    bondTier: 1,
+    ip: 0,
+    gift: { last: null, streak: 0 },
+    blessed: false,
+    expedition: null,
+    captiveOf: null,
   }
 }
 
@@ -108,11 +119,23 @@ function makeState(o: StateOpts = {}): GameState {
     gems: 0,
     materials: {},
     inventory: [],
-    meta: { masterLevel: 1, masterXp: 0, lastSeenAtWorld: 0 },
+    meta: { masterLevel: 1, masterXp: 0, lastSeenAtWorld: 0, pi: 0, login: { lastDay: -1, streak: 0 }, monthly: null, wallet: { spentUsd: 0, purchases: {} }, skill: { blacksmith: 0.4, ballista: 0.4 }, crackOpen: false, revealedHidden: [], peekedFloors: [], nudge: false, piZeroSince: null, deleted: false },
     facilities: {
       kitchen: { level: 1, build: null },
       promotionChamber: { level: 0, build: null },
       tacticalCenter: { level: 1, build: null },
+      trainingCenter: { level: 0, build: null },
+      transferStation: { level: 0, build: null },
+      hallOfMagic: { level: 0, build: null },
+      dormitory: { level: 1, build: null },
+      tavern: { level: 0, build: null },
+      infirmary: { level: 0, build: null },
+      garden: { level: 0, build: null },
+      memorial: { level: 1, build: null },
+      forge: { level: 0, build: null },
+      library: { level: 0, build: null },
+      watchtower: { level: 0, build: null },
+      market: { level: 0, build: null },
     },
     dailies: { attemptsUsed: 0, lastResetWorldDay: 0 },
     heroes,
@@ -127,9 +150,16 @@ function makeState(o: StateOpts = {}): GameState {
       currentFloor: o.currentFloor ?? 1,
       highestCleared: o.highestCleared ?? 0,
       attemptIndex: o.attemptIndex ?? 0,
+      event: null,
+      loop: null,
+      hiddenFound: [],
+      worldEnded: false,
+      worldSaved: false,
     },
-    gacha: { pity: 0, pullCount: 0 },
+    gacha: { pity: 0, pullCount: 0, advPity4: 0, advPity5: 0, advPullCount: 0 },
     rng: { combatCounter: 0 },
+    life: defaultLifeState(0),
+    pvp: PVP_DEFAULTS(),
   }
 }
 
@@ -184,7 +214,9 @@ describe('floorPower', () => {
     // f = 5 → powerBase^5 manual, with the step bonus kicking in at floor(5/5)=1.
     const pb = TUNING.tower.powerBase
     const pow5 = pb * pb * pb * pb * pb
-    const expected = TUNING.tower.base * pow5 * (1 + TUNING.tower.stepBonus * 1) * C_MULT
+    const T = TUNING.tower
+    const boost = 1 + (T.earlyBudgetBoost * (T.inflectionFloor - 5)) / T.inflectionFloor
+    const expected = T.base * pow5 * (1 + T.stepBonus * 1) * boost * C_MULT
     expect(floorPower(5, C_MULT)).toBeCloseTo(expected, 6)
   })
 
@@ -198,8 +230,10 @@ describe('floorPower', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('mobLevel', () => {
-  it('mobLevel(10, 1.0) === 13 (round-half-up of 12.5)', () => {
-    expect(mobLevel(10, C_MULT)).toBe(13)
+  it('mobLevel(f, 1.0) === f before the inflection (the star caps line up with the acts)', () => {
+    expect(mobLevel(10, C_MULT)).toBe(10)
+    expect(mobLevel(40, C_MULT)).toBe(40)
+    expect(mobLevel(60, C_MULT)).toBe(60)
   })
 
   it('is monotonic non-decreasing in f', () => {
@@ -447,7 +481,7 @@ describe('playFloor clearing + rewards', () => {
     const { state: next, result } = playFloor(state)
 
     expect(result.cleared).toBe(true)
-    expect(result.xpAwarded).toBe(TUNING.economy.xpPerFloor)
+    expect(result.xpAwarded).toBe(floorXp(result.floor))
     // The hero's XP progress advanced (level or xpIntoLevel grew).
     const before = crusher.xp
     const after = next.heroes['h_crush' as HeroId]!.xp
@@ -651,10 +685,14 @@ describe('rollMaterialDrops (pure)', () => {
     expect(a).toEqual(b)
   })
 
-  it('drops at most one of each stone (a thin trickle)', () => {
-    for (let f = 1; f <= 30; f++) {
+  it('drops scale with depth: 1 + ⌊f/10⌋ Promotion Stones, 1 + ⌊f/20⌋ Attribute Stones', () => {
+    const MD = TUNING.lobby.materialDrops
+    for (let f = 1; f <= 60; f++) {
       const drop = rollMaterialDrops(makeSeed(f), f, 0, f % 2 === 0, fire)
-      for (const id of Object.keys(drop)) expect(drop[id]).toBeLessThanOrEqual(1)
+      for (const [id, n] of Object.entries(drop)) {
+        const want = id === 'promotionStone' ? 1 + Math.floor(f / MD.stonesPerTen) : 1 + Math.floor(f / MD.attrStonesEvery)
+        expect(n).toBe(want)
+      }
     }
   })
 
@@ -685,6 +723,40 @@ describe('rollMaterialDrops (pure)', () => {
   it('drops nothing when no heroes were deployed (no element to match) beyond promotion stones', () => {
     const drop = rollMaterialDrops(makeSeed(9), 4, 0, true, [])
     for (const id of Object.keys(drop)) expect(id).toBe('promotionStone')
+  })
+})
+
+describe('F10 — the Lv999 is outlasted, not killed', () => {
+  it('a fair party clears F10 while the Lv999 is still standing', () => {
+    const party = ['a', 'b', 'c', 'd', 'e'].map((id, i) =>
+      makeHero({ id, star: 3, level: 14, heroClass: i < 2 ? 'warrior' : i < 4 ? 'archer' : 'mage', baseAttrs: { str: 20, agi: 20, vit: 20, int: 20, wil: 20 }, growthGrades: { str: 5, agi: 5, vit: 5, int: 5, wil: 5 } }),
+    )
+    const { result } = playFloor(makeState({ heroes: party, currentFloor: 10, highestCleared: 9 }))
+    expect(result.cleared).toBe(true)
+    const init = result.result.log.unitsInit
+    const lv999 = init.find((u) => u.name === 'Lv999 Creature')!
+    const dead = result.result.log.events.filter((e) => e.kind === 'death').map((e) => (e as { unitId: string }).unitId)
+    expect(dead).not.toContain(lv999.id)
+    expect(result.result.defeatedTargetTags).toContain('black_priest')
+  })
+})
+
+describe('bench XP (catch-up)', () => {
+  it('living heroes left in the waiting room earn benchXpShare of a clear\'s XP', () => {
+    const crusher = makeCrusher('h_crush')
+    const bench = makeHero({ id: 'h_bench', star: 3, level: 1 })
+    const state = makeState({ heroes: [crusher, bench], slots: ['h_crush' as HeroId, null, null, null, null], currentFloor: 30, highestCleared: 29 })
+    const { state: next, result } = playFloor(state)
+    expect(result.cleared).toBe(true)
+    const want = applyXp(bench.xp, Math.round(result.xpAwarded * TUNING.economy.benchXpShare), bench.star)
+    expect(next.heroes['h_bench' as HeroId]!.xp).toEqual(want)
+    expect(next.heroes['h_bench' as HeroId]!.xp.level).toBeGreaterThan(1)
+  })
+
+  it('floor XP follows the XP curve: about one level\'s worth at the floor\'s depth', () => {
+    expect(floorXp(1)).toBe(TUNING.economy.xpPerFloor)
+    expect(floorXp(40)).toBe(Math.round(xpToNext(40) * TUNING.economy.xpFloorShare))
+    expect(floorXp(60)).toBeGreaterThan(floorXp(40))
   })
 })
 
@@ -727,7 +799,10 @@ describe('playFloor — Master XP', () => {
     const state = makeState({ heroes: [crusher], currentFloor: 1, highestCleared: 0 })
     const { state: next, result } = playFloor(state)
     expect(result.firstClear).toBe(true)
-    expect(next.meta).toEqual(addMasterXp(state.meta, M.xpPerFloorClear + M.xpPerFirstClear))
+    const want = addMasterXp(state.meta, M.xpPerFloorClear + M.xpPerFirstClear)
+    expect([next.meta.masterLevel, next.meta.masterXp]).toEqual([want.masterLevel, want.masterXp])
+    // …and the clear strengthens the world's Probability Interference (Layer 3 §D1).
+    expect(next.meta.pi).toBe(state.meta.pi + TUNING.interference.perClear + TUNING.interference.perFirstClear)
   })
 
   it('awards only floor-clear Master XP on a repeat clear', () => {
@@ -735,7 +810,9 @@ describe('playFloor — Master XP', () => {
     const state = makeState({ heroes: [crusher], currentFloor: 1, highestCleared: 5 })
     const { state: next, result } = playFloor(state)
     expect(result.firstClear).toBe(false)
-    expect(next.meta).toEqual(addMasterXp(state.meta, M.xpPerFloorClear))
+    const want = addMasterXp(state.meta, M.xpPerFloorClear)
+    expect([next.meta.masterLevel, next.meta.masterXp]).toEqual([want.masterLevel, want.masterXp])
+    expect(next.meta.pi).toBe(state.meta.pi + TUNING.interference.perClear)
   })
 
   it('awards no Master XP on a wipe', () => {

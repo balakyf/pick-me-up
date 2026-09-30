@@ -18,6 +18,7 @@ import {
 } from './bitmap'
 import { BONE, GOLD, INK, LINEN, STEEL, WOOD, ramp } from './palette'
 import type { PropKind } from '../world/lobbyMap'
+import * as campus from './campusProps'
 
 export interface PropSprite {
   bmp: Bitmap
@@ -47,6 +48,30 @@ export const PROP_FRAMES: Record<PropKind, number> = {
   banner: 1,
   torch: 3,
   fairy: 4,
+  dummy: 1,
+  drillBoard: 1,
+  plinth: 4,
+  orrery: 4,
+  rift: 4,
+  stall: 1,
+  standard: 2,
+  bed: 1,
+  tree: 2,
+  bush: 1,
+  fountain: 4,
+  well: 1,
+  bench: 1,
+  crop: 2,
+  grave: 1,
+  obelisk: 2,
+  bookcase: 1,
+  desk: 1,
+  cot: 1,
+  bar: 1,
+  lamp: 2,
+  telescope: 1,
+  marketStall: 1,
+  flowers: 1,
 }
 
 const STONE = ramp('#4a4452', '#6e6678', '#8e869a')
@@ -410,6 +435,137 @@ function fairy(f: number): PropSprite {
   return { bmp: outline(b, INK), dx: 0, dy: -18 }
 }
 
+function dummy(): PropSprite {
+  const b = createBitmap(16, 28)
+  const straw = ramp('#8a6a2a', '#c8a04a', '#e8cc7a')
+  vline(b, 7, 14, 13, WOOD.d) // post
+  vline(b, 8, 14, 13, WOOD.m)
+  rect(b, 4, 26, 8, 2, WOOD.d) // base
+  hline(b, 2, 12, 12, WOOD.m) // arms
+  ellipse(b, 4, 10, 8, 10, straw.m) // body
+  vline(b, 5, 12, 6, straw.d)
+  vline(b, 10, 12, 6, straw.l)
+  hline(b, 4, 14, 8, hex('#7a1a2a')) // rope belt
+  ellipse(b, 5, 2, 6, 8, LINEN.m) // sack head
+  set(b, 6, 5, INK)
+  set(b, 9, 5, INK)
+  // painted target on the chest
+  ellipse(b, 6, 16, 4, 4, hex('#d0302a'))
+  set(b, 7, 17, WHITE_PX)
+  set(b, 8, 18, WHITE_PX)
+  return { bmp: outline(b, INK), dx: 0, dy: -12 }
+}
+
+function drillBoard(): PropSprite {
+  const b = createBitmap(32, 16)
+  rect(b, 1, 1, 30, 14, WOOD.d)
+  rect(b, 3, 3, 26, 10, hex('#2a3a2e')) // chalkboard
+  // chalk drill diagram: stick figure, arrows, tally marks
+  line(b, 6, 6, 6, 10, hex('#e8ece0'))
+  set(b, 6, 5, hex('#e8ece0'))
+  line(b, 6, 7, 9, 5, hex('#e8ece0'))
+  line(b, 11, 8, 17, 8, hex('#e8ece0'))
+  line(b, 15, 6, 17, 8, hex('#e8ece0'))
+  line(b, 15, 10, 17, 8, hex('#e8ece0'))
+  for (let i = 0; i < 4; i++) vline(b, 20 + i * 2, 5, 4, hex('#e8ece0'))
+  line(b, 19, 9, 27, 5, hex('#e8ece0'))
+  hline(b, 20, 11, 7, hex('#f2c75c'))
+  return { bmp: outline(b, INK), dx: 0, dy: 1 }
+}
+
+/** A Transfer Station plinth: a carved pedestal with a slowly turning, floating crystal. */
+function plinth(f: number): PropSprite {
+  const b = createBitmap(16, 30)
+  const glow = [hex('#5ad8e6'), hex('#8ae8f0'), hex('#c8f6ff'), hex('#8ae8f0')][f % 4]!
+  const bob = [0, -1, -1, 0][f % 4]!
+  // pedestal
+  rect(b, 3, 20, 10, 9, STONE.m)
+  hline(b, 2, 20, 12, STONE.l)
+  hline(b, 2, 28, 12, STONE.d)
+  vline(b, 4, 21, 7, STONE.l)
+  vline(b, 11, 21, 7, STONE.d)
+  // runic band
+  hline(b, 5, 24, 6, glow)
+  // floating crystal
+  const cy = 6 + bob
+  for (let i = 0; i < 5; i++) hline(b, 8 - i, cy + i, i * 2 + 1, i < 2 ? hex('#c8f6ff') : hex('#5ab0d8'))
+  for (let i = 0; i < 6; i++) hline(b, 4 + i, cy + 5 + i, 9 - i * 2, i < 3 ? hex('#3a78b8') : hex('#2a4a88'))
+  set(b, 7, cy + 2, WHITE_PX)
+  // motes
+  set(b, 2 + (f % 3), 14 - (f % 2), glow)
+  set(b, 13 - (f % 3), 12 + (f % 2), glow)
+  return { bmp: outline(b, INK), dx: 0, dy: -14 }
+}
+
+const WHITE_PX = hex('#fff6e0')
+
+/** Plot an ellipse outline of radii (rx, ry) around (cx, cy). */
+function ring(b: Bitmap, cx: number, cy: number, rx: number, ry: number, c: number) {
+  for (let i = 0; i < 48; i++) {
+    const t = (i / 48) * Math.PI * 2
+    set(b, cx + Math.round(rx * Math.cos(t)), cy + Math.round(ry * Math.sin(t)), c)
+  }
+}
+
+/** Hall of Magic: a brass orrery, its rings turning. */
+function orrery(f: number): PropSprite {
+  const b = createBitmap(32, 30)
+  rect(b, 12, 22, 8, 7, WOOD.d) // stand
+  hline(b, 9, 28, 14, WOOD.m)
+  ring(b, 16, 12, 12, 4, GOLD.m)
+  ring(b, 16, 12, 4, 9, GOLD.d)
+  ellipse(b, 13, 9, 6, 6, hex('#7ae0ff')) // the world at the centre
+  const t = ((f % 4) / 4) * Math.PI * 2
+  set(b, 16 + Math.round(12 * Math.cos(t)), 12 + Math.round(4 * Math.sin(t)), hex('#fff6a0')) // an orbiting star
+  return { bmp: outline(b, INK), dx: 0, dy: -14 }
+}
+
+/** The Crack of Time and Space: a jagged, glowing tear in the air. */
+function rift(f: number): PropSprite {
+  const b = createBitmap(32, 36)
+  const glow = [hex('#b87aff'), hex('#d8a8ff'), hex('#ff7aff'), hex('#d8a8ff')][f % 4]!
+  const xs = [16, 13, 18, 12, 19, 14, 17, 15, 16]
+  for (let i = 0; i < xs.length - 1; i++) {
+    for (let y = i * 4; y < (i + 1) * 4; y++) {
+      const x = xs[i]! + Math.round(((xs[i + 1]! - xs[i]!) * (y - i * 4)) / 4)
+      hline(b, x - 2, y, 5, hex('#1a0a2a'))
+      set(b, x, y, glow)
+    }
+  }
+  for (let i = 0; i < 6; i++) set(b, 6 + ((i * 7 + f * 3) % 20), 4 + ((i * 11 + f) % 28), glow) // motes
+  return { bmp: outline(b, hex('#3a1a5a')), dx: 0, dy: -20 }
+}
+
+/** Isel's shop counter: bright banners and a sign. */
+function stall(): PropSprite {
+  const b = createBitmap(32, 26)
+  rect(b, 1, 12, 30, 13, WOOD.m)
+  hline(b, 1, 12, 30, WOOD.l)
+  vline(b, 2, 0, 12, WOOD.d)
+  vline(b, 29, 0, 12, WOOD.d)
+  for (let x = 2; x < 30; x += 4) rect(b, x, 1, 4, 5, (x / 4) % 2 ? hex('#e8553b') : hex('#fff6e0')) // awning stripes
+  rect(b, 10, 15, 12, 6, hex('#2a1e4a'))
+  set(b, 13, 17, hex('#6ad8e8')) // gem
+  set(b, 14, 18, hex('#6ad8e8'))
+  set(b, 18, 17, GOLD.l)
+  return { bmp: outline(b, INK), dx: 0, dy: -10 }
+}
+
+/** A standing guild banner on a pole. */
+function standard(f: number): PropSprite {
+  const b = createBitmap(16, 34)
+  vline(b, 3, 2, 30, WOOD.d)
+  vline(b, 4, 2, 30, WOOD.m)
+  rect(b, 1, 31, 7, 3, WOOD.d)
+  set(b, 4, 1, GOLD.l)
+  const sway = f % 2
+  rect(b, 5, 4, 9, 13, hex('#2a4a8a'))
+  hline(b, 5, 4, 9, GOLD.m)
+  for (let i = 0; i < 3; i++) set(b, 13 - i + sway, 17 + i, hex('#2a4a8a')) // tail
+  rect(b, 8, 8, 3, 3, GOLD.l) // sigil
+  return { bmp: outline(b, INK), dx: 0, dy: -18 }
+}
+
 const DRAW: Record<PropKind, (f: number) => PropSprite> = {
   hearth,
   table,
@@ -431,6 +587,30 @@ const DRAW: Record<PropKind, (f: number) => PropSprite> = {
   banner,
   torch,
   fairy,
+  dummy,
+  drillBoard,
+  plinth,
+  orrery,
+  rift,
+  stall,
+  standard,
+  bed: campus.bed,
+  tree: campus.tree,
+  bush: campus.bush,
+  fountain: campus.fountain,
+  well: campus.well,
+  bench: campus.bench,
+  crop: campus.crop,
+  grave: campus.grave,
+  obelisk: campus.obelisk,
+  bookcase: campus.bookcase,
+  desk: campus.desk,
+  cot: campus.cot,
+  bar: campus.bar,
+  lamp: campus.lamp,
+  telescope: campus.telescope,
+  marketStall: campus.marketStall,
+  flowers: campus.flowers,
 }
 
 export function drawProp(kind: PropKind, frame = 0): PropSprite {
@@ -438,7 +618,9 @@ export function drawProp(kind: PropKind, frame = 0): PropSprite {
 }
 
 /** Tiny speech/emote bubble shown above a hero's head. */
-export function drawEmote(kind: 'dots' | 'bang' | 'heart' | 'zz'): Bitmap {
+export type EmoteKind = 'dots' | 'bang' | 'heart' | 'zz' | 'sword' | 'food' | 'note' | 'book' | 'pray'
+
+export function drawEmote(kind: EmoteKind): Bitmap {
   const b = createBitmap(11, 11)
   roundRect(b, 0, 0, 11, 8, hex('#fff6e0'))
   set(b, 4, 8, hex('#fff6e0'))
@@ -457,6 +639,28 @@ export function drawEmote(kind: 'dots' | 'bang' | 'heart' | 'zz'): Bitmap {
       rect(b, 3, 4, 5, 1, hex('#e0405a'))
       rect(b, 4, 5, 3, 1, hex('#e0405a'))
       set(b, 5, 6, hex('#e0405a'))
+      break
+    case 'sword':
+      for (let i = 0; i < 5; i++) set(b, 3 + i, 6 - i, hex('#8e94aa'))
+      set(b, 3, 5, hex('#7a4a24'))
+      set(b, 4, 6, hex('#7a4a24'))
+      break
+    case 'food':
+      rect(b, 3, 3, 5, 3, hex('#c8762a'))
+      set(b, 5, 2, hex('#e8e0c8'))
+      break
+    case 'note':
+      vline(b, 6, 1, 5, INK)
+      rect(b, 4, 5, 3, 2, INK)
+      set(b, 7, 2, INK)
+      break
+    case 'book':
+      rect(b, 3, 2, 5, 4, hex('#6a3a8e'))
+      vline(b, 5, 2, 4, hex('#fff6e0'))
+      break
+    case 'pray':
+      vline(b, 5, 1, 5, hex('#f2c75c'))
+      hline(b, 3, 3, 5, hex('#f2c75c'))
       break
     case 'zz':
       hline(b, 2, 2, 3, hex('#3a4ab8'))

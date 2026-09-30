@@ -25,6 +25,8 @@ import { drawHeroFrame } from './heroSprite'
 import type { HeroLook } from './look'
 import { BONE, ELEMENT_RAMP, GOLD, INK, LEATHER, STEEL, WOOD, ramp, type Ramp } from './palette'
 
+const WHITE_PX = hex('#fff6e0')
+
 const GOBLIN_SKIN = ramp('#2e5a1e', '#5a9a2e', '#8ec84a')
 const OGRE_SKIN = ramp('#4a5a3a', '#7a8a5a', '#a8b47a')
 const HARPY_SKIN = ramp('#a88a9a', '#e0c4cc', '#fff0f0')
@@ -199,6 +201,197 @@ function lv999(): Bitmap {
   return outline(b, INK)
 }
 
+function halgiraf(): Bitmap {
+  // The half black dragon (canon F20): hulking, scaled, wings spread, facing right.
+  return dragon(ramp('#140e1e', '#2e2240', '#4e3a6a'), ramp('#4a3a2a', '#7a6248', '#a88a64'), ramp('#1a1024', '#3a2450', '#5a3a7a'))
+}
+
+/** A great winged dragon in the given scale/belly/wing ramps (Halgiraf, Kthat). */
+function dragon(scale: Ramp, belly: Ramp, wing: Ramp): Bitmap {
+  const b = createBitmap(76, 62)
+  // far wing (behind)
+  for (let i = 0; i < 7; i++) line(b, 30, 22, 8 + i * 4, 2 + (i % 2) * 3, wing.d)
+  line(b, 8, 2, 30, 22, wing.m)
+  // tail
+  for (let i = 0; i < 16; i++) ellipse(b, 2 + i, 40 + Math.round(Math.sin(i / 3) * 3), 6, 6, scale.m)
+  line(b, 1, 43, 0, 36, BONE.m)
+  // back legs
+  rect(b, 22, 44, 8, 14, scale.d)
+  rect(b, 20, 56, 12, 4, scale.d)
+  // body
+  ellipse(b, 14, 24, 40, 28, scale.m)
+  ellipse(b, 22, 34, 28, 16, belly.m)
+  for (let x = 24; x < 48; x += 4) vline(b, x, 36, 12, belly.d) // belly plates
+  for (let x = 18; x < 50; x += 5) line(b, x, 25, x + 2, 21, scale.l) // dorsal ridge
+  // front legs
+  rect(b, 44, 44, 7, 14, scale.m)
+  rect(b, 42, 56, 12, 4, scale.m)
+  for (const x of [43, 47, 51]) set(b, x, 60, BONE.l) // claws
+  // neck + head
+  ellipse(b, 44, 14, 14, 20, scale.m)
+  ellipse(b, 50, 6, 20, 14, scale.m)
+  rect(b, 62, 10, 12, 7, scale.m) // snout
+  hline(b, 62, 16, 12, scale.d)
+  for (let x = 63; x < 74; x += 3) set(b, x, 17, BONE.l) // fangs
+  set(b, 72, 11, INK) // nostril
+  // horns
+  line(b, 52, 6, 46, 0, BONE.m)
+  line(b, 53, 6, 47, 0, BONE.l)
+  line(b, 57, 5, 56, 0, BONE.m)
+  // eye (glows)
+  rect(b, 60, 8, 3, 2, hex('#ff3a2e'))
+  set(b, 61, 8, hex('#ffd0a0'))
+  // near wing (in front)
+  for (let i = 0; i < 6; i++) line(b, 34, 24, 18 + i * 5, 4 + (i % 2) * 4, i % 2 ? wing.m : wing.l)
+  line(b, 34, 24, 20, 2, wing.l)
+  return outline(b, INK)
+}
+
+
+// ── late-tower monsters (Acts III–VIII) ──────────────────────────────────────
+
+/** A blocky golem; `big` for the statue/colossus scale, `glow` for its core. */
+function golem(stone: Ramp, glow: number, size: 'small' | 'big' | 'huge'): Bitmap {
+  const k = size === 'huge' ? 2 : size === 'big' ? 1.45 : 1
+  const W = Math.round(34 * k)
+  const H = Math.round(40 * k)
+  const S = (v: number) => Math.round(v * k)
+  const b = createBitmap(W, H)
+  // legs
+  rect(b, S(8), S(28), S(7), S(11), stone.d)
+  rect(b, S(19), S(28), S(7), S(11), stone.m)
+  // torso block
+  rect(b, S(5), S(10), S(24), S(19), stone.m)
+  rect(b, S(5), S(10), S(24), S(3), stone.l)
+  vline(b, S(28), S(10), S(19), stone.d)
+  for (let y = S(15); y < S(28); y += S(5)) hline(b, S(6), y, S(22), stone.d) // cracks/seams
+  // core
+  ellipse(b, S(14), S(16), S(7), S(7), glow)
+  set(b, S(16), S(18), WHITE_PX)
+  // arms
+  rect(b, S(0), S(11), S(6), S(17), stone.d)
+  rect(b, S(28), S(11), S(6), S(17), stone.m)
+  // head
+  rect(b, S(11), S(2), S(12), S(9), stone.m)
+  hline(b, S(11), S(2), S(12), stone.l)
+  rect(b, S(18), S(5), S(3), S(2), glow)
+  return outline(b, INK)
+}
+
+function shark(): Bitmap {
+  const b = createBitmap(40, 24)
+  const skin = ramp('#2a3e5a', '#4a6a8e', '#8aa8c8')
+  // tail
+  line(b, 6, 12, 0, 4, skin.d)
+  line(b, 6, 12, 0, 20, skin.d)
+  rect(b, 0, 4, 2, 17, skin.d)
+  // body
+  ellipse(b, 4, 6, 32, 13, skin.m)
+  ellipse(b, 10, 12, 22, 6, hex('#d8e4ec')) // belly
+  // dorsal fin
+  for (let i = 0; i < 7; i++) hline(b, 16 + i, 6 - i, 7 - i, skin.d)
+  // eye + teeth
+  set(b, 31, 9, INK)
+  for (let x = 28; x < 36; x += 2) set(b, x, 14, WHITE_PX)
+  hline(b, 27, 13, 9, INK)
+  return outline(b, INK)
+}
+
+/** A tentacled horror; `big` for the kraken, small for its spawn. */
+function kraken(big: boolean): Bitmap {
+  const k = big ? 1.6 : 1
+  const S = (v: number) => Math.round(v * k)
+  const b = createBitmap(S(36), S(34))
+  const flesh = ramp('#3a1a3e', '#6a2e6a', '#9a5a9a')
+  for (let i = 0; i < 6; i++) {
+    const x = S(4 + i * 5)
+    line(b, x, S(20), x - S(2) + (i % 2) * S(4), S(33), flesh.d)
+    line(b, x + 1, S(20), x - S(1) + (i % 2) * S(4), S(33), flesh.m)
+  }
+  ellipse(b, S(5), S(2), S(26), S(22), flesh.m)
+  ellipse(b, S(9), S(4), S(12), S(9), flesh.l)
+  ellipse(b, S(19), S(10), S(7), S(6), hex('#ffe07a'))
+  rect(b, S(22), S(11), S(2), S(4), INK)
+  return outline(b, INK)
+}
+
+function chimera(): Bitmap {
+  const b = quadruped(ramp('#6a3a14', '#a8642a', '#d8a050'), hex('#ffe07a'), true)
+  // goat horn + serpent tail
+  line(b, 30, 4, 26, 0, BONE.l)
+  line(b, 31, 4, 27, 0, BONE.m)
+  line(b, 2, 12, 0, 4, hex('#3a6a2e'))
+  set(b, 0, 3, RED_EYE)
+  return outline(b, INK)
+}
+
+function wraith(): Bitmap {
+  const b = createBitmap(26, 34)
+  const mist = ramp('#2a2440', '#4a4270', '#8a80b8')
+  for (let i = 0; i < 5; i++) line(b, 6 + i * 3, 22, 4 + i * 4, 33, i % 2 ? mist.d : mist.m) // tattered hem
+  ellipse(b, 3, 6, 20, 20, mist.m)
+  ellipse(b, 6, 2, 13, 13, mist.d) // hood
+  ellipse(b, 9, 5, 7, 8, INK)
+  set(b, 11, 8, hex('#7af0ff'))
+  set(b, 14, 8, hex('#7af0ff'))
+  line(b, 20, 14, 25, 10, mist.l) // reaching arm
+  return outline(b, INK)
+}
+
+function egg(): Bitmap {
+  const b = createBitmap(30, 36)
+  const shell = ramp('#3a1a2e', '#6a2e4e', '#a85a7a')
+  ellipse(b, 2, 2, 26, 33, shell.m)
+  ellipse(b, 6, 6, 10, 14, shell.l)
+  line(b, 12, 12, 18, 20, INK) // crack
+  line(b, 18, 20, 15, 26, INK)
+  ellipse(b, 15, 18, 4, 4, hex('#ff5a3a'))
+  return outline(b, INK)
+}
+
+function brood(): Bitmap {
+  return quadruped(ramp('#2a0e2a', '#5a1e5a', '#8a3a8a'), hex('#ff5a3a'), false)
+}
+
+/** A floating shard of the Fragment Series (dark crystal). */
+function fragmentShard(): Bitmap {
+  const b = createBitmap(22, 34)
+  const c = ramp('#140e24', '#3a2a6a', '#8a7ae0')
+  for (let i = 0; i < 12; i++) hline(b, 11 - Math.floor(i / 2), 2 + i, 1 + i, i % 3 === 0 ? c.l : c.m)
+  for (let i = 0; i < 12; i++) hline(b, 5 + Math.floor(i / 2), 14 + i, 12 - i, c.d)
+  vline(b, 11, 4, 20, hex('#c8b8ff'))
+  set(b, 8, 30, c.l)
+  set(b, 14, 32, c.l)
+  return outline(b, INK)
+}
+
+function voidSpawn(): Bitmap {
+  const b = createBitmap(30, 28)
+  const v = ramp('#06040c', '#1a1030', '#3a2a5a')
+  ellipse(b, 2, 6, 26, 20, v.m)
+  ellipse(b, 6, 4, 14, 10, v.d)
+  for (let i = 0; i < 7; i++) set(b, 4 + i * 3, 4 + ((i * 5) % 16), hex('#ff3aff'))
+  rect(b, 16, 12, 6, 2, hex('#ff3aff'))
+  for (let i = 0; i < 4; i++) line(b, 6 + i * 6, 24, 4 + i * 6, 27, v.d)
+  return outline(b, INK)
+}
+
+const SCALY = ramp('#1e4a2a', '#3a7a3e', '#6aa85a')
+const SEA_SKIN = ramp('#1e4a5a', '#3a7a8a', '#7ab8c0')
+const DEMON_SKIN = ramp('#5a0e0e', '#9a2a1e', '#d0503a')
+const PALE = ramp('#8a8a9a', '#c0c0d0', '#e8e8f4')
+const FAIR = ramp('#b87450', '#e3a878', '#f6c79c')
+const VOID_CLOTH = ramp('#06040c', '#1a1030', '#3a2a5a')
+const ORDER_CLOTH = ramp('#6a6a7a', '#a8a8ba', '#e0e0ec')
+
+/** A lizardman: scaly skin plus a tail. */
+function lizard(over: Partial<HeroLook>): Bitmap {
+  return humanoid(baseLook({ skin: SCALY, hair: SCALY, hairStyle: 'buzz', eyes: hex('#ffd24a'), ...over }), (b) => {
+    line(b, 6, 24, 1, 29, SCALY.d)
+    line(b, 6, 25, 2, 30, SCALY.m)
+  })
+}
+
 // ── registry ─────────────────────────────────────────────────────────────────
 
 const DRAWERS: Record<string, () => Bitmap> = {
@@ -266,6 +459,140 @@ const DRAWERS: Record<string, () => Bitmap> = {
       }),
     ),
   lv999_creature: lv999,
+  assassin: () =>
+    humanoid(
+      baseLook({
+        skin: ramp('#8a6a5a', '#c09a82', '#dcbca4'),
+        outfit: 'thief',
+        cloth: ramp('#0e0c14', '#1e1a28', '#34304a'),
+        accent: ramp('#5a0e1e', '#9a1a2e', '#d0404a'),
+        headgear: 'hood',
+        weapon: 'daggers',
+      }),
+    ),
+  knight: () =>
+    humanoid(
+      baseLook({
+        skin: ramp('#b87450', '#e3a878', '#f6c79c'),
+        eyes: INK,
+        outfit: 'warrior',
+        cloth: ramp('#2a2a3a', '#44445a', '#666680'),
+        accent: GOLD,
+        headgear: 'helm',
+        weapon: 'sword',
+        shield: true,
+      }),
+    ),
+  halgiraf,
+
+  // Act III — the Swamp
+  lizardman: () => lizard({ outfit: 'warrior', cloth: ramp('#3a2e1e', '#5a4a2e', '#7a6644'), weapon: 'sword', shield: true }),
+  lizard_shaman: () => lizard({ outfit: 'mage', cloth: ramp('#1e3a4a', '#2e5a6e', '#4a8aa0'), weapon: 'staff', headgear: 'hood' }),
+  lizard_rider: () => lizard({ outfit: 'spearman', cloth: ramp('#4a2e1a', '#7a4a2a', '#a8703e'), weapon: 'spear' }),
+  lizard_chief: () =>
+    lizard({ outfit: 'warrior', cloth: ramp('#5a1414', '#8a2424', '#c04040'), weapon: 'club', headgear: 'helm', cape: GOLD, trim: true }),
+  mud_golem: () => golem(ramp('#3a2a1a', '#5e4a30', '#8a6e4a'), hex('#c8a04a'), 'small'),
+  mage_golem: () => golem(ramp('#2a2a3a', '#4a4a64', '#7a7a9a'), hex('#7af0ff'), 'small'),
+  kurushahr: () =>
+    humanoid(baseLook({ skin: PALE, eyes: hex('#7af0ff'), outfit: 'mage', cloth: ramp('#1e1a3a', '#34306a', '#5a54a0'), headgear: 'hood', weapon: 'staff', trim: true, accent: GOLD })),
+  stone_statue: () => golem(ramp('#5a5a5a', '#8a8a86', '#b8b8b0'), hex('#ff5a3a'), 'huge'),
+  crystal_core: () => fragmentShardTinted(ramp('#6a5a1e', '#c8b04a', '#fff0a0')),
+
+  // Act IV — the Drowned Coast
+  shark,
+  merman: () =>
+    humanoid(baseLook({ skin: SEA_SKIN, hair: ramp('#0e2a3a', '#1e4a5a', '#3a7a8a'), eyes: hex('#ffd24a'), outfit: 'spearman', cloth: ramp('#1e3a4a', '#2e5a6e', '#4a8aa0'), weapon: 'spear' })),
+  kraken_spawn: () => kraken(false),
+  kraken: () => kraken(true),
+  guardian_golem: () => golem(ramp('#2a3a4a', '#4a6a7a', '#7a9aaa'), hex('#4aa3ff'), 'big'),
+  jewel_guardian: () => golem(ramp('#1e2a4a', '#34487a', '#5a74b0'), hex('#3a6aff'), 'big'),
+  kthat: () => dragon(ramp('#0e2a3a', '#1e5a6e', '#3a8aa0'), ramp('#6a8a8a', '#9ac0c0', '#cce8e8'), ramp('#0e1e2a', '#1e3a4a', '#3a6a7a')),
+
+  // Act V — the Order's War
+  order_soldier: () =>
+    humanoid(baseLook({ skin: FAIR, eyes: INK, outfit: 'spearman', cloth: ORDER_CLOTH, headgear: 'helm', weapon: 'spear', accent: GOLD })),
+  dark_knight: () =>
+    humanoid(baseLook({ skin: PALE, eyes: RED_EYE, outfit: 'warrior', cloth: ramp('#0e0c14', '#1e1a28', '#34304a'), headgear: 'helm', weapon: 'sword', shield: true, accent: ramp('#3a0a14', '#6a1424', '#9a2a3a') })),
+  demon_marksman: () =>
+    humanoid(baseLook({ skin: DEMON_SKIN, hair: ramp('#140a0a', '#2a1414', '#4a2424'), eyes: hex('#ffd24a'), outfit: 'archer', cloth: ramp('#2a0e0e', '#4a1a1a', '#7a2a2a'), weapon: 'bow' }), (b) => {
+      set(b, 12, 2, BONE.l) // horns
+      set(b, 17, 2, BONE.l)
+    }),
+  order_mage: () => humanoid(baseLook({ skin: FAIR, eyes: INK, outfit: 'mage', cloth: ORDER_CLOTH, headgear: 'hat', weapon: 'staff', accent: GOLD, trim: true })),
+  rodvick: () => humanoid(baseLook({ skin: FAIR, eyes: INK, outfit: 'warrior', cloth: ramp('#4a2a14', '#7a4a24', '#a8703a'), weapon: 'club', mark: 'beard' })),
+  lazenca: () => humanoid(baseLook({ skin: FAIR, eyes: INK, outfit: 'thief', cloth: ramp('#1e3a2a', '#2e5a3e', '#4a8a5e'), headgear: 'bandana', weapon: 'daggers' })),
+  valention: () =>
+    humanoid(baseLook({ skin: FAIR, eyes: RED_EYE, outfit: 'warrior', cloth: ramp('#5a0e0e', '#8a1a1a', '#c02a2a'), headgear: 'plumedHelm', weapon: 'sword', shield: true, cape: ramp('#3a0a0a', '#6a1414', '#9a2424'), trim: true, accent: GOLD })),
+  versace: () =>
+    humanoid(baseLook({ skin: FAIR, hair: ramp('#8a8a9a', '#c0c0d0', '#f0f0ff'), eyes: hex('#7af0ff'), hairStyle: 'long', outfit: 'thief', cloth: ramp('#4a4a5a', '#8a8aa0', '#d0d0e0'), weapon: 'daggers', accent: ELEMENT_RAMP.wind })),
+  darkan: () =>
+    humanoid(baseLook({ skin: PALE, eyes: RED_EYE, outfit: 'warrior', cloth: ramp('#140a1a', '#2a1434', '#4a2a5a'), headgear: 'helm', weapon: 'club', cape: ramp('#1a0a1a', '#3a143a', '#5a2a5a') })),
+  egg_brood: brood,
+  the_egg: egg,
+  order_inquisitor: () =>
+    humanoid(baseLook({ skin: FAIR, eyes: INK, outfit: 'mage', cloth: ramp('#5a4a14', '#a8903a', '#e0c870'), headgear: 'hood', weapon: 'staff', trim: true, accent: GOLD })),
+  el_cid: () =>
+    humanoid(baseLook({ skin: FAIR, eyes: hex('#2a6ab8'), outfit: 'warrior', cloth: ramp('#8a8aa0', '#d0d0e0', '#ffffff'), headgear: 'plumedHelm', weapon: 'sword', shield: true, cape: GOLD, trim: true, accent: GOLD })),
+  order_saint: () =>
+    humanoid(baseLook({ skin: FAIR, hair: GOLD, hairStyle: 'long', eyes: hex('#2a6ab8'), outfit: 'mage', cloth: ramp('#a8a0b8', '#ece6f4', '#ffffff'), headgear: 'circlet', weapon: 'staff', trim: true, accent: GOLD })),
+
+  // Act VI — the Inflection
+  chimera,
+  wraith,
+  chimera_matriarch: () => bossScale(chimera),
+
+  // Act VII — the Wailing Wall (the Fragment Series)
+  fragment_shard: fragmentShard,
+  fragment_knight: () =>
+    humanoid(baseLook({ skin: ramp('#140e24', '#3a2a6a', '#8a7ae0'), hair: VOID_CLOTH, eyes: hex('#c8b8ff'), outfit: 'warrior', cloth: ramp('#140e24', '#2a1e4a', '#5a4a9a'), headgear: 'helm', weapon: 'sword', shield: true })),
+  fragment_warden: () =>
+    humanoid(baseLook({ skin: ramp('#140e24', '#3a2a6a', '#8a7ae0'), hair: VOID_CLOTH, eyes: hex('#c8b8ff'), outfit: 'mage', cloth: ramp('#140e24', '#2a1e4a', '#5a4a9a'), headgear: 'hood', weapon: 'staff' })),
+  pryos: () =>
+    humanoid(baseLook({ skin: PALE, hair: ramp('#0e0c14', '#1e1a28', '#34304a'), hairStyle: 'long', eyes: RED_EYE, outfit: 'master', cloth: ramp('#0e0c14', '#1e1a28', '#34304a'), headgear: 'circlet', weapon: 'sword', cape: ramp('#3a0a14', '#6a1424', '#9a2a3a'), trim: true, accent: GOLD })),
+  fragment_colossus: () => golem(ramp('#0e0a1a', '#2a1e4a', '#5a4a9a'), hex('#c8b8ff'), 'huge'),
+
+  // Act VIII — the Unfinished Floors
+  void_spawn: voidSpawn,
+  abyss_knight: () =>
+    humanoid(baseLook({ skin: VOID_CLOTH, hair: VOID_CLOTH, eyes: hex('#ff3aff'), outfit: 'warrior', cloth: VOID_CLOTH, headgear: 'helm', weapon: 'sword', shield: true, accent: ramp('#3a0a3a', '#7a1a7a', '#ff3aff') })),
+  herald_of_end: () => bossScale(voidSpawn),
+  tell: () =>
+    humanoid(baseLook({ skin: FAIR, hair: ramp('#8a8a9a', '#d0d0e0', '#ffffff'), hairStyle: 'short', eyes: hex('#ffd24a'), outfit: 'master', cloth: ramp('#e0d8f0', '#fff6e0', '#ffffff'), headgear: 'circlet', weapon: 'staff', cape: GOLD, trim: true, accent: GOLD })),
+}
+
+/** A crystal shard in another colour (the F30 crystal cores). */
+function fragmentShardTinted(c: Ramp): Bitmap {
+  const b = createBitmap(22, 34)
+  for (let i = 0; i < 12; i++) hline(b, 11 - Math.floor(i / 2), 2 + i, 1 + i, i % 3 === 0 ? c.l : c.m)
+  for (let i = 0; i < 12; i++) hline(b, 5 + Math.floor(i / 2), 14 + i, 12 - i, c.d)
+  vline(b, 11, 4, 20, WHITE_PX)
+  return outline(b, INK)
+}
+
+/** A boss-scale (×1.6) redraw of a smaller monster (nearest-neighbour). */
+function bossScale(draw: () => Bitmap): Bitmap {
+  const src = draw()
+  const W = Math.round(src.w * 1.6)
+  const H = Math.round(src.h * 1.6)
+  const b = createBitmap(W, H)
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) b.px[y * W + x] = src.px[Math.floor(y / 1.6) * src.w + Math.floor(x / 1.6)]!
+  }
+  return b
+}
+
+/** The F50 Sealed Object: a glowing reliquary on a plinth (a mission NPC, not a person). */
+export function drawReliquary(): Bitmap {
+  const b = createBitmap(24, 32)
+  const stone = ramp('#4a4452', '#6e6678', '#8e869a')
+  rect(b, 3, 22, 18, 9, stone.m)
+  hline(b, 2, 22, 20, stone.l)
+  roundRect(b, 5, 8, 14, 14, GOLD.m)
+  rect(b, 7, 10, 10, 10, hex('#fff0a0'))
+  ellipse(b, 9, 12, 6, 6, hex('#ffffff'))
+  vline(b, 12, 2, 6, GOLD.l)
+  hline(b, 10, 4, 5, GOLD.l)
+  return outline(b, INK)
 }
 
 const cache = new Map<string, Bitmap>()

@@ -2,7 +2,9 @@
  * Cached sprite lookups keyed by identity — what React components and the game
  * loops actually call. Generation is pure; caching lives in render.ts.
  */
-import { iselLook, lookForHero, lookForMaster, type HeroLook, type LookSource } from './look'
+import { iselLook, keyBearerLook, lookForHero, lookForMaster, priasisLook, type HeroLook, type LookSource } from './look'
+import { drawReliquary } from './enemySprite'
+import type { Bitmap } from './bitmap'
 import { drawHeroBust, drawHeroFrame, type Dir, type WalkFrame } from './heroSprite'
 import { cachedCanvas, cachedDataUrl } from './render'
 import { drawEnemy } from './enemySprite'
@@ -47,6 +49,28 @@ export function masterBustUrl(accountId: string): string {
 
 export function iselBustUrl(): string {
   return cachedDataUrl('isel', () => drawHeroBust(iselLook()))
+}
+
+// ── mission NPC allies ───────────────────────────────────────────────────────
+
+const ALLY_LOOKS: Record<string, () => HeroLook> = { 'Princess Priasis': priasisLook, 'Key Bearer': keyBearerLook }
+
+/** Mission NPCs that aren't people (the F50 Sealed Object) draw as a bespoke bitmap. */
+const ALLY_OBJECTS: Record<string, () => Bitmap> = { 'Sealed Object': drawReliquary }
+
+/** Battle frame (facing left, with the party) for a mission NPC, by display name. */
+export function allyFrameUrl(name: string, frame: WalkFrame = 0): string {
+  const obj = ALLY_OBJECTS[name]
+  if (obj) return cachedDataUrl(`allyo|${name}`, obj)
+  const make = ALLY_LOOKS[name] ?? priasisLook
+  return cachedDataUrl(`ally|${name}|${frame}`, () => drawHeroFrame(make(), 'left', frame))
+}
+
+export function allyBustUrl(name: string): string {
+  const obj = ALLY_OBJECTS[name]
+  if (obj) return cachedDataUrl(`allyo|${name}`, obj)
+  const make = ALLY_LOOKS[name] ?? priasisLook
+  return cachedDataUrl(`allyb|${name}`, () => drawHeroBust(make()))
 }
 
 // ── enemies ──────────────────────────────────────────────────────────────────

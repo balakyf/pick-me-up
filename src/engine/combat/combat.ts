@@ -50,10 +50,18 @@ interface MutUnit {
   currentSP: number
   actionGauge: number
   alive: boolean
+  /** Actions taken so far (the `opener` keyword boosts the first). */
+  actions: number
+  /** Remaining `aegis` charges (hits this unit will negate). */
+  aegis: number
 }
 
 function copyUnit(u: CombatUnit, spawnIndex: number, wave: number): MutUnit {
+  let aegis = 0
+  for (const k of u.keywords) if (k.kind === 'aegis') aegis += k.charges
   return {
+    actions: 0,
+    aegis,
     ref: u,
     id: u.id,
     side: u.side,
@@ -70,6 +78,9 @@ function copyUnit(u: CombatUnit, spawnIndex: number, wave: number): MutUnit {
 function byId(a: MutUnit, b: MutUnit): number {
   return a.id < b.id ? -1 : a.id > b.id ? 1 : 0
 }
+
+/** Guard reductions only ever shave off this much in total (never full immunity). */
+const MIN_GUARD_MULT = 0.25
 
 /** elementMult per Layer 0 §2.5. */
 function elementMult(attackEl: Element, defEl: Element): number {
@@ -111,14 +122,18 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
       maxHP: u.stats.maxHP,
       maxSP: u.maxSP,
       cp: u.cp,
+      ...(u.isNpc ? { isNpc: true } : {}),
     })
   }
+  const allyUnits = encounter.allies ?? []
   for (const h of heroUnits) snapshot(h)
+  for (const a of allyUnits) snapshot(a)
   for (const w of encounter.waves) for (const e of w.units) snapshot(e)
 
   // ── Spawn heroes (wave -1) + wave 0 ───────────────────────────────────────
   let spawnCounter = 0
-  const heroes: MutUnit[] = heroUnits.map((u) => copyUnit(u, spawnCounter++, -1))
+  // Mission NPC allies spawn after the party on the hero side (targetable, never act).
+  const heroes: MutUnit[] = [...heroUnits, ...allyUnits].map((u) => copyUnit(u, spawnCounter++, -1))
   const enemies: MutUnit[] = []
   let currentWave = 0
 
@@ -137,12 +152,24 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
 
   let wavesCleared = 0
   const defeatedTargetTags: string[] = []
+  // Reach(distance): steps the party has covered (every hero action is one step).
+  const hasReach = encounter.mission.objectives.some((o) => o.kind === 'reach')
+  let reachProgress = 0
   let outcome: CombatOutcome | null = null
+  // Focus / overlook start from the pre-battle directive; mid-battle orders may change them.
+  let focusEnemyId: string | undefined = encounter.focus?.focusEnemyId
+  let overlooked: string[] = encounter.focus?.overlookedAllyIds ?? []
 
   // ── Helpers over the live rosters ─────────────────────────────────────────
-  const livingHeroes = (): MutUnit[] => heroes.filter((h) => h.alive)
+  /** Everyone alive on the hero side, NPC allies included (what enemies can target). */
+  const livingHeroSide = (): MutUnit[] => heroes.filter((h) => h.alive)
+  /** The player's living heroes only — a wipe/survival is about the party, not NPCs. */
+  const livingHeroes = (): MutUnit[] => heroes.filter((h) => h.alive && !h.ref.isNpc)
+  /** Protect(target): is the tagged NPC ally still standing? */
+  const allyAlive = (tag: string): boolean => heroes.some((h) => h.ref.targetTag === tag && h.alive)
   const livingEnemiesInWave = (w: number): MutUnit[] => enemies.filter((e) => e.alive && e.wave === w)
   const livingEnemies = (): MutUnit[] => enemies.filter((e) => e.alive)
+  const isLooming = (e: MutUnit): boolean => e.ref.keywords.some((k) => k.kind === 'looming')
   const moreWavesToSpawn = (): boolean => currentWave < encounter.waves.length - 1
 
   /** A unit with a 'phased' keyword is untargetable while any non-phased unit in
@@ -152,13 +179,13 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
     const phased = e.ref.keywords.some((k) => k.kind === 'phased')
     if (!phased) return true
     const wavemates = enemies.filter((o) => o.alive && o.wave === e.wave && o.id !== e.id)
-    const anyNonPhasedAlive = wavemates.some((o) => !o.ref.keywords.some((k) => k.kind === 'phased'))
+    const anyNonPhasedAlive = wavemates.some((o) => !isLooming(o) && !o.ref.keywords.some((k) => k.kind === 'phased'))
     return !anyNonPhasedAlive
   }
 
   /** Living, targetable units on the side OPPOSITE the actor. */
   const targetableFoes = (actor: MutUnit): MutUnit[] => {
-    const foes = actor.side === 'hero' ? livingEnemies() : livingHeroes()
+    const foes = actor.side === 'hero' ? livingEnemies() : livingHeroSide()
     return foes.filter(isTargetable)
   }
 
@@ -195,16 +222,48 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
     if (
       actor.side === 'hero' &&
       encounter.focusBonus !== undefined &&
-      encounter.focus?.focusEnemyId === target.id
+      focusEnemyId === target.id
     ) {
       damage *= 1 + encounter.focusBonus
     }
 
-    // ENRAGE: actor stat-spike past its timer.
+    // Actor keywords: ENRAGE past its timer, FRENZY while low, OPENER on the first
+    // action, BANE against a family. None draws RNG.
     for (const kw of actor.ref.keywords) {
       if (kw.kind === 'enrage' && tick >= kw.afterTick) {
         damage *= kw.multiplier
+      } else if (kw.kind === 'frenzy' && actor.currentHP * 100 < actor.ref.stats.maxHP * kw.belowHpPct) {
+        damage *= kw.multiplier
+      } else if (kw.kind === 'opener' && actor.actions === 0) {
+        damage *= kw.multiplier
+      } else if (kw.kind === 'bane' && target.ref.family === kw.family) {
+        damage *= kw.multiplier
       }
+    }
+
+    // Target keywords: IMMUNE to a damage type, VULNERABLE to an element, GUARD
+    // reductions (floored so stacked guards never reach immunity).
+    let guardMult = 1
+    const ranged = actor.ref.unitClass === 'archer' || actor.ref.unitClass === 'mage'
+    for (const kw of target.ref.keywords) {
+      if (kw.kind === 'immune' && kw.damageType === skill.damageType) {
+        damage = 0
+      } else if (kw.kind === 'resist' && kw.damageType === skill.damageType) {
+        guardMult *= 1 - kw.reduction
+      } else if (kw.kind === 'vulnerable' && kw.element === el) {
+        damage *= C.vulnerableMult
+      } else if (kw.kind === 'guard' && (kw.vs === undefined || (kw.vs === 'ranged' ? ranged : kw.vs === el))) {
+        guardMult *= 1 - kw.reduction
+      }
+    }
+    damage *= Math.max(MIN_GUARD_MULT, guardMult)
+
+    // AEGIS: a charge negates the whole hit (the draws above are already spent, so the
+    // stream stays identical to an un-guarded replay).
+    if (target.aegis > 0) {
+      target.aegis--
+      emit({ kind: 'guard', actorId: actor.id, targetId: target.id })
+      return
     }
 
     const amount = Math.round(damage)
@@ -217,6 +276,18 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
       crit,
       hpAfter: target.currentHP,
     })
+
+    // LIFESTEAL: the actor recovers a share of what it dealt (capped at max HP).
+    if (actor.alive && amount > 0) {
+      for (const kw of actor.ref.keywords) {
+        if (kw.kind !== 'lifesteal') continue
+        const heal = Math.min(Math.round(amount * kw.fraction), actor.ref.stats.maxHP - actor.currentHP)
+        if (heal > 0) {
+          actor.currentHP += heal
+          emit({ kind: 'heal', unitId: actor.id, amount: heal, hpAfter: actor.currentHP })
+        }
+      }
+    }
 
     if (target.currentHP <= 0 && target.alive) {
       target.alive = false
@@ -237,21 +308,27 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
     let cands = targetableFoes(actor)
     if (cands.length === 0) return null
 
-    // FOCUS: hero attackers force-prioritize a living, targetable focus enemy.
-    if (actor.side === 'hero') {
-      const focusId = encounter.focus?.focusEnemyId
+    // FOCUS: hero attackers force-prioritize a living, targetable focus enemy (a Wary,
+    // defiant hero ignores the Master and picks its own target).
+    if (actor.side === 'hero' && actor.ref.defiant !== true) {
+      const focusId = focusEnemyId
       if (focusId !== undefined) {
         const focused = cands.find((e) => e.id === focusId)
         if (focused) return focused
       }
     }
 
+    // Heroes don't chase a looming unit while anything else can be hit.
+    if (actor.side === 'hero') {
+      const lesser = cands.filter((c) => !isLooming(c))
+      if (lesser.length > 0) cands = lesser
+    }
+
     // OVERLOOK (Tactical Center): enemy targeting is steered off marked allies while
     // any non-overlooked ally lives (deterministic; no RNG). Falls back to the full
     // pool if every candidate is overlooked.
     if (actor.side === 'enemy') {
-      const overlooked = encounter.focus?.overlookedAllyIds
-      if (overlooked !== undefined && overlooked.length > 0) {
+      if (overlooked.length > 0) {
         const visible = cands.filter((c) => !overlooked.includes(c.id))
         if (visible.length > 0) cands = visible
       }
@@ -327,8 +404,17 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
         return tick >= obj.ticks && livingHeroes().length > 0
       case 'defeat':
         return defeatedTargetTags.includes(obj.targetTag)
+      case 'protect':
+        return allyAlive(obj.targetTag)
+      case 'reach':
+        return reachProgress >= obj.distance
+      case 'acquire':
+        return defeatedTargetTags.includes(obj.targetTag)
     }
   }
+  /** A protect objective whose NPC has fallen loses the mission outright. */
+  const protectFailed = (): boolean =>
+    encounter.mission.objectives.some((o) => o.kind === 'protect' && !allyAlive(o.targetTag))
   const missionWon = (): boolean =>
     encounter.mission.objectives.length > 0 && encounter.mission.objectives.every(objectiveMet)
 
@@ -336,6 +422,10 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
     if (outcome !== null) return
     if (livingHeroes().length === 0) {
       outcome = 'wipe'
+      return
+    }
+    if (protectFailed()) {
+      outcome = 'failed'
       return
     }
     if (missionWon()) {
@@ -346,7 +436,8 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
   /** After the current wave is fully dead, advance/spawn the next wave. */
   const maybeAdvanceWave = (): void => {
     if (outcome !== null) return
-    if (livingEnemiesInWave(currentWave).length === 0) {
+    // A looming unit is outlasted, not killed: the wave counts as cleared without it.
+    if (livingEnemiesInWave(currentWave).filter((e) => !isLooming(e)).length === 0) {
       wavesCleared++
       if (moreWavesToSpawn()) {
         currentWave++
@@ -359,13 +450,22 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
   // One unit takes its action.
   const act = (actor: MutUnit): void => {
     if (!actor.alive || outcome !== null) return
+    // Mission NPCs (escort targets) never act — they only need protecting.
+    if (actor.ref.isNpc) return
+    // A looming unit sleeps until its enrage tick: it wakes, and then it is too late.
+    if (isLooming(actor)) {
+      const wake = actor.ref.keywords.find((k) => k.kind === 'enrage')
+      if (wake !== undefined && wake.kind === 'enrage' && tick < wake.afterTick) return
+    }
 
     // PANIC (low Sanity): a hero below the panic threshold may lose its turn. The
     // draw is GATED on a positive chance, so a healthy hero never touches the rng —
     // existing full-Sanity replays keep their exact draw order. The action gauge was
     // already spent by the caller, so a panic naturally costs the whole turn; SP is
     // retained since no skill is chosen.
-    if (actor.side === 'hero' && actor.ref.sanity !== undefined) {
+    // Any unit carrying Sanity can panic — heroes always do; a whale Master's brittle
+    // PvP roster does too (enemies normally carry none, so their replays are unchanged).
+    if (actor.ref.sanity !== undefined) {
       const p = panicChance(actor.ref.sanity, actor.ref.stats.statusRes)
       if (p > 0) {
         const draw = chance(rng, p)
@@ -376,6 +476,14 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
           return
         }
       }
+    }
+
+    // REACH: a hero's turn also presses the party one step toward the exit (even with
+    // nothing left to strike). Only reach missions count, so other replays are untouched.
+    if (hasReach && actor.side === 'hero') {
+      reachProgress++
+      evaluateState()
+      if (outcome !== null) return
     }
 
     const skill = chooseSkill(actor)
@@ -398,6 +506,8 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
       resolveHit(actor, skill, target)
     }
 
+    actor.actions++
+
     // Deaths from this action may clear the wave / satisfy the mission.
     maybeAdvanceWave()
     evaluateState()
@@ -405,7 +515,19 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
 
   // ── ATB main loop ─────────────────────────────────────────────────────────
   const timer = encounter.mission.timer
+  const orders = [...(encounter.orders ?? [])].sort((a, b) => a.tick - b.tick)
+  let nextOrder = 0
   for (tick = 1; tick <= C.maxTicks; tick++) {
+    // The Master's orders land at the start of their tick (before anyone acts).
+    while (nextOrder < orders.length && orders[nextOrder]!.tick <= tick) {
+      const o = orders[nextOrder++]!
+      emit({ kind: 'order', order: o })
+      if (o.kind === 'retreat') outcome = 'retreat'
+      else if (o.kind === 'focus') focusEnemyId = o.enemyId
+      else if (o.kind === 'protect' && !overlooked.includes(o.allyId)) overlooked = [...overlooked, o.allyId]
+    }
+    if (outcome !== null) break
+
     // Fill action gauges for every living unit (stable order by id).
     const all = [...heroes, ...enemies].filter((u) => u.alive).sort(byId)
     for (const u of all) {
@@ -458,6 +580,14 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
     else fallenHeroIds.push(sid)
   }
 
+  const allyHpPct: Record<string, number> = {}
+  for (const h of heroes) {
+    const tag = h.ref.targetTag
+    if (h.ref.isNpc && tag !== undefined) {
+      allyHpPct[tag] = Math.round((Math.max(0, h.currentHP) / h.ref.stats.maxHP) * 100)
+    }
+  }
+
   const log: CombatLog = {
     seed,
     floor: encounter.floor,
@@ -473,6 +603,8 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
     ticksElapsed,
     wavesCleared,
     defeatedTargetTags,
+    reachProgress,
+    allyHpPct,
     survivorHeroIds,
     fallenHeroIds,
     skillCasts,

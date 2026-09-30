@@ -1,5 +1,5 @@
 /**
- * Layer 1 §1 — Mobius Summon (Normal pool only, slice scope).
+ * Layer 1 §1 — Mobius Summon: the Normal (gold) and Advanced (gem) pools.
  *
  * The gacha turns gold + the account's seeded RNG sub-stream into a brand-new,
  * never-before-seen hero. Every function is PURE and DETERMINISTIC: randomness is
@@ -11,12 +11,14 @@
  *   2. roll class           (Mage = gacha-only and rare; 1★/2★ → classless)
  *   3. per attribute        roll base + growth grade within the star envelope (Layer 0 §4.2)
  *   4. attach skills/portrait/element
- *   5. (engravings are out of slice)
+ *   5. 4★+: class skill + extra skills, a bound exclusive weapon, an engraving (§5.4)
  *   6. mark hero ID consumed → "infinite, all unique" (§1.4)
  *
  * No transcendental math, no Math.random/Date.now: all entropy flows from
- * rngFor(state.seed, 'gacha', state.gacha.pullCount). Rounding (where needed) is
- * Math.round (round-half-up for non-negatives).
+ * rngFor(state.seed, 'gacha', pullCount) (Normal) or rngFor(state.seed, 'gacha-adv',
+ * advPullCount) (Advanced) — separate streams, so Advanced pulls never disturb the
+ * Normal sequence. Only 4★+ rolls take the extra kit/engraving draws, so every Normal
+ * (1–3★) pull is byte-identical to before. Rounding is Math.round.
  */
 
 import { TUNING } from '../tuning'
@@ -32,10 +34,16 @@ import type {
   OwnedHero,
   HeroTemplate,
   GameState,
+  HeroEngraving,
+  EquipmentGrade,
+  EquipmentItem,
+  SummonPool,
 } from '../types'
 import { envelopeForStar } from '../stats'
-import { CAMEO_HEROES, NAME_POOLS, SKILLS } from '../content'
-import { heroSkillsFromIds } from '../skills'
+import { CAMEO_HEROES, CLASS_SKILL, NAME_POOLS, SKILLS } from '../content'
+import { heroSkillsFromIds, learnableSkillIds } from '../skills'
+import { rollEngraving } from '../engravings'
+import { makeExclusiveWeapon } from '../equipment'
 import {
   type Rng,
   type Draw,
@@ -72,6 +80,22 @@ export function rollStar(rng: Rng, pity: number): Draw<Star> {
   if (pity + 1 >= TUNING.gacha.normalPityFloor3At && star < 3) {
     star = 3
   }
+  return { value: star, rng: r }
+}
+
+const ADV = TUNING.gacha.advanced
+
+/**
+ * Roll an Advanced-pool star (3★ 80 / 4★ 18 / 5★ 2), then apply its two Rising
+ * Quality Floors: the `pityFloor4At`-th pull without a 4★+ is lifted to 4★, and the
+ * `pityFloor5At`-th pull without a 5★ is lifted to 5★. One draw.
+ */
+export function rollAdvancedStar(rng: Rng, pity4: number, pity5: number): Draw<Star> {
+  const entries = Object.entries(ADV.rates).map(([star, weight]) => ({ item: Number(star) as Star, weight }))
+  const { value: rolled, rng: r } = weightedPick(rng, entries)
+  let star = rolled
+  if (pity4 + 1 >= ADV.pityFloor4At && star < 4) star = 4
+  if (pity5 + 1 >= ADV.pityFloor5At) star = 5
   return { value: star, rng: r }
 }
 
@@ -233,12 +257,19 @@ export function buildOwnedHeroFromTemplate(template: HeroTemplate, id: HeroId): 
     portraitToken: template.portraitToken,
     origin: 'cameo',
   }
-  return buildOwnedHero(hero)
+  return buildOwnedHero(hero, template.engraving ? { ...template.engraving } : null)
+}
+
+/** The Layer 3 per-hero fields every fresh (or v7-migrated) hero starts with. */
+export function HERO_V8_DEFAULTS(): Pick<OwnedHero, 'favor' | 'bondTier' | 'ip' | 'gift' | 'blessed' | 'expedition' | 'captiveOf'> {
+  const favor = TUNING.favor.start
+  const bondTier = TUNING.favor.tierCeilings.findIndex((c) => favor <= c)
+  return { favor, bondTier, ip: 0, gift: { last: null, streak: 0 }, blessed: false, expedition: null, captiveOf: null }
 }
 
 /** Build a fresh OwnedHero around an already-assembled static Hero: its innate
  *  skillIds become Lv1 HeroSkills (schema v4). */
-function buildOwnedHero(hero: Hero): OwnedHero {
+function buildOwnedHero(hero: Hero, engraving: HeroEngraving | null = null): OwnedHero {
   const { skillIds, ...identity } = hero
   return {
     ...identity,
@@ -248,6 +279,9 @@ function buildOwnedHero(hero: Hero): OwnedHero {
     sanity: TUNING.lobby.sanityMax,
     promotion: null,
     equipment: { weapon: null, armor: null, accessory: null },
+    training: null,
+    engraving,
+    ...HERO_V8_DEFAULTS(),
   }
 }
 
@@ -263,6 +297,42 @@ export interface RollResult {
   consumedTemplateId?: string
   /** Set for procedural heroes whose minted name must be recorded; undefined for cameos. */
   usedName?: string
+  /** 4★+: the grade of the bound exclusive weapon the hero arrives with. */
+  weaponGrade?: EquipmentGrade
+}
+
+/**
+ * The 4★+ arrival kit (Layer 1 §4.2 "arrives with"): the class skill plus
+ * `extraSkills[star]` learnable skills (drawn without replacement), and an
+ * engraving when the hero has none. Draw order: skills, then engraving.
+ */
+function rollHighStarKit(
+  rng: Rng,
+  hero: OwnedHero,
+): Draw<OwnedHero> {
+  let r = rng
+  const known = new Set(hero.skills.map((s) => s.id))
+  const skills = hero.skills.map((s) => ({ ...s }))
+  const signature = hero.heroClass !== null ? CLASS_SKILL[hero.heroClass] : undefined
+  if (signature !== undefined && !known.has(signature)) {
+    skills.push({ id: signature, level: 1, xp: 0 })
+    known.add(signature)
+  }
+  for (let i = 0; i < (ADV.extraSkills[hero.star] ?? 0); i++) {
+    const pool = learnableSkillIds().filter((id) => !known.has(id))
+    if (pool.length === 0) break
+    const d = pick(r, pool)
+    r = d.rng
+    skills.push({ id: d.value, level: 1, xp: 0 })
+    known.add(d.value)
+  }
+  let engraving = hero.engraving
+  if (engraving === null) {
+    const e = rollEngraving(r, hero.star)
+    r = e.rng
+    engraving = e.value
+  }
+  return { value: { ...hero, skills, engraving }, rng: r }
 }
 
 /** Insert a value into a copy of `arr` and return it kept sorted (stable round-trips). */
@@ -283,8 +353,37 @@ export function rollSummon(
   usedNames: string[],
 ): Draw<RollResult> {
   const starDraw = rollStar(rng, pity)
-  const star = starDraw.value
-  let r = starDraw.rng
+  return rollHeroOfStar(starDraw.rng, starDraw.value, consumedHeroIds, consumedTemplateIds, usedNames)
+}
+
+/**
+ * Resolve everything after the star roll: cameo-or-procedural, the procedural
+ * identity, and (4★+ only) the arrival kit + exclusive-weapon grade. PURE.
+ */
+export function rollHeroOfStar(
+  rng: Rng,
+  star: Star,
+  consumedHeroIds: string[],
+  consumedTemplateIds: string[],
+  usedNames: string[],
+): Draw<RollResult> {
+  const drawn = rollBaseHero(rng, star, consumedHeroIds, consumedTemplateIds, usedNames)
+  if (star < 4) return drawn
+  const kit = rollHighStarKit(drawn.rng, drawn.value.hero)
+  return {
+    value: { ...drawn.value, hero: kit.value, weaponGrade: ADV.weaponGrade[star] as EquipmentGrade },
+    rng: kit.rng,
+  }
+}
+
+function rollBaseHero(
+  rng: Rng,
+  star: Star,
+  consumedHeroIds: string[],
+  consumedTemplateIds: string[],
+  usedNames: string[],
+): Draw<RollResult> {
+  let r = rng
 
   // Decide CAMEO vs PROCEDURAL. A cameo is eligible only if it matches the rolled
   // star and has not yet been consumed on this account.
@@ -352,6 +451,149 @@ export function rollSummon(
 // Public summon (Layer 1 §1) — the only entry the store command surface uses
 // ─────────────────────────────────────────────────────────────────────────────
 
+/** Currency cost of `count` pulls from a pool (the Advanced 10-pull is discounted). */
+export function summonCost(pool: SummonPool, count: number): { gold: number; gems: number } {
+  if (pool === 'normal') return { gold: TUNING.gacha.normalCostGold * count, gems: 0 }
+  return { gold: 0, gems: count === 10 ? ADV.tenPullGems : ADV.costGems * count }
+}
+
+/** Fold one resolved roll into the state (hero, consumed ids, exclusive weapon). */
+function admit(state: GameState, roll: RollResult): { state: GameState; hero: OwnedHero } {
+  let hero = roll.hero
+  let inventory = state.inventory
+  if (roll.weaponGrade !== undefined) {
+    const item: EquipmentItem = makeExclusiveWeapon(inventory, hero, roll.weaponGrade)
+    inventory = [...inventory, item]
+    hero = { ...hero, equipment: { ...hero.equipment, weapon: item.id } }
+  }
+  return {
+    hero,
+    state: {
+      ...state,
+      inventory,
+      heroes: { ...state.heroes, [hero.id]: hero },
+      consumedHeroIds: sortedInsert(state.consumedHeroIds, hero.id),
+      consumedTemplateIds:
+        roll.consumedTemplateId !== undefined
+          ? sortedInsert(state.consumedTemplateIds, roll.consumedTemplateId)
+          : [...state.consumedTemplateIds],
+      usedNames: roll.usedName !== undefined ? sortedInsert(state.usedNames, roll.usedName) : [...state.usedNames],
+    },
+  }
+}
+
+/** One Advanced pull against `state` (no payment). */
+function advancedPull(state: GameState): { state: GameState; hero: OwnedHero } {
+  const g = state.gacha
+  const rng = rngFor(state.seed, 'gacha-adv', g.advPullCount)
+  const starDraw = rollAdvancedStar(rng, g.advPity4, g.advPity5)
+  const star = starDraw.value
+  const { value: roll } = rollHeroOfStar(
+    starDraw.rng,
+    star,
+    state.consumedHeroIds,
+    state.consumedTemplateIds,
+    state.usedNames,
+  )
+  // Whale-bait inflation (Layer 3 §D3, canon Sirris): after a dry streak a 3★ may be
+  // SHOWN as a 4★. Its own stream; the engine always uses the true star.
+  if (star === 3 && g.advPity4 >= TUNING.shop.baitPity) {
+    const bait = chance(rngFor(state.seed, 'gacha-bait', g.advPullCount), TUNING.shop.baitChance)
+    if (bait.value) roll.hero = { ...roll.hero, displayStar: 4 }
+  }
+  const admitted = admit(state, roll)
+  return {
+    hero: admitted.hero,
+    state: {
+      ...admitted.state,
+      gacha: {
+        ...g,
+        advPity4: star >= 4 ? 0 : g.advPity4 + 1,
+        advPity5: star >= 5 ? 0 : g.advPity5 + 1,
+        advPullCount: g.advPullCount + 1,
+      },
+    },
+  }
+}
+
+/**
+ * Perform `count` pulls from a pool, paying up front (the Advanced 10-pull at its
+ * discount). PURE. Throws when the account cannot afford the whole batch.
+ */
+/**
+ * The mercy pull: a Master with no living hero and not enough gold for a Normal pull
+ * gets one for free, so a wiped roster can never lock the game.
+ */
+export function mercySummonAvailable(state: GameState): boolean {
+  const anyone = (Object.values(state.heroes) as OwnedHero[]).some((h) => h.alive && !h.captiveOf)
+  return !anyone && state.gold < TUNING.gacha.normalCostGold
+}
+
+export function summonMany(
+  state: GameState,
+  pool: SummonPool = 'normal',
+  count: number = 1,
+): { state: GameState; heroes: OwnedHero[] } {
+  if (!Number.isInteger(count) || count < 1) throw new Error(`summon: invalid count ${count}`)
+  // The canon tutorial draw: a new Master's first Normal ten-pull is free.
+  if (pool === 'normal' && count === 10 && tutorialPullAvailable(state)) {
+    const funded: GameState = {
+      ...state,
+      gold: state.gold + summonCost('normal', 10).gold,
+      life: { ...state.life, guide: { ...state.life.guide, tutorialPull: true } },
+    }
+    return summonMany(funded, 'normal', 10)
+  }
+  // The Mobius crystal holds a limited charge of Advanced pulls per world-day.
+  if (pool === 'advanced') {
+    const left = crystalChargeLeft(state)
+    if (count > left) throw new Error(`summon: the Mobius crystal needs to recharge (${left} Advanced pulls left today)`)
+  }
+  if (pool === 'normal' && count === 1 && mercySummonAvailable(state)) {
+    const res = summon({ ...state, gold: state.gold + TUNING.gacha.normalCostGold })
+    return { state: res.state, heroes: [res.hero] }
+  }
+  const cost = summonCost(pool, count)
+  if (state.gold < cost.gold) throw new Error(`summon: insufficient gold (have ${state.gold}, need ${cost.gold})`)
+  if (state.gems < cost.gems) throw new Error(`summon: insufficient gems (have ${state.gems}, need ${cost.gems})`)
+  const heroes: OwnedHero[] = []
+  if (pool === 'normal') {
+    let cur = state
+    for (let i = 0; i < count; i++) {
+      const res = summon(cur)
+      heroes.push(res.hero)
+      cur = res.state
+    }
+    return { state: cur, heroes }
+  }
+  let cur: GameState = { ...state, gems: state.gems - cost.gems }
+  for (let i = 0; i < count; i++) {
+    const res = advancedPull(cur)
+    heroes.push(res.hero)
+    cur = res.state
+  }
+  const day = worldDayOf(state)
+  const used = state.life.crystal.day === day ? state.life.crystal.advancedPulls : 0
+  cur = { ...cur, life: { ...cur.life, crystal: { day, advancedPulls: used + count } } }
+  return { state: cur, heroes }
+}
+
+/** The free tutorial ten-pull is still waiting. */
+export function tutorialPullAvailable(state: GameState): boolean {
+  return TUNING.gacha.tutorialTenPull && !state.life.guide.tutorialPull
+}
+
+function worldDayOf(state: GameState): number {
+  return Math.floor(state.meta.lastSeenAtWorld / (TUNING.life.slotMs * TUNING.life.slotsPerDay))
+}
+
+/** Advanced pulls the crystal can still give this world-day (whale pacing). */
+export function crystalChargeLeft(state: GameState): number {
+  const cap = TUNING.gacha.advanced.dailyCharge
+  const c = state.life.crystal
+  return c.day === worldDayOf(state) ? Math.max(0, cap - c.advancedPulls) : cap
+}
+
 /**
  * Perform one Normal Mobius Summon. PURE: never mutates `state`; returns a fresh
  * GameState plus the new hero.
@@ -376,38 +618,26 @@ export function summon(state: GameState): { state: GameState; hero: OwnedHero } 
   // The gacha sub-stream is a pure function of (seed, 'gacha', pullCount).
   const rng = rngFor(state.seed, 'gacha', state.gacha.pullCount)
 
-  const { value: roll } = rollSummon(
-    rng,
-    state.gacha.pity,
-    state.consumedHeroIds,
-    state.consumedTemplateIds,
-    state.usedNames,
-  )
+  // Nudge probability (an Intervention, Layer 3 §D2): a second star roll from its own
+  // stream, keep the better. Without a nudge this is exactly rollSummon's draw order.
+  const first = rollStar(rng, state.gacha.pity)
+  let star = first.value
+  if (state.meta.nudge) {
+    const alt = rollStar(rngFor(state.seed, 'gacha-nudge', state.gacha.pullCount), state.gacha.pity).value
+    if (alt > star) star = alt
+  }
+  const { value: roll } = rollHeroOfStar(first.rng, star, state.consumedHeroIds, state.consumedTemplateIds, state.usedNames)
 
-  const hero = roll.hero
-
-  const consumedHeroIds = sortedInsert(state.consumedHeroIds, hero.id)
-  const consumedTemplateIds =
-    roll.consumedTemplateId !== undefined
-      ? sortedInsert(state.consumedTemplateIds, roll.consumedTemplateId)
-      : [...state.consumedTemplateIds]
-  const usedNames =
-    roll.usedName !== undefined
-      ? sortedInsert(state.usedNames, roll.usedName)
-      : [...state.usedNames]
-
+  const admitted = admit({ ...state, gold: state.gold - cost }, roll)
   const nextState: GameState = {
-    ...state,
-    gold: state.gold - cost,
-    heroes: { ...state.heroes, [hero.id]: hero },
-    consumedHeroIds,
-    consumedTemplateIds,
-    usedNames,
+    ...admitted.state,
+    meta: state.meta.nudge ? { ...admitted.state.meta, nudge: false } : admitted.state.meta,
     gacha: {
+      ...state.gacha,
       pity: roll.star >= 3 ? 0 : state.gacha.pity + 1,
       pullCount: state.gacha.pullCount + 1,
     },
   }
 
-  return { state: nextState, hero }
+  return { state: nextState, hero: admitted.hero }
 }

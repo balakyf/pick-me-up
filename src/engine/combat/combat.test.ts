@@ -489,6 +489,60 @@ describe('phased', () => {
   })
 })
 
+describe('looming (outlast, not kill)', () => {
+  const giant = () =>
+    enemy({
+      id: 'giant',
+      keywords: [{ kind: 'enrage', afterTick: 10_000, multiplier: 5 }, { kind: 'looming' }],
+      stats: { maxHP: 1_000_000, pAtk: 10_000, pDef: 0, spd: 200 },
+    })
+
+  it('never shields a phased wavemate, and the wave clears without it', () => {
+    const res = runBattle(
+      [hero({ id: 'h1', unitClass: 'warrior', stats: { pAtk: 500, spd: 100 } })],
+      encounter(
+        [[giant(), enemy({ id: 'priest', targetTag: 'priest', keywords: [{ kind: 'phased' }], stats: { maxHP: 200, pDef: 0, spd: 1 } })]],
+        mission([{ kind: 'defend', waves: 1 }, { kind: 'defeat', targetTag: 'priest' }]),
+      ),
+      5,
+    )
+    expect(res.outcome).toBe('win')
+    expect(res.defeatedTargetTags).toContain('priest')
+    // The giant was never needed: it is still standing, and the hero never chased it.
+    const hitsOnGiant = res.log.events.filter((e) => e.kind === 'hit' && (e as { targetId: string }).targetId === 'giant')
+    expect(hitsOnGiant.length).toBe(0)
+  })
+
+  it('sleeps until its enrage tick (it deals nothing before it wakes)', () => {
+    const res = runBattle(
+      [hero({ id: 'h1', unitClass: 'warrior', stats: { pAtk: 1, maxHP: 10_000, spd: 100 } })],
+      encounter([[giant(), enemy({ id: 'imp', stats: { maxHP: 300, pAtk: 1, pDef: 0, spd: 1 } })]], mission([{ kind: 'survive', ticks: 200 }], 200)),
+      5,
+    )
+    const giantHits = res.log.events.filter((e) => e.kind === 'hit' && (e as { actorId: string }).actorId === 'giant')
+    expect(giantHits.length).toBe(0)
+  })
+})
+
+describe('resist (a softer immune)', () => {
+  it('cuts damage of its type by the reduction, and leaves the other type untouched', () => {
+    const bolt: SkillEffect = { id: 'bolt', name: 'Bolt', skillMult: 1, damageType: 'magic', element: 'physical', target: 'single', spCost: 0 }
+    const hitOn = (kw: KeywordTag[], cls: HeroClass) => {
+      const res = runBattle(
+        [hero({ id: 'h1', unitClass: cls, skills: cls === 'mage' ? [bolt] : [], stats: { pAtk: 100, mAtk: 100, spd: 100, critPct: 0 } })],
+        encounter([[enemy({ id: 'w', keywords: kw, stats: { maxHP: 1_000_000, pDef: 0, mDef: 0, spd: 1, pAtk: 0, mAtk: 0 } })]], mission([{ kind: 'survive', ticks: 30 }], 30)),
+        9,
+      )
+      return (res.log.events.find((e) => e.kind === 'hit') as { amount: number }).amount
+    }
+    const resist: KeywordTag[] = [{ kind: 'resist', damageType: 'physical', reduction: 0.75 }]
+    const plainSteel = hitOn([], 'warrior')
+    expect(hitOn(resist, 'warrior')).toBeLessThan(plainSteel * 0.3)
+    expect(hitOn(resist, 'warrior')).toBeGreaterThan(0) // never a hard lock
+    expect(hitOn(resist, 'mage')).toBe(hitOn([], 'mage'))
+  })
+})
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Targeting priorities
 // ─────────────────────────────────────────────────────────────────────────────
@@ -892,3 +946,121 @@ const GOLDEN = {
   ticksElapsed: 29,
   wavesCleared: 1,
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Conditional keywords (engravings / passives, Layer 1 completion)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('conditional keywords', () => {
+  /** One hero swing at a sturdy dummy; returns the first hit amount (or null on a guard). */
+  function firstHit(heroKw: KeywordTag[], enemyKw: KeywordTag[] = [], extra: Partial<CombatUnit> = {}, heroOpts: Partial<UnitOpts> = {}) {
+    const h = hero({ id: 'h1', stats: { spd: 200, pAtk: 100 }, keywords: heroKw, ...heroOpts })
+    const e = { ...enemy({ id: 'e1', stats: { maxHP: 100000, spd: 1 }, keywords: enemyKw }), ...extra }
+    const res = runBattle([h], encounter([[e]], mission(annihilate, 40)), 5)
+    const ev = res.log.events.find((x) => (x.kind === 'hit' || x.kind === 'guard') && x.actorId === 'h1')!
+    return { ev, res }
+  }
+  const baseline = () => (firstHit([]).ev as { amount: number }).amount
+
+  it('immune zeroes damage of its type; vulnerable multiplies its element', () => {
+    expect((firstHit([], [{ kind: 'immune', damageType: 'physical' }]).ev as { amount: number }).amount).toBe(0)
+    const vuln = firstHit([], [{ kind: 'vulnerable', element: 'physical' }]).ev as { amount: number }
+    expect(vuln.amount).toBe(Math.round(baseline() * TUNING.combat.vulnerableMult))
+  })
+
+  it('opener boosts only the first action', () => {
+    const { res } = firstHit([{ kind: 'opener', multiplier: 2 }])
+    const hits = res.log.events.filter((x) => x.kind === 'hit' && x.actorId === 'h1') as { amount: number }[]
+    expect(hits[0]!.amount).toBeGreaterThan(hits[1]!.amount * 1.7)
+  })
+
+  it('bane multiplies damage against its family only', () => {
+    const dragon = firstHit([{ kind: 'bane', family: 'dragon', multiplier: 1.5 }], [], { family: 'dragon' }).ev as { amount: number }
+    const beast = firstHit([{ kind: 'bane', family: 'dragon', multiplier: 1.5 }], [], { family: 'beast' }).ev as { amount: number }
+    expect(beast.amount).toBe(baseline())
+    expect(dragon.amount).toBeGreaterThan(beast.amount * 1.4)
+  })
+
+  it('guard reduces incoming damage; a ranged-only guard ignores melee', () => {
+    const guarded = firstHit([], [{ kind: 'guard', reduction: 0.5 }]).ev as { amount: number }
+    expect(guarded.amount).toBeLessThan(baseline() * 0.55)
+    const melee = firstHit([], [{ kind: 'guard', reduction: 0.5, vs: 'ranged' }]).ev as { amount: number }
+    expect(melee.amount).toBe(baseline())
+    const archer = firstHit([], [{ kind: 'guard', reduction: 0.5, vs: 'ranged' }], {}, { unitClass: 'archer' }).ev as { amount: number }
+    expect(archer.amount).toBeLessThan(baseline() * 0.55)
+  })
+
+  it('aegis negates the first hits with a guard event and no HP loss', () => {
+    const { res } = firstHit([], [{ kind: 'aegis', charges: 2 }])
+    const onEnemy = res.log.events.filter((x) => (x.kind === 'hit' || x.kind === 'guard') && x.actorId === 'h1')
+    expect(onEnemy[0]!.kind).toBe('guard')
+    expect(onEnemy[1]!.kind).toBe('guard')
+    expect(onEnemy[2]!.kind).toBe('hit')
+  })
+
+  it('lifesteal heals the attacker (never above max HP)', () => {
+    const h = hero({ id: 'h1', stats: { spd: 200, pAtk: 100, maxHP: 1000 }, hp: 500, keywords: [{ kind: 'lifesteal', fraction: 0.5 }] })
+    const e = enemy({ id: 'e1', stats: { maxHP: 100000, spd: 1 } })
+    const res = runBattle([h], encounter([[e]], mission(annihilate, 40)), 5)
+    const heals = res.log.events.filter((x) => x.kind === 'heal') as { amount: number; hpAfter: number }[]
+    expect(heals.length).toBeGreaterThan(0)
+    for (const x of heals) expect(x.hpAfter).toBeLessThanOrEqual(1000)
+  })
+
+  it('frenzy boosts damage only below its HP threshold', () => {
+    const kw: KeywordTag[] = [{ kind: 'frenzy', belowHpPct: 50, multiplier: 2 }]
+    const high = firstHit(kw).ev as { amount: number }
+    const low = firstHit(kw, [], {}, { hp: 10 }).ev as { amount: number }
+    expect(high.amount).toBe(baseline())
+    expect(low.amount).toBeGreaterThan(high.amount * 1.8)
+  })
+
+  it('no keyword draws RNG — rngDraws match an unkeyed replay', () => {
+    const plain = firstHit([]).res.log.rngDraws
+    const keyed = firstHit(
+      [{ kind: 'opener', multiplier: 2 }, { kind: 'lifesteal', fraction: 0.2 }],
+      [{ kind: 'guard', reduction: 0.2 }, { kind: 'aegis', charges: 1 }],
+    ).res.log.rngDraws
+    expect(keyed).toBe(plain)
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Reach / Acquire objectives (Layer 2 full climb)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('reach and acquire objectives', () => {
+  it('reach: every hero action is a step; covering the distance wins without a kill', () => {
+    const h = hero({ id: 'h1', stats: { spd: 200, pAtk: 1 } })
+    const e = enemy({ id: 'e1', stats: { maxHP: 100000, spd: 10, pAtk: 1 } })
+    const res = runBattle([h], encounter([[e]], mission([{ kind: 'reach', distance: 5 }])), 3)
+    expect(res.outcome).toBe('win')
+    expect(res.reachProgress).toBe(5)
+    expect(res.defeatedTargetTags).toEqual([])
+  })
+
+  it('reach keeps counting once every enemy is down', () => {
+    const h = hero({ id: 'h1', stats: { spd: 200, pAtk: 500 } })
+    const e = enemy({ id: 'e1', stats: { maxHP: 10, spd: 1 } })
+    const res = runBattle([h], encounter([[e]], mission([{ kind: 'reach', distance: 6 }])), 3)
+    expect(res.outcome).toBe('win')
+    expect(res.reachProgress).toBe(6)
+  })
+
+  it('acquire: the carrier falling wins at once, even with others standing', () => {
+    const h = hero({ id: 'h1', stats: { spd: 200, pAtk: 500 } })
+    const carrier = enemy({ id: 'e1', stats: { maxHP: 10, spd: 1 }, targetTag: 'jewel' })
+    const guard = enemy({ id: 'e2', stats: { maxHP: 100000, spd: 1 } })
+    const res = runBattle([h], encounter([[carrier, guard]], mission([{ kind: 'acquire', targetTag: 'jewel' }])), 3)
+    expect(res.outcome).toBe('win')
+    expect(res.defeatedTargetTags).toEqual(['jewel'])
+  })
+
+  it('reports each NPC ally’s final HP percentage', () => {
+    const h = hero({ id: 'h1', stats: { spd: 200, pAtk: 500 } })
+    const npc = { ...hero({ id: 'n1', stats: { maxHP: 200 } }), isNpc: true, targetTag: 'vip', sourceHeroId: undefined }
+    const e = enemy({ id: 'e1', stats: { maxHP: 10, spd: 1 } })
+    const res = runBattle([h], encounter([[e]], mission(annihilate), { allies: [npc] }), 3)
+    expect(res.allyHpPct).toEqual({ vip: 100 })
+  })
+})

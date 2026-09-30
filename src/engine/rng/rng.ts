@@ -150,3 +150,17 @@ function numToStr(n: number): string {
 export function rngFor(accountSeed: Seed, ...parts: (string | number)[]): Rng {
   return createRng(makeSeed(hash(accountSeed, ...parts)))
 }
+
+/**
+ * A mutable float stream for hot simulation loops (Quanton Life steps hundreds of heroes
+ * per slot): the same mulberry32 generator, seeded like `rngFor`, but advanced in place
+ * instead of threading immutable Draws. Deterministic in (accountSeed, parts).
+ */
+export function floatStream(accountSeed: Seed | number, ...parts: (string | number)[]): () => number {
+  let cursor = mix32((hash(accountSeed >>> 0, ...parts) ^ (accountSeed >>> 0)) >>> 0)
+  return () => {
+    const s = step(cursor)
+    cursor = s.cursor
+    return s.value
+  }
+}

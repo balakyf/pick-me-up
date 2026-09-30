@@ -32,6 +32,12 @@ const C = {
   dailyM: hex('#264654'),
   dailyL: hex('#305a6a'),
   mist: hex('#6ab4c8'),
+  sandM: hex('#b8966a'),
+  sandL: hex('#cca87a'),
+  sandD: hex('#9a7a52'),
+  crystalM: hex('#1e2244'),
+  crystalL: hex('#2c3464'),
+  crystalGlow: hex('#5ad8e6'),
   wallTop: hex('#241c30'),
   wallTopL: hex('#342a44'),
   brickM: hex('#5a4a5e'),
@@ -39,6 +45,38 @@ const C = {
   brickD: hex('#3e3244'),
   ledge: hex('#8a7a8e'),
   shade: hex('#00000055'),
+  grassD: hex('#2e5a2e'),
+  grassM: hex('#3e7a3a'),
+  grassL: hex('#5a9a4a'),
+  cobM: hex('#6e6a72'),
+  cobL: hex('#8e8a92'),
+  cobD: hex('#4a4652'),
+  soilM: hex('#5e3e24'),
+  soilD: hex('#46301c'),
+  soilL: hex('#7a5232'),
+  lawnM: hex('#35603a'),
+  lawnL: hex('#4a7a4a'),
+  boardM: hex('#8e6a44'),
+  boardL: hex('#a88256'),
+  boardD: hex('#6a4a2e'),
+  tavM: hex('#6a3e2a'),
+  tavL: hex('#824e34'),
+  tavD: hex('#4a2a1c'),
+  libM: hex('#5a3a2a'),
+  libL: hex('#6e4a36'),
+  whiteM: hex('#d8dce8'),
+  whiteL: hex('#eef0f8'),
+  whiteD: hex('#a8aebe'),
+  towerM: hex('#5a5462'),
+  towerL: hex('#6e6878'),
+  flagQ: hex('#8a7a6a'),
+  flagQL: hex('#a8987e'),
+  flagQD: hex('#5e5244'),
+  fenceM: hex('#7a5a3a'),
+  fenceL: hex('#a07a4e'),
+  fenceD: hex('#4a3420'),
+  doorM: hex('#6a4224'),
+  doorD: hex('#3e2414'),
 }
 
 function tileRand(x: number, y: number) {
@@ -139,6 +177,140 @@ function floorTile(b: Bitmap, ch: TileChar, tx: number, ty: number) {
       rect(b, ox + 2, oy + 2, 4, 1, C.dailyL)
       for (let i = 0; i < 3; i++) if (r.chance(0.5)) set(b, ox + r.int(0, 15), oy + r.int(0, 15), C.mist)
       break
+    case 'r':
+      // raked training sand: soft stripes + pebbles
+      rect(b, ox, oy, TILE, TILE, C.sandM)
+      for (let y = 1; y < TILE; y += 4) hline(b, ox, oy + y, TILE, (tx + ty) % 2 ? C.sandL : C.sandD)
+      for (let i = 0; i < 3; i++) set(b, ox + r.int(0, 15), oy + r.int(0, 15), C.sandD)
+      if (r.chance(0.2)) set(b, ox + r.int(2, 13), oy + r.int(2, 13), C.sandL)
+      break
+    case 'h':
+      // hall-of-magic star tiles: deep blue with gold constellations
+      rect(b, ox, oy, TILE, TILE, C.crystalM)
+      hline(b, ox, oy + 15, TILE, C.wallTop)
+      vline(b, ox + 15, oy, TILE, C.wallTop)
+      if ((tx * 7 + ty * 3) % 5 === 0) set(b, ox + 4 + ((tx + ty) % 8), oy + 5, C.marbleGold)
+      if (r.chance(0.3)) set(b, ox + r.int(2, 13), oy + r.int(2, 13), C.marbleGold)
+      break
+    case 'x':
+      // transfer-station crystal floor: dark hex-ish tiles with faint glowing seams
+      rect(b, ox, oy, TILE, TILE, C.crystalM)
+      hline(b, ox, oy + 15, TILE, C.wallTop)
+      vline(b, ox + 15, oy, TILE, C.wallTop)
+      rect(b, ox + 1, oy + 1, 6, 6, C.crystalL)
+      rect(b, ox + 8, oy + 8, 6, 6, C.crystalL)
+      if ((tx + ty) % 3 === 0) {
+        hline(b, ox + 2, oy + 7, 12, C.crystalGlow)
+      } else if (r.chance(0.25)) {
+        set(b, ox + r.int(2, 13), oy + r.int(2, 13), C.crystalGlow)
+      }
+      break
+    case 'g': {
+      rect(b, ox, oy, TILE, TILE, C.grassM)
+      for (let i = 0; i < 7; i++) {
+        const x = ox + r.int(0, 15)
+        const y = oy + r.int(1, 15)
+        set(b, x, y, C.grassL)
+        set(b, x, y - 1, C.grassL)
+      }
+      for (let i = 0; i < 4; i++) set(b, ox + r.int(0, 15), oy + r.int(0, 15), C.grassD)
+      if (r.chance(0.08)) set(b, ox + r.int(2, 13), oy + r.int(2, 13), r.chance(0.5) ? hex('#f0d05a') : hex('#e8e0f0'))
+      break
+    }
+    case 'c': {
+      rect(b, ox, oy, TILE, TILE, C.cobD)
+      for (let j = 0; j < 3; j++)
+        for (let i = 0; i < 3; i++) {
+          const x = ox + i * 5 + ((j % 2) * 2) + 1
+          const y = oy + j * 5 + 1
+          rect(b, x, y, 4, 4, r.chance(0.3) ? C.cobL : C.cobM)
+          set(b, x, y, C.cobL)
+        }
+      break
+    }
+    case 's': {
+      rect(b, ox, oy, TILE, TILE, C.soilM)
+      for (let y = 2; y < TILE; y += 4) hline(b, ox, oy + y, TILE, C.soilD)
+      for (let i = 0; i < 4; i++) set(b, ox + r.int(0, 15), oy + r.int(0, 15), C.soilL)
+      break
+    }
+    case 'y': {
+      rect(b, ox, oy, TILE, TILE, C.lawnM)
+      for (let i = 0; i < 5; i++) set(b, ox + r.int(0, 15), oy + r.int(0, 15), C.lawnL)
+      if (r.chance(0.12)) set(b, ox + r.int(2, 13), oy + r.int(2, 13), hex('#f4eed8'))
+      break
+    }
+    case 'w':
+    case 'v':
+    case 'l': {
+      const [m, l, d] = ch === 'w' ? [C.boardM, C.boardL, C.boardD] : ch === 'v' ? [C.tavM, C.tavL, C.tavD] : [C.libM, C.libL, C.tavD]
+      for (let col = 0; col < 4; col++) {
+        const x0 = ox + col * 4
+        rect(b, x0, oy, 4, TILE, r.chance(0.3) ? l : m)
+        vline(b, x0 + 3, oy, TILE, d)
+        hline(b, x0, oy + ((tx * 3 + col * 5 + ty * 7) % 16), 3, d)
+      }
+      break
+    }
+    case 'i': {
+      rect(b, ox, oy, TILE, TILE, C.whiteM)
+      rect(b, ox + 1, oy + 1, 6, 6, C.whiteL)
+      rect(b, ox + 9, oy + 9, 6, 6, C.whiteL)
+      hline(b, ox, oy + 15, TILE, C.whiteD)
+      vline(b, ox + 15, oy, TILE, C.whiteD)
+      hline(b, ox, oy + 7, TILE, C.whiteD)
+      vline(b, ox + 7, oy, TILE, C.whiteD)
+      break
+    }
+    case 'o': {
+      rect(b, ox, oy, TILE, TILE, C.towerM)
+      hline(b, ox, oy + 15, TILE, C.flagGrout)
+      vline(b, ox + ((ty % 2) * 8 + 7) % 16, oy, TILE, C.flagGrout)
+      set(b, ox + r.int(1, 14), oy + r.int(1, 14), C.towerL)
+      break
+    }
+    case 'q': {
+      rect(b, ox, oy, TILE, TILE, C.flagQ)
+      hline(b, ox, oy + 7, TILE, C.flagQD)
+      hline(b, ox, oy + 15, TILE, C.flagQD)
+      vline(b, ox + ((ty % 2) * 4 + 3), oy, 7, C.flagQD)
+      vline(b, ox + ((ty % 2) * 4 + 11), oy + 8, 8, C.flagQD)
+      rect(b, ox + 1, oy + 1, 2, 1, C.flagQL)
+      break
+    }
+    case '=': {
+      // fence rails over grass (or a hedge around the memorial lawn)
+      floorTile(b, 'g', tx, ty)
+      const hedge = tileAt(tx, ty - 1) === 'y' || tileAt(tx, ty + 1) === 'y' || tileAt(tx - 1, ty) === 'y' || tileAt(tx + 1, ty) === 'y'
+      if (hedge) {
+        rect(b, ox, oy + 2, TILE, 12, C.grassD)
+        for (let i = 0; i < 6; i++) set(b, ox + r.int(0, 15), oy + r.int(3, 12), C.grassL)
+        hline(b, ox, oy + 2, TILE, C.grassM)
+        break
+      }
+      const horiz = tileAt(tx - 1, ty) === '=' || tileAt(tx + 1, ty) === '='
+      if (horiz) {
+        hline(b, ox, oy + 6, TILE, C.fenceL)
+        hline(b, ox, oy + 7, TILE, C.fenceM)
+        hline(b, ox, oy + 11, TILE, C.fenceL)
+        hline(b, ox, oy + 12, TILE, C.fenceD)
+      }
+      if (tileAt(tx, ty - 1) === '=' || tileAt(tx, ty + 1) === '=' || !horiz) {
+        vline(b, ox + 7, oy, TILE, C.fenceL)
+        vline(b, ox + 8, oy, TILE, C.fenceD)
+      }
+      rect(b, ox + 6, oy + 3, 4, 12, C.fenceM)
+      hline(b, ox + 6, oy + 3, 4, C.fenceL)
+      break
+    }
+    case 'D': {
+      // an open doorway: threshold planks between the wall's jambs
+      rect(b, ox, oy, TILE, TILE, C.doorD)
+      for (let y = 1; y < TILE; y += 4) hline(b, ox + 2, oy + y, 12, C.doorM)
+      vline(b, ox, oy, TILE, C.brickD)
+      vline(b, ox + 15, oy, TILE, C.brickD)
+      break
+    }
     default:
       break
   }

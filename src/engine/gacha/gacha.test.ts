@@ -4,6 +4,7 @@
  * Vitest globals are enabled (describe/it/expect available without import).
  */
 
+import { defaultLifeState } from '../life'
 import {
   rollStar,
   rollClass,
@@ -13,9 +14,14 @@ import {
   buildOwnedHeroFromTemplate,
   rollSummon,
   summon,
+  rollAdvancedStar,
+  summonMany,
+  summonCost,
+  mercySummonAvailable,
 } from './gacha'
+import { PVP_DEFAULTS } from '../account'
 import { TUNING, STAR_ENVELOPES } from '../tuning'
-import { CAMEO_HEROES } from '../content'
+import { CAMEO_HEROES, ENGRAVINGS } from '../content'
 import { makeSeed, rngFor, createRng } from '../rng/rng'
 import type { GameState, Seed, HeroId, Star } from '../types'
 
@@ -35,11 +41,23 @@ function makeState(overrides: Partial<GameState> = {}): GameState {
     gems: 0,
     materials: {},
     inventory: [],
-    meta: { masterLevel: 1, masterXp: 0, lastSeenAtWorld: 0 },
+    meta: { masterLevel: 1, masterXp: 0, lastSeenAtWorld: 0, pi: 0, login: { lastDay: -1, streak: 0 }, monthly: null, wallet: { spentUsd: 0, purchases: {} }, skill: { blacksmith: 0.4, ballista: 0.4 }, crackOpen: false, revealedHidden: [], peekedFloors: [], nudge: false, piZeroSince: null, deleted: false },
     facilities: {
       kitchen: { level: 1, build: null },
       promotionChamber: { level: 0, build: null },
       tacticalCenter: { level: 1, build: null },
+      trainingCenter: { level: 0, build: null },
+      transferStation: { level: 0, build: null },
+      hallOfMagic: { level: 0, build: null },
+      dormitory: { level: 1, build: null },
+      tavern: { level: 0, build: null },
+      infirmary: { level: 0, build: null },
+      garden: { level: 0, build: null },
+      memorial: { level: 1, build: null },
+      forge: { level: 0, build: null },
+      library: { level: 0, build: null },
+      watchtower: { level: 0, build: null },
+      market: { level: 0, build: null },
     },
     dailies: { attemptsUsed: 0, lastResetWorldDay: 0 },
     heroes: {},
@@ -47,9 +65,11 @@ function makeState(overrides: Partial<GameState> = {}): GameState {
     usedNames: [],
     consumedTemplateIds: [],
     party: { slots: [null, null, null, null, null], lines: ['front', 'front', 'mid', 'back', 'back'] },
-    tower: { currentFloor: 1, highestCleared: 0, attemptIndex: 0 },
-    gacha: { pity: 0, pullCount: 0 },
+    tower: { currentFloor: 1, highestCleared: 0, attemptIndex: 0, event: null, loop: null, hiddenFound: [], worldEnded: false, worldSaved: false },
+    gacha: { pity: 0, pullCount: 0, advPity4: 0, advPity5: 0, advPullCount: 0 },
     rng: { combatCounter: 0 },
+    life: defaultLifeState(0),
+    pvp: PVP_DEFAULTS(),
   }
   return { ...base, ...overrides }
 }
@@ -179,7 +199,7 @@ describe('Rising Quality Floor — simulated dry streaks', () => {
   it('forcing 49 dry pulls then pulling guarantees a 3 on the 50th (state-level)', () => {
     // Build a state already at pity 49 and assert the very next summon is 3.
     let state = makeState({ gold: TUNING.gacha.normalCostGold })
-    state = { ...state, gacha: { pity: 49, pullCount: state.gacha.pullCount } }
+    state = { ...state, gacha: { ...state.gacha, pity: 49 } }
     const { hero, state: next } = summon(state)
     expect(hero.star).toBe(3)
     // Payout resets pity to 0.
@@ -492,5 +512,125 @@ describe('summon — usedNames', () => {
     for (const n of procNames) {
       expect(last.usedNames).toContain(n)
     }
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Advanced (gem) pool — Layer 1 §1.1–1.3, the 4★+ kit (§4.2) and engravings (§5.4)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('Advanced pool', () => {
+  const ADV = TUNING.gacha.advanced
+
+  it('rolls only 3★–5★', () => {
+    for (let i = 0; i < 300; i++) {
+      const s = rollAdvancedStar(rngFor(makeSeed(9), 'adv-test', i), 0, 0).value
+      expect([3, 4, 5]).toContain(s)
+    }
+  })
+
+  it('lifts the 30th dry pull to 4★+ and the 90th to 5★', () => {
+    for (let i = 0; i < 50; i++) {
+      const r = rngFor(makeSeed(3), 'adv-pity', i)
+      expect(rollAdvancedStar(r, ADV.pityFloor4At - 1, 0).value).toBeGreaterThanOrEqual(4)
+      expect(rollAdvancedStar(r, 0, ADV.pityFloor5At - 1).value).toBe(5)
+    }
+  })
+
+  it('costs gems; the 10-pull is discounted', () => {
+    expect(summonCost('advanced', 1)).toEqual({ gold: 0, gems: ADV.costGems })
+    expect(summonCost('advanced', 10)).toEqual({ gold: 0, gems: ADV.tenPullGems })
+    expect(() => summonMany(makeState({ gems: ADV.costGems - 1 }), 'advanced', 1)).toThrow(/gems/)
+  })
+
+  it('a 10-pull pays once, adds ten unique heroes and advances only the Advanced counters', () => {
+    const s0 = makeState({ gems: ADV.tenPullGems })
+    const { state, heroes } = summonMany(s0, 'advanced', 10)
+    expect(state.gems).toBe(0)
+    expect(heroes).toHaveLength(10)
+    expect(new Set(heroes.map((h) => h.id)).size).toBe(10)
+    expect(state.gacha.advPullCount).toBe(10)
+    expect(state.gacha.pullCount).toBe(0)
+    expect(state.gacha.pity).toBe(0)
+  })
+
+  it('every 4★+ arrives with its class skill, an engraving and a bound exclusive weapon', () => {
+    // Force the floor so every pull is 4★+.
+    let state = makeState({ gems: 1_000_000, gacha: { pity: 0, pullCount: 0, advPity4: ADV.pityFloor4At, advPity5: 0, advPullCount: 0 } })
+    let seen = 0
+    for (let i = 0; i < 12; i++) {
+      // (A fresh crystal each pull: the daily charge isn't what this test is about.)
+      state = { ...state, gacha: { ...state.gacha, advPity4: ADV.pityFloor4At }, life: { ...state.life, crystal: { day: -1, advancedPulls: 0 } } }
+      const { state: next, heroes } = summonMany(state, 'advanced', 1)
+      state = next
+      const h = heroes[0]!
+      expect(h.star).toBeGreaterThanOrEqual(4)
+      expect(h.engraving).not.toBeNull()
+      expect(ENGRAVINGS[h.engraving!.id]).toBeDefined()
+      const weapon = state.inventory.find((i) => i.id === h.equipment.weapon)!
+      expect(weapon.exclusiveTo).toBe(h.id)
+      expect(weapon.grade).toBe(ADV.weaponGrade[h.star])
+      if (h.origin === 'procedural' && h.heroClass !== null) {
+        expect(h.skills.length).toBe(1 + ADV.extraSkills[h.star]!)
+        seen++
+      }
+    }
+    expect(seen).toBeGreaterThan(0)
+  })
+
+  it('never disturbs the Normal stream', () => {
+    const plain = summon(makeState()).hero
+    const afterAdv = summonMany(makeState({ gems: ADV.costGems }), 'advanced', 1).state
+    const again = summon({ ...afterAdv, gold: TUNING.gacha.normalCostGold }).hero
+    expect(again.name).toBe(plain.name)
+    expect(again.star).toBe(plain.star)
+    expect(again.baseAttrs).toEqual(plain.baseAttrs)
+  })
+
+  it('normal pulls never carry an engraving', () => {
+    const { heroes } = runSummons(77, 60)
+    for (const h of heroes) expect(h.engraving).toBeNull()
+  })
+})
+
+describe('the mercy pull (no softlock)', () => {
+  it('a Master with no living hero and too little gold gets one free Normal pull', () => {
+    const broke = makeState({ gold: 100 })
+    expect(mercySummonAvailable(broke)).toBe(true)
+    const { state, heroes } = summonMany(broke, 'normal', 1)
+    expect(heroes).toHaveLength(1)
+    expect(state.gold).toBe(100) // nothing charged
+    expect(mercySummonAvailable(state)).toBe(false) // one living hero now
+  })
+
+  it('is not offered while any hero lives, or when a pull is affordable', () => {
+    expect(mercySummonAvailable(makeState({ gold: TUNING.gacha.normalCostGold }))).toBe(false)
+    const one = summon(makeState()).state
+    expect(mercySummonAvailable({ ...one, gold: 0 })).toBe(false)
+    expect(() => summonMany({ ...one, gold: 0 }, 'normal', 1)).toThrow(/insufficient gold/)
+  })
+})
+
+describe('the tutorial ten-pull and the crystal’s charge', () => {
+  it('a new Master’s first Normal ten-pull is free, once', async () => {
+    const { createAccount } = await import('../account')
+    const s0 = { ...createAccount(77), gold: 0 }
+    const r = summonMany(s0, 'normal', 10)
+    expect(r.heroes).toHaveLength(10)
+    expect(r.state.gold).toBe(0)
+    expect(r.state.life.guide.tutorialPull).toBe(true)
+    expect(() => summonMany(r.state, 'normal', 10)).toThrow(/insufficient gold/)
+  })
+
+  it('the crystal gives a limited number of Advanced pulls per world-day', async () => {
+    const { createAccount } = await import('../account')
+    const cap = TUNING.gacha.advanced.dailyCharge
+    let s = { ...createAccount(78), gems: 1_000_000 }
+    for (let n = 0; n < cap; n++) s = summonMany(s, 'advanced', 1).state
+    expect(s.life.crystal.advancedPulls).toBe(cap)
+    expect(() => summonMany(s, 'advanced', 1)).toThrow(/recharge/)
+    // A new world-day recharges it.
+    const tomorrow = { ...s, meta: { ...s.meta, lastSeenAtWorld: s.meta.lastSeenAtWorld + 24 * 3_600_000 } }
+    expect(() => summonMany(tomorrow, 'advanced', 10)).not.toThrow()
   })
 })

@@ -58,6 +58,15 @@ function ownedFromTemplate(t: HeroTemplate, level = 1): OwnedHero {
     sanity: 100,
     promotion: null,
     equipment: { weapon: null, armor: null, accessory: null },
+    training: null,
+    engraving: null,
+    favor: 35,
+    bondTier: 1,
+    ip: 0,
+    gift: { last: null, streak: 0 },
+    blessed: false,
+    expedition: null,
+    captiveOf: null,
   }
 }
 
@@ -79,6 +88,15 @@ function makeWarrior(overrides: Partial<OwnedHero> = {}): OwnedHero {
     sanity: 100,
     promotion: null,
     equipment: { weapon: null, armor: null, accessory: null },
+    training: null,
+    engraving: null,
+    favor: 35,
+    bondTier: 1,
+    ip: 0,
+    gift: { last: null, streak: 0 },
+    blessed: false,
+    expedition: null,
+    captiveOf: null,
     ...overrides,
   }
 }

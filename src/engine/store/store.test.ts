@@ -12,6 +12,7 @@ import {
   summonWithResult,
   attemptFloorWithResult,
   attemptDailyWithResult,
+  resolveEventWithResult,
   createStore,
 } from './store'
 import { TUNING } from '../tuning'
@@ -24,6 +25,17 @@ import { startUpgrade, skipFacility } from '../facilities'
 import { craftEquipment, equipItem, unequipItem } from '../equipment'
 import { advanceTime } from '../time'
 import { levelCapForStar } from '../stats'
+
+/** The engine modules know nothing of Quanton Life; the reducer layers it on top. */
+function core(s: GameState): unknown {
+  const heroes: Record<string, unknown> = {}
+  for (const [id, h] of Object.entries(s.heroes)) {
+    const { life: _life, ...rest } = h
+    heroes[id] = rest
+  }
+  const { life: _l, ...rest } = s
+  return { ...rest, heroes }
+}
 import type {
   Command,
   EquipmentId,
@@ -120,7 +132,7 @@ describe('reduce — SUMMON', () => {
 
   it('matches gacha.summon(state).state exactly (delegation)', () => {
     const before = fundedAccount(11, 9000)
-    expect(reduce(before, { type: 'SUMMON' })).toEqual(summon(before).state)
+    expect(core(reduce(before, { type: 'SUMMON' }))).toEqual(core(summon(before).state))
   })
 
   it('throws when gold is insufficient (let gacha throw)', () => {
@@ -223,15 +235,13 @@ describe('reduce — ATTEMPT_FLOOR', () => {
 
   it('matches tower.playFloor(state).state exactly (delegation)', () => {
     const before = createAccount(7)
-    expect(reduce(before, { type: 'ATTEMPT_FLOOR' })).toEqual(playFloor(before).state)
+    expect(core(reduce(before, { type: 'ATTEMPT_FLOOR' }))).toEqual(core(playFloor(before).state))
   })
 
   it('threads the optional focus directive through to tower', () => {
     const before = createAccount(7)
     const focus = { focusEnemyId: 'e1_w0_0' }
-    expect(reduce(before, { type: 'ATTEMPT_FLOOR', focus })).toEqual(
-      playFloor(before, focus).state,
-    )
+    expect(core(reduce(before, { type: 'ATTEMPT_FLOOR', focus }))).toEqual(core(playFloor(before, focus).state))
   })
 
   it('throws when state is null', () => {
@@ -314,7 +324,7 @@ describe('summonWithResult / attemptFloorWithResult', () => {
     const before = createAccount(7)
     const focus = { focusEnemyId: 'e1_w0_0' }
     const { state } = attemptFloorWithResult(before, focus)
-    expect(state).toEqual(playFloor(before, focus).state)
+    expect(core(state)).toEqual(core(playFloor(before, focus).state))
   })
 })
 
@@ -389,8 +399,8 @@ describe('createStore', () => {
     const store = createStore()
     store.dispatch({ type: 'NEW_ACCOUNT', seed: 1 })
     const after = store.dispatch({ type: 'SUMMON' })
-    // Account starts with exactly enough for one pull.
-    expect(after.gold).toBe(0)
+    // The pull is paid out of the starting grant.
+    expect(after.gold).toBe(TUNING.economy.startingGold - TUNING.gacha.normalCostGold)
     expect(Object.keys(after.heroes)).toHaveLength(2)
   })
 
@@ -541,6 +551,15 @@ function promotableState(seed = 5): GameState {
     sanity: 100,
     promotion: null,
     equipment: { weapon: null, armor: null, accessory: null },
+    training: null,
+    engraving: null,
+    favor: 35,
+    bondTier: 1,
+    ip: 0,
+    gift: { last: null, streak: 0 },
+    blessed: false,
+    expedition: null,
+    captiveOf: null,
   }
   return { ...acct, heroes: { [hero.id]: hero }, materials: { promotionStone: 999, attrStone_fire: 999 }, gems: 200 }
 }
@@ -564,7 +583,7 @@ describe('reduce — SKIP_TIMER', () => {
   it('gem-skips an in-flight promotion (delegates to skipPromotion)', () => {
     const promoting = startPromotion(promotableState(), 'h_promo' as HeroId, 0)
     const after = reduce(promoting, { type: 'SKIP_TIMER', kind: 'promotion', id: 'h_promo' }, 0)
-    expect(after).toEqual(skipPromotion(promoting, 'h_promo' as HeroId))
+    expect(core(after)).toEqual(core(skipPromotion(promoting, 'h_promo' as HeroId)))
     expect(after.heroes['h_promo' as HeroId]!.star).toBe(4)
     expect(after.heroes['h_promo' as HeroId]!.promotion).toBeNull()
   })
@@ -603,12 +622,21 @@ function dailyReadyState(seed = 5): GameState {
     sanity: 100,
     promotion: null,
     equipment: { weapon: null, armor: null, accessory: null },
+    training: null,
+    engraving: null,
+    favor: 35,
+    bondTier: 1,
+    ip: 0,
+    gift: { last: null, streak: 0 },
+    blessed: false,
+    expedition: null,
+    captiveOf: null,
   }
   return {
     ...acct,
     heroes: { [hero.id]: hero },
     party: { slots: [hero.id, null, null, null, null], lines: ['front', 'front', 'mid', 'back', 'back'] },
-    tower: { currentFloor: 2, highestCleared: 1, attemptIndex: 0 },
+    tower: { currentFloor: 2, highestCleared: 1, attemptIndex: 0, event: null, loop: null, hiddenFound: [], worldEnded: false, worldSaved: false },
   }
 }
 
@@ -783,5 +811,62 @@ describe('reduce — EQUIP_ITEM / UNEQUIP_ITEM', () => {
     expect(() =>
       reduce(null, { type: 'UNEQUIP_ITEM', heroId: 'x' as HeroId, slot: 'weapon' }),
     ).toThrow(/existing account/)
+  })
+})
+
+describe('reduce — Layer 1 completion commands', () => {
+  it('SUMMON { pool: advanced, count: 10 } pays gems once and adds ten heroes', () => {
+    const s0 = { ...createAccount(3), gems: TUNING.gacha.advanced.tenPullGems }
+    const s1 = reduce(s0, { type: 'SUMMON', pool: 'advanced', count: 10 })
+    expect(s1.gems).toBe(0)
+    expect(Object.keys(s1.heroes).length).toBe(Object.keys(s0.heroes).length + 10)
+  })
+
+  it('a bare SUMMON is still one Normal pull', () => {
+    const s0 = createAccount(3)
+    expect(core(reduce(s0, { type: 'SUMMON' }))).toEqual(core(summon(s0).state))
+  })
+
+  it('TRANSFER_SKILL and FUSE_SKILL route to the Transfer Station', () => {
+    const base = createAccount(4)
+    const starter = Object.keys(base.heroes)[0] as HeroId
+    const other = { ...base.heroes[starter]!, id: 'h_other' as HeroId, name: 'Other', skills: [] }
+    const s0: GameState = {
+      ...base,
+      gold: 100_000,
+      heroes: { ...base.heroes, [other.id]: other },
+      facilities: { ...base.facilities, transferStation: { level: 1, build: null } },
+    }
+    const s1 = reduce(s0, { type: 'TRANSFER_SKILL', donorId: starter, recipientId: other.id, skillId: 'berserk' })
+    expect(s1.heroes[other.id]!.skills.map((s) => s.id)).toEqual(['berserk'])
+    expect(() => reduce(s1, { type: 'FUSE_SKILL', heroId: other.id, result: 'exceed' })).toThrow(/fuseSkill/)
+  })
+})
+
+describe('reduce — RESOLVE_EVENT', () => {
+  it('closes the open event and applies its option; resolveEventWithResult reports it', () => {
+    const base = createAccount(8)
+    const s0: GameState = { ...base, tower: { ...base.tower, event: { kind: 'bonus', floor: 5, options: ['rest', 'treasure', 'merchant', 'gamble'] } } }
+    const s1 = reduce(s0, { type: 'RESOLVE_EVENT', option: 'treasure' })
+    expect(s1.tower.event).toBeNull()
+    expect(s1.gold).toBeGreaterThan(s0.gold)
+    const r = resolveEventWithResult(s0, 'treasure')
+    expect(r.state).toEqual(s1)
+    expect(r.outcome.option).toBe('treasure')
+  })
+})
+
+describe('reduce — Layer 3 commands', () => {
+  it('route gifts, logins, packages and the crack through the reducer', () => {
+    const base = createAccount(9)
+    const id = Object.keys(base.heroes)[0] as HeroId
+    let s = reduce({ ...base, gold: 10_000 }, { type: 'GIVE_GIFT', heroId: id, giftId: 'honey_cake' })
+    expect(s.heroes[id]!.gift.last).toBe('honey_cake')
+    s = reduce(s, { type: 'CLAIM_LOGIN' })
+    expect(s.meta.login.streak).toBe(1)
+    s = reduce(s, { type: 'BUY_PACKAGE', packageId: 'pouch' })
+    expect(s.meta.wallet.purchases.pouch).toBe(1)
+    expect(() => reduce(s, { type: 'OPEN_CRACK' })).toThrow(/Master Lv 20/)
+    expect(() => reduce(s, { type: 'INTERVENE', heroId: id, action: 'peek' })).toThrow(/Devoted/)
   })
 })

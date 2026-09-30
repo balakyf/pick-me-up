@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
+  scaleDailyReward,
   worldDayIndex,
   dailyDungeonFor,
   dailyReward,
@@ -7,6 +8,7 @@ import {
   dailyAttemptsLeft,
   attemptDaily,
 } from './daily'
+import { xpToNext } from '../stats'
 import { createAccount } from '../account'
 import { TUNING } from '../tuning'
 import type { GameState, OwnedHero, HeroId, Star } from '../types'
@@ -32,6 +34,15 @@ function strongHero(id = 'h_str'): OwnedHero {
     sanity: 100,
     promotion: null,
     equipment: { weapon: null, armor: null, accessory: null },
+    training: null,
+    engraving: null,
+    favor: 35,
+    bondTier: 1,
+    ip: 0,
+    gift: { last: null, streak: 0 },
+    blessed: false,
+    expedition: null,
+    captiveOf: null,
   }
 }
 
@@ -53,7 +64,7 @@ function dailyState(opts: {
     ...acct,
     heroes: { [hero.id]: hero },
     party: { slots: [hero.id, null, null, null, null], lines: ['front', 'front', 'mid', 'back', 'back'] },
-    tower: { currentFloor: highestCleared + 1, highestCleared, attemptIndex: 0 },
+    tower: { currentFloor: highestCleared + 1, highestCleared, attemptIndex: 0, event: null, loop: null, hiddenFound: [], worldEnded: false, worldSaved: false },
     dailies: { attemptsUsed: opts.attemptsUsed ?? 0, lastResetWorldDay: 0 },
     gems: opts.gems ?? 0,
     materials: {},
@@ -119,13 +130,33 @@ describe('attemptDaily', () => {
     const before = dailyState({ highestCleared: 1 }) // floor-1 daily → crusher wins
     const { state: after, result } = attemptDaily(before, inDay(0)) // day 0 = Gold Vault
     expect(result.cleared).toBe(true)
-    expect(after.gold).toBe(before.gold + D.rewards.goldVault)
+    // Rewards scale with depth: ×(1 + highestCleared × depthScalePerFloor).
+    expect(after.gold).toBe(before.gold + Math.round(D.rewards.goldVault * (1 + 1 * D.depthScalePerFloor)))
     expect(after.dailies.attemptsUsed).toBe(1)
   })
 
+  it('is fought at the party\'s level when it has fallen behind (the catch-up faucet)', () => {
+    const strong = { ...strongHero(), xp: { level: 1, xpIntoLevel: 0, heldXp: 0, atCap: false } }
+    const before = dailyState({ hero: strong, highestCleared: 40 })
+    const { result } = attemptDaily(before, inDay(0))
+    expect(result.cleared).toBe(true) // a Lv1 party faces a Lv1 daily, not F40
+  })
+
+  it('scales rewards with the Master\'s depth (gems stay flat)', () => {
+    expect(scaleDailyReward({ gold: 600 }, 0).gold).toBe(600)
+    expect(scaleDailyReward({ gold: 600 }, 30).gold).toBe(Math.round(600 * (1 + 30 * D.depthScalePerFloor)))
+    expect(scaleDailyReward({ gems: 20 }, 50).gems).toBe(20)
+    const deep = scaleDailyReward({ materials: { promotionStone: 2 } }, 40).materials!.promotionStone!
+    expect(deep).toBe(Math.round(2 * (1 + 40 * D.depthScalePerFloor)))
+    // The Proving Hall's XP keeps up with the XP curve (never below the flat floor).
+    expect(scaleDailyReward({ heroXp: 120 }, 0).heroXp).toBe(120)
+    expect(scaleDailyReward({ heroXp: 120 }, 30).heroXp).toBe(Math.round(xpToNext(30) * D.provingHallXpShare))
+  })
+
   it('is NON-LETHAL — a losing run never permakills a hero (no 4th permadeath source)', () => {
-    const weak = weakHero()
-    const before = dailyState({ hero: weak, highestCleared: 30 }) // hard daily → weak loses
+    // A Lv30 hero with no stats to speak of: the daily is fought at its level (F30) and lost.
+    const weak = { ...weakHero(), xp: { level: 30, xpIntoLevel: 0, heldXp: 0, atCap: false } }
+    const before = dailyState({ hero: weak, highestCleared: 30 })
     const { state: after, result } = attemptDaily(before, inDay(0))
     expect(result.cleared).toBe(false)
     expect(after.heroes[weak.id]!.alive).toBe(true) // still alive
@@ -172,5 +203,13 @@ describe('attemptDaily', () => {
     attemptDaily(before, inDay(0))
     expect(before.gold).toBe(goldBefore)
     expect(before.dailies.attemptsUsed).toBe(0)
+  })
+})
+
+describe('Elemental Trial rotation', () => {
+  it('a given weekday cycles through every element over the weeks (no lock-in)', () => {
+    const tuesdays = Array.from({ length: 7 }, (_, w) => 7 * w + 1)
+    const els = new Set(tuesdays.map((d) => Object.keys(dailyReward(d).materials ?? {})[0]))
+    expect(els.size).toBe(TUNING.lobby.daily.elementRotation.length)
   })
 })

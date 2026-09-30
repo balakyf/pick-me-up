@@ -20,7 +20,7 @@ import { buildFillerEncounter } from '../tower'
 import { buildCombatUnit } from '../unit'
 import { runBattle } from '../combat'
 import { SKILLS } from '../content'
-import { applyXp } from '../stats'
+import { applyXp, xpToNext } from '../stats'
 import { foldBattleSkills } from '../skills'
 import { hash, rngFor } from '../rng/rng'
 import type {
@@ -89,7 +89,10 @@ export function dailyDungeonFor(dayIndex: number): DailyDungeon {
 /** The element the Elemental Trial rewards on a given day (rotates by day). */
 function trialElement(dayIndex: number): Element {
   const r = D.elementRotation
-  return r[((dayIndex % r.length) + r.length) % r.length]! as Element
+  // Advance by the week as well as the day, so a weekday never locks onto one element
+  // (with 7 elements, `day % 7` alone would give every Tuesday the same stone).
+  const i = dayIndex + Math.floor(dayIndex / 7)
+  return r[((i % r.length) + r.length) % r.length]! as Element
 }
 
 /** The win reward for a world-day index (deterministic per weekday). */
@@ -114,6 +117,27 @@ export function dailyReward(dayIndex: number): DailyReward {
   }
 }
 
+/**
+ * Rewards grow with the Master's depth so a daily stays worth running: gold and stones by
+ * ×(1 + highestCleared × depthScalePerFloor); the Proving Hall's XP by half a level at
+ * the Master's deepest floor. Gems stay flat (the premium faucet is not inflated).
+ */
+export function scaleDailyReward(r: DailyReward, highestCleared: number): DailyReward {
+  const depth = 1 + highestCleared * D.depthScalePerFloor
+  const out: DailyReward = { ...r }
+  if (r.gold) out.gold = Math.round(r.gold * depth)
+  if (r.materials) {
+    out.materials = {}
+    for (const [k, n] of Object.entries(r.materials)) out.materials[k] = Math.max(n, Math.round(n * depth))
+  }
+  // Every daily win teaches something (the Proving Hall most): XP at the Master's depth,
+  // so a rebuilt roster climbs back quickly.
+  const lvl = Math.max(1, Math.min(highestCleared, TUNING.xp.maxLevel))
+  const xp = Math.round(xpToNext(lvl) * (r.heroXp ? D.provingHallXpShare : D.dailyXpShare))
+  if (r.heroXp || xp > 0) out.heroXp = Math.max(r.heroXp ?? 0, xp)
+  return out
+}
+
 /** Light tower-progress gate: dailies open once the unlock floor is cleared. */
 export function dailyUnlocked(state: GameState): boolean {
   return state.tower.highestCleared >= D.unlockHighestCleared
@@ -125,8 +149,13 @@ export function dailyAttemptsLeft(state: GameState): number {
 }
 
 /** The floor whose power budget the daily fight uses (scales with tower progress). */
-function dailyFloor(state: GameState): number {
-  return Math.max(1, state.tower.highestCleared)
+/**
+ * The daily is fought at the Master's depth — or, for a party that has fallen behind
+ * (a rebuilt roster), at its own average level, so the daily can still be won and act as
+ * the catch-up faucet.
+ */
+function dailyFloor(state: GameState, partyLevel: number): number {
+  return Math.max(1, Math.min(state.tower.highestCleared, Math.round(partyLevel)))
 }
 
 /**
@@ -159,7 +188,8 @@ export function attemptDaily(state: GameState, nowWorld: number): { state: GameS
     const heroId = slots[s]
     if (heroId === null || heroId === undefined) continue
     const hero = state.heroes[heroId]
-    if (hero === undefined || !hero.alive || hero.sanity <= 0) continue
+    // A hero in a Training Center drill is in the yard, not the party.
+    if (hero === undefined || !hero.alive || hero.sanity <= 0 || hero.training !== null || hero.expedition || hero.captiveOf) continue
     heroUnits.push(buildCombatUnit(hero, lines[s] ?? 'front', SKILLS, state.inventory))
     deployedIds.push(heroId)
   }
@@ -167,13 +197,14 @@ export function attemptDaily(state: GameState, nowWorld: number): { state: GameS
 
   // Seeded encounter + battle (reuses the tower filler power-budget generator).
   const worldMult = TUNING.tower.worldMult[state.worldGrade]
-  const floor = dailyFloor(state)
+  const partyLevel = deployedIds.reduce((n, id) => n + state.heroes[id]!.xp.level, 0) / deployedIds.length
+  const floor = dailyFloor(state, partyLevel)
   const built = buildFillerEncounter(floor, worldMult, rngFor(state.seed, 'daily', dayIndex, attempt))
   const enc: Encounter = { floor, mission: built.mission, waves: built.waves, encounterContext: 'tower' }
   const res = runBattle(heroUnits, enc, hash(state.seed, 'daily', dayIndex, attempt))
 
   const cleared = res.outcome === 'win'
-  const rewards = cleared ? dailyReward(dayIndex) : {}
+  const rewards = cleared ? scaleDailyReward(dailyReward(dayIndex), state.tower.highestCleared) : {}
 
   // ── Fold rewards into the account (NON-LETHAL: no permadeath, no Sanity change). ──
   const survivorSet = new Set<string>(res.survivorHeroIds as string[])
@@ -183,9 +214,15 @@ export function attemptDaily(state: GameState, nowWorld: number): { state: GameS
     if (!survivorSet.has(id as string)) continue
     const h = heroes[id]!
     // Survivors auto-learn from their casts win or lose (Layer 1 §2.4); XP only on a win.
-    const learned = foldBattleSkills(id, h.skills, res.skillCasts[id as string])
-    skillProgress.push(...learned.progress)
     const xp = cleared && rewards.heroXp ? applyXp(h.xp, rewards.heroXp, h.star) : h.xp
+    // Level unlocks can fire here too; achievements are tower feats (no floor off-tower).
+    const learned = foldBattleSkills(id, h.skills, res.skillCasts[id as string], {
+      heroLevel: xp.level,
+      highestCleared: state.tower.highestCleared,
+      won: false,
+      defeatedTargetTags: [],
+    })
+    skillProgress.push(...learned.progress)
     heroes[id] = { ...h, xp, skills: learned.skills }
   }
 

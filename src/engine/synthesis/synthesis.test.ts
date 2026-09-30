@@ -10,6 +10,7 @@ import {
   canSynthesize,
   synthesisUnlocked,
   salvageYield,
+  rescueOptions,
   type SynthesisInput,
 } from './synthesis'
 import { createAccount } from '../account'
@@ -40,6 +41,15 @@ function makeHero(id: string, overrides: Partial<OwnedHero> = {}): OwnedHero {
     sanity: 100,
     promotion: null,
     equipment: { weapon: null, armor: null, accessory: null },
+    training: null,
+    engraving: null,
+    favor: 35,
+    bondTier: 1,
+    ip: 0,
+    gift: { last: null, streak: 0 },
+    blessed: false,
+    expedition: null,
+    captiveOf: null,
     ...overrides,
   }
 }
@@ -257,7 +267,7 @@ describe('salvage preview + no-survivor', () => {
     expect(p.materialYield['promotionStone']).toBe(S.salvageYield[5]!.promotionStone)
     expect(p.materialYield['attrStone_water']).toBe(S.salvageYield[5]!.attrStone)
     expect(p.rescue).toBeNull()
-    expect(p.skillCopyChance).toBe(0)
+    expect(p.skillCopyOdds).toEqual([])
     expect(p.survivorSanityCost).toBe(0)
   })
 
@@ -282,5 +292,51 @@ describe('guards — duplicates + unknown', () => {
     const a = makeHero('a'); const b = makeHero('b')
     const state = accountWith([a, b])
     expect(() => synthesize(state, { mode: 'salvage', survivorId: null, sacrificeIds: ['ghost' as HeroId] })).toThrow()
+  })
+})
+
+describe('Synthesis follow-ups (grade-aware copy, chosen rescue, 7★ η)', () => {
+  it('copy odds fall with the skill grade and bound skills never copy', () => {
+    const surv = makeHero('surv', { skills: [] })
+    const sac = makeHero('sac', { skills: sk('berserk', 'ixid', 'dragon_slayer') })
+    const p = synthesisPreview(accountWith([surv, sac, makeHero('x')]), { mode: 'transfer', survivorId: surv.id, sacrificeIds: [sac.id] })
+    const odds = Object.fromEntries(p.skillCopyOdds.map((o) => [o.skillId, o.chance]))
+    expect(odds.dragon_slayer).toBeUndefined()
+    expect(odds.berserk).toBeGreaterThan(odds.ixid!)
+    expect(odds.berserk).toBeCloseTo(S.skillCopyChanceByGrade.D! / 2, 3)
+  })
+
+  it('a 7★ survivor transfers at the higher η', () => {
+    const grades = { str: 0, agi: 0, vit: 0, int: 0, wil: 0 }
+    const sacG = { str: 10, agi: 10, vit: 10, int: 10, wil: 10 }
+    const run = (star: 3 | 7) => {
+      const surv = makeHero('surv', { star, growthGrades: grades })
+      const sac = makeHero('sac', { growthGrades: sacG })
+      return synthesize(accountWith([surv, sac, makeHero('x')]), { mode: 'transfer', survivorId: surv.id, sacrificeIds: [sac.id] })
+        .heroes['surv' as HeroId]!.growthGrades.str
+    }
+    expect(run(3)).toBe(1)
+    expect(run(7)).toBe(Math.ceil(10 * S.transferEfficiency7))
+  })
+
+  it('salvage can rescue the chosen grade instead of the automatic skill', () => {
+    const surv = makeHero('surv', { skills: [], growthGrades: { str: 1, agi: 1, vit: 1, int: 1, wil: 1 } })
+    const sac = makeHero('sac', { skills: sk('berserk'), growthGrades: { str: 2, agi: 9, vit: 2, int: 2, wil: 2 } })
+    const state = accountWith([surv, sac, makeHero('x')])
+    const auto = synthesize(state, { mode: 'salvage', survivorId: surv.id, sacrificeIds: [sac.id] })
+    expect(ids(auto.heroes['surv' as HeroId]!)).toEqual(['berserk'])
+    const chosen = synthesize(state, { mode: 'salvage', survivorId: surv.id, sacrificeIds: [sac.id], rescue: { kind: 'grade', attr: 'agi' } })
+    expect(chosen.heroes['surv' as HeroId]!.growthGrades.agi).toBe(9)
+    expect(ids(chosen.heroes['surv' as HeroId]!)).toEqual([])
+  })
+
+  it('rejects a rescue the sacrifices cannot provide', () => {
+    const surv = makeHero('surv', { skills: sk('berserk') })
+    const sac = makeHero('sac', { skills: sk('berserk') })
+    const state = accountWith([surv, sac, makeHero('x')])
+    expect(() =>
+      synthesize(state, { mode: 'salvage', survivorId: surv.id, sacrificeIds: [sac.id], rescue: { kind: 'skill', skillId: 'berserk' } }),
+    ).toThrow(/can pass on/)
+    expect(rescueOptions(state, surv.id, [sac.id]).every((o) => o.kind === 'grade')).toBe(true)
   })
 })
