@@ -11,6 +11,7 @@ import type { CombatUnit, GameState } from '../types'
 import { TUNING } from '../tuning'
 import { ENEMY_TEMPLATES, SKILLS } from '../content'
 import { buildCombatUnit, buildEnemyUnit } from '../unit'
+import { recordBattle } from '../codex'
 import { runBattle } from '../combat'
 import { rivalSquad } from '../events'
 import { worldDayIndex } from '../daily'
@@ -105,7 +106,7 @@ export function guildRaid(state: GameState, nowWorld: number): { state: GameStat
   if (book) materials.bookOfReverseHeaven = (materials.bookOfReverseHeaven ?? 0) + 1
   return {
     outcome: { dealt, mates, bossHp, felled, book, gold, gems },
-    state: { ...state, gold: state.gold + gold, gems: state.gems + gems, materials, pvp: { ...state.pvp, guildRaidWeek: week } },
+    state: { ...state, gold: state.gold + gold, gems: state.gems + gems, materials, pvp: { ...state.pvp, guildRaidWeek: week }, codex: recordBattle(state.codex, res.log) },
   }
 }
 

@@ -734,6 +734,8 @@ export interface CodexEntry {
   defeated: number
   /** Its resistances, immunities and weak element are known. */
   studied: boolean
+  /** Distinct floors it was met on (sorted, capped — see engine/codex). */
+  floors: number[]
 }
 
 export interface CodexState {
@@ -876,6 +878,8 @@ export interface CombatUnit {
   isNpc?: boolean
   /** Enemy family for `bane` keywords; absent for heroes. */
   family?: EnemyFamily
+  /** The enemy template this unit was built from (the Codex key); absent for heroes. */
+  templateId?: string
 }
 
 /** Master levers carried into a battle (combat resolves once, then the UI replays
@@ -929,7 +933,25 @@ export interface Encounter {
   /** The Master's mid-battle orders, each applied at the start of its tick. Combat is
    *  deterministic, so re-resolving with an order replays the fight exactly up to it. */
   orders?: BattleOrder[]
+  /** Bonds between party members at battle start (friends cover and follow up, rivals compete). */
+  bonds?: CombatBond[]
+  /** The floor's conditions (Fog, Blood Moon…), from F40 — see engine/depth. */
+  modifiers?: FloorModifierId[]
 }
+
+/** How two party members stand with each other in battle (from Quanton Life affinity). */
+export type BondKind = 'friend' | 'closeFriend' | 'rival' | 'grudge'
+
+/** A bond between two hero-side units (unit ids), carried into combat. */
+export interface CombatBond {
+  a: string
+  b: string
+  kind: BondKind
+  affinity: number
+}
+
+/** A floor condition that bends a battle for both sides (combat depth, F40+). */
+export type FloorModifierId = 'fog' | 'bloodMoon' | 'holyGround' | 'miasma' | 'gale' | 'frost'
 
 /** A mid-battle order (Living Lobby spec §6). */
 export type BattleOrder =
@@ -955,6 +977,8 @@ export interface CombatUnitInit {
   cp: number
   /** Present (true) for mission NPC allies. */
   isNpc?: boolean
+  /** The enemy template (the Codex key); absent for heroes. */
+  templateId?: string
 }
 
 /** `failed` = the mission was lost without a wipe (e.g. the escort target fell). */
@@ -978,6 +1002,14 @@ export type CombatEvent = { seq: number; tick: number } & (
   | { kind: 'mission'; note: string }
   /** The Master gave an order (mid-battle). */
   | { kind: 'order'; order: BattleOrder }
+  /** A close friend threw themself in front of a killing blow meant for `allyId`. */
+  | { kind: 'cover'; unitId: string; allyId: string; actorId: string }
+  /** A friend pressed `allyId`'s attack with a strike of their own on the same target. */
+  | { kind: 'followup'; unitId: string; allyId: string; targetId: string }
+  /** A rival ignored the focus order to chase a kill of their own. */
+  | { kind: 'rivalry'; unitId: string; rivalId: string; targetId: string }
+  /** The floor's conditions, announced as the battle begins. */
+  | { kind: 'floor-mods'; modifiers: FloorModifierId[] }
   | { kind: 'end'; outcome: CombatOutcome }
 )
 

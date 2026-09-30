@@ -17,6 +17,10 @@ import { scale } from './pixel/bitmap'
 import { drawTowerExterior, TOWER_H, TOWER_W } from './pixel/towerMap'
 import { t } from './i18n/i18n'
 import { ELEMENT_VIS } from './bits'
+import { CodexButton } from './codex/CodexWindow'
+import { ScoutCodexNote } from './codex/ScoutCodexNote'
+import { SynergyPanel } from './tower/SynergyPanel'
+import { FloorModBadge, FloorModsLine } from './tower/FloorMods'
 
 const MAX_FLOOR = TUNING.tower.sliceTopFloor
 const EV = TUNING.events
@@ -273,9 +277,10 @@ function ScoutPanel({ state, report, onSuggest }: { state: GameState; report: Sc
           ? t('Parties this strong have come back whole.')
           : t('Parties this strong lose about {n} heroes an attempt.', { n: report.expectedDeaths })}
       </div>
+      <FloorModsLine mods={report.modifiers} />
       <div className="scout-enemies">
         {report.enemies.map((e) => {
-          const notes = report.studied || e.keywords.some((k) => k.kind === 'looming') ? e.keywords.map(keywordNote).filter(Boolean) : []
+          const notes = report.studied || e.studied || e.keywords.some((k) => k.kind === 'looming') ? e.keywords.map(keywordNote).filter(Boolean) : []
           return (
             <div key={`${e.name}|${e.level}`} className="scout-enemy">
               <span className="el-dot" style={{ background: ELEMENT_VIS[e.element].color }} title={t(ELEMENT_VIS[e.element].label)} />
@@ -284,6 +289,7 @@ function ScoutPanel({ state, report, onSuggest }: { state: GameState; report: Sc
               <span className="muted small">Lv{e.level}</span>
               {e.target && <span className="chip">{t('target')}</span>}
               {notes.length > 0 && <span className="scout-notes">{notes.join(' · ')}</span>}
+              <ScoutCodexNote enemy={e} floorStudied={report.studied} />
             </div>
           )
         })}
@@ -426,6 +432,7 @@ export function TowerScreen({ state, store }: { state: GameState; store: Store }
       <p className="sub">
         {t('100 floors of permadeath. Falling heroes are gone for good.')}
         {state.tower.worldEnded && ` ${t('The world you climbed is gone.')}`}
+        <CodexButton state={state} />
       </p>
 
       {summit && (
@@ -460,6 +467,7 @@ export function TowerScreen({ state, store }: { state: GameState; store: Store }
       {err && <div className="muted" style={{ color: 'var(--bad)' }}>{err}</div>}
 
       {report && <ScoutPanel state={state} report={report} onSuggest={suggest} />}
+      {report && <SynergyPanel state={state} />}
 
       {!deployable && !event && (
         <div className="empty" style={{ color: 'var(--warn)' }}>
@@ -503,6 +511,7 @@ export function TowerScreen({ state, store }: { state: GameState; store: Store }
                 <div className="ft">
                   {t('Floor {n}', { n: f })} {anchor && <span className="anchor-badge">{t('ANCHOR')}</span>}
                   {f === TUNING.tower.worldEndFloor && <span className="anchor-badge danger">{t('WORLD\'S END')}</span>}
+                  <FloorModBadge state={state} floor={f} />
                 </div>
                 <div className="fs">
                   {t(mission)}

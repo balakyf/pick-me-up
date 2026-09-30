@@ -22,6 +22,7 @@ import { clampSanity } from '../kitchen'
 import { summon } from '../gacha'
 import { rngFor, hash, chance, pick, type Rng } from '../rng'
 import { TOURNAMENT_FORMATS } from '../tower'
+import { recordBattle } from '../codex'
 
 const E = TUNING.events
 const TT = E.tournament
@@ -179,7 +180,8 @@ export function runTournament(state: GameState, format: TournamentFormat): { rou
 
   if (format === 'party_raid') {
     const boss = rivalSquad(r, 1, fieldCp * 1.6, 'raid')
-    const bossUnit: CombatUnit = { ...boss.units[0]!, name: 'Raid Colossus', targetTag: 'raid_boss' }
+    // A disguised rival, not a Codex entry.
+    const bossUnit: CombatUnit = { ...boss.units[0]!, name: 'Raid Colossus', targetTag: 'raid_boss', templateId: undefined }
     const res = runBattle(
       field,
       encounterOf([[bossUnit]], floor, [{ kind: 'defeat', targetTag: 'raid_boss' }], TT.raidTicks),
@@ -269,6 +271,8 @@ export function resolveEvent(state: GameState, option: string): { state: GameSta
     default: {
       const format = option as TournamentFormat
       const { rounds, wins } = runTournament(next, format)
+      // The rival squads go in the Enemy Codex (a Battle Royale's rounds share one log).
+      for (const log of new Set(rounds.map((x) => x.log))) next = { ...next, codex: recordBattle(next.codex, log) }
       outcome.rounds = rounds
       outcome.wins = wins
       outcome.placing = tournamentPlacing(wins)

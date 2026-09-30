@@ -9,6 +9,7 @@ import { allyBustUrl, allyFrameUrl, enemySize, enemyUrl, heroBustUrl, heroFrameU
 import type { LookSource } from '../pixel/look'
 import { ELEMENT_VIS, hpColor } from '../bits'
 import { t } from '../i18n/i18n'
+import { DEPTH_DURATION, depthSnap } from './synergyCaptions'
 
 /**
  * The battle as a side-view JRPG scene. The engine resolved the fight already;
@@ -45,6 +46,7 @@ const DURATION: Record<CombatEvent['kind'], number> = {
   mission: 900,
   order: 900,
   end: 600,
+  ...DEPTH_DURATION,
 }
 
 /** A hero's death holds the scene: the moment is not skipped past at speed. */
@@ -225,6 +227,11 @@ export function BattleScene({
                     ? t('The party falls back through the gate.')
                     : t('Time is up…')
           break
+        default: {
+          // Combat depth: cover, follow-ups, rivalry and the floor's conditions.
+          const d = depthSnap(e, nameOf)
+          if (d) Object.assign(next, d)
+        }
       }
       out.push(next)
       cur = next

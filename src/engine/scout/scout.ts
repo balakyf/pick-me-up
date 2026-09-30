@@ -14,7 +14,8 @@ import { skillCp } from '../skills'
 import { engravingCp } from '../engravings'
 import { buildEncounter, floorPower } from '../tower'
 import { ELEMENT_ADVANTAGE } from '../tuning'
-import type { Element, EnemyFamily, GameState, HeroId, KeywordTag, Line, OwnedHero } from '../types'
+import type { Element, EnemyFamily, FloorModifierId, GameState, HeroId, KeywordTag, Line, OwnedHero } from '../types'
+import { isStudied } from '../codex'
 
 export type Threat = 'safe' | 'fair' | 'risky' | 'deadly'
 
@@ -27,6 +28,10 @@ export interface ScoutedEnemy {
   keywords: KeywordTag[]
   /** A mission target (defeat / protect / acquire). */
   target: boolean
+  /** The enemy template (the Codex key). */
+  templateId?: string
+  /** The Enemy Codex already knows its weaknesses (felled often enough, or scouted before). */
+  studied: boolean
 }
 
 export interface ScoutReport {
@@ -44,6 +49,8 @@ export interface ScoutReport {
   studied: boolean
   /** Damage types most of the floor shrugs off. */
   immune: { physical: boolean; magic: boolean }
+  /** The floor's conditions (combat depth, F40+). */
+  modifiers: FloorModifierId[]
 }
 
 export function heroCp(h: OwnedHero): number {
@@ -94,6 +101,8 @@ export function scoutFloor(state: GameState, heroes: OwnedHero[] = partyHeroes(s
           family: u.family,
           keywords: u.keywords,
           target: u.targetTag !== undefined && targets.has(u.targetTag),
+          ...(u.templateId !== undefined ? { templateId: u.templateId } : {}),
+          studied: u.templateId !== undefined && isStudied(state.codex, u.templateId),
         })
     }
   }
@@ -112,6 +121,7 @@ export function scoutFloor(state: GameState, heroes: OwnedHero[] = partyHeroes(s
     ...threatFor(ratio),
     studied: state.meta.peekedFloors.includes(floor),
     immune: { physical: immPhys > total / 2, magic: immMagic > total / 2 },
+    modifiers: enc.modifiers ?? [],
   }
 }
 

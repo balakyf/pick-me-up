@@ -48,6 +48,8 @@ import { foldBattleSkills } from '../skills'
 import { rebellionChance, withFavor } from '../favor'
 import { addPi } from '../interference'
 import { practice, woundBoss } from '../minigames'
+import { floorModifiersFor, withBonds } from '../depth'
+import { recordBattle } from '../codex'
 import { hash, rngFor, nextInt, nextFloat, chance, pick, makeSeed, type Rng } from '../rng/rng'
 import type { HiddenObjective, LoopState, TowerEvent, TowerState, BattleResult } from '../types'
 
@@ -445,6 +447,9 @@ export function buildEncounter(state: GameState, floor: number, focus?: FocusDir
     encounterContext: 'tower',
   }
   if (built.allies !== undefined && built.allies.length > 0) enc.allies = built.allies
+  // Combat depth: the floor's conditions (Fog, Blood Moon…) from F40.
+  const modifiers = floorModifiersFor(state, floor)
+  if (modifiers.length > 0) enc.modifiers = modifiers
   if (focus !== undefined) {
     enc.focus = focus
     // Tactical Center amplifies the focus lever: a concentrate-fire bonus by level.
@@ -550,6 +555,8 @@ export function playFloor(
     }
   }
   if (orders && orders.length > 0) enc = { ...enc, orders }
+  // Combat depth: friends and rivals in the party fight as such.
+  enc = withBonds(enc, state, deployedIds)
   const res = runBattle(heroUnits, enc, combatSeed)
 
   // ── 4. Interpret. ───────────────────────────────────────────────────────────
@@ -676,6 +683,8 @@ export function playFloor(
     heroes: nextHeroes,
     tower: nextTower,
     meta: nextMeta,
+    // The Enemy Codex remembers who was met here (a scouted floor's enemies are studied).
+    codex: recordBattle(state.codex, res.log, { studied: state.meta.peekedFloors.includes(floor) }),
   }
 
   const result: FloorResult = {

@@ -253,6 +253,7 @@ export function buildEnemyUnit(
     cp: combatPower(stats),
     targetTag: opts?.targetTag ?? template.id,
     ...(template.family !== undefined ? { family: template.family } : {}),
+    templateId: template.id,
   }
 }
 

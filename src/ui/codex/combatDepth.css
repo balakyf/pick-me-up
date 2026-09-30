@@ -1,0 +1,64 @@
+/* ── Combat depth: the Enemy Codex, party bonds & formation, floor modifiers ── */
+
+/* The Codex window */
+.codex { display: flex; flex-direction: column; gap: 10px; }
+.codex-top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+.codex-filter { display: flex; flex-wrap: wrap; gap: 4px; }
+.codex-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
+  gap: 6px;
+  max-height: 52vh;
+  overflow: auto;
+  padding: 2px;
+}
+.codex-cell {
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  padding: 6px 4px; min-height: 118px;
+  background: var(--panel); border: 2px solid var(--line); color: var(--ink);
+  font-family: var(--font); cursor: pointer;
+}
+.codex-cell:hover { border-color: var(--accent-2); }
+.codex-cell.unmet { background: #0e0a1c; color: var(--ink-faint); }
+.codex-cell.studied { border-color: var(--gold-deep); }
+.codex-cell.sel { border-color: var(--gold); box-shadow: 0 0 0 2px var(--gold-deep); }
+.codex-art { height: 72px; width: 96px; display: flex; align-items: flex-end; justify-content: center; }
+.codex-art img { max-height: 72px; max-width: 96px; object-fit: contain; }
+.codex-name { font-size: 13px; text-align: center; line-height: 1.1; }
+.codex-sub { font-size: 11px; color: var(--ink-dim); }
+.codex-detail { background: var(--panel-2); border: 2px solid var(--line); padding: 8px 10px; font-size: 14px; }
+.codex-detail-head { display: flex; align-items: center; gap: 6px; margin-bottom: 2px; }
+.codex-studied { border-color: var(--gold); color: var(--gold); }
+.codex-intel { display: flex; flex-direction: column; gap: 2px; margin-top: 4px; }
+.codex-weak { margin-right: 8px; }
+.codex-traits { color: var(--accent-2); }
+.codex-btn { margin-left: 8px; vertical-align: middle; }
+h2 .codex-btn { font-size: 13px; }
+.codex .small { font-size: 12px; }
+
+/* Party bonds & formation (the tower's pre-battle area) */
+.synergy { max-width: 720px; margin: 0 auto 14px; padding: 10px 14px; }
+.synergy-list { display: flex; flex-direction: column; gap: 3px; margin: 6px 0; font-size: 14px; }
+.synergy-row { gap: 6px; }
+.synergy-effect { color: var(--accent-2); font-size: 12px; }
+.synergy-effect.bad { color: #ffc0c6; }
+.formation-row { display: grid; grid-template-columns: 44px 120px 1fr; align-items: baseline; gap: 6px; font-size: 13px; }
+.formation-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.formation-effects { font-size: 12px; }
+.synergy-row { display: grid; grid-template-columns: 120px 180px 1fr; align-items: baseline; }
+.synergy-pair { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.synergy-row .chip { margin: 0; text-align: center; }
+@media (max-width: 600px) {
+  .synergy-row { grid-template-columns: auto 1fr; gap: 2px 6px; margin-bottom: 4px; }
+  .formation-row { grid-template-columns: 44px 1fr; gap: 2px 6px; margin-bottom: 4px; }
+  .synergy-effect, .formation-effects { grid-column: 1 / -1; }
+}
+.formation-line { min-width: 44px; color: var(--gold); text-transform: uppercase; font-size: 11px; }
+.formation-good { color: var(--good); }
+.formation-bad { color: var(--warn); }
+
+/* Floor modifiers */
+.floor-mods { display: flex; flex-direction: column; gap: 2px; margin: 6px 0 2px; font-size: 13px; }
+.floor-mod b { color: var(--gem); }
+.floor-mod-badge { margin-left: 6px; font-size: 12px; padding: 0 4px; border: 1px solid var(--gem); color: var(--gem); cursor: help; }
+.scout-codex { color: var(--gold); font-size: 12px; }
