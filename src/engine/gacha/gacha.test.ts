@@ -21,7 +21,7 @@ import {
 } from './gacha'
 import { PVP_DEFAULTS } from '../account'
 import { TUNING, STAR_ENVELOPES } from '../tuning'
-import { CAMEO_HEROES, ENGRAVINGS } from '../content'
+import { CAMEO_HEROES, ENGRAVINGS, NAME_POOLS } from '../content'
 import { makeSeed, rngFor, createRng } from '../rng/rng'
 import type { GameState, Seed, HeroId, Star } from '../types'
 
@@ -317,6 +317,18 @@ describe('makeProceduralName', () => {
       used.push(value)
     }
     expect(new Set(used).size).toBe(used.length)
+  })
+
+  it('spreads first names: no first name repeats until every one is worn', () => {
+    let rng = createRng(makeSeed(2718))
+    const used: string[] = []
+    for (let i = 0; i < NAME_POOLS.first.length; i++) {
+      const { value, rng: r } = makeProceduralName(rng, used)
+      rng = r
+      used.push(value)
+    }
+    const firsts = used.map((n) => n.split(' ')[0])
+    expect(new Set(firsts).size).toBe(NAME_POOLS.first.length)
   })
 })
 

@@ -201,15 +201,29 @@ export function allocateHeroId(consumedHeroIds: string[], rng: Rng): Draw<HeroId
 /**
  * Mint a procedural name by combining NAME_POOLS (first + last), ensuring it is
  * not already in `usedNames`. Re-rolls on collision; deterministic per rng.
+ *
+ * First names spread out: a drawn first name already worn more often than the
+ * least-worn one slides to the next least-worn first name in the pool, so a roster
+ * doesn't hold two Lyras while another first name is still unused. The slide spends
+ * no extra rng.
  */
 export function makeProceduralName(rng: Rng, usedNames: string[]): Draw<string> {
   const used = new Set(usedNames)
+  const firstCount = new Map<string, number>()
+  for (const n of usedNames) {
+    const first = n.split(' ')[0]!
+    firstCount.set(first, (firstCount.get(first) ?? 0) + 1)
+  }
+  const pool = NAME_POOLS.first
+  const least = Math.min(...pool.map((f) => firstCount.get(f) ?? 0))
   let r = rng
   for (let attempt = 0; attempt < 1000; attempt++) {
-    const f = pick(r, NAME_POOLS.first)
+    const f = nextInt(r, 0, pool.length - 1)
+    let i = f.value
+    while ((firstCount.get(pool[i]!) ?? 0) > least) i = (i + 1) % pool.length
     const l = pick(f.rng, NAME_POOLS.last)
     r = l.rng
-    const name = `${f.value} ${l.value}`
+    const name = `${pool[i]!} ${l.value}`
     if (!used.has(name)) {
       return { value: name, rng: r }
     }

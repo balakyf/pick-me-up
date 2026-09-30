@@ -156,7 +156,7 @@ export function App() {
 
   useEffect(() => {
     if (params.seed !== null && getStore().getState() === null) {
-      getStore().dispatch({ type: 'NEW_ACCOUNT', seed: params.seed >>> 0, now: 0 })
+      getStore().dispatch({ type: 'NEW_ACCOUNT', seed: params.seed >>> 0, now: Date.now() })
     }
   }, [params.seed])
 
