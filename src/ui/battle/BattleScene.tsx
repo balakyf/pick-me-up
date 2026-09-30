@@ -1,10 +1,12 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { playMusic, sfx } from '../audio/sound'
-import type { BattleOrder, CombatEvent, CombatLog, CombatUnitInit, GameState, HeroId, Line } from '../../engine/types'
+import type { BattleOrder, CombatEvent, CombatLog, CombatUnitInit, Element, GameState, HeroId, Line } from '../../engine/types'
 import { lastWords } from '../life/speech'
 import { SKILLS } from '../../engine/content'
-import { drawBattleBg, BG_H, BG_W } from '../pixel/battleBg'
-import { cachedDataUrl } from '../pixel/render'
+import { bgTheme, drawBattleLayers, BG_H, BG_W, HORIZON, LAYER_ORDER, type BattleLayerName, type BattleLayers } from '../pixel/battleBg'
+import { canvasAvailable, cachedDataUrl } from '../pixel/render'
+import { BattleFxCanvas, type FxHandle } from './BattleFxCanvas'
+import { BATTLE_KEYS, battleKeyAction, fitStage, hudBeside, isTypingTarget, weatherForFloor } from './battleFx'
 import { allyBustUrl, allyFrameUrl, enemySize, enemyUrl, heroBustUrl, heroFrameUrl } from '../pixel/sprites'
 import type { LookSource } from '../pixel/look'
 import { ELEMENT_VIS, hpColor } from '../bits'
@@ -26,6 +28,8 @@ interface Snap {
   caption: string
   /** The authored skill being cast this action (kept through its hits). */
   skill: { name: string; color: string; caster: string } | null
+  /** The element of the current action (colours its hit sparks). */
+  element: Element
 }
 
 const SPEEDS = [1, 2, 4] as const
@@ -49,6 +53,10 @@ const DURATION: Record<CombatEvent['kind'], number> = {
 
 /** A hero's death holds the scene: the moment is not skipped past at speed. */
 const HERO_DEATH_MS = 2600
+/** Hit-stop: a critical blow freezes the frame this long before the impact lands. */
+const HITSTOP_MS = 120
+/** The fallen hero's last words linger this long after the scene moves on. */
+const MOURN_LINGER_MS = 1200
 
 const HERO_X: Record<Line, number> = { front: 262, mid: 298, back: 334 }
 const ENEMY_X: Record<Line, number> = { front: 128, mid: 90, back: 52 }
@@ -132,6 +140,7 @@ export function BattleScene({
       panic: null,
       caption: t('Floor {n}', { n: log.floor }),
       skill: null,
+      element: 'physical',
     }
     out.push(cur)
     for (const e of log.events) {
@@ -161,8 +170,9 @@ export function BattleScene({
           next.target = e.targetId
           next.caption = `${nameOf(e.actorId)} — ${skillName(e.skillId)}`
           const def = SKILLS[e.skillId]
+          const el = def?.element ?? byId[e.actorId]?.element ?? 'physical'
+          next.element = el
           if (def) {
-            const el = def.element ?? byId[e.actorId]?.element ?? 'physical'
             next.skill = { name: t(def.name), color: ELEMENT_VIS[el].color, caster: e.actorId }
           }
           break
@@ -261,29 +271,48 @@ export function BattleScene({
     const shown = cursor > 0 ? log.events[cursor - 1] : undefined
     let ms = (ev ? DURATION[ev.kind] : 400) / speed
     // Hit-stop: a critical blow freezes the frame for a beat.
-    if (shown?.kind === 'hit' && shown.crit) ms += 140
+    if (shown?.kind === 'hit' && shown.crit) ms += HITSTOP_MS
     // A hero's death is not rushed, whatever the speed.
     if (shown?.kind === 'death' && byId[shown.unitId]?.side === 'hero' && !byId[shown.unitId]?.isNpc) ms = Math.max(ms, HERO_DEATH_MS / Math.min(speed, 2))
     const tm = setTimeout(() => setCursor((c) => Math.min(frames.length - 1, c + 1)), ms)
     return () => clearTimeout(tm)
   }, [cursor, playing, atEnd, speed, frames.length, log.events, byId])
 
-  // Fit the stage: largest integer zoom that leaves room for the windows below.
-  const [zoom, setZoom] = useState(2)
-  useEffect(() => {
-    const fit = () => {
-      const z = Math.min(window.innerWidth / BG_W, (window.innerHeight - 190) / BG_H)
-      setZoom(z >= 1 ? Math.max(1, Math.floor(z)) : Math.max(0.5, z))
+  // Fit the stage to the screen: as big as the room left by the windows below allows,
+  // and wider than the 384px canon on wide screens (the backdrop tiles to fill).
+  const hudRef = useRef<HTMLDivElement | null>(null)
+  const [fit, setFit] = useState(() => ({ ...fitStage(BG_W * 2, BG_H * 2), beside: false }))
+  useLayoutEffect(() => {
+    const measure = () => {
+      const vw = window.innerWidth
+      const vh = window.innerHeight
+      // A short landscape screen (a phone on its side) puts the windows beside the stage.
+      const beside = hudBeside(vw, vh)
+      const next = beside
+        ? fitStage(vw - (hudRef.current?.offsetWidth ?? 280) - 28, vh - 16)
+        : fitStage(vw - 16, vh - (hudRef.current?.offsetHeight ?? 0) - 26)
+      setFit((f) => (f.zoom === next.zoom && f.width === next.width && f.beside === beside ? f : { ...next, beside }))
     }
-    fit()
-    window.addEventListener('resize', fit)
-    return () => window.removeEventListener('resize', fit)
+    measure()
+    window.addEventListener('resize', measure)
+    const ro = typeof ResizeObserver !== 'undefined' && hudRef.current ? new ResizeObserver(measure) : null
+    if (ro && hudRef.current) ro.observe(hudRef.current)
+    return () => {
+      window.removeEventListener('resize', measure)
+      ro?.disconnect()
+    }
   }, [])
+  const { zoom, width: stageW, beside } = fit
+  /** Where the 384px canon (the unit layout) sits inside the wider stage. */
+  const ox = Math.floor((stageW - BG_W) / 2)
 
+  const reduced = useReducedMotion()
   const snap = frames[cursor]!
   const current = cursor > 0 ? log.events[cursor - 1] : undefined
   const pos = useMemo(() => layout(log), [log])
-  const bg = cachedDataUrl(`bbg|${log.floor >= 1 && log.floor <= 9 ? 'p' : log.floor}`, () => drawBattleBg(log.floor))
+  const floorFx = devFxFloor() ?? log.floor
+  const layers = layerUrls(floorFx)
+  const weather = weatherForFloor(floorFx)
 
   const heroSrc = (u: CombatUnitInit): LookSource => {
     const h = state?.heroes[u.id as keyof GameState['heroes']]
@@ -302,22 +331,78 @@ export function BattleScene({
 
   const outcome = log.outcome
 
-  // Screen shake: a crit or a blow worth a quarter of the target's life shakes the stage.
-  const shake =
-    current?.kind === 'hit' && (current.crit || current.amount >= (byId[current.targetId]?.maxHP ?? Infinity) * 0.25)
-      ? current.crit
-        ? 'shake-heavy'
-        : 'shake'
-      : ''
-  // The death moment: the fallen hero's portrait and last words.
+  // The death moment: the world greys, the fallen hero sinks slowly, their last words…
   const fallen =
     current?.kind === 'death' && byId[current.unitId]?.side === 'hero' && !byId[current.unitId]?.isNpc ? byId[current.unitId]! : null
+  // …which linger a moment after the replay moves on, then fade.
+  const [mourning, setMourning] = useState<{ unit: CombatUnitInit; words: string; seq: number; fading: boolean } | null>(null)
+  useEffect(() => {
+    if (!fallen || current?.kind !== 'death') return
+    const seq = current.seq
+    const words = state ? lastWords(state, { heroId: fallen.id as HeroId, name: fallen.name }) : '…'
+    setMourning({ unit: fallen, words, seq, fading: false })
+    const hold = HERO_DEATH_MS / Math.min(speed, 2) + MOURN_LINGER_MS
+    const fade = setTimeout(() => setMourning((m) => (m && m.seq === seq ? { ...m, fading: true } : m)), hold)
+    const gone = setTimeout(() => setMourning((m) => (m && m.seq === seq ? null : m)), hold + 600)
+    return () => {
+      clearTimeout(fade)
+      clearTimeout(gone)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [current?.seq, log])
+
+  // Impact juice for each blow as it lands: element sparks, and on a crit the hit-stop,
+  // the camera punch and the heavy shake; a killing blow gets a smaller punch.
+  const fx = useRef<FxHandle | null>(null)
+  const camRef = useRef<HTMLDivElement | null>(null)
+  const wrapRef = useRef<HTMLDivElement | null>(null)
+  useEffect(() => {
+    const e = current
+    if (!e || atEnd) return
+    const at = (id: string) => {
+      const p = pos[id]
+      const u = byId[id]
+      if (!p || !u) return null
+      const h = u.side === 'hero' ? 32 : enemySize(u.name, u.element).h
+      return { x: ox + p.x, y: p.y - Math.round(h / 2) }
+    }
+    if (e.kind === 'hit') {
+      const p = at(e.targetId)
+      if (!p) return
+      const dir: 1 | -1 = byId[e.actorId]?.side === 'hero' ? -1 : 1
+      const kill = e.hpAfter <= 0
+      const big = e.amount >= (byId[e.targetId]?.maxHP ?? Infinity) * 0.25
+      if (e.crit) {
+        fx.current?.freeze(HITSTOP_MS)
+        fx.current?.burst('crit', snap.element, p.x, p.y, dir)
+        if (!reduced) {
+          punch(camRef.current, p, kill ? 1.14 : 1.1, HITSTOP_MS)
+          shake(wrapRef.current, 5, HITSTOP_MS)
+        }
+      } else {
+        fx.current?.burst(kill ? 'kill' : 'hit', snap.element, p.x, p.y, dir)
+        if (!reduced) {
+          if (kill) punch(camRef.current, p, 1.05, 0)
+          if (kill || big) shake(wrapRef.current, 2, 0)
+        }
+      }
+    } else if (e.kind === 'heal') {
+      const p = at(e.unitId)
+      if (p) fx.current?.burst('heal', 'wind', p.x, p.y + 6, 1)
+    } else if (e.kind === 'guard') {
+      const p = at(e.targetId)
+      if (p) fx.current?.burst('guard', 'physical', p.x, p.y, byId[e.actorId]?.side === 'hero' ? -1 : 1)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [current?.seq, log])
 
   const tick = current?.tick ?? 0
+  const [retreatArmed, setRetreatArmed] = useState(false)
   function give(order: BattleOrder) {
     if (!orders) return
     const next = orders.give(order)
     setAim(null)
+    setRetreatArmed(false)
     if (!next) return
     // The new log replays the old one exactly up to the order's tick: resume there.
     const resume = next.events.findIndex((e) => e.tick >= order.tick)
@@ -332,78 +417,166 @@ export function BattleScene({
     if (aim === 'focus' && u.side === 'enemy' && snap.visible[u.id]) give({ tick: tick + 1, kind: 'focus', enemyId: u.id })
     if (aim === 'protect' && u.side === 'hero' && !u.isNpc) give({ tick: tick + 1, kind: 'protect', allyId: u.id })
   }
+  const toggleAim = (which: 'focus' | 'protect') => {
+    if (ordersLeft <= 0) return
+    setAim(aim === which ? null : which)
+    setRetreatArmed(false)
+    setPlaying(false)
+  }
+
+  // Keyboard: the battle is a modal overlay, so it listens first (capture phase) and
+  // keeps every key from reaching the lobby or the windows underneath.
+  const live = useRef({ atEnd, retreatArmed, hasOrders: !!orders, give, toggleAim, onDone, tick, last: frames.length - 1 })
+  live.current = { atEnd, retreatArmed, hasOrders: !!orders, give, toggleAim, onDone, tick, last: frames.length - 1 }
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (isTypingTarget(e.target)) return
+      e.stopPropagation()
+      const L = live.current
+      const act = battleKeyAction(e, L.atEnd)
+      if (!act) return
+      e.preventDefault()
+      // A focused button would also "click" on Space/Enter: the shortcut wins.
+      const focused = document.activeElement
+      if (focused instanceof HTMLElement && focused.tagName === 'BUTTON') focused.blur()
+      switch (act.kind) {
+        case 'continue':
+          L.onDone()
+          return
+        case 'pause':
+          setPlaying((p) => !p)
+          return
+        case 'speed':
+          setSpeed(act.speed)
+          return
+        case 'skip':
+          setAim(null)
+          setRetreatArmed(false)
+          setCursor(L.last)
+          return
+        case 'focus':
+        case 'protect':
+          if (L.hasOrders) L.toggleAim(act.kind)
+          return
+        case 'retreat':
+          if (!L.hasOrders) return
+          // Retreat throws the fight away: the first press asks, the second sounds it.
+          if (L.retreatArmed) L.give({ tick: L.tick + 1, kind: 'retreat' })
+          else {
+            setRetreatArmed(true)
+            setAim(null)
+            setPlaying(false)
+          }
+          return
+        case 'escape':
+          setAim(null)
+          setRetreatArmed(false)
+          return
+      }
+    }
+    window.addEventListener('keydown', onKey, true)
+    return () => window.removeEventListener('keydown', onKey, true)
+  }, [])
+
+  const kbd = (k: string) => <kbd className="bkey">{t(k)}</kbd>
+  const card = mourning ?? (fallen ? { unit: fallen, words: '', seq: -1, fading: false } : null)
+  const stagePxW = Math.round(stageW * zoom)
 
   return (
-    <div className="battle">
-      <div className="battle-caption pframe">{snap.caption}</div>
+    <div className={`battle ${reduced ? 'calm' : ''} ${beside ? 'beside' : ''}`}>
+      <div
+        ref={wrapRef}
+        className={`battle-stage-wrap ${aim ? 'aiming' : ''} ${fallen ? 'death-moment' : ''}`}
+        style={{ width: stagePxW, height: Math.round(BG_H * zoom) }}
+      >
+        <div className="battle-stage" style={{ width: stageW, height: BG_H, transform: `scale(${zoom})` }}>
+          <div className="battle-cam" ref={camRef}>
+            {LAYER_ORDER.map((name) =>
+              layers[name] ? (
+                <div
+                  key={name}
+                  className={`bg-layer bg-${name} bg-theme-${bgTheme(floorFx)}`}
+                  style={{ backgroundImage: `url(${layers[name]})`, ['--ox' as string]: `${ox}px` }}
+                />
+              ) : null,
+            )}
 
-      <div className={`battle-stage-wrap ${shake} ${aim ? 'aiming' : ''}`} style={{ width: BG_W * zoom, height: BG_H * zoom }}>
-        <div className="battle-stage" style={{ transform: `scale(${zoom})` }}>
-          {bg && <img className="px battle-bg" src={bg} width={BG_W} height={BG_H} alt="" />}
-
-          {log.unitsInit.map((u) => {
-            if (!snap.visible[u.id] && u.side === 'enemy') return null
-            const p = pos[u.id]!
-            const isHero = u.side === 'hero'
-            const acting = snap.actor === u.id && (current?.kind === 'act' || current?.kind === 'hit' || current?.kind === 'miss')
-            const hurt = snap.target === u.id && current?.kind === 'hit'
-            const skillHit = hurt && snap.skill !== null
-            const dead = !!snap.dead[u.id]
-            const size = isHero ? { w: 24, h: 32 } : enemySize(u.name, u.element)
-            const src = u.isNpc
-              ? allyFrameUrl(u.name)
-              : isHero
-                ? heroFrameUrl(heroSrc(u), 'left', acting ? 1 : 0)
-                : enemyUrl(u.name, u.element)
-            const cls = ['bunit', isHero ? 'hero' : 'enemy', acting ? 'acting' : '', hurt ? 'hurt' : '', dead ? 'ko' : '']
-              .filter(Boolean)
-              .join(' ')
-            const hpPct = (Math.max(0, snap.hp[u.id] ?? u.maxHP) / u.maxHP) * 100
-            return (
-              <div
-                key={u.id}
-                className={`${cls} ${aim === 'focus' && !isHero && !dead ? 'aimable' : ''} ${aim === 'protect' && isHero && !u.isNpc && !dead ? 'aimable' : ''}`}
-                onClick={() => aimAt(u)}
-                style={{
-                  left: p.x - size.w / 2,
-                  top: p.y - size.h,
-                  width: size.w,
-                  height: size.h,
-                  zIndex: p.y,
-                  ...(skillHit ? { ['--skill-color' as string]: snap.skill!.color } : {}),
-                }}
-              >
-                {skillHit && <div className="skill-flash" />}
-                {snap.skill && snap.skill.caster === u.id && (
-                  <div className="skill-banner" style={{ borderColor: snap.skill.color }}>
-                    {snap.skill.name}
+            <div className="battle-units" style={{ left: ox }}>
+              {log.unitsInit.map((u) => {
+                if (!snap.visible[u.id] && u.side === 'enemy') return null
+                const p = pos[u.id]!
+                const isHero = u.side === 'hero'
+                const acting = snap.actor === u.id && (current?.kind === 'act' || current?.kind === 'hit' || current?.kind === 'miss')
+                const hurt = snap.target === u.id && current?.kind === 'hit'
+                const skillHit = hurt && snap.skill !== null
+                const dead = !!snap.dead[u.id]
+                const falling = fallen?.id === u.id
+                const size = isHero ? { w: 24, h: 32 } : enemySize(u.name, u.element)
+                const src = u.isNpc
+                  ? allyFrameUrl(u.name)
+                  : isHero
+                    ? heroFrameUrl(heroSrc(u), 'left', acting ? 1 : 0)
+                    : enemyUrl(u.name, u.element)
+                const cls = ['bunit', isHero ? 'hero' : 'enemy', acting ? 'acting' : '', hurt ? 'hurt' : '', dead ? 'ko' : '', falling ? 'falling' : '']
+                  .filter(Boolean)
+                  .join(' ')
+                const hpPct = (Math.max(0, snap.hp[u.id] ?? u.maxHP) / u.maxHP) * 100
+                return (
+                  <div
+                    key={u.id}
+                    className={`${cls} ${aim === 'focus' && !isHero && !dead ? 'aimable' : ''} ${aim === 'protect' && isHero && !u.isNpc && !dead ? 'aimable' : ''}`}
+                    onClick={() => aimAt(u)}
+                    style={{
+                      left: p.x - size.w / 2,
+                      top: p.y - size.h,
+                      width: size.w,
+                      height: size.h,
+                      zIndex: p.y,
+                      ...(skillHit ? { ['--skill-color' as string]: snap.skill!.color } : {}),
+                    }}
+                  >
+                    {skillHit && <div className="skill-flash" />}
+                    {snap.skill && snap.skill.caster === u.id && (
+                      <div className="skill-banner" style={{ borderColor: snap.skill.color }}>
+                        {snap.skill.name}
+                      </div>
+                    )}
+                    <div className="bshadow" style={{ width: size.w * 0.7 }} />
+                    {src && <img className="px bsprite" src={src} width={size.w} height={size.h} alt={u.name} />}
+                    {(!isHero || u.isNpc) && !dead && (
+                      <div className="bhp">
+                        <span style={{ width: `${hpPct}%`, background: hpColor(hpPct) }} />
+                      </div>
+                    )}
+                    {snap.panic === u.id && <span className="bsweat">💧</span>}
                   </div>
-                )}
-                <div className="bshadow" style={{ width: size.w * 0.7 }} />
-                {src && <img className="px bsprite" src={src} width={size.w} height={size.h} alt={u.name} />}
-                {(!isHero || u.isNpc) && !dead && (
-                  <div className="bhp">
-                    <span style={{ width: `${hpPct}%`, background: hpColor(hpPct) }} />
-                  </div>
-                )}
-                {snap.panic === u.id && <span className="bsweat">💧</span>}
-              </div>
-            )
-          })}
+                )
+              })}
 
-          {popups.map((e) => {
-            if (e.kind !== 'hit' && e.kind !== 'miss' && e.kind !== 'guard' && e.kind !== 'heal') return null
-            const p = pos[e.kind === 'heal' ? e.unitId : e.targetId]
-            if (!p) return null
-            const text =
-              e.kind === 'miss' ? t('MISS') : e.kind === 'guard' ? t('GUARD') : e.kind === 'heal' ? `+${e.amount}` : String(e.amount)
-            const cls = e.kind === 'miss' || e.kind === 'guard' ? 'miss' : e.kind === 'heal' ? 'heal' : e.crit ? 'crit' : ''
-            return (
-              <div key={e.seq} className={`dmg ${cls}`} style={{ left: p.x, top: p.y - 34, zIndex: 999 }}>
-                {text}
-              </div>
-            )
-          })}
+              {popups.map((e) => {
+                if (e.kind !== 'hit' && e.kind !== 'miss' && e.kind !== 'guard' && e.kind !== 'heal') return null
+                const p = pos[e.kind === 'heal' ? e.unitId : e.targetId]
+                if (!p) return null
+                const text =
+                  e.kind === 'miss' ? t('MISS') : e.kind === 'guard' ? t('GUARD') : e.kind === 'heal' ? `+${e.amount}` : String(e.amount)
+                const kill = e.kind === 'hit' && e.hpAfter <= 0
+                const cls =
+                  e.kind === 'miss' || e.kind === 'guard' ? 'miss' : e.kind === 'heal' ? 'heal' : e.crit ? 'crit' : kill ? 'kill' : ''
+                return (
+                  <div key={e.seq} className={`dmg ${cls}`} style={{ left: p.x, top: p.y - 34, zIndex: 999 }}>
+                    {e.kind === 'hit' && e.crit && <span className="dmg-tag">{t('CRITICAL!')}</span>}
+                    {text}
+                  </div>
+                )
+              })}
+            </div>
+
+            <BattleFxCanvas ref={fx} width={stageW} height={BG_H} horizon={HORIZON} weather={weather} density={reduced ? 0.25 : 1} />
+          </div>
+
+          {fallen && <div className="death-vignette" />}
+          {fallen && <div className="cine-bar top" />}
+          {fallen && <div className="cine-bar bottom" />}
 
           {atEnd && (
             <div className={`battle-banner ${outcome === 'win' ? 'win' : 'lose'}`}>
@@ -418,21 +591,24 @@ export function BattleScene({
                       : t('TIME UP')}
             </div>
           )}
-          {fallen && (
-            <div className="death-card" key={current?.seq}>
-              <img className="px" src={heroBustUrl(heroSrc(fallen))} width={48} height={48} alt="" />
+          {card && (
+            <div className={`death-card ${card.fading ? 'fading' : ''}`} key={card.unit.id}>
+              <img className="px" src={heroBustUrl(heroSrc(card.unit))} width={48} height={48} alt="" />
               <div>
-                <div className="death-name">{fallen.name}</div>
-                <div className="death-words">
-                  “{state ? lastWords(state, { heroId: fallen.id as HeroId, name: fallen.name }) : '…'}”
-                </div>
+                <div className="death-name">{card.unit.name}</div>
+                <div className="death-words">“{card.words || '…'}”</div>
               </div>
             </div>
           )}
         </div>
+        <div className="battle-caption pframe">{snap.caption}</div>
       </div>
 
-      <div className="battle-windows">
+      <div
+        className="battle-hud"
+        ref={hudRef}
+        style={beside ? undefined : { width: Math.max(Math.min(stagePxW, 1280), Math.min(800, window.innerWidth - 16)) }}
+      >
         <div className="pframe battle-foes">
           {liveEnemies.length <= 6
             ? liveEnemies.map((u) => {
@@ -498,60 +674,138 @@ export function BattleScene({
             )
           })}
         </div>
-      </div>
 
-      <div className="battle-controls">
-        {!atEnd ? (
-          <>
-            <button className="pbtn" onClick={() => setPlaying((p) => !p)}>
-              {playing ? t('❚❚ Pause') : t('▶ Play')}
+        <div className="battle-controls">
+          {!atEnd ? (
+            <>
+              <div className="bctl-row">
+                <button className="pbtn" onClick={() => setPlaying((p) => !p)}>
+                  {playing ? t('❚❚ Pause') : t('▶ Play')}
+                  {kbd(BATTLE_KEYS.pause)}
+                </button>
+                {SPEEDS.map((s, i) => (
+                  <button key={s} className={`pbtn ghost ${speed === s ? 'on' : ''}`} onClick={() => setSpeed(s)}>
+                    {s}×{kbd(String(i + 1))}
+                  </button>
+                ))}
+                <button className="pbtn ghost" onClick={() => setCursor(frames.length - 1)}>
+                  {t('Skip ▸▸')}
+                  {kbd(BATTLE_KEYS.skip)}
+                </button>
+              </div>
+              {orders && (
+                <div className="bctl-row order-bar">
+                  <button
+                    className={`pbtn sm ${aim === 'focus' ? 'on' : ''}`}
+                    disabled={ordersLeft <= 0}
+                    onClick={() => toggleAim('focus')}
+                    title={t('Every hero attacks the enemy you pick')}
+                  >
+                    🎯 {t('Focus')}
+                    {kbd(BATTLE_KEYS.focus)}
+                  </button>
+                  <button
+                    className={`pbtn sm ${aim === 'protect' ? 'on' : ''}`}
+                    disabled={ordersLeft <= 0}
+                    onClick={() => toggleAim('protect')}
+                    title={t('Enemies avoid the hero you pick while anyone else stands')}
+                  >
+                    🛡 {t('Protect')}
+                    {kbd(BATTLE_KEYS.protect)}
+                  </button>
+                  <span className="muted small">{t('{n} orders', { n: Math.max(0, ordersLeft) })}</span>
+                  <button
+                    className={`pbtn sm danger ${retreatArmed ? 'armed' : ''}`}
+                    onClick={() => give({ tick: tick + 1, kind: 'retreat' })}
+                    title={t('End the fight now: the living come home, nothing is won')}
+                  >
+                    🏳 {t('Retreat')}
+                    {kbd(BATTLE_KEYS.retreat)}
+                  </button>
+                </div>
+              )}
+              {aim && (
+                <span className="aim-hint">
+                  {aim === 'focus' ? t('Click an enemy…') : t('Click a hero…')}
+                  {kbd(BATTLE_KEYS.close)}
+                </span>
+              )}
+              {retreatArmed && <span className="aim-hint">{t('Press R again to sound the retreat (Esc to cancel)')}</span>}
+            </>
+          ) : (
+            <button className="pbtn primary big" onClick={onDone}>
+              {t('Continue ▸')}
+              {kbd('Enter')}
             </button>
-            {SPEEDS.map((s) => (
-              <button key={s} className={`pbtn ghost ${speed === s ? 'on' : ''}`} onClick={() => setSpeed(s)}>
-                {s}×
-              </button>
-            ))}
-            <button className="pbtn ghost" onClick={() => setCursor(frames.length - 1)}>
-              {t('Skip ▸▸')}
-            </button>
-            {orders && (
-              <span className="order-bar">
-                <button
-                  className={`pbtn sm ${aim === 'focus' ? 'on' : ''}`}
-                  disabled={ordersLeft <= 0}
-                  onClick={() => {
-                    setAim(aim === 'focus' ? null : 'focus')
-                    setPlaying(false)
-                  }}
-                  title={t('Every hero attacks the enemy you pick')}
-                >
-                  🎯 {t('Focus')}
-                </button>
-                <button
-                  className={`pbtn sm ${aim === 'protect' ? 'on' : ''}`}
-                  disabled={ordersLeft <= 0}
-                  onClick={() => {
-                    setAim(aim === 'protect' ? null : 'protect')
-                    setPlaying(false)
-                  }}
-                  title={t('Enemies avoid the hero you pick while anyone else stands')}
-                >
-                  🛡 {t('Protect')}
-                </button>
-                <span className="muted small">{t('{n} orders', { n: Math.max(0, ordersLeft) })}</span>
-                <button className="pbtn sm danger" onClick={() => give({ tick: tick + 1, kind: 'retreat' })} title={t('End the fight now: the living come home, nothing is won')}>
-                  🏳 {t('Retreat')}
-                </button>
-              </span>
-            )}
-            {aim && <span className="aim-hint">{aim === 'focus' ? t('Click an enemy…') : t('Click a hero…')}</span>}
-          </>
-        ) : (
-          <button className="pbtn primary big" onClick={onDone}>
-            {t('Continue ▸')}
-          </button>
-        )}
+          )}
+        </div>
       </div>
     </div>
   )
+}
+
+// ── Scene helpers ────────────────────────────────────────────────────────────
+
+/** Which layers each backdrop theme has (known after its first build). */
+const layerPresence = new Map<string, Set<BattleLayerName>>()
+
+/** Data URLs of a floor's parallax layers, cached per backdrop theme ('' = no layer). */
+function layerUrls(floor: number): Record<BattleLayerName, string> {
+  const out = { sky: '', drift: '', far: '', mid: '', ground: '', fog: '' }
+  if (!canvasAvailable()) return out
+  const theme = bgTheme(floor)
+  let built: BattleLayers | null = null
+  const get = () => (built ??= drawBattleLayers(floor))
+  let present = layerPresence.get(theme)
+  if (!present) {
+    const L = get()
+    present = new Set(LAYER_ORDER.filter((n) => L[n] !== null))
+    layerPresence.set(theme, present)
+  }
+  for (const name of LAYER_ORDER) if (present.has(name)) out[name] = cachedDataUrl(`bbg|${theme}|${name}`, () => get()[name]!)
+  return out
+}
+
+/** Dev-only: `?battlefx=<floor>` previews another floor's backdrop and weather. */
+function devFxFloor(): number | null {
+  if (typeof window === 'undefined') return null
+  const v = Number(new URLSearchParams(window.location.search).get('battlefx'))
+  return Number.isInteger(v) && v > 0 ? v : null
+}
+
+/** The player's reduced-motion preference (no shake or zoom, sparse weather). */
+function useReducedMotion(): boolean {
+  const query = () =>
+    typeof window !== 'undefined' && typeof window.matchMedia === 'function' ? window.matchMedia('(prefers-reduced-motion: reduce)') : null
+  const [reduce, setReduce] = useState(() => !!query()?.matches)
+  useEffect(() => {
+    const q = query()
+    if (!q || typeof q.addEventListener !== 'function') return
+    const on = () => setReduce(q.matches)
+    q.addEventListener('change', on)
+    return () => q.removeEventListener('change', on)
+  }, [])
+  return reduce
+}
+
+/** Camera punch: a quick zoom toward (x, y) and back, after `delay` ms of hit-stop. */
+function punch(el: HTMLElement | null, at: { x: number; y: number }, amount: number, delay: number) {
+  if (!el || typeof el.animate !== 'function') return
+  el.style.transformOrigin = `${at.x}px ${at.y}px`
+  el.animate([{ transform: 'scale(1)' }, { transform: `scale(${amount})`, offset: 0.3 }, { transform: 'scale(1)' }], {
+    duration: 380,
+    delay,
+    easing: 'steps(6, end)',
+  })
+}
+
+/** Screen shake of the whole stage, `px` screen pixels at its strongest. */
+function shake(el: HTMLElement | null, px: number, delay: number) {
+  if (!el || typeof el.animate !== 'function') return
+  const k = (a: number, b: number) => ({ transform: `translate(${Math.round(a * px)}px, ${Math.round(b * px)}px)` })
+  el.animate([k(0, 0), k(-1, 0.5), k(1, -0.5), k(-0.75, -0.25), k(0.75, 0.5), k(-0.25, 0), k(0, 0)], {
+    duration: px > 2 ? 320 : 220,
+    delay,
+    easing: 'steps(6, end)',
+  })
 }
