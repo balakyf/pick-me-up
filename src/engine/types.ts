@@ -403,6 +403,12 @@ export type MemoryKind =
   | 'jobTier'
   | 'mourned'
   | 'retreated'
+  // The estate (WS6b): duels, statues, bounties, trauma
+  | 'duel'
+  | 'statue'
+  | 'bounty'
+  | 'comforted'
+  | 'burnout'
 
 export interface Memory {
   kind: MemoryKind
@@ -464,6 +470,14 @@ export type ChronicleKind =
   | 'research'
   | 'stalled'
   | 'arrival'
+  // The estate (WS6b)
+  | 'statue'
+  | 'withdrawn'
+  | 'recovered'
+  | 'burnout'
+  | 'duel'
+  | 'bounty'
+  | 'jealous'
 
 export interface ChronicleEntry {
   /** World-time ms. */
@@ -791,6 +805,74 @@ export interface EstateState {
   statues: HeroId[]
   /** Decoration id → level. */
   decor: Record<string, number>
+  /** Bounties under way (bench heroes out on a gold-funded job). */
+  bounties: Bounty[]
+  /** The latest finished bounties, newest first (what they brought back). */
+  bountyLog: BountyReport[]
+  /** Next bounty id. */
+  bountySeq: number
+  /** Per-hero trauma: fatigue, burnout, withdrawal (living heroes only). */
+  trauma: Record<HeroId, HeroTrauma>
+  /** The Master's attention (talks, gifts, deployments) over a rolling window. */
+  attention: AttentionMark[]
+  /** Who feels neglected, and whom they envy (recomputed each world-day). */
+  jealous: Record<HeroId, HeroId>
+  /** Tryout duels: how many today (world-day `day`) and ever, and the latest. */
+  duels: { day: number; today: number; total: number; last: DuelRecord | null }
+  /** World-time the estate last caught up (fatigue recovery, daily checks). */
+  clock: number
+}
+
+/** A gold-funded job bench heroes take for a while (a gold → materials conversion). */
+export interface Bounty {
+  id: number
+  kind: string
+  heroIds: HeroId[]
+  postedAt: number
+  endsAt: number
+}
+
+/** What a finished bounty brought back. */
+export interface BountyReport {
+  id: number
+  kind: string
+  heroIds: HeroId[]
+  endedAt: number
+  materials: Record<MaterialId, number>
+  xp: number
+  item: string | null
+}
+
+export interface HeroTrauma {
+  /** Floors fought without rest, as of `foughtAt` (recovers one per world-hour after). */
+  fatigue: number
+  /** World-time of the last floor fought. */
+  foughtAt: number
+  /** Burnt out: refuses deployment until this world-time (null = fine). */
+  burnoutUntil: number | null
+  /** Has burnt out before — a veteran who teaches well (canon Roderick). */
+  veteran: boolean
+  /** Withdrawn from the others until comforted (null = not). */
+  withdrawn: { since: number; cause: HeroId | null; comfort: number; lastTalkDay: number } | null
+  /** When Sanity first sank below the despair line (null = above it). */
+  lowSince: number | null
+}
+
+export interface AttentionMark {
+  /** World-day index. */
+  day: number
+  heroId: HeroId
+  weight: number
+}
+
+export interface DuelRecord {
+  a: HeroId
+  b: HeroId
+  /** The winner, or null for a draw. */
+  winner: HeroId | null
+  day: number
+  /** How the pair took it: grudging respect, or bitterness. */
+  mood: 'respect' | 'bitter' | 'friendly'
 }
 
 /** THE canonical game state. Every module imports this; none redeclare it.
@@ -1283,3 +1365,15 @@ export type Command =
   | { type: 'TOWER_RAID'; floor: number; parties: HeroId[][]; crew: HeroId[]; ballista?: number }
   /** Tower challenges: one attempt at this week's Crack of Time trial (a simulation). */
   | { type: 'WEEKLY_TRIAL'; heroIds: HeroId[] }
+  /** The estate: raise a decoration one level. */
+  | { type: 'BUY_DECOR'; decor: string }
+  /** The estate: raise a statue for a fallen hero in the Memorial. */
+  | { type: 'RAISE_STATUE'; heroId: HeroId }
+  /** The estate: post a bounty on the board and send bench heroes on it. */
+  | { type: 'POST_BOUNTY'; bounty: string; heroIds: HeroId[] }
+  /** Training Center: pay to redirect a running drill to another skill (keeps its timer). */
+  | { type: 'REFOCUS_DRILL'; heroId: HeroId; skillId: string }
+  /** Training Yard: host a tryout duel between two heroes. */
+  | { type: 'HOST_DUEL'; a: HeroId; b: HeroId }
+  /** The Master talked to a hero (attention; comfort for the withdrawn). */
+  | { type: 'TALK_TO_HERO'; heroId: HeroId }

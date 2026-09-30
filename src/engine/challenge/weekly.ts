@@ -14,6 +14,7 @@
  *
  * PURE and DETERMINISTIC.
  */
+import { estateBusy } from '../estate/deploy'
 import type { CombatLog, CombatUnit, Element, GameState, HeroId, MaterialId, OwnedHero } from '../types'
 import { TUNING } from '../tuning'
 import { SKILLS } from '../content'
@@ -104,7 +105,7 @@ export function weeklyRefusal(state: GameState, heroIds: readonly HeroId[], nowW
   if (distinct(heroIds).length !== heroIds.length) return 'A hero can only enter once.'
   for (const id of heroIds) {
     const h = state.heroes[id]
-    if (!canEnterTrial(h)) return 'Everyone must be alive and at home.'
+    if (!canEnterTrial(h) || estateBusy(state, id) === 'is out on a bounty') return 'Everyone must be alive and at home.'
     if (!heroAllowed(rule, h)) return "Someone doesn't meet this week's rule."
   }
   return null

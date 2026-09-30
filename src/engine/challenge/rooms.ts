@@ -44,6 +44,7 @@ import { CHALLENGE } from './tuning'
 import { challengeOf, fitToFight } from './challenge'
 import { applyPartyBonuses } from './bonds'
 import { recordBattle } from '../codex'
+import { refusesDeploy } from '../estate/deploy'
 
 const R = CHALLENGE.rooms
 
@@ -159,7 +160,7 @@ function partyFit(state: GameState): { hero: OwnedHero; line: CombatUnit['line']
   const out: { hero: OwnedHero; line: CombatUnit['line'] }[] = []
   state.party.slots.forEach((id, i) => {
     const h = id ? state.heroes[id] : undefined
-    if (fitToFight(h)) out.push({ hero: h, line: state.party.lines[i] ?? 'front' })
+    if (fitToFight(h) && !refusesDeploy(state, h.id)) out.push({ hero: h, line: state.party.lines[i] ?? 'front' })
   })
   return out
 }

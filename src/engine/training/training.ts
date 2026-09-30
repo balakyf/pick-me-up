@@ -10,6 +10,7 @@
  * PURE and DETERMINISTIC: no RNG; inputs never mutated.
  */
 
+import { estateBusy } from '../estate/deploy'
 import type { GameState, HeroId, OwnedHero, SkillGrade } from '../types'
 import { SKILLS } from '../content'
 import { TUNING } from '../tuning'
@@ -62,6 +63,7 @@ export function trainingRefusal(state: GameState, heroId: HeroId, skillId: strin
   if (hero.training !== null) return 'That hero is already training.'
   if (hero.expedition) return 'That hero is away in the Ruins.'
   if (hero.captiveOf) return 'That hero is held captive.'
+  if (estateBusy(state, heroId) === 'is out on a bounty') return 'That hero is out on a bounty.'
   const mode = trainingMode(hero, skillId)
   if (mode === null) return 'The Training Center cannot teach that skill.'
   const def = SKILLS[skillId]!

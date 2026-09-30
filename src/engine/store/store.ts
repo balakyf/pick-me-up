@@ -64,6 +64,7 @@ import { attemptDaily, type DailyResult } from '../daily'
 import { advanceTime, toWorldTime } from '../time'
 import { assignJob, lifeOf, lifeReact } from '../life'
 import { afterFloor, resolveBonusRoom, runRaid, runWeeklyTrial } from '../challenge'
+import { buyDecor, estateReact, hostDuel, postBounty, raiseStatue, refocusDrill, talkToHero } from '../estate'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Guards
@@ -126,9 +127,9 @@ export function reduce(state: GameState | null, cmd: Command, nowWorld: number =
     if (current.meta.deleted) throw new Error('reduce: this waiting room has greyed and been deleted — start a new Master')
     // Tower challenges: the Shrine's blessing is spent, an anchor may open a side room.
     const r = afterFloor(playFloor(current, cmd.focus, cmd.ballista, cmd.subvert, cmd.orders))
-    return lifeReact(state, r.state, cmd, nowWorld, r.result)
+    return estateReact(state, lifeReact(state, r.state, cmd, nowWorld, r.result), cmd, nowWorld, r.result)
   }
-  return lifeReact(state, reduceCore(state, cmd, nowWorld), cmd, nowWorld)
+  return estateReact(state, lifeReact(state, reduceCore(state, cmd, nowWorld), cmd, nowWorld), cmd, nowWorld)
 }
 
 function reduceCore(state: GameState | null, cmd: Command, nowWorld: number): GameState {
@@ -290,6 +291,25 @@ function reduceCore(state: GameState | null, cmd: Command, nowWorld: number): Ga
     case 'WEEKLY_TRIAL':
       return runWeeklyTrial(current, cmd.heroIds, nowWorld).state
 
+    // The estate (spec 2026-09-30-estate-and-life)
+    case 'BUY_DECOR':
+      return buyDecor(current, cmd.decor)
+
+    case 'RAISE_STATUE':
+      return raiseStatue(current, cmd.heroId, nowWorld)
+
+    case 'POST_BOUNTY':
+      return postBounty(current, cmd.bounty, cmd.heroIds, nowWorld)
+
+    case 'REFOCUS_DRILL':
+      return refocusDrill(current, cmd.heroId, cmd.skillId)
+
+    case 'HOST_DUEL':
+      return hostDuel(current, cmd.a, cmd.b, nowWorld)
+
+    case 'TALK_TO_HERO':
+      return talkToHero(current, cmd.heroId, nowWorld)
+
     default: {
       // Exhaustiveness guard: a new Command variant must be handled here.
       const exhaustive: never = cmd
@@ -340,7 +360,8 @@ export function attemptFloorWithResult(
   orders?: BattleOrder[],
 ): { state: GameState; result: FloorResult } {
   const r = afterFloor(playFloor(state, focus, ballista, subvert, orders))
-  return { state: lifeReact(state, r.state, { type: 'ATTEMPT_FLOOR', focus, ballista, subvert, orders }, 0, r.result), result: r.result }
+  const cmd: Command = { type: 'ATTEMPT_FLOOR', focus, ballista, subvert, orders }
+  return { state: estateReact(state, lifeReact(state, r.state, cmd, 0, r.result), cmd, 0, r.result), result: r.result }
 }
 
 /** Like RAID_RIVAL, but also returns the raid's outcome (loot, captive, battle log). */

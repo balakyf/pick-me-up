@@ -49,6 +49,7 @@ import { ROOF_LIFT, blanket, drawRoof, smoke } from '../pixel/campusProps'
 import { drawLot, drawSign, drawSiteFrame, drawSiteMarker, type SiteMarker } from '../pixel/siteArt'
 import { gatedRooms, siteRooms, buildableCount } from './sites'
 import { ConstructionBoard } from './ConstructionBoard'
+import { drawSky, estateDrawables, skyLabel } from './estateLayer'
 import { heroBustUrl, heroFrameCanvas, iselBustUrl, masterBustUrl, masterFrameCanvas } from '../pixel/sprites'
 import type { Dir, WalkFrame } from '../pixel/heroSprite'
 import { hashString } from '../pixel/rand'
@@ -526,6 +527,7 @@ export function LobbyWorld({
     if (!h) return
     const inParty = st.party.slots.includes(h.id)
     if (!st.life.guide.done.includes('talk')) store.dispatch({ type: 'GUIDE_STEP', step: 'talk' })
+    store.dispatch({ type: 'TALK_TO_HERO', heroId: h.id }, Date.now())
     setDialog({
       speaker: h.name,
       bust: heroBustUrl(h),
@@ -944,6 +946,8 @@ export function LobbyWorld({
           },
         })
       }
+      // The estate: decorations, statues, the season on the ground, the trees and the roofs.
+      list.push(...estateDrawables(ctx, st, toWorldTime(Date.now()), w.time, { camX, camY, VW, VH }, w.roofAlpha, inside))
       list.sort((a, b) => a.y - b.y)
       for (const d of list) d.draw()
 
@@ -1007,6 +1011,9 @@ export function LobbyWorld({
         }
         ctx.globalCompositeOperation = 'source-over'
       }
+
+      // the sky: weather, season, lantern light, fireflies
+      drawSky(ctx, st, toWorldTime(Date.now()), w.time, { camX, camY, VW, VH }, dark)
 
       // warm vignette
       const g = ctx.createRadialGradient(VW / 2, VH / 2, Math.min(VW, VH) * 0.45, VW / 2, VH / 2, Math.max(VW, VH) * 0.7)
@@ -1132,6 +1139,7 @@ export function LobbyWorld({
           <div className="hud-sub hud-clock">
             {hour >= 6 && hour < 19 ? '☀' : '☾'} {t('Day {n}', { n: accountDay(state, dayOfSlot(slotOf(clock))) })} · {clockLabel(clock)}
           </div>
+          <div className="hud-sub hud-sky">{skyLabel(state, clock, hour < 6 || hour >= 19)}</div>
         </div>
       </div>
 

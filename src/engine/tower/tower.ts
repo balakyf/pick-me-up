@@ -46,6 +46,7 @@ import { tacticalFocusBonus } from '../tactical'
 import { addMasterXp } from '../master'
 import { foldBattleSkills } from '../skills'
 import { rebellionChance, withFavor } from '../favor'
+import { moraleAdjust, refusesDeploy } from '../estate/deploy'
 import { addPi } from '../interference'
 import { practice, woundBoss } from '../minigames'
 import { floorModifiersFor, withBonds } from '../depth'
@@ -521,8 +522,13 @@ export function playFloor(
       refusedHeroIds.push(heroId)
       continue
     }
+    // The estate: a burnt-out hero (or one out on a bounty) refuses; the withdrawn fight dulled.
+    if (refusesDeploy(state, heroId)) {
+      refusedHeroIds.push(heroId)
+      continue
+    }
     const line: Line = lines[s] ?? 'front'
-    heroUnits.push(buildCombatUnit(hero, line, SKILLS, state.inventory))
+    heroUnits.push(moraleAdjust(state, buildCombatUnit(hero, line, SKILLS, state.inventory)))
     deployedIds.push(heroId)
   }
 

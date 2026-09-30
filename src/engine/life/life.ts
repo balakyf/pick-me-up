@@ -39,6 +39,8 @@ import type {
 } from '../types'
 import { personalityOf, chemistry, type Personality } from './personality'
 import { JOB_PLACE, jobOpen, jobTier, workPower, aptitude, jobFeeling } from './jobs'
+import { activityNudge, estateLifeMods, estateLive, instructorMult, type EstateLifeMods } from '../estate/lifeHooks'
+import { weatherAt, type Weather } from '../estate/weather'
 
 const L = TUNING.life
 const R = L.relation
@@ -217,6 +219,9 @@ interface Ctx {
   forgeHasWork: boolean
   /** Heroes already headed to each place this slot (crowding). */
   crowd: Map<LifePlace, number>
+  /** The estate (decorations, trauma, bounties) and the sky overhead. */
+  mods: EstateLifeMods
+  weather: Weather
 }
 
 /** How many heroes a place holds comfortably before it feels crowded. */
@@ -343,7 +348,7 @@ function chooseActivity(hero: OwnedHero, life: HeroLife, ctx: Ctx, rnd: () => nu
     // A full room is less inviting: every hero past its capacity costs a little.
     const place = placeFor(k, hero, life, ctx.state)
     const over = (ctx.crowd.get(place) ?? 0) - placeCapacity(place, ctx.state)
-    const v = s + rnd() * 0.35 - (over > 0 && k !== 'work' && k !== 'sleep' ? 0.25 * over : 0)
+    const v = s + rnd() * 0.35 - (over > 0 && k !== 'work' && k !== 'sleep' ? 0.25 * over : 0) + activityNudge(ctx.mods, hero.id, k, place, ctx.weather)
     if (v > bestScore) {
       bestScore = v
       best = k
@@ -399,7 +404,7 @@ export function autoForgeSlot(state: GameState): EquipmentSlot | null {
 // The step
 // ─────────────────────────────────────────────────────────────────────────────
 
-interface Working {
+export interface Working {
   hero: OwnedHero
   life: HeroLife
   sanity: number
@@ -457,6 +462,7 @@ export function stepLife(state: GameState, nowWorld: number): GameState {
   const pantryCap = Math.max(4, work.length * L.jobs.pantryPerHero)
   const seed = state.seed
   let lastStallDay = -1
+  const mods = estateLifeMods(state)
 
   for (let slot = from + 1; slot <= target; slot++) {
     const hour = hourOfSlot(slot)
@@ -468,11 +474,11 @@ export function stepLife(state: GameState, nowWorld: number): GameState {
       forge.wip?.slot ?? (forge.order === 'auto' ? autoForgeSlot(forgeState) : forge.order)
     const forgeHasWork = smithyUnlocked(state) && forge.order !== null && orderSlot !== null
     const crowd = new Map<LifePlace, number>()
-    const ctx: Ctx = { state: forgeState, slot, hour, forgeHasWork, crowd }
+    const ctx: Ctx = { state: forgeState, slot, hour, forgeHasWork, crowd, mods, weather: weatherAt(seed, atWorld) }
 
     // 1. Decide.
     for (const w of work) {
-      const pin = pinned(w.hero)
+      const pin = pinned(w.hero) ?? (mods.away.has(w.hero.id) ? 'away' : null)
       if (pin) {
         w.life.doing = { kind: pin, place: placeFor(pin, w.hero, w.life, state), untilSlot: slot + 1 }
         continue
@@ -549,7 +555,7 @@ export function stepLife(state: GameState, nowWorld: number): GameState {
           break
         }
         case 'instructor':
-          instructorPower += power
+          instructorPower += power * instructorMult(mods, w.hero.id)
           break
         case 'healer':
           healerPower += power
@@ -559,6 +565,8 @@ export function stepLife(state: GameState, nowWorld: number): GameState {
           break
       }
     }
+
+    guardPower += mods.guard
 
     // The forge: start an item (paying for it), then hammer on it.
     if (smithPower > 0 && leadSmith) {
@@ -609,7 +617,7 @@ export function stepLife(state: GameState, nowWorld: number): GameState {
     }
 
     // 3. Live: needs, activity effects, sanity, grief.
-    const trainMult = Math.min(L.train.instructorCap, 1 + L.train.instructorPerPower * instructorPower)
+    const trainMult = Math.min(L.train.instructorCap, 1 + L.train.instructorPerPower * instructorPower) * mods.trainMult
     for (const w of work) {
       const kind = w.life.doing.kind
       if (kind === 'away' || kind === 'captive' || kind === 'promoting' || kind === 'drilling') continue
@@ -678,6 +686,7 @@ export function stepLife(state: GameState, nowWorld: number): GameState {
           break
         }
       }
+      estateLive(mods, w, kind, isSleepHour(hour, w.p))
       let unmet = 0
       let content = true
       for (const k of ['energy', 'hunger', 'social', 'fun'] as NeedKey[]) {

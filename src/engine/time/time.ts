@@ -15,6 +15,7 @@ import { piAfterGap, piZeroCrossing } from '../interference'
 import { expeditionHaul } from '../rift'
 import { resolveInvasions } from '../pvp'
 import { stepLife } from '../life/life'
+import { resolveEstate } from '../estate/estate'
 import type { GameState, OwnedHero, HeroId, DailiesState, FacilityId } from '../types'
 
 /** 1 world-hour in world-time ms. World-time is plain ms, only dilated at the edge. */
@@ -123,5 +124,6 @@ export function advanceTime(state: GameState, nowWorld: number): GameState {
   // Offline invasions through the open crack, and captive deadlines (Layer 4 §2).
   const invaded = resolveInvasions({ ...state, gems, materials, heroes: nextHeroes, facilities: nextFacilities, dailies, meta }, nowWorld)
   // Quanton Life: the heroes live through the elapsed slots (needs, jobs, friendships).
-  return stepLife(invaded, nowWorld)
+  // The estate: bounties come home, trauma moves on (before the heroes live the slots).
+  return stepLife(resolveEstate(invaded, nowWorld), nowWorld)
 }

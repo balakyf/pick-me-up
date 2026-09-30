@@ -30,6 +30,8 @@ import { heroBustUrl } from '../pixel/sprites'
 import { JOB_NAME, accountDay, chronicleLine, diaryLine, groupedChronicle, placeName, shortName, speak, statusLine, tradeName } from './speech'
 import { t } from '../i18n/i18n'
 import { BondList } from '../bond/BondBadge'
+import { BOUNTIES } from '../../engine/estate'
+import { EstateNotes } from './EstatePanels'
 
 const first = (n: string) => n.split(/\s+/)[0] ?? n
 
@@ -94,6 +96,15 @@ export function memoryLine(state: GameState, m: Memory): string {
     }),
     mourned: t('Visited {name}’s grave', { name: other }),
     retreated: t('Retreated from floor {floor}', { floor: m.floor ?? '?' }),
+    duel: m.detail?.startsWith('won')
+      ? t('Won a tryout duel against {name}', { name: other })
+      : m.detail?.startsWith('lost')
+        ? t('Lost a tryout duel to {name}', { name: other })
+        : t('Fought {name} to a draw', { name: other }),
+    statue: t('Saw a statue raised for {name}', { name: other }),
+    bounty: t('Came back from a bounty: {name}', { name: t(BOUNTIES[m.detail ?? '']?.name ?? '') }),
+    comforted: t('Came back to the others, comforted'),
+    burnout: t('Burnt out after too many floors'),
   }
   return `${day} · ${text[m.kind]}`
 }
@@ -258,6 +269,7 @@ export function HeroProfile({
             </div>
             <div className="profile-now">“{speak(state, hero, inParty, 'profile')}”</div>
             <div className="muted small">{statusLine(state, hero)}</div>
+            <EstateNotes state={state} hero={hero} />
           </div>
         </div>
 

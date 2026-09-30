@@ -34,6 +34,7 @@ import { CHALLENGE } from './tuning'
 import { bindPages, challengeOf, distinct, fitToFight, lineFor } from './challenge'
 import { applyPartyBonuses } from './bonds'
 import { withBonds } from '../depth'
+import { moraleAdjust, refusesDeploy } from '../estate/deploy'
 import { recordBattle } from '../codex'
 
 const RD = CHALLENGE.raids
@@ -103,7 +104,7 @@ export function raidRefusal(state: GameState, floor: number, parties: readonly H
   if (crew.length > RD.maxCrew) return `The ballista takes at most ${RD.maxCrew} crew.`
   const all = [...fighting.flat(), ...crew]
   if (distinct(all).length !== all.length) return 'A hero can only be in one place.'
-  if (all.some((id) => !fitToFight(state.heroes[id]))) return 'Everyone sent must be fit to fight.'
+  if (all.some((id) => !fitToFight(state.heroes[id]) || refusesDeploy(state, id))) return 'Everyone sent must be fit to fight.'
   return null
 }
 
@@ -164,7 +165,7 @@ export function runRaid(
   let cleared = false
   for (const [i, party] of parties.filter((p) => p.length > 0).entries()) {
     const units = applyPartyBonuses(
-      party.map((id) => buildCombatUnit(state.heroes[id]!, lineFor(state.heroes[id]!), SKILLS, state.inventory)),
+      party.map((id) => moraleAdjust(state, buildCombatUnit(state.heroes[id]!, lineFor(state.heroes[id]!), SKILLS, state.inventory))),
       state,
       { blessing: false },
     )

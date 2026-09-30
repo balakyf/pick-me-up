@@ -11,6 +11,7 @@
  * PURE and DETERMINISTIC: the return roll is rngFor(seed, 'ruins', heroId, completesAt).
  */
 
+import { estateBusy } from '../estate/deploy'
 import type { GameState, HeroId, MaterialId, OwnedHero } from '../types'
 import { TUNING } from '../tuning'
 import { piUnlocked } from '../interference'
@@ -64,7 +65,7 @@ export function dispatchRefusal(state: GameState, heroIds: readonly HeroId[]): s
   for (const id of heroIds) {
     const h = state.heroes[id]
     if (!h) return 'Unknown hero.'
-    const why = busy(h)
+    const why = busy(h) ?? estateBusy(state, id)
     if (why) return `${h.name} ${why}.`
   }
   return null

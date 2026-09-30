@@ -84,6 +84,8 @@ const STATUS_LABEL: Record<HeroStatus, string> = {
   promoting: 'Promoting',
   away: 'Away',
   captive: 'Captive',
+  bounty: 'Bounty',
+  burnout: 'Burnt out',
 }
 const STATUS_HINT: Record<HeroStatus, string> = {
   ready: 'Rested and fit to fight.',
@@ -93,10 +95,12 @@ const STATUS_HINT: Record<HeroStatus, string> = {
   promoting: 'In the Promotion Chamber — cannot fight.',
   away: 'Away on a Ruins expedition — cannot fight.',
   captive: 'Held by a rival Master — cannot fight.',
+  bounty: 'Out on a bounty — cannot fight until they return.',
+  burnout: 'Burnt out — resting, refuses the tower for now.',
 }
 
-function StatusChip({ hero }: { hero: OwnedHero }) {
-  const s = heroStatus(hero)
+function StatusChip({ hero, state }: { hero: OwnedHero; state: GameState }) {
+  const s = heroStatus(hero, state)
   return (
     <span className={`pb-status st-${s}`} title={`${t(STATUS_HINT[s])} ${t('Sanity {n}', { n: Math.round(hero.sanity) })}`}>
       {t(STATUS_LABEL[s])}
@@ -152,7 +156,7 @@ export function PartyScreen({ state, store }: { state: GameState; store: Store }
   const summary = lineSummary(state, draft, lines)
   const totalCp = summary.reduce((n, l) => n + l.cp, 0)
   const deployed = draft.filter(Boolean).length
-  const benched = draft.flatMap((id) => (id && state.heroes[id] && !deployable(state.heroes[id]!) ? [state.heroes[id]!] : []))
+  const benched = draft.flatMap((id) => (id && state.heroes[id] && !deployable(state.heroes[id]!, state) ? [state.heroes[id]!] : []))
 
   function commit(next: Draft) {
     if (JSON.stringify(next) === JSON.stringify(state.party.slots)) return
@@ -323,7 +327,7 @@ export function PartyScreen({ state, store }: { state: GameState; store: Store }
                       data-slot={i}
                       role="button"
                       tabIndex={0}
-                      className={`pb-slot ${h ? 'filled' : ''} ${over ? 'over' : ''} ${lifted ? 'lifted' : ''} ${h && !deployable(h) ? 'benched' : ''}`}
+                      className={`pb-slot ${h ? 'filled' : ''} ${over ? 'over' : ''} ${lifted ? 'lifted' : ''} ${h && !deployable(h, state) ? 'benched' : ''}`}
                       onPointerDown={h ? (e) => startDrag(e, { kind: 'slot', index: i, id: h.id }) : undefined}
                       onClick={clickGuard(() => h && (setNote(null), commit(removeAt(draft, i))))}
                       onKeyDown={(e) => slotKeys(e, i)}
@@ -340,7 +344,7 @@ export function PartyScreen({ state, store }: { state: GameState; store: Store }
                             <span style={{ color: STAR_COLOR[shownStarOf(h, state)] }}>{shownStarOf(h, state)}★</span>
                             <span className="cp">{heroCp(h).toLocaleString()}</span>
                           </span>
-                          {!deployable(h) && <StatusChip hero={h} />}
+                          {!deployable(h, state) && <StatusChip hero={h} state={state} />}
                         </>
                       ) : (
                         <span className="pb-slot-empty">{t('+ empty')}</span>
@@ -462,14 +466,14 @@ export function PartyScreen({ state, store }: { state: GameState; store: Store }
             {heroes.map((h) => {
               const slot = draft.indexOf(h.id)
               const star = shownStarOf(h, state)
-              const st = heroStatus(h)
+              const st = heroStatus(h, state)
               return (
                 <div
                   key={h.id}
                   role="listitem"
                   tabIndex={0}
                   data-hero={h.id}
-                  className={`pb-row ${slot !== -1 ? 'in' : ''} ${drag?.src.id === h.id ? 'lifted' : ''} ${deployable(h) ? '' : 'unavail'}`}
+                  className={`pb-row ${slot !== -1 ? 'in' : ''} ${drag?.src.id === h.id ? 'lifted' : ''} ${deployable(h, state) ? '' : 'unavail'}`}
                   onPointerDown={(e) => startDrag(e, { kind: 'hero', id: h.id })}
                   onClick={clickGuard(() => toggleHero(h.id))}
                   onKeyDown={(e) => heroKeys(e, h.id)}
@@ -483,7 +487,7 @@ export function PartyScreen({ state, store }: { state: GameState; store: Store }
                   <Bust hero={h} size={32} />
                   <span className="c-name">
                     <span className="pb-name">{h.name}</span>
-                    {st !== 'ready' && <StatusChip hero={h} />}
+                    {st !== 'ready' && <StatusChip hero={h} state={state} />}
                   </span>
                   <span className="c-star" style={{ color: STAR_COLOR[star] }}>
                     <Stars star={star} />

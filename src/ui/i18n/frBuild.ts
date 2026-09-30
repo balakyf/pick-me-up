@@ -35,4 +35,10 @@ export const FR_BUILD: Record<string, string> = {
     'Appuyez sur 🔨 Construire (en haut à droite), ou marchez jusqu’à un terrain marqué d’un marteau et utilisez son panneau.',
   '↑↓←→ / WASD / ZQSD · E interact · click to walk · H heroes · B build · N map · M menu':
     '↑↓←→ / WASD / ZQSD · E interagir · cliquer pour marcher · H héros · B construire · N carte · M menu',
+  // Availability shared across the estate and the tower
+  Bounty: 'Prime',
+  'Burnt out': 'Épuisé',
+  'Out on a bounty — cannot fight until they return.': 'Parti pour une prime — ne peut pas combattre avant son retour.',
+  'Burnt out — resting, refuses the tower for now.': 'Épuisé — se repose et refuse la tour pour l’instant.',
+  'That hero is out on a bounty.': 'Ce héros est parti pour une prime.',
 }

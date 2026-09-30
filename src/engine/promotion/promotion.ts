@@ -15,6 +15,7 @@
  * skill unlocks against the newly released levels (§2.2).
  */
 
+import { estateBusy } from '../estate/deploy'
 import { TUNING } from '../tuning'
 import { envelopeForStar, levelCapForStar, applyXp } from '../stats'
 import { rollAttributes } from '../gacha'
@@ -121,6 +122,9 @@ export function startPromotion(state: GameState, heroId: HeroId, nowWorld: numbe
   }
   if (!canAfford(state, hero)) {
     throw new Error(`startPromotion: insufficient materials for ${heroId}`)
+  }
+  if (estateBusy(state, heroId) === 'is out on a bounty') {
+    throw new Error(`startPromotion: hero ${heroId} is out on a bounty`)
   }
 
   const pay = promotionPayment(state, hero)!

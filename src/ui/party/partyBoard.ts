@@ -6,16 +6,20 @@
 import type { Element, GameState, HeroClass, HeroId, Line, OwnedHero, Star } from '../../engine/types'
 import { canFight, heroCp } from '../../engine/scout'
 import { shownStar } from '../../engine/shop'
+import { estateBusy, refusesDeploy } from '../../engine/estate/deploy'
 
 /** Below this Sanity the scout won't suggest a hero (mirrors suggestParty's default). */
 export const WEARY_BELOW = 40
 
-export type HeroStatus = 'ready' | 'weary' | 'broken' | 'training' | 'promoting' | 'away' | 'captive'
+export type HeroStatus = 'ready' | 'weary' | 'broken' | 'training' | 'promoting' | 'away' | 'captive' | 'bounty' | 'burnout'
 
 /** What a hero is up to, as the board shows it. Only 'ready' and 'weary' can fight. */
-export function heroStatus(h: OwnedHero): HeroStatus {
+export function heroStatus(h: OwnedHero, state?: GameState): HeroStatus {
   if (h.captiveOf) return 'captive'
   if (h.expedition !== null) return 'away'
+  const estate = state ? estateBusy(state, h.id) : null
+  if (estate === 'is out on a bounty') return 'bounty'
+  if (estate !== null) return 'burnout'
   if (h.promotion !== null) return 'promoting'
   if (h.training !== null) return 'training'
   if (h.sanity <= 0) return 'broken'
@@ -24,8 +28,8 @@ export function heroStatus(h: OwnedHero): HeroStatus {
 }
 
 /** Can this hero actually take the field right now? (The scout's rule.) */
-export function deployable(h: OwnedHero): boolean {
-  return canFight(h)
+export function deployable(h: OwnedHero, state?: GameState): boolean {
+  return canFight(h) && (!state || !refusesDeploy(state, h.id))
 }
 
 export type SortKey = 'cp' | 'level' | 'stars' | 'name' | 'element' | 'class'
@@ -70,7 +74,7 @@ export function boardHeroes(
     if (filter.element !== 'all' && h.element !== filter.element) return false
     if (filter.heroClass !== 'all' && (h.heroClass ?? 'none') !== filter.heroClass) return false
     if (filter.minStar > 0 && shownStar(h, ml) < filter.minStar) return false
-    if (filter.hideUnavailable && !deployable(h)) return false
+    if (filter.hideUnavailable && !deployable(h, state)) return false
     return true
   })
   const cp = new Map(list.map((h) => [h.id, heroCp(h)]))

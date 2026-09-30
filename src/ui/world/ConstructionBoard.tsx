@@ -11,6 +11,7 @@ import { t } from '../i18n/i18n'
 import { allSites, type Site, type SiteStatus } from './sites'
 import { PLACE_ICON } from './LobbyWorld'
 import type { PlaceId } from './lobbyMap'
+import { BoardTabs, DecorateTab } from '../life/EstatePanels'
 
 /**
  * The Construction Board: every building on the campus in one list — what can be built
@@ -29,6 +30,7 @@ export function ConstructionBoard({
   onGo: (place: PlaceId) => void
 }) {
   const [err, setErr] = useState<string | null>(null)
+  const [tab, setTab] = useState<'build' | 'decor'>('build')
   const sites = allSites(state)
   const nowWorld = toWorldTime(Date.now())
   const ml = state.meta.masterLevel
@@ -87,8 +89,17 @@ export function ConstructionBoard({
     { title: t('Standing'), list: [...group(['ready']).filter((s) => s.level > 0), ...group(['built'])] },
   ]
 
+  if (tab === 'decor') {
+    return (
+      <PixelWindow title={t('Construction')} icon="🔨" onClose={onClose} wide>
+        <BoardTabs tab={tab} onTab={setTab} />
+        <DecorateTab state={state} store={store} />
+      </PixelWindow>
+    )
+  }
   return (
     <PixelWindow title={t('Construction')} icon="🔨" onClose={onClose} wide>
+      <BoardTabs tab={tab} onTab={setTab} />
       <p className="place-blurb">
         {t('Unbuilt places stand as staked dirt lots and bare timber frames, marked with a hammer. Build them here or walk to the signpost on the site.')}
       </p>

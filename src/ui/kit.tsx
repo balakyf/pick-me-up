@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 
 /**
  * The pixel UI kit: RPG windows, the dialog box and small HUD pieces. Styling
@@ -18,17 +18,22 @@ export function PixelWindow({
   children: ReactNode
   wide?: boolean
 }) {
+  const backdrop = useRef<HTMLDivElement>(null)
   useEffect(() => {
     if (!onClose) return
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
+      if (e.key !== 'Escape') return
+      // Only the topmost window closes: a window opened inside another keeps its parent.
+      const all = document.querySelectorAll('.pwin-backdrop')
+      if (backdrop.current && all.length > 0 && all[all.length - 1] !== backdrop.current) return
+      onClose()
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [onClose])
 
   return (
-    <div className="pwin-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose?.()}>
+    <div ref={backdrop} className="pwin-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose?.()}>
       <div className={`pwin ${wide ? 'wide' : ''}`} role="dialog" aria-label={title}>
         <div className="pwin-title">
           {icon && <span className="pwin-icon">{icon}</span>}

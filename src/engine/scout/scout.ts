@@ -8,6 +8,7 @@
  * 0.6–1.0 won ~88% with ~0.8 deaths; below 0.6 the party lost more than it won and
  * ~3 heroes died an attempt.
  */
+import { refusesDeploy } from '../estate/deploy'
 import { TUNING } from '../tuning'
 import { combatPowerForHero } from '../stats'
 import { skillCp } from '../skills'
@@ -150,7 +151,7 @@ export function suggestParty(state: GameState, minSanity = 40): { slots: (HeroId
   const elems = report ? report.enemies.flatMap((e) => Array.from({ length: e.count }, () => e.element)) : []
   const score = (h: OwnedHero) => heroCp(h) * (advantaged(h, elems) ? 1.25 : 1)
   const fit = Object.values(state.heroes)
-    .filter((h) => canFight(h) && h.sanity >= minSanity)
+    .filter((h) => canFight(h) && h.sanity >= minSanity && !refusesDeploy(state, h.id))
     .sort((a, b) => score(b) - score(a))
   const picked: OwnedHero[] = []
   const take = (pred: (h: OwnedHero) => boolean, n: number) => {
