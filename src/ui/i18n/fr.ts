@@ -4,6 +4,7 @@
  */
 import { FR_CONTENT } from './frContent'
 import { FR_LIFE } from './frLife'
+import { FR_SUMMON } from './frSummon'
 
 const FR_UI: Record<string, string> = {
   // ── App shell & menus ──────────────────────────────────────────────────────
@@ -503,4 +504,4 @@ const FR_UI: Record<string, string> = {
   'Unequip failed': 'Échec du retrait',
 }
 
-export const FR: Record<string, string> = { ...FR_CONTENT, ...FR_LIFE, ...FR_UI }
+export const FR: Record<string, string> = { ...FR_CONTENT, ...FR_LIFE, ...FR_SUMMON, ...FR_UI }

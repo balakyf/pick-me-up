@@ -8,6 +8,7 @@ import { drawTowerExterior, TOWER_H, TOWER_W } from './towerMap'
 import { drawSummonCircle } from './summonFx'
 import { INK, CLASS_CLOTH, tame } from './palette'
 import { hashString } from './rand'
+import type { Star } from '../../engine/types'
 import { ENEMY_TEMPLATES } from '../../engine/content'
 
 const hero = (over: Partial<LookSource> = {}): LookSource => ({
@@ -77,6 +78,29 @@ describe('hero looks', () => {
     expect(plain.cloth).toEqual(CLASS_CLOTH.peasant)
   })
 
+  it('promotion re-dresses a hero but never changes their face', () => {
+    const before = lookForHero(hero({ star: 2, heroClass: null }))
+    for (const heroClass of ['warrior', 'spearman', 'thief', 'archer', 'mage'] as const) {
+      const after = lookForHero(hero({ star: 3, heroClass }))
+      expect(after.skin).toEqual(before.skin)
+      expect(after.hair).toEqual(before.hair)
+      expect(after.hairStyle).toBe(before.hairStyle)
+      expect(after.eyes).toBe(before.eyes)
+      expect(after.mark).toBe(before.mark)
+    }
+  })
+
+  it('stars escalate the regalia: sash 3★, cape 4★, gem 5★, aura 6★, glowing aura 7★', () => {
+    const at = (star: Star) => lookForHero(hero({ star }))
+    expect(at(3)).toMatchObject({ sash: true, gem: false, aura: 0 })
+    expect(at(3).cape).toBeNull()
+    expect(at(4).cape).not.toBeNull()
+    expect(at(5)).toMatchObject({ gem: true, trim: true, aura: 0 })
+    expect(at(6).aura).toBe(1)
+    expect(at(7).aura).toBe(2)
+    expect(lookForHero(hero({ star: 2, heroClass: null })).sash).toBe(false)
+  })
+
   it('the master avatar is stable per account', () => {
     expect(lookForMaster('46631913')).toEqual(lookForMaster('46631913'))
   })
@@ -114,6 +138,33 @@ describe('hero sprites', () => {
     const stand = Array.from(drawHeroFrame(l, 'down', 0).px)
     expect(Array.from(drawHeroFrame(l, 'down', 1).px)).not.toEqual(stand)
     expect(Array.from(drawHeroFrame(l, 'left', 1).px)).not.toEqual(Array.from(drawHeroFrame(l, 'left', 0).px))
+  })
+
+  it('every class reads differently: distinct busts and walk frames for the same person', () => {
+    const classes = [null, 'warrior', 'spearman', 'thief', 'archer', 'mage'] as const
+    const busts = new Set<string>()
+    const fronts = new Set<string>()
+    const sides = new Set<string>()
+    for (const heroClass of classes) {
+      const l = lookForHero(hero({ heroClass, star: heroClass === null ? 2 : 3 }))
+      busts.add(Array.from(drawHeroBust(l).px).join(','))
+      fronts.add(Array.from(drawHeroFrame(l, 'down', 0).px).join(','))
+      sides.add(Array.from(drawHeroFrame(l, 'left', 0).px).join(','))
+    }
+    expect(busts.size).toBe(classes.length)
+    expect(fronts.size).toBe(classes.length)
+    expect(sides.size).toBe(classes.length)
+  })
+
+  it('6★+ carry a translucent aura; 7★ glows harder and its sparkles move with the walk frame', () => {
+    const translucent = (b: { px: Uint32Array }) => Array.from(b.px).filter((c) => (c & 255) > 0 && (c & 255) < 255).length
+    const bust = (star: Star) => drawHeroBust(lookForHero(hero({ star })))
+    expect(translucent(bust(5))).toBe(0)
+    expect(translucent(bust(6))).toBeGreaterThan(20)
+    expect(translucent(bust(7))).toBeGreaterThan(translucent(bust(6)))
+    const seven = lookForHero(hero({ star: 7 }))
+    const sparkleAt = (f: 0 | 1 | 2) => Array.from(drawHeroFrame(seven, 'down', f).px.slice(0, FRAME_W * 8)).join(',')
+    expect(sparkleAt(0)).not.toBe(sparkleAt(1)) // the top rows hold only aura + sparkles
   })
 
   it('no duplicates: a spread of summoned heroes all get distinct portraits', () => {

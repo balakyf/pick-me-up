@@ -222,6 +222,68 @@ describe('App smoke — Layer 1 completion', () => {
   })
 })
 
+describe('App smoke — the summon reveal', () => {
+  it('the free ten-pull reveals one hero at a time; Skip lands on a sorted lineup', () => {
+    vi.useFakeTimers({ now: 1000 })
+    try {
+      mount()
+      act(() => {
+        getStore().dispatch({ type: 'NEW_ACCOUNT', seed: 36, now: 0 })
+      })
+      openPlace('Mobius Summon')
+      clickButton('Summon ×10')
+      // The pull is already saved; the reveal is cosmetic and starts at hero 1 of 10.
+      expect(Object.keys(getStore().getState()!.heroes).length).toBe(11)
+      expect(container.querySelector('.sr')).not.toBeNull()
+      expect(container.textContent).toContain('1 / 10')
+      // The beam resolves into a card on its own…
+      act(() => {
+        vi.advanceTimersByTime(5000)
+      })
+      expect(container.querySelector('.sr-card')).not.toBeNull()
+      // …and Space moves on to the next hero.
+      act(() => {
+        window.dispatchEvent(new KeyboardEvent('keydown', { key: ' ' }))
+      })
+      expect(container.textContent).toContain('2 / 10')
+      clickButton('Skip ▸▸')
+      expect(container.textContent).toContain('10 new heroes answer the call')
+      const minis = Array.from(container.querySelectorAll('.sr-mini'))
+      expect(minis.length).toBe(10)
+      const starsOf = (el: Element) => (el.querySelector('.stars')?.textContent ?? '').length
+      const stars = minis.map(starsOf)
+      expect(stars).toEqual([...stars].sort((a, b) => b - a)) // best first
+      expect(container.querySelectorAll('.sr-mini.best').length).toBe(1)
+      clickButton('Done')
+      expect(container.querySelector('.sr')).toBeNull()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('Esc skips straight to the lineup, whose Registry button leaves the summon scene', () => {
+    vi.useFakeTimers({ now: 1000 })
+    try {
+      mount()
+      act(() => {
+        getStore().dispatch({ type: 'NEW_ACCOUNT', seed: 37, now: 0 })
+      })
+      openPlace('Mobius Summon')
+      clickButton('Summon ·')
+      expect(container.textContent).toContain('1 / 1')
+      act(() => {
+        window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+      })
+      expect(container.textContent).toContain('A new hero answers the call')
+      clickButton('Hero Registry')
+      expect(container.querySelector('.sr')).toBeNull()
+      expect(container.textContent).toContain('click a card for full stats')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+})
+
 describe('App smoke — the full climb', () => {
   it('the Tower shows its acts, an open event blocks Enter, and resolving it continues', () => {
     mount()
