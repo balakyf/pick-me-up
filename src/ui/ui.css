@@ -492,7 +492,10 @@ span.arm-slot { padding: 2px 8px; border: 2px dashed #3e3478; color: var(--ink-f
   .hud-help { display: none; }
   .hud-tl { min-width: 0; padding: 6px; }
   .hud-tl .gauge { width: 90px; }
-  .hud-tr { top: auto; bottom: 12px; right: 12px; }
+  /* The top-right bar becomes a wrapping row along the bottom so Build and Menu stay on screen. */
+  .hud-tr { top: auto; bottom: 12px; right: 12px; left: 12px; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
+  .hud-tr .pbtn { padding: 4px 8px; font-size: 13px; }
+  .hud-tr .coin { font-size: 13px; }
   .battle-windows { flex-direction: column; }
   .party-row { grid-template-columns: 24px 1fr auto 100px; font-size: 14px; }
   .scene-bar { flex-wrap: wrap; }
@@ -706,6 +709,7 @@ span.arm-slot { padding: 2px 8px; border: 2px dashed #3e3478; color: var(--ink-f
 .guide-list li.next { color: var(--ink); font-weight: 600; }
 .guide-hint { font-style: italic; color: #d8d0f0; margin-bottom: 6px; }
 @media (max-width: 720px) { .hud-guide { top: auto; bottom: 170px; width: 220px; } }
+@media (max-width: 640px) { .hud-guide { bottom: 210px; } .hud-mini { bottom: 100px; } }
 
 /* ── Construction Board (world/ConstructionBoard.tsx) ───────────────────────── */
 .cb-hud { position: relative; }
