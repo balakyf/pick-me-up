@@ -12,9 +12,8 @@ import { BattleScene, type BattleOrders } from './battle/BattleScene'
 import { ResultsScreen } from './screens'
 import { HeroCard } from './HeroCard'
 import { TimingGame } from './metaPanels'
-import { cachedDataUrl } from './pixel/render'
-import { scale } from './pixel/bitmap'
-import { drawTowerExterior, TOWER_H, TOWER_W } from './pixel/towerMap'
+import { TowerExterior } from './challenge/TowerExterior'
+import { TowerChallenges } from './challenge/TowerChallenges'
 import { t } from './i18n/i18n'
 import { ELEMENT_VIS } from './bits'
 import { CodexButton } from './codex/CodexWindow'
@@ -308,23 +307,6 @@ function ScoutPanel({ state, report, onSuggest }: { state: GameState; report: Sc
   )
 }
 
-/** The tower from outside: where the party stands on the spire of 100 floors. */
-function TowerExterior({ state }: { state: GameState }) {
-  const tw = state.tower
-  const key = `tower|${tw.currentFloor}|${tw.highestCleared}|${tw.worldEnded}|${tw.worldSaved}`
-  const url = cachedDataUrl(key, () =>
-    scale(drawTowerExterior({ current: tw.currentFloor, highest: tw.highestCleared, worldEnded: tw.worldEnded, worldSaved: tw.worldSaved }), 2),
-  )
-  return (
-    <div className="tower-exterior" title={t('Floor {n} of {max}', { n: Math.min(tw.currentFloor, MAX_FLOOR), max: MAX_FLOOR })}>
-      {url && <img className="px" src={url} width={TOWER_W * 2} height={TOWER_H * 2} alt={t('The Tower from outside')} />}
-      <div className="muted" style={{ fontSize: 12, textAlign: 'center' }}>
-        {t('{n}/{max} cleared', { n: tw.highestCleared, max: MAX_FLOOR })}
-      </div>
-    </div>
-  )
-}
-
 export function TowerScreen({ state, store }: { state: GameState; store: Store }) {
   const [combat, setCombat] = useState<CombatLog | null>(null)
   const [pending, setPending] = useState<FloorResult | null>(null)
@@ -465,6 +447,7 @@ export function TowerScreen({ state, store }: { state: GameState; store: Store }
 
       {event && <EventPanel state={state} onResolve={resolve} />}
       {err && <div className="muted" style={{ color: 'var(--bad)' }}>{err}</div>}
+      <TowerChallenges state={state} store={store} />
 
       {report && <ScoutPanel state={state} report={report} onSuggest={suggest} />}
       {report && <SynergyPanel state={state} />}
@@ -476,7 +459,7 @@ export function TowerScreen({ state, store }: { state: GameState; store: Store }
       )}
 
       <div className="tower-layout">
-      <TowerExterior state={state} />
+      <TowerExterior state={state} hold={combat !== null || showResult} />
       <div className="tower">
         {ACTS.flatMap((act) => {
           const open = openActs.has(act.id)

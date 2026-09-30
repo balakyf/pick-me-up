@@ -746,14 +746,44 @@ export interface CodexState {
 /** Heroes summoned already bound to one another (canon 인연: a band, twins…). */
 export interface BondGroup {
   id: string
+  /** The English display name ("the Gale Band"); `adj` + `noun` let the UI translate it. */
   name: string
   members: HeroId[]
+  /** Name parts: "the {adj} {noun}" (size 3+), or "the Twin {noun}" for a pair (adj 'Twin'). */
+  adj?: string
+  noun?: string
+}
+
+/** The optional side rooms that can open after an anchor's first clear (tower challenges). */
+export type BonusRoomKind = 'vault' | 'shrine' | 'lostHero' | 'merchant' | 'training' | 'mimic'
+
+/** An open side room: it waits (optional) until taken, left, or the next anchor replaces it. */
+export interface BonusRoom {
+  kind: BonusRoomKind
+  /** The anchor floor it follows. */
+  floor: number
+  /** Merchant wares already bought. */
+  bought: string[]
+}
+
+/** One raid boss's record (the reward chest pays once per world-week). */
+export interface RaidRecord {
+  clears: number
+  attempts: number
+  lastClearWeek: number
 }
 
 export interface ChallengeState {
   bondGroups: Record<string, BondGroup>
-  /** The weekly trial: which week it is, attempts spent, and the Master's best result. */
-  weekly: { week: number; attempts: number; best: number }
+  /** The weekly trial: which week it is, attempts spent, the Master's best result, and how
+   *  many of the week's score thresholds have paid out. */
+  weekly: { week: number; attempts: number; best: number; claimed: number }
+  /** The side room waiting on the Tower screen, if any. */
+  room: BonusRoom | null
+  /** The Cursed Shrine's buff: +pct stats for the party on `floor` (its next tower attempt). */
+  blessing: { floor: number; pct: number } | null
+  /** Raid records keyed by anchor floor. */
+  raids: Record<string, RaidRecord>
 }
 
 export interface EstateState {
@@ -825,8 +855,9 @@ export type EnemyFamily = 'dragon' | 'undead' | 'beast' | 'humanoid' | 'construc
 export type KeywordTag =
   /** Takes no damage of this type. */
   | { kind: 'immune'; damageType: DamageType }
-  /** Takes ×(1 − reduction) damage of this type (a softer immune: slow, but never a hard lock). */
-  | { kind: 'resist'; damageType: DamageType; reduction: number }
+  /** Takes ×(1 − reduction) damage of this type (a softer immune: slow, but never a hard lock).
+   *  With `fromTick`, only from that tick on (a raid ballista broke the scales until then). */
+  | { kind: 'resist'; damageType: DamageType; reduction: number; fromTick?: number }
   /** Takes ×vulnerableMult damage from this element. */
   | { kind: 'vulnerable'; element: Element }
   | { kind: 'phased' } // untargetable until all non-phased enemies in the wave are down
@@ -979,6 +1010,8 @@ export interface CombatUnitInit {
   isNpc?: boolean
   /** The enemy template (the Codex key); absent for heroes. */
   templateId?: string
+  /** HP at the start of the fight when below max (a raid boss already wounded). */
+  startHP?: number
 }
 
 /** `failed` = the mission was lost without a wipe (e.g. the escort target fell). */
@@ -1243,3 +1276,10 @@ export type Command =
   | { type: 'GUIDE_STEP'; step: string }
   /** Testing-only: grant free gold. Not part of the real economy. */
   | { type: 'ADD_GOLD'; amount: number }
+  /** Tower challenges: act in the open side room ('leave' closes it). */
+  | { type: 'BONUS_ROOM'; choice: string }
+  /** Tower challenges: up to three parties raid a cleared anchor's boss (one shared HP pool);
+   *  the crew man the ballista instead of fighting. */
+  | { type: 'TOWER_RAID'; floor: number; parties: HeroId[][]; crew: HeroId[]; ballista?: number }
+  /** Tower challenges: one attempt at this week's Crack of Time trial (a simulation). */
+  | { type: 'WEEKLY_TRIAL'; heroIds: HeroId[] }

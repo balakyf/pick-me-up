@@ -9,6 +9,7 @@ import { FR_QOL } from './frQol'
 import { FR_SUMMON } from './frSummon'
 import { FR_BATTLE_FX } from './frBattleFx'
 import { FR_COMBAT_DEPTH } from './frCombatDepth'
+import { FR_CHALLENGE } from './frChallenge'
 
 const FR_UI: Record<string, string> = {
   // ── App shell & menus ──────────────────────────────────────────────────────
@@ -508,4 +509,4 @@ const FR_UI: Record<string, string> = {
   'Unequip failed': 'Échec du retrait',
 }
 
-export const FR: Record<string, string> = { ...FR_CONTENT, ...FR_LIFE, ...FR_UI, ...FR_BUILD, ...FR_QOL, ...FR_SUMMON, ...FR_BATTLE_FX, ...FR_COMBAT_DEPTH }
+export const FR: Record<string, string> = { ...FR_CONTENT, ...FR_LIFE, ...FR_UI, ...FR_BUILD, ...FR_QOL, ...FR_SUMMON, ...FR_BATTLE_FX, ...FR_COMBAT_DEPTH, ...FR_CHALLENGE }

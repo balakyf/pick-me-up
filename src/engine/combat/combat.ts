@@ -138,6 +138,7 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
       cp: u.cp,
       ...(u.isNpc ? { isNpc: true } : {}),
       ...(u.templateId !== undefined ? { templateId: u.templateId } : {}),
+      ...(u.currentHP < u.stats.maxHP ? { startHP: u.currentHP } : {}),
     })
   }
   const allyUnits = encounter.allies ?? []
@@ -283,7 +284,7 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
     for (const kw of target.ref.keywords) {
       if (kw.kind === 'immune' && kw.damageType === skill.damageType) {
         damage = 0
-      } else if (kw.kind === 'resist' && kw.damageType === skill.damageType) {
+      } else if (kw.kind === 'resist' && kw.damageType === skill.damageType && tick >= (kw.fromTick ?? 0)) {
         guardMult *= 1 - kw.reduction
       } else if (kw.kind === 'vulnerable' && kw.element === el) {
         damage *= C.vulnerableMult

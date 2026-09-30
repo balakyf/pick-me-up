@@ -50,6 +50,7 @@ import { addPi } from '../interference'
 import { practice, woundBoss } from '../minigames'
 import { floorModifiersFor, withBonds } from '../depth'
 import { recordBattle } from '../codex'
+import { applyPartyBonuses } from '../challenge/bonds'
 import { hash, rngFor, nextInt, nextFloat, chance, pick, makeSeed, type Rng } from '../rng/rng'
 import type { HiddenObjective, LoopState, TowerEvent, TowerState, BattleResult } from '../types'
 
@@ -557,7 +558,8 @@ export function playFloor(
   if (orders && orders.length > 0) enc = { ...enc, orders }
   // Combat depth: friends and rivals in the party fight as such.
   enc = withBonds(enc, state, deployedIds)
-  const res = runBattle(heroUnits, enc, combatSeed)
+  // Tower challenges: bond set bonuses and the Cursed Shrine's blessing ride on the units.
+  const res = runBattle(applyPartyBonuses(heroUnits, state), enc, combatSeed)
 
   // ── 4. Interpret. ───────────────────────────────────────────────────────────
   const cleared = res.outcome === 'win'

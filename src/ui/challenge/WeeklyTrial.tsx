@@ -1,0 +1,197 @@
+import { useState } from 'react'
+import type { GameState, HeroId, OwnedHero } from '../../engine/types'
+import type { Store } from '../../engine/store'
+import { weeklyTrialWithResult } from '../../engine/store'
+import {
+  CHALLENGE,
+  canEnterTrial,
+  heroAllowed,
+  weeklyAttemptsLeft,
+  weeklyFor,
+  weeklyRefusal,
+  weeklyRule,
+  weeklyUnlocked,
+  type WeeklyOutcome,
+  type WeeklyRule,
+} from '../../engine/challenge'
+import { toWorldTime } from '../../engine/time'
+import { PixelWindow } from '../kit'
+import { BattleScene } from '../battle/BattleScene'
+import { cpOf, ELEMENT_VIS } from '../bits'
+import { t } from '../i18n/i18n'
+import { HeroChip, lootLine } from './common'
+import './challenge.css'
+
+const W = CHALLENGE.weekly
+
+export function ruleName(rule: WeeklyRule): string {
+  switch (rule.id) {
+    case 'lowStar':
+      return t('3★ and below')
+    case 'element':
+      return t('{el} heroes only', { el: t(ELEMENT_VIS[rule.element!].label) })
+    case 'duo':
+      return t('Two heroes')
+    case 'tough':
+      return t('Enemies ×{m} HP', { m: rule.enemyHpMult })
+    case 'noMages':
+      return t('No mages')
+  }
+}
+
+function ruleBlurb(rule: WeeklyRule): string {
+  switch (rule.id) {
+    case 'lowStar':
+      return t('The Crack only lets through heroes of 3★ or less. Old hands, prove your recruits.')
+    case 'element':
+      return t('Only heroes of one element may enter. The rest of the roster watches.')
+    case 'duo':
+      return t('Two heroes, back to back, against everything the Crack sends.')
+    case 'tough':
+      return t('The echoes come back thicker than they were. Every enemy has half again its HP.')
+    case 'noMages':
+      return t('The Crack swallows spells. Blades, bows and fists only.')
+  }
+}
+
+/**
+ * The weekly Crack of Time trial: this week's rule, the gauntlet, three attempts, the
+ * Master's best, and the thresholds that pay once a week. A simulation — nobody dies.
+ */
+export function WeeklyTrial({ state, store, onClose }: { state: GameState; store: Store; onClose: () => void }) {
+  const nowWorld = toWorldTime(Date.now())
+  const weekly = weeklyFor(state, nowWorld)
+  const rule = weeklyRule(weekly.week)
+  const eligible = (Object.values(state.heroes) as OwnedHero[])
+    .filter((h) => canEnterTrial(h) && heroAllowed(rule, h))
+    .sort((a, b) => cpOf(b) - cpOf(a))
+  const [team, setTeam] = useState<HeroId[]>(() => eligible.slice(0, rule.maxHeroes).map((h) => h.id))
+  const [err, setErr] = useState<string | null>(null)
+  const [watch, setWatch] = useState<WeeklyOutcome | null>(null)
+  const [result, setResult] = useState<WeeklyOutcome | null>(null)
+  const left = weeklyAttemptsLeft(state, nowWorld)
+  const why = weeklyRefusal(state, team, nowWorld)
+
+  function toggle(id: HeroId) {
+    setTeam((cur) => (cur.includes(id) ? cur.filter((x) => x !== id) : cur.length < rule.maxHeroes ? [...cur, id] : cur))
+  }
+
+  function enter() {
+    setErr(null)
+    try {
+      const { outcome } = weeklyTrialWithResult(store.getState(), team, Date.now())
+      store.dispatch({ type: 'WEEKLY_TRIAL', heroIds: team }, Date.now())
+      setWatch(outcome)
+    } catch (e) {
+      setErr(t(e instanceof Error ? e.message.replace(/^\w+: /, '') : 'That failed'))
+    }
+  }
+
+  if (watch) {
+    return (
+      <BattleScene
+        log={watch.log}
+        state={state}
+        onDone={() => {
+          setResult(watch)
+          setWatch(null)
+        }}
+      />
+    )
+  }
+
+  return (
+    <PixelWindow title={t('Crack of Time · weekly trial')} icon="⟡" onClose={onClose} wide>
+      {!weeklyUnlocked(state) ? (
+        <div className="muted">{t('The Crack replays its trials for Masters past F{n}.', { n: W.unlockFloor })}</div>
+      ) : result ? (
+        <div className="raid-result">
+          <div className="big-outcome win">{t('{n} waves', { n: result.score })}</div>
+          <div className="muted">
+            {result.newBest ? t('A new best this week!') : t('Best this week: {n} waves', { n: result.best })}
+          </div>
+          {result.reached.length > 0 ? (
+            <div className="room-loot">🎁 {lootLine({ gems: result.gems, materials: result.materials })}</div>
+          ) : (
+            <div className="muted small">{t('No new threshold reached this time.')}</div>
+          )}
+          <div className="muted small">{t('It was only an echo: everyone walks back out of the Crack unharmed.')}</div>
+          <div style={{ display: 'flex', gap: 10, justifyContent: 'center', marginTop: 12 }}>
+            <button className="pbtn" onClick={() => setWatch(result)}>
+              ▸ {t('Watch again')}
+            </button>
+            <button className="btn primary" onClick={() => setResult(null)}>
+              {t('Back')}
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="weekly">
+          <div className="weekly-rule">
+            <div className="weekly-rule-name">
+              {t('This week')} · <b>{ruleName(rule)}</b>
+            </div>
+            <div className="muted small">{ruleBlurb(rule)}</div>
+            <div className="muted small">
+              {t('A gauntlet of {n} escalating waves. Score = waves cleared.', { n: W.waves })}{' '}
+              <b style={{ color: 'var(--good)' }}>{t('A simulation: no permadeath, no Sanity lost.')}</b>
+            </div>
+          </div>
+          <div className="weekly-stats">
+            <span>
+              {t('Attempts left')} <b>{left}</b>/{W.attempts}
+            </span>
+            <span>
+              {t('Best')} <b>{weekly.best}</b>
+            </span>
+          </div>
+          <div className="weekly-thresholds">
+            {W.thresholds.map((th, i) => (
+              <span key={th.waves} className={`wt ${i < weekly.claimed ? 'done' : ''}`} title={lootLine({ gems: th.gems, materials: th.materials })}>
+                {i < weekly.claimed ? '✓' : '◇'} {th.waves} · {th.gems}💎
+              </span>
+            ))}
+          </div>
+          <h4 className="panel-sub">
+            {t('Your team')} ({team.length}/{rule.maxHeroes})
+          </h4>
+          <div className="raid-roster">
+            {eligible.length === 0 && <div className="muted">{t('No hero of yours meets this week’s rule.')}</div>}
+            {eligible.map((h) => (
+              <HeroChip key={h.id} hero={h} selected={team.includes(h.id)} onClick={() => toggle(h.id)} />
+            ))}
+          </div>
+          <div className="raid-actions">
+            <button className="pbtn ghost" onClick={() => setTeam(eligible.slice(0, rule.maxHeroes).map((h) => h.id))}>
+              ✦ {t('Strongest team')}
+            </button>
+            <span className="spacer" />
+            <button className="pbtn primary" disabled={why !== null} onClick={enter}>
+              ⟡ {t('Enter the Crack')}
+            </button>
+          </div>
+          {why && <div className="muted small" style={{ color: 'var(--warn)' }}>{t(why)}</div>}
+          {err && <div className="muted small" style={{ color: 'var(--bad)' }}>{err}</div>}
+        </div>
+      )}
+    </PixelWindow>
+  )
+}
+
+/** A small launcher for the lobby's Crack of Time place (shown once the Crack is open). */
+export function WeeklyTrialLauncher({ state, store }: { state: GameState; store: Store }) {
+  const [open, setOpen] = useState(false)
+  const nowWorld = toWorldTime(Date.now())
+  const rule = weeklyRule(weeklyFor(state, nowWorld).week)
+  return (
+    <div className="lr-action">
+      <div className="lr-action-note">
+        ⟡ {t('Weekly trial: {rule}', { rule: ruleName(rule) })} · {t('{n} attempts left', { n: weeklyAttemptsLeft(state, nowWorld) })}
+      </div>
+      <button className="pbtn" onClick={() => setOpen(true)} disabled={!weeklyUnlocked(state)}>
+        {t('Open the weekly trial')}
+      </button>
+      {open && <WeeklyTrial state={state} store={store} onClose={() => setOpen(false)} />}
+    </div>
+  )
+}

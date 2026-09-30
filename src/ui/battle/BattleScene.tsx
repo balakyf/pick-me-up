@@ -134,7 +134,7 @@ export function BattleScene({
   const frames = useMemo<Snap[]>(() => {
     const out: Snap[] = []
     let cur: Snap = {
-      hp: Object.fromEntries(log.unitsInit.map((u) => [u.id, u.maxHP])),
+      hp: Object.fromEntries(log.unitsInit.map((u) => [u.id, u.startHP ?? u.maxHP])),
       dead: {},
       visible: {},
       actor: null,

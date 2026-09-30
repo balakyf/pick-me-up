@@ -91,7 +91,7 @@ export function canCraft(state: GameState): boolean {
 }
 
 /** Deterministic next equipment id from the current inventory size. */
-function nextEquipmentId(inventory: readonly EquipmentItem[]): EquipmentId {
+export function nextEquipmentId(inventory: readonly EquipmentItem[]): EquipmentId {
   return `eq_${String(inventory.length + 1).padStart(6, '0')}` as EquipmentId
 }
 
