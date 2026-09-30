@@ -3,6 +3,7 @@
  * name, kind, the floors it was met on and how often it fell; once studied (felled often
  * enough, or met on a scouted floor) its element, weaknesses and traits too.
  */
+import { createPortal } from 'react-dom'
 import { useMemo, useState } from 'react'
 import type { EnemyTemplate, GameState } from '../../engine/types'
 import { ACTS } from '../../engine/content'
@@ -142,7 +143,8 @@ export function CodexButton({ state, label }: { state: GameState; label?: string
       <button className="pbtn sm codex-btn" onClick={() => setOpen(true)} title={t('What the Master knows of the tower’s enemies')}>
         📖 {label ?? t('Enemy Codex')}
       </button>
-      {open && <CodexWindow state={state} onClose={() => setOpen(false)} />}
+      {/* Portalled: the button sits inside inline text (a <p>) on the Tower screen. */}
+      {open && createPortal(<CodexWindow state={state} onClose={() => setOpen(false)} />, document.body)}
     </>
   )
 }

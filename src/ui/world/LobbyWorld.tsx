@@ -595,6 +595,8 @@ export function LobbyWorld({
   useEffect(() => {
     const down = (e: KeyboardEvent) => {
       if (modalRef.current) return
+      // A window the App opened over the lobby (the Menu, save transfer, key help) owns the keys.
+      if (document.querySelector('.pwin-backdrop')) return
       const tag = (e.target as HTMLElement | null)?.tagName
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return
       const k = e.key.length === 1 ? e.key.toLowerCase() : e.key
