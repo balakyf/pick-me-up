@@ -26,14 +26,14 @@ import { craftEquipment, equipItem, unequipItem } from '../equipment'
 import { advanceTime } from '../time'
 import { levelCapForStar } from '../stats'
 
-/** The engine modules know nothing of Quanton Life; the reducer layers it on top. */
+/** The engine modules know nothing of Quanton Life or the estate; the reducer layers them on top. */
 function core(s: GameState): unknown {
   const heroes: Record<string, unknown> = {}
   for (const [id, h] of Object.entries(s.heroes)) {
     const { life: _life, ...rest } = h
     heroes[id] = rest
   }
-  const { life: _l, ...rest } = s
+  const { life: _l, estate: _e, ...rest } = s
   return { ...rest, heroes }
 }
 import type {

@@ -24,6 +24,7 @@ import { upgradeCost as forgeUpgradeCost, upgradeOdds, upgradeRefusal } from '..
 import { upgradeEquipmentWithResult } from '../engine/store'
 import { t } from './i18n/i18n'
 import { DormitoryInfo, ForgeOrderSection, HereNow, KitchenPantry, LibraryInfo, MemorialPanel, StaffSection, WatchtowerInfo } from './life/lifePanels'
+import { EstateSection } from './life/EstatePanels'
 
 /**
  * Facility panels — the rules-facing half of the Lobby. The walkable world
@@ -1152,6 +1153,7 @@ export function PlacePanel({
         </>
       )}
       {place === 'daily' && <DailyPortal state={state} store={store} />}
+      <EstateSection place={place} state={state} store={store} />
     </div>
   )
 }

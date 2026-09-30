@@ -28,6 +28,8 @@ import { hashString } from '../pixel/rand'
 import { toWorldTime } from '../../engine/time'
 import { slotOf } from '../../engine/life'
 import { t } from '../i18n/i18n'
+import { bountyStatus, estatePair, estateTopics } from './speechEstate'
+import { BOUNTIES, traumaOf } from '../../engine/estate'
 
 type Vars = Record<string, string | number>
 type ByVoice = Partial<Record<Voice, string[]>> & { any?: string[] }
@@ -74,14 +76,20 @@ const ACTIVITY: Partial<Record<ActivityKind, ByVoice>> = {
     any: ['This {food} is the best thing that has happened to me all week.', 'Sit, Master. There is enough for two.', 'Food tastes different when you know tomorrow is a floor.'],
     rough: ['Mmf. Busy. Eating.', 'Whoever cooked this — I owe them.'],
     formal: ['Forgive me, Master — I was just finishing my meal.'],
-    cheerful: ['Try the {food}! No? More for me!'],
+    cheerful: ['Try the {food}! No? More for me!', 'Seconds! Thirds! Who is counting?'],
     grim: ['Eat while you can. That is the whole philosophy.'],
+    quiet: ['…Good bread.'],
   },
   work: {
     any: ['Busy, Master. The work does not do itself.', 'If you need me, I am here until the bell.'],
+    rough: ['Less talk, more work.'],
+    formal: ['Duty first, Master. Always.'],
+    cheerful: ['Work is just play with a schedule!'],
+    quiet: ['…Almost done.'],
+    grim: ['Work keeps the mind off the stairs.'],
   },
   train: {
-    any: ['One more set. Then another.', 'The dummy never hits back. That is the problem.', 'I felt slow on the last floor. Never again.'],
+    any: ['One more set. Then another.', 'The dummy never hits back. That is the problem.', 'I felt slow on the last floor. Never again.', 'Again. Slower. Then faster.'],
     rough: ['Out of the way unless you want a bruise.', 'Sweat now or bleed later.'],
     formal: ['Discipline is a kind of armour, Master.'],
     cheerful: ['Watch this — no, wait, watch THIS!'],
@@ -94,15 +102,20 @@ const ACTIVITY: Partial<Record<ActivityKind, ByVoice>> = {
     cheerful: ['Master! You came! Somebody get the Master a mug!'],
     quiet: ['I like the noise. It means we are still here.'],
     formal: ['A little company keeps the mind steady, I find.'],
+    grim: ['Drink with the living while you can.'],
   },
   read: {
     any: ['There is a book in here about floor {floor}. Someone climbed it before us.', 'Words are quieter than people. I needed quiet.'],
     formal: ['Knowledge is the one thing the tower cannot take from us.'],
     grim: ['I read about worlds that ended. It helps, strangely.'],
+    quiet: ['…Page two hundred.'],
+    cheerful: ['This book has pictures!'],
+    rough: ['Reading. Don’t tell anyone.'],
   },
   pray: {
     any: ['I do not know who I am praying to. It helps anyway.', 'Just a moment more, Master.'],
     grim: ['If anyone is listening, they are taking their time.'],
+    formal: ['Grant us one more floor. Just one more.'],
   },
   mourn: {
     any: ['I come here to tell {fallen} how we are doing.', 'Sit with me a while. You do not have to say anything.', 'I still set a place for {fallen} sometimes.'],
@@ -111,11 +124,16 @@ const ACTIVITY: Partial<Record<ActivityKind, ByVoice>> = {
   },
   heal: {
     any: ['The healers say I need rest. I keep seeing the stairs.', 'It is quiet here. I am trying to remember how to sleep.'],
+    grim: ['They patch the body. The rest takes longer.'],
+    cheerful: ['The healer says I am a terrible patient. I say I am a delightful one.'],
   },
   wander: {
     any: ['Just stretching my legs. This place is bigger than it looks.', 'Have you seen the sky over the courtyard? It is not a real sky, is it.'],
     cheerful: ['I found a new shortcut behind the kitchen!'],
     grim: ['Walking. Counting the doors. Old habit.'],
+    quiet: ['…Just walking.'],
+    formal: ['A constitutional, Master. Good for the nerves.'],
+    rough: ['Stretching my legs before they rust.'],
   },
   drilling: {
     any: ['The drill-master says three more days. My arms say otherwise.', 'I am almost there. The technique is almost mine.'],
@@ -153,10 +171,24 @@ const JOB_FEEL = {
 }
 
 const NEED: Record<'hunger' | 'energy' | 'social' | 'fun', ByVoice> = {
-  hunger: { any: ['I could eat a whole goblin. Cooked, preferably.', 'When is supper? Asking for my stomach.'], rough: ['Food. Now.'] },
-  energy: { any: ['I can barely keep my eyes open.', 'Is it night yet? It feels like night.'], grim: ['Tired in the bones, Master.'] },
-  social: { any: ['It has been a while since anyone talked to me. Thank you for stopping.', 'Do you have a moment? Just… a moment.'] },
-  fun: { any: ['Same walls, same stairs, same everything.', 'I need something that is not the tower. Anything.'] },
+  hunger: {
+    any: ['I could eat a whole goblin. Cooked, preferably.', 'When is supper? Asking for my stomach.'],
+    rough: ['Food. Now.'],
+    cheerful: ['Is it supper yet? Is it supper now?'],
+    grim: ['Hunger is a quiet enemy.'],
+  },
+  energy: {
+    any: ['I can barely keep my eyes open.', 'Is it night yet? It feels like night.'],
+    grim: ['Tired in the bones, Master.'],
+    rough: ['Need sleep. Now.'],
+    cheerful: ['I am… not… tired…'],
+  },
+  social: { any: ['It has been a while since anyone talked to me. Thank you for stopping.', 'Do you have a moment? Just… a moment.'], quiet: ['…Stay a moment?'] },
+  fun: {
+    any: ['Same walls, same stairs, same everything.', 'I need something that is not the tower. Anything.'],
+    rough: ['Bored enough to spar with the dummy. Again.'],
+    cheerful: ['I would give anything for a game of cards.'],
+  },
 }
 
 const MEMORY: Partial<Record<Memory['kind'], ByVoice>> = {
@@ -221,6 +253,9 @@ const FRIEND_LINE: ByVoice = {
   any: ['If you are looking for {friend}, try the {place}.', '{friend} saved my skin more than once. I will return the favour.'],
   cheerful: ['{friend} and I are going to the tavern later — come!'],
   grim: ['If I fall, look after {friend}. Promise me.'],
+  rough: ['{friend} is all right. Don’t tell them I said so.'],
+  quiet: ['…{friend} is kind to me.'],
+  formal: ['{friend} and I have an understanding.'],
 }
 
 const HOME: Record<string, string[]> = {
@@ -229,9 +264,9 @@ const HOME: Record<string, string[]> = {
   baker: ['I used to be up before dawn for the bread. Some habits stay.', 'The oven here is… adequate.'],
   smith: ['My father’s forge was smaller. Hotter, though.', 'I can tell good steel by the sound.'],
   fisher: ['I miss the sea. The tower has no tides.', 'Salt, wind, a net. That was my life.'],
-  weaver: ['I used to make cloth. Now I make excuses to the healers.'],
-  shepherd: ['Sheep are easier than goblins. Smarter, too.'],
-  miller: ['Grind, sift, sell. It was an honest living.'],
+  weaver: ['I used to make cloth. Now I make excuses to the healers.', 'Look at this hem. Whoever stitched our banners should be ashamed.'],
+  shepherd: ['Sheep are easier than goblins. Smarter, too.', 'I count heads every morning. Old habit. Some mornings the count is short.'],
+  miller: ['Grind, sift, sell. It was an honest living.', 'I miss the sound of the wheel. Here it is only boots on stairs.'],
   herbalist: ['There is feverfew growing by the well. Nobody noticed but me.'],
   shopkeeper: ['I sold pots. Good pots. Nobody here needs pots.'],
   scribe: ['I copied other people’s stories. Now I am in one.'],
@@ -239,11 +274,11 @@ const HOME: Record<string, string[]> = {
   innkeeper: ['Every tavern needs someone behind the bar. Just saying.'],
   mercenary: ['Coin is coin. Though I would not mind a thank-you now and then.', 'I fought for worse employers than you, Master.'],
   hunter: ['I tracked wolves for a living. The tower’s wolves are not so different.'],
-  soldier: ['Orders I understand. It is the waiting I hate.'],
+  soldier: ['Orders I understand. It is the waiting I hate.', 'A barracks is a barracks, in any world. This one has better food.'],
   informant: ['I hear everything in this lobby. Everything.'],
   sailor: ['Rope, sail, storm. I miss all of it.'],
   fieldMedic: ['I stitched men up on battlefields. The tower is a battlefield that never ends.'],
-  knight: ['I swore an oath in another world. I have not decided if it still binds me.'],
+  knight: ['I swore an oath in another world. I have not decided if it still binds me.', 'A knight without a lord is just a man in heavy clothes.'],
   courtMage: ['The mana here is wrong. Artificial. Someone made this place.'],
   priest: ['My god does not reach this far. I pray anyway.'],
   swordMaster: ['Forty years of the blade, and the tower still teaches me.'],
@@ -253,7 +288,12 @@ const HOME: Record<string, string[]> = {
 }
 
 const TOWER: ByVoice = {
-  any: ['Floor {floor} next. I heard it is worse than the last.', 'How high do you think we will get, Master?'],
+  any: [
+    'Floor {floor} next. I heard it is worse than the last.',
+    'How high do you think we will get, Master?',
+    'They say the air gets thinner up there. Or maybe that is fear.',
+    'I dreamt of floor {floor} last night. We won.',
+  ],
   grim: ['Every floor is someone’s last. I would rather it not be mine.'],
   cheerful: ['Floor {floor}! I have a good feeling about this one.'],
   rough: ['Point me at floor {floor}. I will do the rest.'],
@@ -261,7 +301,7 @@ const TOWER: ByVoice = {
   formal: ['Floor {floor} awaits your orders, Master.'],
 }
 
-const GRIEF_HEAVY = ['I do not want to talk. Please.', 'Not today, Master.', 'Everyone keeps saying it gets easier.']
+const GRIEF_HEAVY = ['I do not want to talk. Please.', 'Not today, Master.', 'Everyone keeps saying it gets easier.', 'I keep counting the empty bunks.', 'Give me a little time.']
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Topics
@@ -396,6 +436,9 @@ function topicsFor(state: GameState, hero: OwnedHero, inParty: boolean): Topic[]
   const out: Topic[] = []
   const baseVars: Vars = { food: t(p.food), floor: state.tower.currentFloor, trade: tradeName(p.background) }
   const { friend, rival } = bondsOf(state, hero.id)
+  // The estate: weather, statues, duels, jealousy… A withdrawn hero says only terse things.
+  const estate = estateTopics(state, hero, p, (id) => nameOf(state, id), (id) => fallenName(state, id))
+  if (traumaOf(state, hero.id).withdrawn) return estate
 
   // Heavy grief drowns out everything else.
   if (life.grief > 70) {
@@ -446,6 +489,7 @@ function topicsFor(state: GameState, hero: OwnedHero, inParty: boolean): Topic[]
     const tier = jobTier(life.jobXp[life.job] ?? 0)
     if (tier >= 2) out.push({ weight: 15, say: () => t('{tier} {job}, at your service.', { tier: t(TIER_NAMES[tier]!), job: t(JOB_NAME[life.job!]) }) })
   }
+  out.push(...estate)
   return out
 }
 
@@ -481,11 +525,15 @@ const PAIR_FRIEND: [string, string][] = [
   ['You were good out there on {floor}.', 'Only because you had my back.'],
   ['If I fall, you take my boots.', 'You are not falling. I am not taking your boots.'],
   ['Remember when we first met?', 'You tripped over the summoning circle.'],
+  ['Watch my back up there?', 'Always have.'],
+  ['You look tired.', 'You look worse. Sit.'],
 ]
 const PAIR_RIVAL: [string, string][] = [
   ['Still holding your sword like a broom?', 'Still talking instead of fighting?'],
   ['The Master will pick me for the next floor.', 'Keep dreaming.'],
   ['Stay out of my way on {floor}.', 'Then keep up.'],
+  ['Nice swing. For a farmer.', 'Nice mouth. For someone who hides at the back.'],
+  ['Out of my chair.', 'It has my name on it now.'],
 ]
 const PAIR_GRIEF: [string, string][] = [
   ['I miss {fallen}.', 'Me too. Every day.'],
@@ -500,6 +548,8 @@ const PAIR_TAVERN: [string, string][] = [
   ['Another round?', 'You are buying.'],
   ['To floor {floor}!', 'To coming back from it!'],
   ['Deal me in.', 'You still owe me two dishes.'],
+  ['One more song!', 'That was the last one three songs ago.'],
+  ['Who spilled the ale?', 'The floor did. It moved.'],
 ]
 const PAIR_ANY: [string, string][] = [
   ['Heard the tower goes all the way to a hundred.', 'Then we climb a hundred.'],
@@ -508,6 +558,9 @@ const PAIR_ANY: [string, string][] = [
   ['Who cooks tonight?', 'Not you. Never again.'],
   ['Isel smiles too much.', 'Fairies always do. Keep your purse close.'],
   ['Did you see the new one from the crystal?', 'Another stranger with a sad story.'],
+  ['What do you miss most?', 'Bread I did not have to fight for.'],
+  ['The new ones look nervous.', 'We all did, once.'],
+  ['Heard the Master talking to the crystal again.', 'Everyone talks to the crystal. It never answers.'],
 ]
 
 /** A two-line exchange between two heroes, chosen from what they share. */
@@ -522,6 +575,8 @@ export function pairLines(state: GameState, a: OwnedHero, b: OwnedHero, bucket: 
   const shared = aLost && lb.memories.some((m) => m.kind === 'friendDied' && m.other === aLost.other)
   let pool = PAIR_ANY
   let vars: Vars = { floor: state.tower.currentFloor }
+  const est = shared ? null : estatePair(state, a, b, seed)
+  if (est) return est
   if (shared) {
     pool = PAIR_GRIEF
     vars = { fallen: fallenName(state, aLost!.other) }
@@ -584,13 +639,15 @@ export function statusLine(state: GameState, hero: OwnedHero): string {
   let verb = t(DOING[d.kind])
   if (d.kind === 'work' && life.job) verb = t(d.stalled ? 'Waiting for materials' : JOB_DOING[life.job])
   if (d.kind === 'hobby') verb = t(HOBBY_DOING[personalityOf(hero).hobby])
+  const bounty = bountyStatus(state, hero.id)
+  if (bounty) return bounty
   if (hero.captiveOf || hero.expedition) return verb
   const where = t('at the {place}', { place: placeName(d.place) })
   return d.with && state.heroes[d.with] ? t('{verb} {where} with {name}', { verb, where, name: nameOf(state, d.with) }) : `${verb} ${where}`
 }
 
 const LAST_WORDS: ByVoice = {
-  any: ['Tell {friend}… I kept my promise.', 'Master… keep climbing.', 'I can see home from here.', 'It is all right. It is all right.'],
+  any: ['Tell {friend}… I kept my promise.', 'Master… keep climbing.', 'I can see home from here.', 'It is all right. It is all right.', 'Keep… the fire lit.'],
   rough: ['Heh. Worth it.', 'Don’t you dare cry over me, {friend}.'],
   formal: ['It has been an honour, Master.', 'See the others home. That is my last request.'],
   cheerful: ['Save me a seat at supper, {friend}…', 'Hey… we did good, right?'],
@@ -646,6 +703,28 @@ export function chronicleLine(state: GameState, e: ChronicleEntry): string {
       return t('The Forge went cold — {a} ran out of gold or stones.', { a: A })
     case 'arrival':
       return b ? t('{a} arrived through the crystal; {b} showed them around.', { a: A, b: B }) : t('{a} arrived through the crystal.', { a: A })
+    case 'statue':
+      return t('A statue of {a} now stands in the Memorial.', { a: A })
+    case 'withdrawn':
+      return b ? t('{a} has withdrawn from the others since losing {b}.', { a: A, b: B }) : t('{a} has withdrawn into themselves.', { a: A })
+    case 'recovered':
+      return t('{a} is back among the others.', { a: A })
+    case 'burnout':
+      return t('{a} burnt out after too many floors and refuses the tower for now.', { a: A })
+    case 'duel': {
+      const [res, mood] = (e.detail ?? 'draw:friendly').split(':')
+      if (res === 'draw') return t('{a} and {b} fought a tryout duel to a draw.', { a: A, b: B })
+      if (mood === 'respect') return t('{a} beat {b} in a tryout duel — and they shook hands after.', { a: A, b: B })
+      if (mood === 'bitter') return t('{a} beat {b} in a tryout duel; {b} has not forgiven it.', { a: A, b: B })
+      return t('{a} beat {b} in a friendly tryout.', { a: A, b: B })
+    }
+    case 'bounty':
+      return t('{list} came back from a bounty: {name}.', {
+        list: e.heroIds.map((id) => shortName(state, id)).join(', '),
+        name: t(BOUNTIES[e.detail ?? '']?.name ?? e.detail ?? ''),
+      })
+    case 'jealous':
+      return t('{a} feels overlooked — the Master only has eyes for {b}.', { a: A, b: B })
   }
 }
 

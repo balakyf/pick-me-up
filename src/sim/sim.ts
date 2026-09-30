@@ -27,6 +27,7 @@ import { ANCHORS } from '../engine/content'
 import { loginClaimed, packageRefusal } from '../engine/shop'
 import { crackRefusal, dispatchRefusal } from '../engine/rift'
 import { GIFTS, giftDelta } from '../engine/favor'
+import { BOUNTIES, BOUNTY, benchHeroes, bountyRefusal, decorOptions, refusesDeploy, statueCost, statueRefusal } from '../engine/estate'
 
 export type ProfileId = 'casual' | 'engaged' | 'whale'
 
@@ -48,6 +49,8 @@ export interface Profile {
   equipment: boolean
   /** Simulated spend per real week, in USD (0 = free player). */
   usdPerWeek: number
+  /** Gold kept back from the estate's sinks (decorations, statues, bounties). */
+  estateReserve: number
 }
 
 export const PROFILES: Record<ProfileId, Profile> = {
@@ -65,6 +68,7 @@ export const PROFILES: Record<ProfileId, Profile> = {
     guild: false,
     equipment: false,
     usdPerWeek: 0,
+    estateReserve: 150_000,
   },
   engaged: {
     id: 'engaged',
@@ -80,6 +84,7 @@ export const PROFILES: Record<ProfileId, Profile> = {
     guild: true,
     equipment: true,
     usdPerWeek: 0,
+    estateReserve: 200_000,
   },
   whale: {
     id: 'whale',
@@ -95,6 +100,7 @@ export const PROFILES: Record<ProfileId, Profile> = {
     guild: true,
     equipment: true,
     usdPerWeek: 120,
+    estateReserve: 300_000,
   },
 }
 
@@ -222,6 +228,7 @@ class Bot {
     if (this.p.guild) this.guild()
     this.rescueCaptives()
     this.feast()
+    this.estate()
     this.setParty()
     if (this.p.dailies) this.dailies()
     this.climb(day)
@@ -357,13 +364,50 @@ class Bot {
   }
 
   /**
+   * The estate's gold sinks, from surplus only (above the profile's reserve): a statue for
+   * a fallen hero someone mourns, the cheapest decoration upgrade, and bounties for the
+   * bench (the richest the board allows, manned by the weakest free heroes).
+   */
+  private estate(): void {
+    const spare = () => this.s.gold - this.p.estateReserve
+    // A word with anyone who has withdrawn (it costs nothing and brings them back).
+    for (const [id, t] of Object.entries(this.s.estate.trauma)) {
+      if (t.withdrawn) this.try({ type: 'TALK_TO_HERO', heroId: id as HeroId })
+    }
+    // A statue for the most-mourned fallen hero without one.
+    const graves = this.s.life.memorial
+      .filter((r) => statueRefusal(this.s, r.heroId) === null && r.mourners.length > 0)
+      .sort((a, b) => b.mourners.length - a.mourners.length || statueCost(a) - statueCost(b))
+    if (graves[0] && statueCost(graves[0]) < spare()) this.try({ type: 'RAISE_STATUE', heroId: graves[0].heroId })
+    // Up to two decoration upgrades, cheapest first.
+    for (let i = 0; i < 2; i++) {
+      const next = decorOptions(this.s)
+        .filter((o) => o.refusal === null && o.cost !== null && o.cost < spare())
+        .sort((a, b) => a.cost! - b.cost!)[0]
+      if (!next || !this.try({ type: 'BUY_DECOR', decor: next.def.id })) break
+    }
+    // Bounties for the bench: the best job the board allows, the weakest free heroes on it.
+    let guard = 0
+    while (this.s.estate.bounties.length < BOUNTY.maxActive && guard++ < BOUNTY.maxActive) {
+      const kinds = Object.values(BOUNTIES)
+        .filter((b) => b.minFloor <= this.s.tower.highestCleared && b.gold < spare() / 2)
+        .sort((a, b) => b.gold - a.gold)
+      const bench = benchHeroes(this.s).sort((a, b) => heroCp(a) - heroCp(b))
+      const kind = kinds.find((k) => bench.length >= k.heroes)
+      if (!kind) break
+      const ids = bench.slice(0, kind.heroes).map((h) => h.id)
+      if (bountyRefusal(this.s, kind.id, ids) !== null || !this.try({ type: 'POST_BOUNTY', bounty: kind.id, heroIds: ids })) break
+    }
+  }
+
+  /**
    * The five strongest heroes fit to fight now — counter-picked like a person would after
    * one look at the floor: bring mages against the physically immune, blades against the
    * magic-immune.
    */
   bestFive(): OwnedHero[] {
     const fit = living(this.s)
-      .filter((h) => available(h) && h.sanity >= this.p.restSanity)
+      .filter((h) => available(h) && h.sanity >= this.p.restSanity && !refusesDeploy(this.s, h.id))
       .sort((a, b) => heroCp(b) - heroCp(a))
     const need = this.immunities()
     const picked: OwnedHero[] = []
@@ -465,7 +509,7 @@ class Bot {
     }
     const party = new Set(this.s.party.slots.filter(Boolean))
     const bench = living(this.s)
-      .filter((h) => available(h) && !party.has(h.id))
+      .filter((h) => available(h) && !party.has(h.id) && !refusesDeploy(this.s, h.id))
       .sort((a, b) => heroCp(b) - heroCp(a))
       .slice(0, TUNING.rift.maxTeam)
       .map((h) => h.id)
