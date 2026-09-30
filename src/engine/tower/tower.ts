@@ -280,7 +280,9 @@ function buildScaledAnchor(
 ): { waves: EnemyWave[]; mission: Mission; allies: CombatUnit[] } {
   let built = buildAnchorEncounter(anchor, floor, worldMult, extraLevels)
   if (floor <= 20) return built
-  const target = floorPower(floor, worldMult) * T.anchorBudgetMult
+  // The Wailing Wall itself (F80's anchor) stands far above its floor's budget: the gate holds.
+  const wall = floor === T.wallFloor ? T.wallPowerMult : 1
+  const target = floorPower(floor, worldMult) * T.anchorBudgetMult * wall
   const cpOf = (b: { waves: EnemyWave[] }) => b.waves.reduce((n, w) => n + w.units.reduce((m, u) => m + u.cp, 0), 0)
   let mult = 1
   for (let i = 0; i < 400 && cpOf(built) < target; i++) {

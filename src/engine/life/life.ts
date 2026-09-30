@@ -82,7 +82,11 @@ export function defaultLifeState(nowWorld: number): LifeState {
     tally: { jobGold: 0, meals: 0, forged: 0, trainXp: 0, research: 0, healed: 0 },
     letterReadAt: nowWorld,
     guide: { tutorialPull: false, done: [] },
-    crystal: { day: -1, advancedPulls: 0 },
+    // A new Master's crystal holds only its starting charge and refills from there.
+    crystal: {
+      day: Math.floor(nowWorld / (TUNING.life.slotMs * TUNING.life.slotsPerDay)),
+      advancedPulls: TUNING.gacha.advanced.dailyCharge - TUNING.gacha.advanced.startCharge,
+    },
   }
 }
 

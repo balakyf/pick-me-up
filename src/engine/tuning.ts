@@ -106,9 +106,18 @@ export const TUNING = {
       costGems: 150,
       /** A 10-pull is discounted (canon 1,350). */
       tenPullGems: 1350,
-      /** The crystal's charge: Advanced pulls per world-day (8 real hours). Whale pacing —
-       *  the balance pass saw paying bots at the Wailing Wall by day three. */
+      /** The crystal's charge: the Advanced pulls it holds when full (a ten-pull needs a full
+       *  crystal). Whale pacing — the balance pass saw paying bots at the Wailing Wall by day
+       *  three. */
       dailyCharge: 10,
+      /** Pulls the crystal recharges per world-day (8 real hours): 3 an Earth day. A free
+       *  player earns ~1 pull of gems a day and never meets the limit; a payer is metered
+       *  (balance pass 2). */
+      rechargePerDay: 1,
+      /** Pulls a new Master's crystal holds: none — bringing the Master across spent it, and
+       *  it fills from there. A free player's first ten-pull of gems is ~10 days away, by
+       *  when it is full; a payer's first week is metered from nothing (balance pass 2). */
+      startCharge: 0,
       rates: { 3: 80, 4: 18, 5: 2 } as Record<number, number>,
       /** The Nth consecutive pull without a 4★+ is lifted to 4★+. */
       pityFloor4At: 30,
@@ -158,6 +167,11 @@ export const TUNING = {
     /** The Wailing Wall (canon: difficulty explodes at F80): mobs from here on gain this many levels. */
     wallFloor: 80,
     wallLevelBonus: 20,
+    /** …and the Wall itself (F80's anchor) is raised to this × its floor's anchor budget.
+     *  Encounters fill to the CP budget, so the level bonus alone mostly trades enemy count
+     *  for level; once the bots learned to retreat (keeping their best alive) they walked
+     *  through at +20 levels (balance pass 2). Only the gate: F81+ keep their curve. */
+    wallPowerMult: 1.8,
     /** Past the inflection the budget exponent eases to this (the LEVEL curve steepens
      *  instead), so a maxed party can reach the summit. */
     latePowerBase: 1.04,

@@ -176,7 +176,7 @@ export function SummonScreen({
         ) : (
           <div className="pity">
             {t('Quality floor:')} <b>{state.gacha.advPity4}</b> / {ADV.pityFloor4At} → ★★★★ · <b>{state.gacha.advPity5}</b> /{' '}
-            {ADV.pityFloor5At} → ★★★★★ · {t('Crystal charge: {n}/{m} today', { n: charge, m: ADV.dailyCharge })}
+            {ADV.pityFloor5At} → ★★★★★ · {t('Crystal charge: {n}/{m} · +{k} each world-day', { n: charge, m: ADV.dailyCharge, k: ADV.rechargePerDay })}
           </div>
         )}
 

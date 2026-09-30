@@ -197,7 +197,7 @@ export const FR_LIFE: Record<string, string> = {
   '{n} newcomers came through the crystal: {list}.': '{n} nouveaux venus ont franchi le cristal : {list}.',
 
   // ── Summon, lobby, welcome ─────────────────────────────────────────────────
-  'Crystal charge: {n}/{m} today': 'Charge du cristal : {n}/{m} aujourd’hui',
+  'Crystal charge: {n}/{m} · +{k} each world-day': 'Charge du cristal : {n}/{m} · +{k} par jour-monde',
   'Summon ×10 · free (your first summon)': 'Invoquer ×10 · gratuit (votre première invocation)',
   'Summon ×10 · {gold} Gold': 'Invoquer ×10 · {gold} or',
   'Welcome, Master. I am Isel — I keep this waiting room in order.':

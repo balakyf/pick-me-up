@@ -56,7 +56,8 @@ describe('the predatory layer (simulated money)', () => {
     let baited = null
     for (let seed = 1; seed <= 40 && !baited; seed++) {
       const acct = createAccount(seed)
-      const s = { ...acct, gems: 1_000_000, gacha: { ...acct.gacha, advPity4: S.baitPity } }
+      // (A full crystal: a new Master's starts empty.)
+      const s = { ...acct, gems: 1_000_000, gacha: { ...acct.gacha, advPity4: S.baitPity }, life: { ...acct.life, crystal: { day: -1, advancedPulls: 0 } } }
       baited = summonMany(s, 'advanced', 1).heroes.find((h) => h.displayStar !== undefined) ?? null
     }
     expect(baited).not.toBeNull()

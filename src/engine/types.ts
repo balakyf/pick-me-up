@@ -543,7 +543,7 @@ export interface LifeState {
   letterReadAt: number
   /** Onboarding: the free tutorial 10-pull, and the first-steps checklist done so far. */
   guide: { tutorialPull: boolean; done: string[] }
-  /** Advanced pulls taken today (the crystal's charge), and which world-day. */
+  /** The crystal's charge: Advanced pulls not yet recharged, as of world-day `day` (the last pull). */
   crystal: { day: number; advancedPulls: number }
 }
 
