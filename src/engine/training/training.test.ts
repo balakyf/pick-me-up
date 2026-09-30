@@ -10,12 +10,17 @@ import {
   completeTraining,
   skipTraining,
   trainingOptions,
+  practiceFocus,
+  practiceRate,
+  practise,
 } from './training'
 import { createAccount } from '../account'
 import { advanceTime } from '../time'
 import { reduce } from '../store'
 import { playFloor } from '../tower'
 import { canUpgrade, unlockMasterLevel } from '../facilities'
+import { stepLife } from '../life'
+import { SKILLS } from '../content'
 import { TUNING } from '../tuning'
 import type { GameState, HeroId, HeroSkill, OwnedHero } from '../types'
 
@@ -228,5 +233,63 @@ describe('Training Center — across the engine', () => {
     // Only the training hero is in the party → nobody deploys.
     const { result } = playFloor({ ...training, party })
     expect(result.result.log.unitsInit.filter((u) => u.side === 'hero')).toEqual([])
+  })
+})
+
+describe('self-practice (no orders needed)', () => {
+  const S = T.self
+
+  it('works on the roughest owned skill first, then something new the centre can teach', () => {
+    const { state, id } = withCenter(1, [hs('composure', 3), hs('calmness', 1)])
+    expect(practiceFocus(heroOf(state, id), 1)).toEqual({ skillId: 'calmness', mode: 'refine' })
+    const { state: s2, id: id2 } = withCenter(1, [])
+    const f = practiceFocus(heroOf(s2, id2), 1)
+    expect(f?.mode).toBe('learn')
+    expect(SKILLS[f!.skillId]!.trainable).toBe(true)
+    // Without a centre there is nobody to teach a new skill.
+    expect(practiceFocus(heroOf(s2, id2), 0)).toBeNull()
+  })
+
+  it('banks points and turns them into skill XP; learning takes learnPoints', () => {
+    const { state, id } = withCenter(1, [hs('composure', 1)])
+    let hero = heroOf(state, id)
+    let practice: { skillId: string; points: number } | undefined
+    let levels = 0
+    for (let i = 0; i < 40; i++) {
+      const r = practise(hero, practice, 1)
+      hero = r.hero
+      practice = r.practice
+      if (r.gained?.kind === 'level') levels++
+    }
+    expect(levels).toBeGreaterThan(0)
+    expect(hero.skills.find((s) => s.id === 'composure')!.level).toBeGreaterThan(1)
+
+    const { state: s2, id: id2 } = withCenter(1, [])
+    let h2 = heroOf(s2, id2)
+    let p2: { skillId: string; points: number } | undefined
+    const slots = Math.ceil(S.learnPoints / practiceRate(1))
+    for (let i = 0; i < slots; i++) ({ hero: h2, practice: p2 } = practise(h2, p2, 1))
+    expect(h2.skills).toHaveLength(1)
+    expect(h2.training).toBeNull()
+  })
+
+  it('costs nothing and is faster with a better centre and with instructors', () => {
+    expect(practiceRate(0)).toBeLessThan(practiceRate(1))
+    expect(practiceRate(3)).toBeGreaterThan(practiceRate(1))
+    expect(practiceRate(1, 2)).toBeCloseTo(practiceRate(1) * 2)
+  })
+
+  it('heroes left alone for a few days pick up and improve skills by themselves', () => {
+    let s = reduce({ ...createAccount(11), gold: TUNING.gacha.normalCostGold * 8 }, { type: 'SUMMON' })
+    for (let i = 0; i < 7; i++) s = reduce(s, { type: 'SUMMON' })
+    s = { ...s, facilities: { ...s.facilities, trainingCenter: { level: 1, build: null } } }
+    const gold = s.gold
+    const score = (st: GameState) => Object.values(st.heroes).reduce((a, h) => a + h.skills.reduce((b, k) => b + k.level, 0), 0)
+    const before = score(s)
+    const after = stepLife(s, (s.life.slot + 3 * 48) * TUNING.life.slotMs)
+    expect(score(after)).toBeGreaterThan(before)
+    expect(after.life.tally.selfTaught ?? 0).toBeGreaterThan(0)
+    expect(Object.values(after.heroes).every((h) => h.training === null)).toBe(true)
+    expect(after.gold).toBeGreaterThanOrEqual(gold)
   })
 })

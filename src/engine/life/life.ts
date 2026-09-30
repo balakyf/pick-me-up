@@ -39,6 +39,7 @@ import type {
 } from '../types'
 import { personalityOf, chemistry, type Personality } from './personality'
 import { JOB_PLACE, jobOpen, jobTier, workPower, aptitude, jobFeeling } from './jobs'
+import { practiceFocus, practise } from '../training/training'
 import { activityNudge, estateLifeMods, estateLive, instructorMult, type EstateLifeMods } from '../estate/lifeHooks'
 import { weatherAt, type Weather } from '../estate/weather'
 
@@ -337,7 +338,10 @@ function chooseActivity(hero: OwnedHero, life: HeroLife, ctx: Ctx, rnd: () => nu
     if (!blocked) scores.push(['work', 1.3 + p.diligence * 0.9 + (feel === 'likes' ? 0.3 : feel === 'dislikes' ? -0.4 : 0) - (n.energy < 25 ? 1 : 0)])
   }
   if (!night) {
-    scores.push(['train', 0.1 + p.diligence * 0.5 + p.courage * 0.15 - (hero.xp.atCap ? 0.8 : 0)])
+    // At the level cap the yard still has skills to offer, as long as one is left to practise.
+    const practice = practiceFocus(hero, f.trainingCenter.level) !== null
+    const capped = hero.xp.atCap ? (practice ? 0.3 : 0.8) : 0
+    scores.push(['train', 0.1 + p.diligence * 0.5 + p.courage * 0.15 + (practice && f.trainingCenter.level > 0 ? 0.15 : 0) - capped])
     scores.push(['socialize', need01(n.social) * 1.4 + p.sociability * 0.6 + (hour >= L.hours.evening ? 0.5 : 0)])
     scores.push(['hobby', need01(n.fun) * 1.2 + 0.45])
     scores.push(['read', p.curiosity * 0.8 + need01(n.fun) * 0.4 - (f.library.level > 0 ? 0 : 0.3)])
@@ -622,6 +626,7 @@ export function stepLife(state: GameState, nowWorld: number): GameState {
 
     // 3. Live: needs, activity effects, sanity, grief.
     const trainMult = Math.min(L.train.instructorCap, 1 + L.train.instructorPerPower * instructorPower) * mods.trainMult
+    const centreLevel = state.facilities.trainingCenter.level
     for (const w of work) {
       const kind = w.life.doing.kind
       if (kind === 'away' || kind === 'captive' || kind === 'promoting' || kind === 'drilling') continue
@@ -653,6 +658,17 @@ export function stepLife(state: GameState, nowWorld: number): GameState {
           if (!w.xp.atCap) tally.trainXp += gain
           w.xp = applyXp(w.xp, gain, w.hero.star)
           n.fun += 2
+          // Free time in the yard also works on a skill of the hero's own choosing.
+          const pr = practise(w.hero, w.life.practice, centreLevel, trainMult)
+          w.hero = pr.hero
+          w.life.practice = pr.practice
+          if (pr.gained) {
+            tally.selfTaught = (tally.selfTaught ?? 0) + 1
+            if (pr.gained.kind === 'learned') {
+              addMemory(w.life, { kind: 'selfTaught', day, detail: pr.gained.skillId, weight: 30 })
+              pushChronicle(chronicle, { at: atWorld, kind: 'selfTaught', heroIds: [w.hero.id], detail: pr.gained.skillId })
+            }
+          }
           break
         }
         case 'socialize':

@@ -409,6 +409,7 @@ export type MemoryKind =
   | 'bounty'
   | 'comforted'
   | 'burnout'
+  | 'selfTaught'
 
 export interface Memory {
   kind: MemoryKind
@@ -447,6 +448,8 @@ export interface HeroLife {
   arrivedDay: number
   /** Deepest floor the hero has fought on. */
   bestFloor: number
+  /** Self-practice in the yard: the skill the hero is working on and the progress banked. */
+  practice?: { skillId: string; points: number }
 }
 
 /** A pair of heroes' history ("a|b", ids sorted). */
@@ -478,6 +481,7 @@ export type ChronicleKind =
   | 'duel'
   | 'bounty'
   | 'jealous'
+  | 'selfTaught'
 
 export interface ChronicleEntry {
   /** World-time ms. */
@@ -517,6 +521,8 @@ export interface LifeTally {
   trainXp: number
   research: number
   healed: number
+  /** Skill levels and new skills heroes gained by practising on their own. */
+  selfTaught?: number
 }
 
 export type ForgeOrder = EquipmentSlot | 'auto'

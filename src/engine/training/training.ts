@@ -147,3 +147,92 @@ export function trainingOptions(state: GameState, heroId: HeroId): TrainingOptio
     return { skillId, mode, cost: drillCost(skillId, mode), ok: reason === null, reason }
   })
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Self-practice: heroes who spend free time in the yard work on a skill of their own
+// choosing. Free and slower than a drill; a drill is the Master's way to focus them.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const S = T.self
+
+export interface PracticeFocus {
+  skillId: string
+  mode: 'refine' | 'learn'
+}
+
+const round3 = (v: number) => Math.round(v * 1000) / 1000
+
+/** Owned skills are practised first while any is still below this level. */
+const BASICS_LEVEL = 3
+
+/** Small stable hash, so heroes don't all pick the same new skill. */
+function pick<T>(items: readonly T[], key: string): T {
+  let h = 0
+  for (let i = 0; i < key.length; i++) h = (h * 31 + key.charCodeAt(i)) >>> 0
+  return items[h % items.length]!
+}
+
+/**
+ * What a hero works on when they train on their own: their least-practised skill while
+ * any is still rough (below Lv3), then a new skill the Training Center can teach, then
+ * whatever owned skill still has room to grow. Null when there is nothing left.
+ */
+export function practiceFocus(hero: OwnedHero, centreLevel: number): PracticeFocus | null {
+  const growing = hero.skills
+    .filter((s) => SKILLS[s.id] !== undefined && s.level < maxLevelFor(SKILLS[s.id]!.grade))
+    .sort((a, b) => a.level - b.level || gradeRank(SKILLS[b.id]!.grade) - gradeRank(SKILLS[a.id]!.grade) || a.id.localeCompare(b.id))
+  const rough = growing[0]
+  if (rough && rough.level < BASICS_LEVEL) return { skillId: rough.id, mode: 'refine' }
+  const ceiling = maxTrainableGrade(centreLevel)
+  if (ceiling !== null) {
+    const teachable = Object.keys(SKILLS)
+      .filter((id) => SKILLS[id]!.trainable && !hero.skills.some((s) => s.id === id) && gradeRank(SKILLS[id]!.grade) <= gradeRank(ceiling))
+      .sort()
+    if (teachable.length > 0) {
+      const top = Math.max(...teachable.map((id) => gradeRank(SKILLS[id]!.grade)))
+      return { skillId: pick(teachable.filter((id) => gradeRank(SKILLS[id]!.grade) === top), hero.id), mode: 'learn' }
+    }
+  }
+  return rough ? { skillId: rough.id, mode: 'refine' } : null
+}
+
+/** Practice points one 'train' slot banks (instructors multiply it via `trainMult`). */
+export function practiceRate(centreLevel: number, trainMult = 1): number {
+  const centre = centreLevel > 0 ? 1 + S.perCentreLevel * (centreLevel - 1) : S.noCentreMult
+  return S.perSlot * centre * trainMult
+}
+
+export interface PracticeResult {
+  hero: OwnedHero
+  practice: { skillId: string; points: number } | undefined
+  /** What the session achieved: a skill level, a newly learned skill, or nothing yet. */
+  gained: { kind: 'level' | 'learned'; skillId: string } | null
+}
+
+/** One slot of self-practice. Pure: returns the updated hero and practice record. */
+export function practise(
+  hero: OwnedHero,
+  practice: { skillId: string; points: number } | undefined,
+  centreLevel: number,
+  trainMult = 1,
+): PracticeResult {
+  const focus = practiceFocus(hero, centreLevel)
+  if (focus === null) return { hero, practice: undefined, gained: null }
+  let points = (practice?.skillId === focus.skillId ? practice.points : 0) + practiceRate(centreLevel, trainMult)
+  if (focus.mode === 'learn') {
+    if (points < S.learnPoints) return { hero, practice: { skillId: focus.skillId, points: round3(points) }, gained: null }
+    const skills = resolveMerges([...hero.skills, { id: focus.skillId, level: 1, xp: 0 }])
+    return { hero: { ...hero, skills }, practice: undefined, gained: { kind: 'learned', skillId: focus.skillId } }
+  }
+  const whole = Math.floor(points)
+  if (whole < 1) return { hero, practice: { skillId: focus.skillId, points: round3(points) }, gained: null }
+  points -= whole
+  const before = hero.skills.find((s) => s.id === focus.skillId)?.level ?? 0
+  const skills = resolveMerges(awardSkillXp(hero.skills, { [focus.skillId]: whole }))
+  const after = skills.find((s) => s.id === focus.skillId)?.level ?? 0
+  return {
+    hero: { ...hero, skills },
+    practice: { skillId: focus.skillId, points: round3(points) },
+    gained: after > before ? { kind: 'level', skillId: focus.skillId } : null,
+  }
+}

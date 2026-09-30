@@ -269,7 +269,7 @@ function reduceCore(state: GameState | null, cmd: Command, nowWorld: number): Ga
         life: {
           ...current.life,
           letterReadAt: Math.max(nowWorld, current.meta.lastSeenAtWorld),
-          tally: { jobGold: 0, meals: 0, forged: 0, trainXp: 0, research: 0, healed: 0 },
+          tally: { jobGold: 0, meals: 0, forged: 0, trainXp: 0, research: 0, healed: 0, selfTaught: 0 },
         },
       }
 

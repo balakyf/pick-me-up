@@ -10,6 +10,7 @@
  *
  * Presentation only: it reads GameState and never changes it.
  */
+import { SKILLS } from '../../engine/content'
 import type { GameState, HeroId, Memory, OwnedHero, JobId, ActivityKind, LifePlace, FallenRecord, ChronicleEntry } from '../../engine/types'
 import {
   bondOf,
@@ -247,6 +248,9 @@ const MEMORY: Partial<Record<Memory['kind'], ByVoice>> = {
   mourned: {
     any: ['I visited {fallen} yesterday. Told them about the new floors.'],
   },
+  selfTaught: {
+    any: ['Nobody taught me {skill}. I just kept at it in the yard until it worked.', 'I picked up {skill} on my own. Want to see?'],
+  },
 }
 
 const FRIEND_LINE: ByVoice = {
@@ -425,6 +429,7 @@ function memoryVars(state: GameState, hero: OwnedHero, m: Memory, p: Personality
     job: job ? t(JOB_NAME[job]) : '',
     tier: t(TIER_NAMES[tier] ?? 'Novice'),
     food: t(p.food),
+    skill: m.kind === 'selfTaught' ? t(SKILLS[m.detail ?? '']?.name ?? m.detail ?? '') : '',
   }
 }
 
@@ -723,6 +728,8 @@ export function chronicleLine(state: GameState, e: ChronicleEntry): string {
         list: e.heroIds.map((id) => shortName(state, id)).join(', '),
         name: t(BOUNTIES[e.detail ?? '']?.name ?? e.detail ?? ''),
       })
+    case 'selfTaught':
+      return t('{a} taught themselves {skill} in the yard.', { a: A, skill: t(SKILLS[e.detail ?? '']?.name ?? e.detail ?? '') })
     case 'jealous':
       return t('{a} feels overlooked — the Master only has eyes for {b}.', { a: A, b: B })
   }

@@ -1005,3 +1005,11 @@ kbd.bkey {
 .hud-zoom .pbtn { min-width: 44px; }
 @media (max-width: 720px) { .hud-zoom { bottom: 170px; } }
 @media (max-width: 640px) { .hud-zoom { bottom: 205px; } }
+
+/* Training Center: heroes practising on their own */
+.practice-list { list-style: none; margin: 4px 0 8px; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.practice-row { display: flex; align-items: center; gap: 8px; padding: 3px 6px; border-radius: 4px; background: rgba(255, 255, 255, 0.03); }
+.practice-row.here { background: rgba(255, 214, 102, 0.1); }
+.practice-name { flex: 1; display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.practice-bar { display: block; height: 4px; border-radius: 2px; background: rgba(255, 255, 255, 0.12); overflow: hidden; }
+.practice-bar > span { display: block; height: 100%; background: var(--gold, #e0b64a); }

@@ -16,7 +16,8 @@ import { fuseOptions, maxTransferGrade, transferCost, transferRefusal, transferr
 import { smithyUnlocked, forgeGrade, forgeCost, canCraft, itemName, equippedItemIds } from '../engine/equipment'
 import { Portrait, SkillList } from './bits'
 import { SKILLS } from '../engine/content'
-import { maxTrainableGrade, drillXp, trainingOptions } from '../engine/training'
+import { maxTrainableGrade, drillXp, trainingOptions, practiceFocus, practiceRate } from '../engine/training'
+import { lifeOf } from '../engine/life'
 import { skillProgressLine } from './screens'
 import { HallOfMagicInfo, RiftPanel, ShopPanel, TimingGame } from './metaPanels'
 import { GuildPanel } from './pvpPanels'
@@ -746,7 +747,11 @@ function TrainingAction({ state, store }: { state: GameState; store: Store }) {
   }
 
   if (ceiling === null) {
-    return <div className="lr-action-note">{t('Build the Training Center to start drills.')}</div>
+    return (
+      <div className="lr-action-note">
+        {t('Heroes already spar in the yard in their free time, at half pace. Build the Training Center to teach them new skills and to start drills.')}
+      </div>
+    )
   }
 
   return (
@@ -777,7 +782,10 @@ function TrainingAction({ state, store }: { state: GameState; store: Store }) {
         </>
       )}
 
+      <SelfPractice state={state} heroes={free} />
+
       <h4 className="panel-sub">{t('New drill')}</h4>
+      <p className="muted small">{t('Optional: a drill focuses one hero on the skill you choose, much faster than practising alone.')}</p>
       {free.length === 0 ? (
         <div className="lr-empty">{t('Every hero is busy.')}</div>
       ) : (
@@ -821,6 +829,53 @@ function TrainingAction({ state, store }: { state: GameState; store: Store }) {
       )}
       {err && <div className="lr-action-note" style={{ color: 'var(--bad)' }}>{err}</div>}
     </div>
+  )
+}
+
+/** Who is practising what on their own (no orders needed): the yard's free-time regulars. */
+function SelfPractice({ state, heroes }: { state: GameState; heroes: OwnedHero[] }) {
+  const level = state.facilities.trainingCenter.level
+  const rows = heroes
+    .map((h) => ({ h, focus: practiceFocus(h, level), here: lifeOf(h).doing.kind === 'train' }))
+    .filter((r) => r.focus !== null)
+    .sort((a, b) => Number(b.here) - Number(a.here))
+  return (
+    <>
+      <h4 className="panel-sub">{t('Practising on their own')}</h4>
+      <p className="muted small">
+        {t('In their free time heroes come to the yard and work on a skill of their choosing, for free. Instructors make it go faster.')}
+      </p>
+      <div className="ta-row"><span>{t('Practice per hour in the yard')}</span><span className="ta-val">+{(practiceRate(level) * 2).toFixed(1)} {t('skill XP')}</span></div>
+      {rows.length === 0 ? (
+        <div className="lr-empty">{t('Nobody has anything left to practise here.')}</div>
+      ) : (
+        <ul className="practice-list">
+          {rows.map(({ h, focus, here }) => {
+            const def = SKILLS[focus!.skillId]!
+            const owned = h.skills.find((s) => s.id === focus!.skillId)
+            const pts = lifeOf(h).practice?.skillId === focus!.skillId ? lifeOf(h).practice!.points : 0
+            const pct =
+              focus!.mode === 'learn'
+                ? pts / TRAIN.self.learnPoints
+                : owned
+                  ? (owned.xp + pts) / (TUNING.skills.xpToNext[owned.level] ?? 1)
+                  : 0
+            return (
+              <li key={h.id} className={`practice-row ${here ? 'here' : ''}`}>
+                <Portrait hero={h} size="sm" />
+                <span className="practice-name">
+                  <b>{h.name.split(/\s+/)[0]}</b> · {focus!.mode === 'learn' ? t('learning {skill}', { skill: t(def.name) }) : t('{skill} Lv {n}', { skill: t(def.name), n: owned?.level ?? 1 })}
+                  <span className="practice-bar" aria-hidden="true">
+                    <span style={{ width: `${Math.min(100, Math.round(pct * 100))}%` }} />
+                  </span>
+                </span>
+                <span className="muted small">{here ? t('in the yard now') : ''}</span>
+              </li>
+            )
+          })}
+        </ul>
+      )}
+    </>
   )
 }
 

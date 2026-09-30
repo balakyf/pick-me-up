@@ -721,6 +721,19 @@ export const TUNING = {
       learnMult: 2,
       /** Gems to finish a drill immediately. */
       skipGemCost: 15,
+      /**
+       * Self-practice: free time spent in the yard also works on a skill, no gold and no
+       * order needed. Use-XP per 'train' slot = perSlot × centre factor × instructors.
+       */
+      self: {
+        perSlot: 0.5,
+        /** Without a Training Center heroes still spar, at this share of the rate. */
+        noCentreMult: 0.5,
+        /** Each centre level past the first adds this share. */
+        perCentreLevel: 0.25,
+        /** Points to pick up a new skill on one's own (needs the centre, within its ceiling). */
+        learnPoints: 6,
+      },
     },
     /** Passive skills gain this much use-XP per battle survived (they are never cast). */
     passiveXpPerBattle: 1,

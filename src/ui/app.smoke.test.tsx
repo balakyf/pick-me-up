@@ -191,7 +191,7 @@ describe('App smoke', () => {
     })
     openPlace('Training Center')
     expect(container.textContent).toContain('never stats or level')
-    expect(container.textContent).toContain('Build the Training Center to start drills')
+    expect(container.textContent).toContain('Build the Training Center to teach them new skills')
     expect(container.textContent).toContain('Unlocks at Master Lv 2')
   })
 })

@@ -3,6 +3,7 @@
  * they are, what they want, who they love and hate, what they remember, their job), and
  * Isel's letter — the canon login report of what the heroes did while the Master was away.
  */
+import { SKILLS } from '../../engine/content'
 import { useState } from 'react'
 import type { GameState, HeroId, JobId, Memory, OwnedHero } from '../../engine/types'
 import type { Store } from '../../engine/store'
@@ -103,6 +104,7 @@ export function memoryLine(state: GameState, m: Memory): string {
         : t('Fought {name} to a draw', { name: other }),
     statue: t('Saw a statue raised for {name}', { name: other }),
     bounty: t('Came back from a bounty: {name}', { name: t(BOUNTIES[m.detail ?? '']?.name ?? '') }),
+    selfTaught: t('Taught themselves {skill}', { skill: t(SKILLS[m.detail ?? '']?.name ?? m.detail ?? '') }),
     comforted: t('Came back to the others, comforted'),
     burnout: t('Burnt out after too many floors'),
   }
@@ -345,7 +347,7 @@ export function letterReady(state: GameState, nowWorld: number, minGapWorld = 2 
   const since = state.life.letterReadAt
   if (nowWorld - since < minGapWorld) return false
   const tl = state.life.tally
-  const newsy = state.life.chronicle.some((e) => e.at > since) || tl.forged + tl.meals + tl.research > 0 || tl.jobGold > 0 || tl.trainXp > 0
+  const newsy = state.life.chronicle.some((e) => e.at > since) || tl.forged + tl.meals + tl.research > 0 || tl.jobGold > 0 || tl.trainXp > 0 || (tl.selfTaught ?? 0) > 0
   return newsy
 }
 
@@ -378,6 +380,7 @@ export function LetterWindow({ state, onClose }: { state: GameState; onClose: ()
           {tl.meals > 0 && <span className="chip">🍲 {t('{n} meals served', { n: tl.meals })}</span>}
           {tl.jobGold > 0 && <span className="chip">◆ {t('+{n} gold from work', { n: tl.jobGold.toLocaleString() })}</span>}
           {tl.trainXp > 0 && <span className="chip">⚔ {t('{n} XP trained', { n: tl.trainXp.toLocaleString() })}</span>}
+          {(tl.selfTaught ?? 0) > 0 && <span className="chip">🎯 {t('{n} skills improved in the yard', { n: tl.selfTaught! })}</span>}
           {tl.research > 0 && <span className="chip">📚 {t('{n} floors studied', { n: tl.research })}</span>}
           {tl.healed > 0 && <span className="chip">✚ {t('{n} sanity mended', { n: tl.healed })}</span>}
           {invasions.length > 0 && <span className="chip">⟡ {t('{n} invasions', { n: invasions.length })}</span>}
