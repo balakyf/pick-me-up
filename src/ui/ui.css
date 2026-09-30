@@ -706,3 +706,134 @@ span.arm-slot { padding: 2px 8px; border: 2px dashed #3e3478; color: var(--ink-f
 .guide-list li.next { color: var(--ink); font-weight: 600; }
 .guide-hint { font-style: italic; color: #d8d0f0; margin-bottom: 6px; }
 @media (max-width: 720px) { .hud-guide { top: auto; bottom: 170px; width: 220px; } }
+
+/* ── Battle FX (WS1): full-screen stage, parallax, weather, impact juice, keys ── */
+.battle { justify-content: safe center; overflow-y: auto; gap: 8px; padding: 8px; }
+.battle-stage-wrap { max-width: 100%; }
+.battle-stage-wrap > .battle-caption {
+  position: absolute; top: 6px; left: 50%; transform: translateX(-50%); z-index: 1100;
+  min-width: min(520px, 86%); max-width: 94%; font-size: 17px; min-height: 0; padding: 4px 14px;
+  opacity: 0.94; pointer-events: none;
+}
+.battle-cam { position: absolute; inset: 0; transform-origin: 50% 60%; }
+.bg-layer {
+  position: absolute; top: 0; bottom: 0; left: -4px; right: -4px;
+  background-repeat: repeat-x; background-size: 384px 216px;
+  background-position: calc(var(--ox, 0px) + 4px) 0;
+  image-rendering: pixelated; image-rendering: crisp-edges;
+  transition: filter 0.5s steps(4);
+}
+/* Clouds, smoke and mist drift one pixel at a time; far scenery sways, the ground holds. */
+.bg-drift { animation: bgDrift 180s steps(384) infinite; }
+.bg-theme-swamp.bg-drift, .bg-theme-statue.bg-drift { animation-duration: 90s; }
+.bg-theme-war.bg-drift, .bg-theme-fallingCity.bg-drift { animation-duration: 110s; }
+.bg-theme-coast.bg-drift { animation-duration: 70s; }
+.bg-theme-worldsEnd.bg-drift { animation-duration: 40s; }
+.bg-fog { animation: bgDrift 60s steps(384) infinite reverse; }
+.bg-far { animation: bgSwayFar 22s steps(2) infinite alternate; }
+.bg-mid { animation: bgSwayMid 14s steps(4) infinite alternate; }
+.bg-theme-unfinished.bg-far { animation: glitchTear 2.6s steps(1) infinite; }
+@keyframes bgDrift {
+  from { background-position: calc(var(--ox, 0px) + 4px) 0; }
+  to { background-position: calc(var(--ox, 0px) + 4px - 384px) 0; }
+}
+@keyframes bgSwayFar { from { transform: translateX(-1px); } to { transform: translateX(1px); } }
+@keyframes bgSwayMid { from { transform: translateX(-2px); } to { transform: translateX(2px); } }
+@keyframes glitchTear {
+  0%, 100% { transform: none; opacity: 1; }
+  8% { transform: translateX(3px); opacity: 0.6; }
+  10% { transform: none; opacity: 1; }
+  47% { transform: translateX(-5px); filter: hue-rotate(90deg); }
+  49% { transform: none; filter: none; }
+  71% { opacity: 0.2; }
+  73% { opacity: 1; }
+}
+.battle-units { position: absolute; top: 0; width: 384px; height: 216px; }
+.battle-fx { position: absolute; left: 0; top: 0; width: 100%; height: 100%; z-index: 900; pointer-events: none; }
+
+/* Impact: a crit's number lands after the hit-stop, big; a killing blow burns orange. */
+.dmg.crit { font-size: 19px; color: var(--gold); transform-origin: 50% 100%; animation: dmgCrit 1.1s steps(11) 0.12s both; }
+.dmg.kill { font-size: 15px; color: #ff9a6a; }
+.dmg-tag { display: block; font-size: 6px; line-height: 7px; letter-spacing: 1px; color: #fff6e0; text-align: center; }
+@keyframes dmgCrit {
+  0% { transform: translate(-50%, 6px) scale(0.4); opacity: 1; filter: brightness(3); }
+  15% { transform: translate(-50%, -10px) scale(1.35); filter: none; }
+  30% { transform: translate(-50%, -6px) scale(1); }
+  85% { opacity: 1; }
+  100% { transform: translate(-50%, -12px) scale(1); opacity: 0; }
+}
+
+/* The death moment: the world greys and narrows; the fallen hero sinks, in colour. */
+.bunit { transition: transform 0.12s steps(3), filter 0.5s steps(4); }
+.battle-fx { transition: filter 0.5s steps(4); }
+.death-moment .bg-layer, .death-moment .bunit:not(.falling), .death-moment .battle-fx { filter: grayscale(0.85) brightness(0.7); }
+.bunit.hero.ko.falling { z-index: 940 !important; }
+.bunit.hero.ko.falling .bsprite { animation: heroFall 1.8s steps(9) both; }
+@keyframes heroFall {
+  0% { transform: none; filter: brightness(1.8); }
+  15% { transform: translateY(-3px) rotate(6deg); filter: none; }
+  45% { transform: translateY(0) rotate(-20deg); }
+  100% { transform: rotate(-90deg) translate(-10px, 6px); filter: grayscale(0.5) brightness(0.85); }
+}
+.death-vignette {
+  position: absolute; inset: 0; z-index: 950; pointer-events: none;
+  background: radial-gradient(ellipse at 50% 55%, transparent 40%, rgba(8, 4, 18, 0.85) 100%);
+  animation: fadeInFx 0.6s steps(4) both;
+}
+.cine-bar { position: absolute; left: 0; right: 0; height: 12px; background: #000; z-index: 960; pointer-events: none; }
+.cine-bar.top { top: 0; animation: cineTop 0.4s steps(4) both; }
+.cine-bar.bottom { bottom: 0; animation: cineBottom 0.4s steps(4) both; }
+@keyframes cineTop { from { transform: translateY(-100%); } to { transform: none; } }
+@keyframes cineBottom { from { transform: translateY(100%); } to { transform: none; } }
+@keyframes fadeInFx { from { opacity: 0; } to { opacity: 1; } }
+.death-card { top: 20px; width: auto; max-width: 250px; padding: 4px 8px; gap: 6px; }
+.death-card img { width: 32px; height: 32px; }
+.death-card .death-name { font-size: 9px; }
+.death-card .death-words { font-size: 8px; line-height: 10px; }
+.death-card.fading { animation: deathOut 0.6s steps(4) forwards; }
+@keyframes deathOut { from { opacity: 1; } to { opacity: 0; transform: translateX(-50%) translateY(-4px); } }
+
+/* The HUD under the stage: foes | party | controls, stacking on narrow screens. */
+.battle-hud {
+  display: grid; grid-template-columns: minmax(190px, 1fr) minmax(300px, 1.7fr) auto; gap: 8px;
+  max-width: 100%; flex: none;
+}
+.battle-hud .battle-foes { min-height: 0; }
+.battle-hud .battle-controls { flex-direction: column; align-items: stretch; justify-content: center; gap: 6px; flex-wrap: nowrap; }
+.bctl-row { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; align-items: center; }
+.battle-hud .order-bar { border-left: none; padding-left: 0; padding-top: 6px; border-top: 2px solid var(--line); }
+.battle-hud .aim-hint { text-align: center; font-size: 14px; }
+.pbtn.danger.armed { outline: 2px solid var(--gold); animation: blink 0.5s steps(2) infinite; }
+kbd.bkey {
+  font-size: 10px; line-height: 12px; min-width: 0; margin: 0 0 0 6px; padding: 0 3px;
+  vertical-align: 2px; opacity: 0.7; box-shadow: inset -1px -1px 0 #b8a878; text-shadow: none;
+}
+.pbtn.big kbd.bkey { font-size: 11px; }
+@media (max-width: 1000px) {
+  .battle-hud { grid-template-columns: 1fr 1.6fr; }
+  .battle-hud .battle-controls { grid-column: 1 / -1; }
+}
+@media (max-width: 640px) {
+  .battle-hud { grid-template-columns: 1fr; }
+  .battle-stage-wrap > .battle-caption { font-size: 13px; top: 3px; padding: 2px 8px; }
+}
+@media (hover: none), (max-width: 640px) { kbd.bkey { display: none; } }
+
+/* A phone on its side: the windows stand beside the stage, compact. */
+.battle.beside { flex-direction: row; align-items: center; }
+.battle.beside .battle-hud { grid-template-columns: 1fr; width: 280px; max-height: calc(100vh - 16px); overflow-y: auto; gap: 4px; }
+.battle.beside .battle-hud .battle-controls { grid-column: auto; }
+.battle.beside .battle-foes { font-size: 13px; padding: 4px 8px; }
+.battle.beside .battle-party { padding: 4px 6px; }
+.battle.beside .party-row { grid-template-columns: 18px 1fr 70px; font-size: 13px; gap: 4px; }
+.battle.beside .party-lv, .battle.beside .party-hpnum { display: none; }
+.battle.beside .party-bust { width: 18px; height: 18px; }
+.battle.beside .pbtn { padding: 3px 8px; font-size: 13px; }
+.battle.beside .pbtn.big { padding: 6px 14px; font-size: 16px; }
+.battle.beside .battle-stage-wrap > .battle-caption { font-size: 13px; top: 3px; padding: 2px 8px; }
+
+/* Reduced motion: no drift, sway, shake or punch; weather is thinned in code. */
+.battle.calm .bg-layer, .battle.calm .bunit.hero.ko.falling .bsprite, .battle.calm .dmg.crit { animation: none !important; }
+@media (prefers-reduced-motion: reduce) {
+  .bg-layer { animation: none !important; }
+}
