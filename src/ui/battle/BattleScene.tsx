@@ -12,6 +12,7 @@ import type { LookSource } from '../pixel/look'
 import { ELEMENT_VIS, hpColor } from '../bits'
 import { t } from '../i18n/i18n'
 import { DEPTH_DURATION, depthSnap } from './synergyCaptions'
+import { attackStyle, choreograph, popupOffsets, type AttackStyle } from './choreo'
 
 /**
  * The battle as a side-view JRPG scene. The engine resolved the fight already;
@@ -39,7 +40,7 @@ const SPEEDS = [1, 2, 4] as const
 const DURATION: Record<CombatEvent['kind'], number> = {
   'battle-start': 700,
   'wave-spawn': 800,
-  act: 260,
+  act: 340,
   hit: 460,
   miss: 400,
   'hp-cost': 450,
@@ -60,8 +61,8 @@ const HITSTOP_MS = 120
 /** The fallen hero's last words linger this long after the scene moves on. */
 const MOURN_LINGER_MS = 1200
 
-const HERO_X: Record<Line, number> = { front: 262, mid: 298, back: 334 }
-const ENEMY_X: Record<Line, number> = { front: 128, mid: 90, back: 52 }
+const HERO_X: Record<Line, number> = { front: 250, mid: 286, back: 322 }
+const ENEMY_X: Record<Line, number> = { front: 140, mid: 102, back: 64 }
 
 function skillName(id: string): string {
   if (id === 'basic') return t('Attack')
@@ -329,6 +330,38 @@ export function BattleScene({
   // Damage popups for the most recent few events (each animates once on mount).
   const popups = (atEnd ? [] : log.events.slice(Math.max(0, cursor - 3), cursor))
     .filter((e) => e.kind === 'hit' || e.kind === 'miss' || e.kind === 'guard' || e.kind === 'heal')
+  const popupStack = popupOffsets(popups.map((e) => ({ target: e.kind === 'heal' ? e.unitId : 'targetId' in e ? e.targetId : '' })))
+
+  // Choreography: who runs where, who fires what (see choreo.ts).
+  const sizeOf = (u: CombatUnitInit) => (u.side === 'hero' ? { w: 24, h: 32 } : enemySize(u.name, u.element))
+  const style = useMemo<AttackStyle | null>(() => {
+    if (!current || !('actorId' in current)) return null
+    // The action's skill comes from its 'act' (hits and misses follow it).
+    let skillId: string | null = null
+    for (let i = cursor - 1; i >= 0; i--) {
+      const ev = log.events[i]!
+      if (ev.kind === 'act' && ev.actorId === current.actorId) {
+        skillId = ev.skillId
+        break
+      }
+      if (ev.kind === 'act') break
+    }
+    const u = byId[current.actorId]
+    return u ? attackStyle(u, skillId, sizeOf(u).w) : null
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [current?.seq, log])
+  const { poses, shot } = choreograph(
+    atEnd ? undefined : current,
+    pos,
+    byId,
+    style,
+    (id) => (byId[id] ? sizeOf(byId[id]!).w : 24),
+    (id) => (byId[id] ? sizeOf(byId[id]!).h : 32),
+    snap.element,
+  )
+  // The parties march in at the start; a new wave charges on.
+  const entering = (u: CombatUnitInit) =>
+    cursor <= 1 || (current?.kind === 'wave-spawn' && current.enemyIds.includes(u.id))
 
   const heroes = log.unitsInit.filter((u) => u.side === 'hero')
   const enemies = log.unitsInit.filter((u) => u.side === 'enemy')
@@ -496,7 +529,7 @@ export function BattleScene({
         className={`battle-stage-wrap ${aim ? 'aiming' : ''} ${fallen ? 'death-moment' : ''}`}
         style={{ width: stagePxW, height: Math.round(BG_H * zoom) }}
       >
-        <div className="battle-stage" style={{ width: stageW, height: BG_H, transform: `scale(${zoom})` }}>
+        <div className="battle-stage" style={{ width: stageW, height: BG_H, transform: `scale(${zoom})`, ['--spd' as string]: speed }}>
           <div className="battle-cam" ref={camRef}>
             {LAYER_ORDER.map((name) =>
               layers[name] ? (
@@ -524,7 +557,18 @@ export function BattleScene({
                   : isHero
                     ? heroFrameUrl(heroSrc(u), 'left', acting ? 1 : 0)
                     : enemyUrl(u.name, u.element)
-                const cls = ['bunit', isHero ? 'hero' : 'enemy', acting ? 'acting' : '', hurt ? 'hurt' : '', dead ? 'ko' : '', falling ? 'falling' : '']
+                const pose = poses[u.id]
+                const cheering = atEnd && outcome === 'win' && isHero && !dead
+                const cls = [
+                  'bunit',
+                  isHero ? 'hero' : 'enemy',
+                  acting ? 'acting' : '',
+                  hurt ? 'hurt' : '',
+                  dead ? 'ko' : '',
+                  falling ? 'falling' : '',
+                  entering(u) ? 'entering' : '',
+                  cheering ? 'cheer' : '',
+                ]
                   .filter(Boolean)
                   .join(' ')
                 const hpPct = (Math.max(0, snap.hp[u.id] ?? u.maxHP) / u.maxHP) * 100
@@ -538,20 +582,25 @@ export function BattleScene({
                       top: p.y - size.h,
                       width: size.w,
                       height: size.h,
-                      zIndex: p.y,
+                      zIndex: pose?.z ?? p.y,
+                      transform: pose ? `translate(${pose.dx}px, ${pose.dy}px)` : undefined,
+                      ['--enter-delay' as string]: `${(isHero ? heroes.indexOf(u) : enemies.indexOf(u) % 6) * 70}ms`,
                       ...(skillHit ? { ['--skill-color' as string]: snap.skill!.color } : {}),
                     }}
                   >
                     {skillHit && <div className="skill-flash" />}
-                    {snap.skill && snap.skill.caster === u.id && (
+                    {snap.skill && snap.skill.caster === u.id && current?.kind === 'act' && (
                       <div className="skill-banner" style={{ borderColor: snap.skill.color }}>
                         {snap.skill.name}
                       </div>
                     )}
                     <div className="bshadow" style={{ width: size.w * 0.7 }} />
                     {src && <img className="px bsprite" src={src} width={size.w} height={size.h} alt={u.name} />}
-                    {(!isHero || u.isNpc) && !dead && (
-                      <div className="bhp">
+                    {snap.actor === u.id && !dead && !atEnd && !(snap.skill?.caster === u.id && current?.kind === 'act') && (
+                      <div className="turn-mark" aria-hidden="true" />
+                    )}
+                    {!dead && (
+                      <div className={`bhp ${isHero && !u.isNpc ? 'hero-hp' : ''}`}>
                         <span style={{ width: `${hpPct}%`, background: hpColor(hpPct) }} />
                       </div>
                     )}
@@ -560,17 +609,39 @@ export function BattleScene({
                 )
               })}
 
-              {popups.map((e) => {
+              {shot && (
+                <div
+                  key={shot.key}
+                  className={`bshot ${shot.style}`}
+                  style={{
+                    left: shot.from.x,
+                    top: shot.from.y,
+                    zIndex: 998,
+                    ['--dx' as string]: `${shot.to.x - shot.from.x}px`,
+                    ['--dy' as string]: `${shot.to.y - shot.from.y}px`,
+                    ['--shot' as string]: ELEMENT_VIS[shot.element].color,
+                    ['--rot' as string]: `${Math.atan2(shot.to.y - shot.from.y, shot.to.x - shot.from.x)}rad`,
+                  }}
+                />
+              )}
+
+              {popups.map((e, i) => {
                 if (e.kind !== 'hit' && e.kind !== 'miss' && e.kind !== 'guard' && e.kind !== 'heal') return null
-                const p = pos[e.kind === 'heal' ? e.unitId : e.targetId]
+                const who = e.kind === 'heal' ? e.unitId : e.targetId
+                const p = pos[who]
                 if (!p) return null
+                const head = byId[who] ? sizeOf(byId[who]!).h : 32
                 const text =
                   e.kind === 'miss' ? t('MISS') : e.kind === 'guard' ? t('GUARD') : e.kind === 'heal' ? `+${e.amount}` : String(e.amount)
                 const kill = e.kind === 'hit' && e.hpAfter <= 0
                 const cls =
                   e.kind === 'miss' || e.kind === 'guard' ? 'miss' : e.kind === 'heal' ? 'heal' : e.crit ? 'crit' : kill ? 'kill' : ''
                 return (
-                  <div key={e.seq} className={`dmg ${cls}`} style={{ left: p.x, top: p.y - 34, zIndex: 999 }}>
+                  <div
+                    key={e.seq}
+                    className={`dmg ${cls}`}
+                    style={{ left: p.x + (popupStack[i]! % 2 ? 7 : 0), top: p.y - Math.min(head, 60) - 16 - popupStack[i]! * 11, zIndex: 999 }}
+                  >
                     {e.kind === 'hit' && e.crit && <span className="dmg-tag">{t('CRITICAL!')}</span>}
                     {text}
                   </div>
