@@ -13,7 +13,9 @@ import { applyPartyBonuses, bindSummonBatch, bondBonuses, bondGriefMult, bondGro
 const B = CHALLENGE.bonds
 
 function tenPull(seed: number, pool: 'normal' | 'advanced'): GameState {
-  const s = { ...createAccount(seed, { now: 0 }), gold: 1_000_000, gems: 100_000 }
+  const acct = createAccount(seed, { now: 0 })
+  // A full crystal (a new Master's starts empty and recharges).
+  const s = { ...acct, gold: 1_000_000, gems: 100_000, life: { ...acct.life, crystal: { day: -1, advancedPulls: 0 } } }
   return summonMany(s, pool, 10).state
 }
 

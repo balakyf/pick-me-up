@@ -11,7 +11,7 @@
  * who uses every system, and a whale. Everything is seeded, so a run is repeatable.
  */
 import { TUNING } from '../engine/tuning'
-import type { GameState, HeroId, Line, OwnedHero, EquipmentSlot, Command, FloorResult, BonusRoomKind } from '../engine/types'
+import type { GameState, HeroId, Line, OwnedHero, EquipmentSlot, Command, FloorResult, BonusRoomKind, FacilityId, JobId, CombatLog, BattleOrder } from '../engine/types'
 import { reduce, attemptFloorWithResult } from '../engine/store'
 import { toWorldTime } from '../engine/time'
 import { combatPowerForHero } from '../engine/stats'
@@ -28,7 +28,28 @@ import { loginClaimed, packageRefusal } from '../engine/shop'
 import { crackRefusal, dispatchRefusal } from '../engine/rift'
 import { challengeOf } from '../engine/challenge'
 import { GIFTS, giftDelta } from '../engine/favor'
-import { BOUNTIES, BOUNTY, benchHeroes, bountyRefusal, decorOptions, refusesDeploy, statueCost, statueRefusal } from '../engine/estate'
+import { BOUNTIES, BOUNTY, benchHeroes, bountyRefusal, decorOptions, duelPurse, duelRefusal, estateBusy, refusesDeploy, statueCost, statueRefusal } from '../engine/estate'
+import { crystalChargeLeft } from '../engine/gacha'
+import { aptitude, jobHolders, jobOpen, jobSeats } from '../engine/life'
+import { completeTraining, trainingOptions } from '../engine/training'
+import { transferCost, transferRefusal, transferredLevel } from '../engine/transfer'
+import { synthesisUnlocked } from '../engine/synthesis'
+import { resolveMerges } from '../engine/skills'
+import {
+  canEnterTrial,
+  fitToFight,
+  heroAllowed,
+  raidChestReady,
+  raidRecord,
+  raidRefusal,
+  raidsOpen,
+  weeklyAttemptsLeft,
+  weeklyFor,
+  weeklyRefusal,
+  weeklyRule,
+  weeklyUnlocked,
+  worldWeekOf,
+} from '../engine/challenge'
 
 export type ProfileId = 'casual' | 'engaged' | 'whale'
 
@@ -52,6 +73,18 @@ export interface Profile {
   usdPerWeek: number
   /** Gold kept back from the estate's sinks (decorations, statues, bounties). */
   estateReserve: number
+  /** Give bench heroes building jobs (the Living Lobby). */
+  jobs: boolean
+  /** Training Center drills at the end of a session. */
+  drills: boolean
+  /** Synthesis (salvage the surplus, transfer grades) and Transfer Station skill moves. */
+  synthesis: boolean
+  /** Pull the party out of a fight that is clearly lost (a battle order). */
+  retreat: boolean
+  /** Tower challenges: raids on cleared anchors, the weekly Crack trial, tryout duels. */
+  raids: boolean
+  trial: boolean
+  duels: boolean
 }
 
 export const PROFILES: Record<ProfileId, Profile> = {
@@ -70,6 +103,14 @@ export const PROFILES: Record<ProfileId, Profile> = {
     equipment: false,
     usdPerWeek: 0,
     estateReserve: 150_000,
+    // Jobs measured neutral for a casual over 16 seeds (balance pass 2), so it keeps it simple.
+    jobs: false,
+    drills: false,
+    synthesis: false,
+    retreat: false,
+    raids: false,
+    trial: false,
+    duels: false,
   },
   engaged: {
     id: 'engaged',
@@ -86,6 +127,13 @@ export const PROFILES: Record<ProfileId, Profile> = {
     equipment: true,
     usdPerWeek: 0,
     estateReserve: 200_000,
+    jobs: true,
+    drills: true,
+    synthesis: true,
+    retreat: true,
+    raids: true,
+    trial: true,
+    duels: true,
   },
   whale: {
     id: 'whale',
@@ -102,6 +150,13 @@ export const PROFILES: Record<ProfileId, Profile> = {
     equipment: true,
     usdPerWeek: 120,
     estateReserve: 300_000,
+    jobs: true,
+    drills: true,
+    synthesis: true,
+    retreat: true,
+    raids: true,
+    trial: true,
+    duels: true,
   },
 }
 
@@ -112,6 +167,7 @@ export interface DaySample {
   gold: number
   gems: number
   alive: number
+  /** Heroes lost in battle (the tower, raids) — not those given up to synthesis. */
   deaths: number
   /** Sum of the five strongest living heroes' CP. */
   topCp: number
@@ -121,6 +177,8 @@ export interface DaySample {
   avgSanity: number
   spentUsd: number
   pi: number
+  /** Advanced (gem) pulls made so far. */
+  advPulls: number
 }
 
 /** One floor attempt: how strong the party was against the floor's budget, and how it went. */
@@ -152,9 +210,26 @@ export interface SimResult {
   deleted: boolean
   /** Commands the bot tried that the engine refused, by type (a sanity check on the bot). */
   refusals: Record<string, number>
+  /** How often each lever was pulled (see LEVERS; plus RETREAT, RAID_CLEAR, RAID_DEATHS,
+   *  RETREAT_SAVED — heroes a retreat brought home — SACRIFICED to synthesis, ADV_PULLS, and
+   *  TRIAL_BEST, the best weekly score). */
+  levers: Record<string, number>
 }
 
+/** Commands counted as levers when the engine accepts them. */
+const LEVERS = new Set<Command['type']>(['ASSIGN_JOB', 'TRAIN_SKILL', 'SYNTHESIZE', 'TRANSFER_SKILL', 'TOWER_RAID', 'WEEKLY_TRIAL', 'HOST_DUEL', 'POST_BOUNTY', 'BUY_DECOR', 'RAISE_STATUE', 'UPGRADE_FACILITY'])
+
 const REAL_DAY_MS = 86_400_000
+/** Gold in hand before a bot builds a Living Lobby workplace (surplus, not summon money). */
+const LOBBY_BUILD_GOLD = 60_000
+/** Heroes past this CP rank are "surplus" for synthesis and skill donation. */
+const KEEP_RANKS = 15
+/** Jobs the bots fill, most useful first (the forge needs an order and stones: left out). */
+/** Gold a bot keeps in hand when paying for drills, skill transfers and duels. */
+const SPARE_GOLD = 15_000
+/** A raid goes ahead only when every party's CP is this multiple of the anchor's budget. */
+const RAID_MARGIN = 1.5
+const JOB_ORDER: JobId[] = ['healer', 'cook', 'instructor', 'scholar', 'merchant', 'gardener', 'guard']
 /** A fixed real-time epoch so runs never depend on the wall clock. */
 const REAL_EPOCH = Date.UTC(2026, 0, 5)
 const SIZE = TUNING.account.partySize
@@ -177,6 +252,12 @@ class Bot {
   now = 0
   readonly res: SimResult
   private lastInvasionLog = 0
+  /** A free player's gem stash reached a ten-pull and is being spent. */
+  private gemStash = false
+  private lastSynthDay = -1
+  private lastRaidDay = -1
+  private lastTrialDay = -1
+  private lastDuelDay = -1
   /** After a loss, the party strength and day it happened (a person waits to get stronger). */
   private lastLoss: { floor: number; ratio: number; day: number; wiped: boolean } | null = null
 
@@ -200,13 +281,21 @@ class Bot {
       worldSaved: false,
       deleted: false,
       refusals: {},
+      levers: {},
     }
+  }
+
+  private lever(key: string, n = 1): void {
+    this.res.levers[key] = (this.res.levers[key] ?? 0) + n
   }
 
   /** Dispatch; a refusal is counted and swallowed (the bot's guess was wrong, the game is fine). */
   try(cmd: Command): boolean {
     try {
       this.s = reduce(this.s, cmd, this.now)
+      if (LEVERS.has(cmd.type)) this.lever(cmd.type === 'SYNTHESIZE' ? `SYNTHESIZE:${cmd.mode}` : cmd.type)
+      if (cmd.type === 'SUMMON' && cmd.pool === 'advanced') this.lever('ADV_PULLS', cmd.count ?? 1)
+      if (cmd.type === 'SYNTHESIZE') this.lever('SACRIFICED', cmd.sacrificeIds.length)
       return true
     } catch {
       this.res.refusals[cmd.type] = (this.res.refusals[cmd.type] ?? 0) + 1
@@ -224,6 +313,7 @@ class Bot {
     this.sideRoom()
     this.buildFacilities()
     this.promote()
+    if (this.p.synthesis) this.synthesis(day)
     this.summon()
     if (this.p.equipment) this.forge()
     if (this.p.gifts) this.gifts()
@@ -231,10 +321,16 @@ class Bot {
     this.rescueCaptives()
     this.feast()
     this.estate()
+    if (this.p.jobs) this.jobs()
     this.setParty()
     if (this.p.dailies) this.dailies()
     this.climb(day)
+    // After the climb: the side attractions, then the yard (drills lock heroes for an hour).
+    if (this.p.raids) this.raid(day)
     if (this.p.crack) this.rift()
+    if (this.p.trial) this.trial(day)
+    if (this.p.duels) this.duel(day)
+    if (this.p.drills) this.drills()
   }
 
   private trackInvasions(): void {
@@ -279,6 +375,12 @@ class Bot {
       // Keep a summon's worth of gold in reserve so upgrades don't starve the roster.
       if (canUpgrade(this.s, f) && this.s.gold >= TUNING.gacha.normalCostGold) this.try({ type: 'UPGRADE_FACILITY', facility: f })
     }
+    if (!this.p.jobs) return
+    // The buildings the jobs work in, from surplus only and to a few seats each.
+    const lobby: FacilityId[] = this.p.facilities === 'core' ? ['garden'] : ['infirmary', 'garden', 'library', 'market', 'watchtower']
+    for (const f of lobby) {
+      if (this.s.facilities[f].level < 3 && canUpgrade(this.s, f) && this.s.gold >= LOBBY_BUILD_GOLD) this.try({ type: 'UPGRADE_FACILITY', facility: f })
+    }
   }
 
   private promote(): void {
@@ -289,8 +391,7 @@ class Bot {
 
   private summon(): void {
     const cost = TUNING.gacha.normalCostGold
-    // A casual player keeps a small bench; the engaged keep pulling while gold is spare.
-    const cap = this.p.id === 'casual' ? 15 : 40
+    const cap = this.summonCap()
     let guard = 0
     if (!this.s.life.guide.tutorialPull) this.try({ type: 'SUMMON', pool: 'normal', count: 10 }) // the free tutorial draw
     if (living(this.s).length === 0) this.try({ type: 'SUMMON', pool: 'normal' }) // the mercy pull
@@ -301,14 +402,25 @@ class Bot {
     }
     if (!this.p.advancedPool) return
     const adv = TUNING.gacha.advanced
+    // A free player saves up for a discounted ten-pull and then spends the stash; a payer
+    // pulls whenever there are gems. Either way, only what the crystal's charge allows
+    // (singles once it is below ten).
+    if (this.s.gems >= adv.tenPullGems) this.gemStash = true
     guard = 0
-    while (guard++ < 10) {
-      if (this.s.gems >= adv.tenPullGems) {
+    while (guard++ < 20 && (this.gemStash || this.p.usdPerWeek > 0)) {
+      const charge = crystalChargeLeft(this.s)
+      if (charge >= 10 && this.s.gems >= adv.tenPullGems) {
         if (!this.try({ type: 'SUMMON', pool: 'advanced', count: 10 })) break
-      } else if (this.p.usdPerWeek > 0 && this.s.gems >= adv.costGems) {
+      } else if (charge >= 1 && this.s.gems >= adv.costGems) {
         if (!this.try({ type: 'SUMMON', pool: 'advanced', count: 1 })) break
       } else break
     }
+    if (this.s.gems < adv.costGems) this.gemStash = false
+  }
+
+  /** A casual player keeps a small bench; the engaged keep pulling while gold is spare. */
+  private summonCap(): number {
+    return this.p.id === 'casual' ? 15 : 40
   }
 
   private forge(): void {
@@ -402,6 +514,160 @@ class Bot {
     }
   }
 
+  /** CP-ranked living heroes, strongest first. */
+  private ranked(): OwnedHero[] {
+    return living(this.s).sort((a, b) => heroCp(b) - heroCp(a))
+  }
+
+  /** The surplus: home and free, outside the KEEP_RANKS strongest and the party (weakest first). */
+  private surplus(): OwnedHero[] {
+    const keep = new Set<HeroId>(this.ranked().slice(0, KEEP_RANKS).map((h) => h.id))
+    for (const id of this.s.party.slots) if (id) keep.add(id)
+    return living(this.s)
+      .filter((h) => !keep.has(h.id) && available(h) && !refusesDeploy(this.s, h.id))
+      .sort((a, b) => heroCp(a) - heroCp(b))
+  }
+
+  /** Jobs: fill each open seat with the bench hero who takes to it best (never one who resents it). */
+  private jobs(): void {
+    const top = new Set(this.ranked().slice(0, 8).map((h) => h.id))
+    for (const job of JOB_ORDER) {
+      let guard = 0
+      while (jobOpen(this.s, job) && jobHolders(this.s, job).length < jobSeats(this.s, job) && guard++ < 5) {
+        const pick = living(this.s)
+          .filter((h) => !top.has(h.id) && !h.captiveOf && (h.life?.job ?? null) === null && aptitude(h, job) >= TUNING.life.jobs.dislikeAt)
+          .sort((a, b) => aptitude(b, job) - aptitude(a, job))[0]
+        if (!pick || !this.try({ type: 'ASSIGN_JOB', heroId: pick.id, job })) break
+      }
+    }
+  }
+
+  /**
+   * Synthesis, at most once a day (every synthesis costs the whole roster Sanity): with the
+   * roster full, render the weakest surplus 1–2★ into stones (rescuing a skill or their
+   * best grade onto a rested top hero); a payer, drowning in 3★, also feeds one spare's
+   * better grades into its strongest. Then the Transfer Station moves skills.
+   */
+  private synthesis(day: number): void {
+    if (synthesisUnlocked(this.s) && this.lastSynthDay !== day) {
+      const spare = this.surplus()
+      const top = this.ranked().find((h) => available(h) && h.sanity >= 85)
+      if (living(this.s).length >= this.summonCap() - 1) {
+        const doomed = spare
+          .filter((h) => h.star <= 2)
+          .slice(0, 5)
+          .map((h) => h.id)
+        if (doomed.length >= 3 && this.try({ type: 'SYNTHESIZE', mode: 'salvage', survivorId: top?.id ?? null, sacrificeIds: doomed })) this.lastSynthDay = day
+      }
+      if (this.lastSynthDay !== day && this.p.usdPerWeek > 0 && top) {
+        const donor = spare
+          .filter((h) => h.star <= 3)
+          .map((h) => ({ h, d: gradeGain(top, h) }))
+          .sort((a, b) => b.d - a.d)[0]
+        if (donor && donor.d >= 2 && this.try({ type: 'SYNTHESIZE', mode: 'transfer', survivorId: top.id, sacrificeIds: [donor.h.id] })) this.lastSynthDay = day
+      }
+    }
+    this.skillTransfers()
+  }
+
+  /** Transfer Station: move a surplus hero's skill onto a party hero who lacks it (two a session). */
+  private skillTransfers(): void {
+    const station = this.s.facilities.transferStation.level
+    if (station <= 0) return
+    let moved = 0
+    const donors = this.surplus()
+    for (const r of this.bestFive()) {
+      if (moved >= 2) break
+      const recipient = this.s.heroes[r.id]!
+      const before = skillCp(recipient.skills)
+      let best: { donor: HeroId; skill: string; gain: number } | null = null
+      for (const d of donors) {
+        for (const sk of this.s.heroes[d.id]!.skills) {
+          if (this.s.gold - transferCost(sk.id) < SPARE_GOLD || transferRefusal(this.s, d.id, r.id, sk.id) !== null) continue
+          const gain = skillCp(resolveMerges([...recipient.skills, { id: sk.id, level: transferredLevel(sk.level, station), xp: 0 }])) - before
+          if (gain > 0 && (!best || gain > best.gain)) best = { donor: d.id, skill: sk.id, gain }
+        }
+      }
+      if (best && this.try({ type: 'TRANSFER_SKILL', donorId: best.donor, recipientId: r.id, skillId: best.skill })) moved++
+    }
+  }
+
+  /** Training Center: before logging off, drill the strongest few (a drill takes an hour). */
+  private drills(): void {
+    const centre = this.s.facilities.trainingCenter.level
+    if (centre <= 0) return
+    let started = 0
+    for (const h of this.ranked().slice(0, 8)) {
+      if (started >= 5 || this.s.gold < SPARE_GOLD) break
+      if (!available(h) || refusesDeploy(this.s, h.id)) continue
+      const before = skillCp(h.skills)
+      const best = trainingOptions(this.s, h.id)
+        .filter((o) => o.ok && this.s.gold - o.cost >= SPARE_GOLD)
+        .map((o) => ({ o, gain: skillCp(completeTraining({ ...h, training: { skillId: o.skillId, mode: o.mode, completesAtWorld: 0 } }, centre).skills) - before }))
+        .sort((a, b) => b.gain - a.gain || Number(b.o.mode === 'refine') - Number(a.o.mode === 'refine') || a.o.cost - b.o.cost)[0]
+      if (best && this.try({ type: 'TRAIN_SKILL', heroId: h.id, skillId: best.o.skillId })) started++
+    }
+  }
+
+  /**
+   * Raids, once a day: the lowest cleared anchor whose chest still waits this week, and only
+   * when each of three parties outguns the anchor by RAID_MARGIN (it is the tower:
+   * permadeath). Rested fighters only; the crew favours archers and the altar-holders.
+   */
+  private raid(day: number): void {
+    if (this.lastRaidDay === day) return
+    const wm = TUNING.tower.worldMult[this.s.worldGrade]
+    const fit = living(this.s)
+      .filter((h) => fitToFight(h) && !refusesDeploy(this.s, h.id) && h.sanity >= 60)
+      .sort((a, b) => heroCp(b) - heroCp(a))
+    if (fit.length < 3 * SIZE + 1) return
+    for (const floor of raidsOpen(this.s)) {
+      if (!raidChestReady(this.s, floor, this.now)) continue
+      const parties = [0, 1, 2].map((i) => fit.slice(i * SIZE, (i + 1) * SIZE))
+      const weakest = Math.min(...parties.map((p) => p.reduce((a, h) => a + heroCp(h), 0)))
+      if (weakest < RAID_MARGIN * floorPower(floor, wm)) continue
+      const crew = fit
+        .slice(3 * SIZE)
+        .sort((a, b) => crewValue(b) - crewValue(a))
+        .slice(0, 3)
+      const ids = parties.map((p) => p.map((h) => h.id))
+      const crewIds = crew.map((h) => h.id)
+      if (raidRefusal(this.s, floor, ids, crewIds) !== null) continue
+      const clears = raidRecord(this.s, floor).clears
+      const alive = living(this.s).length
+      if (!this.try({ type: 'TOWER_RAID', floor, parties: ids, crew: crewIds, ballista: 0.6 })) return
+      this.lastRaidDay = day
+      if (raidRecord(this.s, floor).clears > clears) this.lever('RAID_CLEAR')
+      this.lever('RAID_DEATHS', alive - living(this.s).length)
+      return
+    }
+  }
+
+  /** The weekly Crack trial (a simulation: nothing to lose): one go a day with the best legal team. */
+  private trial(day: number): void {
+    if (this.lastTrialDay === day || !weeklyUnlocked(this.s) || weeklyAttemptsLeft(this.s, this.now) <= 0) return
+    const rule = weeklyRule(worldWeekOf(this.now))
+    const team = this.ranked()
+      .filter((h) => canEnterTrial(h) && heroAllowed(rule, h) && estateBusy(this.s, h.id) !== 'is out on a bounty')
+      .slice(0, rule.maxHeroes)
+      .map((h) => h.id)
+    if (team.length === 0 || weeklyRefusal(this.s, team, this.now) !== null) return
+    if (this.try({ type: 'WEEKLY_TRIAL', heroIds: team })) {
+      this.lastTrialDay = day
+      this.res.levers.TRIAL_BEST = Math.max(this.res.levers.TRIAL_BEST ?? 0, weeklyFor(this.s, this.now).best)
+    }
+  }
+
+  /** A tryout duel a day between the next two heroes up (XP for the bench). */
+  private duel(day: number): void {
+    if (this.lastDuelDay === day) return
+    const [a, b] = this.ranked()
+      .slice(SIZE, SIZE + 8)
+      .filter((h) => available(h) && h.sanity >= 60)
+    if (!a || !b || duelRefusal(this.s, a.id, b.id) !== null || this.s.gold < duelPurse(this.s, a.id, b.id) + SPARE_GOLD) return
+    if (this.try({ type: 'HOST_DUEL', a: a.id, b: b.id })) this.lastDuelDay = day
+  }
+
   /**
    * The five strongest heroes fit to fight now — counter-picked like a person would after
    * one look at the floor: bring mages against the physically immune, blades against the
@@ -482,7 +748,22 @@ class Bot {
       const subvert = floor === 90 && this.s.tower.hiddenFound.length >= TUNING.lifecycle.subvertTruths ? true : undefined
       let out
       try {
-        out = attemptFloorWithResult(reduce(this.s, { type: 'TICK' }, this.now), undefined, ballista, subvert)
+        const pre = reduce(this.s, { type: 'TICK' }, this.now)
+        out = attemptFloorWithResult(pre, undefined, ballista, subvert)
+        // A fight going badly: call the retreat as the first hero staggers (combat is
+        // deterministic, so re-resolving with the order replays the fight up to it — the
+        // same revise the battle screen does).
+        const lost = out.result.fallenHeroIds.length
+        const tick = this.p.retreat && !out.result.cleared && lost > 0 ? retreatTick(out.result.result.log) : null
+        if (tick !== null) {
+          const orders: BattleOrder[] = [{ tick, kind: 'retreat' }]
+          const alt = attemptFloorWithResult(pre, undefined, ballista, subvert, orders)
+          if (alt.result.fallenHeroIds.length < lost) {
+            out = alt
+            this.lever('RETREAT')
+            this.lever('RETREAT_SAVED', lost - alt.result.fallenHeroIds.length)
+          }
+        }
       } catch {
         this.res.refusals.ATTEMPT_FLOOR = (this.res.refusals.ATTEMPT_FLOOR ?? 0) + 1
         return
@@ -555,13 +836,14 @@ class Bot {
       gold: s.gold,
       gems: s.gems,
       alive: all.filter((h) => h.alive).length,
-      deaths: all.filter((h) => !h.alive).length,
+      deaths: all.filter((h) => !h.alive).length - (this.res.levers.SACRIFICED ?? 0),
       topCp: Math.round(top.reduce((a, b) => a + b, 0)),
       nextFloorPower: Math.round(floorPower(Math.min(s.tower.currentFloor, TUNING.tower.sliceTopFloor), TUNING.tower.worldMult[s.worldGrade])),
       masterLevel: s.meta.masterLevel,
       avgSanity: Math.round(this.avgSanity()),
       spentUsd: Math.round(s.meta.wallet.spentUsd * 100) / 100,
       pi: Math.round(s.meta.pi),
+      advPulls: s.gacha.advPullCount,
     }
   }
 }
@@ -570,6 +852,31 @@ function bulk(h: OwnedHero): number {
   const cls = h.heroClass
   const role = cls === 'warrior' || cls === 'spearman' ? 2 : cls === 'thief' ? 1 : 0
   return role * 1e6 + heroCp(h)
+}
+
+/** Ballista crew value: archers aim truer, a light hero or a mage holds the altar. */
+function crewValue(h: OwnedHero): number {
+  return (h.heroClass === 'archer' ? 2 : 0) + (h.element === 'light' || h.heroClass === 'mage' ? 1 : 0)
+}
+
+/** Attributes whose growth grade a transfer synthesis from `sac` would raise on `survivor`. */
+function gradeGain(survivor: OwnedHero, sac: OwnedHero): number {
+  let n = 0
+  for (const k of ['str', 'agi', 'vit', 'int', 'wil'] as const) if (sac.growthGrades[k] > survivor.growthGrades[k]) n++
+  return n
+}
+
+/**
+ * When a watching Master would call the retreat in a fight the party is losing: the beat
+ * after the first hero drops below a third of their HP (or falls outright).
+ */
+export function retreatTick(log: CombatLog): number | null {
+  const maxHp = new Map(log.unitsInit.filter((u) => u.side === 'hero').map((u) => [u.id, u.maxHP]))
+  for (const e of log.events) {
+    if (e.kind === 'hit' && maxHp.has(e.targetId) && e.hpAfter < maxHp.get(e.targetId)! / 3) return e.tick + 1
+    if (e.kind === 'death' && maxHp.has(e.unitId)) return e.tick + 1
+  }
+  return null
 }
 
 const GRADES = ['E', 'D', 'C', 'B', 'A', 'S', 'SS', 'SSS']

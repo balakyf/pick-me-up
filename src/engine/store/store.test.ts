@@ -818,7 +818,9 @@ describe('reduce — EQUIP_ITEM / UNEQUIP_ITEM', () => {
 
 describe('reduce — Layer 1 completion commands', () => {
   it('SUMMON { pool: advanced, count: 10 } pays gems once and adds ten heroes', () => {
-    const s0 = { ...createAccount(3), gems: TUNING.gacha.advanced.tenPullGems }
+    // A full crystal (a new Master's starts empty and recharges; see gacha.test).
+    const acct = createAccount(3)
+    const s0 = { ...acct, gems: TUNING.gacha.advanced.tenPullGems, life: { ...acct.life, crystal: { day: -1, advancedPulls: 0 } } }
     const s1 = reduce(s0, { type: 'SUMMON', pool: 'advanced', count: 10 })
     expect(s1.gems).toBe(0)
     expect(Object.keys(s1.heroes).length).toBe(Object.keys(s0.heroes).length + 10)

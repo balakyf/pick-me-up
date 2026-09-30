@@ -21,6 +21,7 @@ import {
   summonMany,
   summonCost,
   mercySummonAvailable,
+  crystalChargeLeft,
 } from './gacha'
 import { PVP_DEFAULTS } from '../account'
 import { TUNING, STAR_ENVELOPES } from '../tuning'
@@ -71,7 +72,8 @@ function makeState(overrides: Partial<GameState> = {}): GameState {
     tower: { currentFloor: 1, highestCleared: 0, attemptIndex: 0, event: null, loop: null, hiddenFound: [], worldEnded: false, worldSaved: false },
     gacha: { pity: 0, pullCount: 0, advPity4: 0, advPity5: 0, advPullCount: 0 },
     rng: { combatCounter: 0 },
-    life: defaultLifeState(0),
+    // A full crystal: its charge has tests of its own.
+    life: { ...defaultLifeState(0), crystal: { day: -1, advancedPulls: 0 } },
     pvp: PVP_DEFAULTS(),
     codex: defaultCodex(),
     challenge: defaultChallenge(),
@@ -640,15 +642,26 @@ describe('the tutorial ten-pull and the crystal’s charge', () => {
     expect(() => summonMany(r.state, 'normal', 10)).toThrow(/insufficient gold/)
   })
 
-  it('the crystal gives a limited number of Advanced pulls per world-day', async () => {
+  it('a new crystal is empty and recharges a pull a world-day, up to a full charge', async () => {
     const { createAccount } = await import('../account')
-    const cap = TUNING.gacha.advanced.dailyCharge
+    const ADV = TUNING.gacha.advanced
+    const DAY = TUNING.life.slotMs * TUNING.life.slotsPerDay
+    const later = (st: GameState, days: number): GameState => ({ ...st, meta: { ...st.meta, lastSeenAtWorld: st.meta.lastSeenAtWorld + days * DAY } })
     let s = { ...createAccount(78), gems: 1_000_000 }
-    for (let n = 0; n < cap; n++) s = summonMany(s, 'advanced', 1).state
-    expect(s.life.crystal.advancedPulls).toBe(cap)
+    expect(crystalChargeLeft(s)).toBe(ADV.startCharge)
     expect(() => summonMany(s, 'advanced', 1)).toThrow(/recharge/)
-    // A new world-day recharges it.
-    const tomorrow = { ...s, meta: { ...s.meta, lastSeenAtWorld: s.meta.lastSeenAtWorld + 24 * 3_600_000 } }
-    expect(() => summonMany(tomorrow, 'advanced', 10)).not.toThrow()
+    // A world-day later it holds one pull more.
+    s = later(s, 1)
+    expect(crystalChargeLeft(s)).toBe(ADV.startCharge + ADV.rechargePerDay)
+    s = summonMany(s, 'advanced', 1).state
+    expect(crystalChargeLeft(s)).toBe(ADV.startCharge + ADV.rechargePerDay - 1)
+    expect(() => summonMany(s, 'advanced', 10)).toThrow(/recharge/)
+    // It fills to its charge and no further; then a ten-pull empties it.
+    s = later(s, 100)
+    expect(crystalChargeLeft(s)).toBe(ADV.dailyCharge)
+    s = summonMany(s, 'advanced', 10).state
+    expect(crystalChargeLeft(s)).toBe(0)
+    expect(() => summonMany(s, 'advanced', 1)).toThrow(/recharge/)
+    expect(crystalChargeLeft(later(s, 3))).toBe(3 * ADV.rechargePerDay)
   })
 })

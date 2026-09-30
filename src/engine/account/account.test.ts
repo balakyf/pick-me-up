@@ -606,7 +606,8 @@ describe('migrate — v9 → v10 (Quanton Life)', () => {
     expect(restored.schemaVersion).toBe(TUNING.account.schemaVersion)
     expect(restored.facilities.dormitory.level).toBe(TUNING.lobby.facilityStartLevels.dormitory)
     expect(restored.facilities.forge).toEqual({ level: 0, build: null })
-    expect(restored.life).toEqual(life)
+    // A fresh life clock — except the crystal: an existing Master's starts full.
+    expect(restored.life).toEqual({ ...life, crystal: { day: -1, advancedPulls: 0 } })
   })
 })
 

@@ -400,7 +400,8 @@ function migrateV9toV10(envelope: SaveEnvelope): SaveEnvelope {
       ...s,
       schemaVersion: 10,
       facilities: { ...LIFE_FACILITIES(), ...s.facilities },
-      life: defaultLifeState(s.meta.lastSeenAtWorld),
+      // An existing Master is not a new one: their crystal starts full.
+      life: { ...defaultLifeState(s.meta.lastSeenAtWorld), crystal: { day: -1, advancedPulls: 0 } },
     },
   }
 }

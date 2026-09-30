@@ -588,8 +588,7 @@ export function summonMany(
     cur = res.state
   }
   const day = worldDayOf(state)
-  const used = state.life.crystal.day === day ? state.life.crystal.advancedPulls : 0
-  cur = { ...cur, life: { ...cur.life, crystal: { day, advancedPulls: used + count } } }
+  cur = { ...cur, life: { ...cur.life, crystal: { day, advancedPulls: crystalOwed(state.life.crystal, day) + count } } }
   return withBond(cur, heroes, pool)
 }
 
@@ -608,11 +607,19 @@ function worldDayOf(state: GameState): number {
   return Math.floor(state.meta.lastSeenAtWorld / (TUNING.life.slotMs * TUNING.life.slotsPerDay))
 }
 
-/** Advanced pulls the crystal can still give this world-day (whale pacing). */
+/**
+ * Advanced pulls the crystal owes back as of world-day `day`: the pulls taken, less what
+ * it has recharged since the last pull (`rechargePerDay` a world-day).
+ */
+function crystalOwed(crystal: GameState['life']['crystal'], day: number): number {
+  const rate = TUNING.gacha.advanced.rechargePerDay
+  return Math.max(0, crystal.advancedPulls - Math.floor(rate * Math.max(0, day - crystal.day)))
+}
+
+/** Advanced pulls the crystal holds right now (whale pacing): a full charge of `dailyCharge`,
+ *  refilling steadily, so a ten-pull waits for a full crystal. */
 export function crystalChargeLeft(state: GameState): number {
-  const cap = TUNING.gacha.advanced.dailyCharge
-  const c = state.life.crystal
-  return c.day === worldDayOf(state) ? Math.max(0, cap - c.advancedPulls) : cap
+  return Math.max(0, TUNING.gacha.advanced.dailyCharge - crystalOwed(state.life.crystal, worldDayOf(state)))
 }
 
 /**
