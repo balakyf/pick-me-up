@@ -1,0 +1,28 @@
+/* Quality of life: save export/import, keyboard help, the backup reminder. */
+.qol-save .panel-sub:first-of-type { margin-top: 4px; }
+.qol-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 6px 0; }
+.qol-last { margin-left: auto; font-size: 13px; }
+.qol-code { display: block; width: 100%; resize: vertical; font-size: 12px; margin: 6px 0; word-break: break-all; }
+.qol-ok { color: var(--good); font-size: 14px; margin: 6px 0; }
+.qol-warn { color: var(--warn); font-size: 13px; margin: 6px 0; }
+.qol-err { color: var(--bad); font-size: 14px; margin: 8px 0; padding: 6px 8px; border: 2px solid var(--bad); background: #ef5d6b14; }
+.qol-confirm { margin-top: 10px; padding: 10px 12px; border-color: var(--warn); }
+.qol-compare { display: grid; grid-template-columns: auto 1fr; gap: 2px 8px; margin: 6px 0; font-size: 14px; }
+
+.qol-keys section + section { margin-top: 4px; }
+.qol-key-row { display: grid; grid-template-columns: minmax(120px, 42%) 1fr; gap: 8px; align-items: center; padding: 3px 0; border-bottom: 1px dotted #3e347866; font-size: 15px; }
+.qol-kbds { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.qol-keys-foot { margin: 12px 0 0; }
+
+.menu-extra { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 12px; }
+.menu-extra .muted { font-size: 13px; }
+
+.qol-toast {
+  position: fixed; left: 50%; top: 64px; transform: translateX(-50%); z-index: 40;
+  display: flex; align-items: center; gap: 8px; width: max-content; max-width: calc(100vw - 32px); padding: 6px 10px; font-size: 14px;
+  background: #120e2cee; border: 2px solid var(--gold); box-shadow: 0 0 0 2px var(--rim-dark), 4px 4px 0 rgba(0, 0, 0, 0.45);
+}
+@media (max-width: 640px) {
+  .qol-toast { top: auto; bottom: 84px; flex-wrap: wrap; justify-content: center; }
+}
+.qol-toast .pbtn { flex: none; white-space: nowrap; }

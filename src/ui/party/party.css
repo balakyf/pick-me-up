@@ -1,0 +1,146 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   Party Board — the formation (five slots in three lines) over a compact hero
+   list. Draws only from the ui.css tokens.
+   ═══════════════════════════════════════════════════════════════════════════ */
+.party-board { user-select: none; }
+.party-board.dragging, .party-board.dragging * { cursor: grabbing !important; }
+
+.pb-formation { padding: 10px 12px 8px; margin-bottom: 12px; }
+@media (min-width: 721px) and (min-height: 640px) {
+  /* Stays in view under the scene bar so a drag from far down the list still lands. */
+  .pb-formation { position: sticky; top: 76px; z-index: 25; }
+}
+.pb-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+.pb-total { display: flex; align-items: baseline; gap: 12px; font-size: 18px; }
+.pb-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+.pb-lines { display: flex; gap: 10px; }
+.pb-line { flex-basis: 0; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.pb-line-head { display: flex; justify-content: space-between; gap: 4px; font-size: 12px; padding: 0 2px; white-space: nowrap; overflow: hidden; }
+.pb-line-name { color: var(--gold); text-transform: uppercase; letter-spacing: 1px; }
+.pb-line-cp { color: var(--ink-dim); overflow: hidden; text-overflow: ellipsis; }
+.pb-line-slots { display: flex; gap: 6px; }
+.line-front .pb-line-head { border-bottom: 2px solid #ef5d6b66; }
+.line-mid .pb-line-head { border-bottom: 2px solid #f2c75c66; }
+.line-back .pb-line-head { border-bottom: 2px solid #4aa3ff66; }
+
+.pb-slot {
+  flex: 1 1 0; min-width: 0; min-height: 112px; position: relative; cursor: pointer;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+  padding: 16px 4px 6px; background: #120e2c; border: 2px dashed #4a3e8e; color: var(--ink-faint);
+  touch-action: manipulation;
+}
+.pb-slot.filled { border-style: solid; border-color: #6a5cb0; background: linear-gradient(180deg, var(--panel-2), var(--win-bot)); color: var(--ink); cursor: grab; }
+.pb-slot.benched { border-color: var(--warn); }
+.pb-slot:focus-visible, .pb-row:focus-visible, .pb-cardwrap:focus-visible { outline: 2px solid var(--gold); outline-offset: 1px; }
+.pb-slot.over { border-color: var(--gold); border-style: solid; background: #3a3078; box-shadow: 0 0 0 2px var(--gold-deep); }
+.pb-slot.lifted { opacity: 0.4; }
+.pb-slot-n { position: absolute; top: 2px; left: 5px; font-size: 12px; color: var(--gold); }
+.pb-slot-grip { position: absolute; top: 1px; right: 4px; font-size: 13px; }
+.pb-slot-name { font-size: 13px; font-weight: 600; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pb-slot-meta { display: flex; gap: 6px; font-size: 12px; }
+.pb-slot-empty { font-size: 13px; }
+.pb-slot .pb-status { position: absolute; bottom: -8px; }
+
+.pb-bust { display: inline-block; flex: none; border: 2px solid var(--rim-dark); overflow: hidden; }
+.pb-bust img { display: block; width: 100%; height: 100%; }
+
+.pb-status { display: inline-block; font-size: 11px; padding: 0 5px; border: 1px solid currentColor; background: #120e2c; line-height: 1.4; white-space: nowrap; }
+.st-ready { color: var(--good); }
+.st-weary { color: var(--warn); }
+.st-broken, .st-captive { color: var(--bad); }
+.st-training, .st-promoting { color: var(--accent-2); }
+.st-away { color: var(--gem); }
+
+.pb-warn { margin-top: 12px; font-size: 13px; color: var(--warn); }
+.pb-note { margin-top: 8px; font-size: 13px; color: var(--gold); }
+.pb-hint { margin-top: 8px; font-size: 12px; }
+
+/* Toolbar */
+.pb-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin-bottom: 6px; }
+.pb-toolbar select.pinput { padding: 3px 4px; max-width: 190px; }
+.pb-search { width: 180px; }
+.pb-field { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; color: var(--ink-dim); }
+.pb-check { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; color: var(--ink-dim); cursor: pointer; }
+.pb-check input { accent-color: var(--accent); }
+.pb-viewtoggle { display: inline-flex; gap: 4px; }
+.pb-count { margin: 4px 0 8px; font-size: 13px; }
+
+/* The list */
+.pb-listwrap { border: 2px dashed transparent; min-height: 60px; }
+.pb-listwrap.over { border-color: var(--bad); background: #ef5d6b14; }
+.pb-list { display: flex; flex-direction: column; gap: 3px; }
+.pb-row {
+  display: grid; align-items: center; gap: 8px;
+  grid-template-columns: 14px 32px minmax(150px, 1.5fr) 96px minmax(90px, 1fr) minmax(90px, 1fr) 64px 64px 34px;
+  padding: 3px 8px 3px 4px; background: #16112e; border: 2px solid #2c2460; cursor: grab;
+  font-size: 14px; touch-action: pan-y;
+}
+.pb-row:hover { border-color: #6a5cb0; background: #1f1942; }
+.pb-row.in { border-color: var(--gold-deep); background: #2a2150; }
+.pb-row.unavail { opacity: 0.62; }
+.pb-row.lifted { opacity: 0.35; }
+.pb-thead { background: none; border-color: transparent; cursor: default; padding-top: 0; padding-bottom: 0; }
+.pb-thead:hover { background: none; border-color: transparent; }
+.pb-th { background: none; border: none; color: var(--ink-dim); font: inherit; font-size: 12px; text-align: left; padding: 0; cursor: pointer; text-transform: uppercase; letter-spacing: 0.5px; }
+.pb-th.on, .pb-th:hover { color: var(--gold); }
+.pb-grip { color: var(--ink-faint); font-size: 14px; line-height: 1; touch-action: none; cursor: grab; text-align: center; }
+.c-name { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.pb-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.c-star .stars { font-size: 14px; letter-spacing: 0; }
+.c-class, .c-el { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 13px; }
+.c-lv { font-variant-numeric: tabular-nums; }
+.pb-cap { color: var(--ink-faint); font-size: 12px; }
+.c-cp { text-align: right; }
+.pb-th.c-cp { text-align: right; }
+.c-slot { text-align: center; }
+.pb-inslot { color: var(--gold); font-weight: 600; font-size: 13px; }
+.pb-add { color: var(--ink-faint); }
+.pb-cardwrap { outline: none; cursor: grab; }
+
+/* The drag ghost follows the pointer. */
+.pb-ghost {
+  position: fixed; z-index: 150; pointer-events: none; transform: translate(12px, 12px);
+  display: flex; align-items: center; gap: 8px; padding: 4px 10px 4px 4px; font-size: 13px;
+  background: #120e2cf0; border: 2px solid var(--gold); box-shadow: 4px 4px 0 rgba(0, 0, 0, 0.5);
+}
+
+@media (max-width: 900px) {
+  .pb-row { grid-template-columns: 14px 32px minmax(0, 1fr) 70px 28px 28px 54px 60px 28px; }
+  .pb-wide { display: none; }
+  .c-class, .c-el { text-align: center; }
+}
+@media (max-width: 640px) {
+  .party-board.screen { padding: 8px 12px 24px; }
+  .pb-formation { padding: 8px 6px 6px; }
+  .pb-lines { gap: 4px; }
+  .pb-line-slots { gap: 3px; }
+  .pb-line-head { font-size: 10px; letter-spacing: 0; flex-direction: column; gap: 0; }
+  .pb-line-name { letter-spacing: 0; }
+  .pb-slot { min-height: 96px; padding: 14px 2px 6px; }
+  .pb-slot .pb-bust { width: 36px !important; height: 36px !important; }
+  .pb-slot-name { font-size: 11px; }
+  .pb-slot-meta { font-size: 10px; gap: 3px; flex-direction: column; align-items: center; line-height: 1.1; }
+  .pb-slot .pb-status { font-size: 9px; padding: 0 2px; }
+  .pb-total { font-size: 16px; }
+  .pb-search { width: 100%; }
+  .pb-toolbar select.pinput { max-width: none; flex: 1 1 40%; min-width: 0; }
+  .pb-field { flex: 1 1 40%; }
+  .pb-field select.pinput { flex: 1 1 auto; }
+  .pb-thead { display: none; }
+  /* Two-line rows: name and status on top, the numbers beneath. */
+  .pb-row {
+    grid-template-columns: 22px 32px auto 22px 22px minmax(0, 1fr) auto;
+    grid-template-areas: 'grip bust name name name name cp' 'grip bust star cls el lv slot';
+    row-gap: 0; column-gap: 6px; padding: 4px 8px 4px 2px;
+  }
+  .pb-row > .pb-grip { grid-area: grip; font-size: 18px; align-self: stretch; display: flex; align-items: center; justify-content: center; }
+  .pb-row > .pb-bust { grid-area: bust; }
+  .pb-row > .c-name { grid-area: name; }
+  .pb-row > .c-cp { grid-area: cp; }
+  .pb-row > .c-star { grid-area: star; }
+  .pb-row > .c-class { grid-area: cls; }
+  .pb-row > .c-el { grid-area: el; }
+  .pb-row > .c-lv { grid-area: lv; font-size: 12px; }
+  .pb-row > .c-slot { grid-area: slot; text-align: right; }
+}

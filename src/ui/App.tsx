@@ -17,6 +17,10 @@ import { playMusic, sfx, unlockAudio } from './audio/sound'
 import { useMuted } from './audio/useSound'
 import { useLocale } from './i18n/useLocale'
 import { t } from './i18n/i18n'
+import { useHotkeys } from './useHotkeys'
+import { KeyboardHelp } from './qol/KeyboardHelp'
+import { SaveTransfer, lastExportText } from './qol/SaveTransfer'
+import { BackupReminder } from './qol/BackupReminder'
 
 type View = 'lobby' | WorldView
 
@@ -79,7 +83,19 @@ function Scene({
   )
 }
 
-function GameMenu({ store, onGo, onClose }: { store: Store; onGo: (p: PlaceId) => void; onClose: () => void }) {
+function GameMenu({
+  store,
+  onGo,
+  onClose,
+  onSave,
+  onKeys,
+}: {
+  store: Store
+  onGo: (p: PlaceId) => void
+  onClose: () => void
+  onSave: () => void
+  onKeys: () => void
+}) {
   // In-page confirmation (browser confirm() dialogs are blocked in embedded viewers).
   const [confirmReset, setConfirmReset] = useState(false)
   const [muted, setMuted] = useMuted()
@@ -93,6 +109,16 @@ function GameMenu({ store, onGo, onClose }: { store: Store; onGo: (p: PlaceId) =
             {t(PLACE_LABEL[p])}
           </button>
         ))}
+      </div>
+      <div className="menu-extra">
+        <button className="pbtn" onClick={onSave}>
+          💾 {t('Export / import save')}
+        </button>
+        <span className="muted">{lastExportText(Date.now())}</span>
+        <span className="spacer" />
+        <button className="pbtn ghost" onClick={onKeys} title={t('Keyboard shortcuts')}>
+          ⌨ {t('Keys')} <kbd>?</kbd>
+        </button>
       </div>
       <div className="menu-foot">
         <button className="pbtn ghost" onClick={() => setMuted(!muted)} title="Chiptune sound effects and music">
@@ -153,6 +179,10 @@ export function App() {
   const [view, setView] = useState<View>(params.view)
   const [menuOpen, setMenuOpen] = useState(false)
   const [travel, setTravel] = useState<{ place: PlaceId; nonce: number } | null>(null)
+  // Quality-of-life windows (save export/import, keyboard help); `epoch` remounts the
+  // world after an import so nothing holds on to the replaced save.
+  const [panel, setPanel] = useState<'save' | 'keys' | null>(null)
+  const [epoch, setEpoch] = useState(0)
 
   useEffect(() => {
     if (params.seed !== null && getStore().getState() === null) {
@@ -168,6 +198,19 @@ export function App() {
       setDemoLog(attemptFloorWithResult(state).result.result.log)
     }
   }, [wantFight, state, demoLog])
+
+  // Scene shortcuts (T/P/R/U/G/L/M/?); they stand aside for inputs, windows and battles.
+  useHotkeys(
+    view,
+    (a) => {
+      if (a.kind === 'go' || a.kind === 'back') {
+        setTravel(null)
+        setView(a.kind === 'go' ? a.view : 'lobby')
+      } else if (a.kind === 'menu') setMenuOpen(true)
+      else setPanel('keys')
+    },
+    state !== null && !state.meta.deleted && demoLog === null,
+  )
 
   if (typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('gallery')) {
     return <DevGallery />
@@ -226,9 +269,9 @@ export function App() {
   return (
     <div className="app">
       {view === 'lobby' ? (
-        <LobbyWorld state={state} store={store} onNavigate={navigate} onMenu={openMenu} travelRequest={travel} />
+        <LobbyWorld key={epoch} state={state} store={store} onNavigate={navigate} onMenu={openMenu} travelRequest={travel} />
       ) : (
-        <Scene title={t(SCENE_TITLE[view])} state={state} onBack={back} onMenu={openMenu}>
+        <Scene key={epoch} title={t(SCENE_TITLE[view])} state={state} onBack={back} onMenu={openMenu}>
           {view === 'tower' && <TowerScreen state={state} store={store} />}
           {view === 'summon' && <SummonScreen state={state} store={store} />}
           {view === 'party' && <PartyScreen state={state} store={store} />}
@@ -236,7 +279,18 @@ export function App() {
         </Scene>
       )}
 
-      {menuOpen && <GameMenu store={store} onGo={go} onClose={() => setMenuOpen(false)} />}
+      {menuOpen && (
+        <GameMenu
+          store={store}
+          onGo={go}
+          onClose={() => setMenuOpen(false)}
+          onSave={() => (setMenuOpen(false), setPanel('save'))}
+          onKeys={() => (setMenuOpen(false), setPanel('keys'))}
+        />
+      )}
+      {panel === 'save' && <SaveTransfer state={state} store={store} onClose={() => setPanel(null)} onImported={() => setEpoch((e) => e + 1)} />}
+      {panel === 'keys' && <KeyboardHelp onClose={() => setPanel(null)} />}
+      {view === 'lobby' && !menuOpen && panel === null && <BackupReminder state={state} onExport={() => setPanel('save')} />}
       {demoLog && <BattleScene log={demoLog} state={state} onDone={() => setDemoLog(null)} />}
     </div>
   )

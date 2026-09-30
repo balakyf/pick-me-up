@@ -2,6 +2,7 @@
 export const FR_BUILD: Record<string, string> = {
   Build: 'Construire',
   Construction: 'Construction',
+  'Construction: build and upgrade': 'Construction : bâtir et améliorer',
   'Construction: build and upgrade (B)': 'Construction : bâtir et améliorer (B)',
   'Build the {name} here': 'Bâtir ici : {name}',
   '{name} · under construction': '{name} · en construction',

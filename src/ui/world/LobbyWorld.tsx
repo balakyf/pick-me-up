@@ -1192,7 +1192,7 @@ export function LobbyWorld({
         </div>
       )}
       <div className="hud hud-help">
-        {t('↑↓←→ / WASD / ZQSD · E interact · click to walk · H heroes · B build · N map · M menu')}
+        {t('↑↓←→ / WASD / ZQSD · E interact · click to walk · H heroes · B build · N map · M menu')} · {t('? all keys')}
         <button className="pbtn sm ghost" onClick={() => setShowMap((v) => !v)} style={{ marginLeft: 6 }}>
           🗺
         </button>
