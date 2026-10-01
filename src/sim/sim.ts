@@ -265,8 +265,9 @@ class Bot {
     readonly p: Profile,
     seed: number,
     readonly onAttempt?: AttemptHook,
+    readonly epoch: number = REAL_EPOCH,
   ) {
-    this.s = reduce(null, { type: 'NEW_ACCOUNT', seed, now: REAL_EPOCH })
+    this.s = reduce(null, { type: 'NEW_ACCOUNT', seed, now: epoch })
     this.res = {
       profile: p.id,
       seed,
@@ -346,7 +347,7 @@ class Bot {
     if (this.p.usdPerWeek <= 0) return
     if (this.s.meta.monthly === null || this.s.meta.monthly.daysLeft <= 0) this.try({ type: 'BUY_PACKAGE', packageId: 'monthly' })
     this.try({ type: 'CLAIM_MONTHLY' })
-    const weeks = Math.floor((this.now - toWorldTime(REAL_EPOCH)) / (7 * 3 * REAL_DAY_MS)) + 1
+    const weeks = Math.floor((this.now - toWorldTime(this.epoch)) / (7 * 3 * REAL_DAY_MS)) + 1
     const budget = weeks * this.p.usdPerWeek
     for (const id of ['hoard', 'vault', 'chest', 'satchel', 'pouch']) {
       const pkg = TUNING.shop.packages[id]!
@@ -889,13 +890,25 @@ export type AttemptHook = (before: GameState, result: FloorResult) => void
 
 /** Play `days` real days as `profile`. Deterministic for a given seed. */
 export function simulate(profileId: ProfileId, seed: number, days: number, onAttempt?: AttemptHook): SimResult {
+  return run(profileId, seed, days, REAL_EPOCH, onAttempt).res
+}
+
+/**
+ * Play `days` real days as `profile` starting at `epoch` and hand back the account
+ * itself (a mid-game save for playtesting: `npm run mksave`).
+ */
+export function playAccount(profileId: ProfileId, seed: number, days: number, epoch: number): GameState {
+  return run(profileId, seed, days, epoch).s
+}
+
+function run(profileId: ProfileId, seed: number, days: number, epoch: number, onAttempt?: AttemptHook): Bot {
   const p = PROFILES[profileId]
-  const bot = new Bot(p, seed, onAttempt)
+  const bot = new Bot(p, seed, onAttempt, epoch)
   for (let d = 0; d < days; d++) {
     for (let k = 0; k < p.sessionsPerDay; k++) {
       // Sessions spread across the waking hours (08:00–23:00).
       const hour = 8 + (15 * k) / Math.max(1, p.sessionsPerDay - 1)
-      bot.session(REAL_EPOCH + d * REAL_DAY_MS + hour * 3_600_000, d)
+      bot.session(epoch + d * REAL_DAY_MS + hour * 3_600_000, d)
       if (bot.s.meta.deleted) break
     }
     bot.res.days.push(bot.sample(d))
@@ -906,7 +919,7 @@ export function simulate(profileId: ProfileId, seed: number, days: number, onAtt
     if (bot.s.tower.highestCleared >= TUNING.tower.sliceTopFloor) break
   }
   bot.res.captiveLosses = bot.s.pvp.log.filter((l) => l.note.startsWith('synthesized')).length
-  return bot.res
+  return bot
 }
 
 /** World-day index helper re-exported for reports. */
