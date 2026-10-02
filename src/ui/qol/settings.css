@@ -1,0 +1,59 @@
+/* The Settings window (lane H). */
+.set-body { display: flex; flex-direction: column; gap: 6px; }
+.set-section + .set-section { margin-top: 6px; }
+.set-title { margin: 4px 0 2px; }
+.set-row {
+  display: grid; grid-template-columns: minmax(130px, 38%) 1fr; gap: 10px; align-items: center;
+  padding: 6px 0; border-bottom: 1px dotted #3e347866;
+}
+.set-label { display: flex; flex-direction: column; gap: 2px; font-size: 15px; }
+.set-hint { font-size: 12px; line-height: 1.25; }
+.set-control { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; min-width: 0; }
+.set-value { min-width: 40px; text-align: right; font-size: 14px; color: var(--ink-dim); }
+
+/* Sliders: a pixel trough and a square thumb. */
+.set-slider {
+  appearance: none; -webkit-appearance: none; flex: 1; min-width: 110px; height: 10px; margin: 0;
+  background: linear-gradient(90deg, var(--gold) 0 var(--fill, 50%), #120e2c var(--fill, 50%) 100%);
+  border: 2px solid #4a3e8e; box-shadow: 0 0 0 1px var(--rim-dark); cursor: pointer;
+}
+.set-slider:disabled { opacity: 0.45; cursor: not-allowed; }
+.set-slider::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none; width: 14px; height: 18px; background: var(--ink);
+  border: 2px solid var(--rim-dark); box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.45);
+}
+.set-slider::-moz-range-thumb { width: 12px; height: 16px; background: var(--ink); border: 2px solid var(--rim-dark); border-radius: 0; }
+.set-slider:focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; }
+
+/* The on/off switch. */
+.set-switch {
+  display: inline-flex; align-items: center; gap: 8px; cursor: pointer; font: inherit; font-size: 15px;
+  color: var(--ink-dim); background: #120e2c; border: 2px solid #4a3e8e; padding: 4px 10px 4px 6px;
+}
+.set-knob { width: 26px; height: 12px; background: #2a2250; border: 2px solid var(--rim-dark); position: relative; }
+.set-knob::after { content: ''; position: absolute; top: 0; left: 0; width: 10px; height: 8px; background: var(--ink-faint); }
+.set-switch.on { color: var(--ink); border-color: var(--gold); }
+.set-switch.on .set-knob { background: #5fd08a55; }
+.set-switch.on .set-knob::after { left: 14px; background: var(--gold); }
+
+/* Choices: radio buttons drawn as a row of segments. */
+.set-choice { display: flex; flex-wrap: wrap; gap: 4px; }
+.set-opt {
+  display: inline-flex; align-items: center; gap: 6px; cursor: pointer; font-size: 15px; padding: 4px 10px;
+  background: #120e2c; border: 2px solid #4a3e8e; color: var(--ink-dim); position: relative;
+}
+.set-opt input { position: absolute; opacity: 0; width: 1px; height: 1px; margin: 0; pointer-events: none; }
+.set-opt.on { color: var(--ink); border-color: var(--gold); background: #2a2250; }
+.set-opt:has(input:focus-visible) { outline: 2px solid var(--gold); outline-offset: 2px; }
+
+.set-preview { font-size: 15px; padding: 6px 10px; min-height: 2.6em; margin: 4px 0 2px; }
+.set-caret { color: var(--gold); margin-left: 1px; }
+:root[data-motion='reduce'] .set-caret { animation: none; }
+.set-caret { animation: blink 0.8s steps(2) infinite; }
+
+.set-foot { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 10px; }
+.set-foot .pbtn { margin-left: auto; }
+
+@media (max-width: 520px) {
+  .set-row { grid-template-columns: 1fr; gap: 6px; }
+}

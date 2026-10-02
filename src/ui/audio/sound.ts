@@ -96,6 +96,8 @@ export function stopMusic(): void {
 
 /** Wake the audio after a user gesture (browsers start it suspended). */
 export function unlockAudio(): void {
+  // Already awake: nothing to do (this runs on every click and key press).
+  if (getGraph()?.ctx.state === 'running') return
   if (!ensureGraph()) return
   resumeAudio()
   syncMusic()
