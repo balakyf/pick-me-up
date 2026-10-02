@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { sfx } from '../audio/sound'
 import { useMusic } from '../audio/useSound'
+import { useRegisterBattle } from '../qol/windowRegistry'
 import type { BattleOrder, CombatLog, CombatUnitInit, GameState, HeroId } from '../../engine/types'
 import { lastWordsTogether } from '../life/speech'
 import { bgTheme, BG_H, BG_W, HORIZON, LAYER_ORDER } from '../pixel/battleBg'
@@ -71,6 +72,8 @@ export function BattleScene({
   const [cursor, setCursor] = useState(0)
   // Battle music while the scene is up; the scene underneath gets its theme back after.
   useMusic('battle')
+  // Toasts wait while the fight plays.
+  useRegisterBattle()
   // A sound for each event as it plays (cosmetic).
   useEffect(() => {
     const e = cursor > 0 ? log.events[cursor - 1] : undefined

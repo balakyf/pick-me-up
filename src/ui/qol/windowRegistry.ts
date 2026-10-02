@@ -48,3 +48,36 @@ export function useAnyWindowOpen(): boolean {
   }, [])
   return n > 0
 }
+
+// A battle on screen (BattleScene registers itself): toasts wait until it closes.
+let battles = 0
+const battleListeners = new Set<() => void>()
+const emitBattle = () => {
+  for (const fn of battleListeners) fn()
+}
+
+/** Register the calling battle scene while it is mounted. */
+export function useRegisterBattle(): void {
+  useEffect(() => {
+    battles++
+    emitBattle()
+    return () => {
+      battles = Math.max(0, battles - 1)
+      emitBattle()
+    }
+  }, [])
+}
+
+/** True while a battle replay is on screen. */
+export function useBattleOpen(): boolean {
+  const [n, setN] = useState(battles)
+  useEffect(() => {
+    const on = () => setN(battles)
+    battleListeners.add(on)
+    on()
+    return () => {
+      battleListeners.delete(on)
+    }
+  }, [])
+  return n > 0
+}

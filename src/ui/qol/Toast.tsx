@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { currentToasts, dismissToast, subscribeToasts, type ToastItem } from './toastBus'
 import { t } from '../i18n/i18n'
+import { useBattleOpen } from './windowRegistry'
 import './toast.css'
 
 /** One toast: it leaves on its own after its time, or at a click. */
@@ -19,11 +20,13 @@ function ToastRow({ item }: { item: ToastItem }) {
   )
 }
 
-/** Where toasts appear: top centre, under the HUD, above windows. Mounted once by App. */
+/** Where toasts appear: top centre, under the HUD, above windows. Mounted once by App.
+ *  A battle on screen comes first: toasts wait (their clocks too) until it closes. */
 export function ToastHost() {
   const [items, setItems] = useState<readonly ToastItem[]>(currentToasts)
   useEffect(() => subscribeToasts(setItems), [])
-  if (items.length === 0) return null
+  const battle = useBattleOpen()
+  if (items.length === 0 || battle) return null
   return (
     <div className="toast-stack" role="status" aria-live="polite">
       {items.map((i) => (

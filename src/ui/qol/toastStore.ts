@@ -25,6 +25,10 @@ export function withToasts(store: Store): Store {
   }
 }
 
+/** A clock jump bigger than this (world ms) is a catch-up after time away: Isel's letter
+ *  tells that story, so it raises no toasts (ten real minutes at the 3x world clock). */
+export const CATCH_UP_WORLD_MS = 30 * 60_000
+
 /** Toast what changed between renders without a command (timers finishing). `epoch` resets it. */
 export function useTimeToasts(state: GameState | null, epoch: number): void {
   const prev = useRef<{ state: GameState | null; epoch: number }>({ state, epoch })
@@ -32,6 +36,7 @@ export function useTimeToasts(state: GameState | null, epoch: number): void {
     const was = prev.current
     prev.current = { state, epoch }
     if (!state || !was.state || was.epoch !== epoch || was.state === state) return
+    if (state.meta.lastSeenAtWorld - was.state.meta.lastSeenAtWorld > CATCH_UP_WORLD_MS) return
     for (const said of describeTime(was.state, state)) toast(said.text, { icon: said.icon, tone: said.tone })
   }, [state, epoch])
 }

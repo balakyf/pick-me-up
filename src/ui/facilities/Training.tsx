@@ -144,7 +144,10 @@ export function SelfPractice({ state, heroes }: { state: GameState; heroes: Owne
               <li key={h.id} className={`practice-row ${here ? 'here' : ''}`}>
                 <Portrait hero={h} size="sm" />
                 <span className="practice-name">
-                  <b>{pickerName(state, h)}</b> <HeroTag hero={h} /> · {focus!.mode === 'learn' ? t('learning {skill}', { skill: t(def.name) }) : t('{skill} Lv {n}', { skill: t(def.name), n: owned?.level ?? 1 })}
+                  <span>
+                    <b>{pickerName(state, h)}</b> <HeroTag hero={h} /> ·{' '}
+                    {focus!.mode === 'learn' ? t('learning {skill}', { skill: t(def.name) }) : t('{skill} Lv {n}', { skill: t(def.name), n: owned?.level ?? 1 })}
+                  </span>
                   <span className="practice-bar" aria-hidden="true">
                     <span style={{ width: `${Math.min(100, Math.round(pct * 100))}%` }} />
                   </span>
