@@ -751,6 +751,30 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
   const missionWon = (): boolean =>
     objectives.length > 0 && objectives.every(objectiveMet)
 
+  /** Waiting or walking can win this mission (a survival, an escape): never futile. */
+  const winsWithoutBlows = objectives.some((o) => o.kind === 'survive' || o.kind === 'reach')
+  /** Everything `u` could still strike with: its castable skills (SP never refills), the
+   *  basic attack it falls back on, and the strike it presses a friend's attack with. */
+  const strikesOf = (u: MutUnit): SkillEffect[] => {
+    const open = u.ref.skills.filter((s) => castable(u, s))
+    return [...(open.length > 0 ? open : [BASIC_ATTACK]), followUpSkill(u.ref, BASIC_ATTACK)]
+  }
+  /**
+   * FUTILITY: nothing the party still holds can hurt any foe it has to beat — a squad of
+   * blades against a lone, physical-immune Fragment Warden. It can only get worse (SP
+   * never refills, a foe falls only to a blow), so the party falls back at once instead of
+   * swinging IMMUNE until it dies or the clock runs out. The foe the beat names is the
+   * front-most one standing.
+   */
+  const futileFoe = (): MutUnit | null => {
+    if (winsWithoutBlows) return null
+    const foes = livingEnemies().filter((e) => !isLooming(e))
+    if (foes.length === 0) return null
+    const strikes = heroes.filter((h) => h.alive).flatMap(strikesOf)
+    if (foes.some((f) => strikes.some((s) => !immuneTo(f.ref, s)))) return null
+    return frontMost(foes)
+  }
+
   const evaluateState = (): void => {
     if (outcome !== null) return
     if (livingHeroes().length === 0) {
@@ -766,6 +790,12 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
         missionBeat('horde-spent', { left: surviveObjective.ticks - tick }, 'The horde is spent — the floor is held!')
       }
       outcome = 'win'
+      return
+    }
+    const untouchable = futileFoe()
+    if (untouchable !== null) {
+      missionBeat('futile', { unitId: untouchable.id }, `Nothing can touch ${untouchable.ref.name} — fall back!`)
+      outcome = 'retreat'
     }
   }
 

@@ -1160,6 +1160,8 @@ export type MissionCode =
   | 'wakes'
   /** Survival: no foe is left and no wave is coming — the floor is held at once. */
   | 'horde-spent'
+  /** Nothing the party holds can hurt the foes left (`unitId` stands in front): it falls back. */
+  | 'futile'
 
 /** A mission beat's details (which fields are set depends on the code). */
 export interface MissionParams {

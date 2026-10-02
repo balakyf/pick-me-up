@@ -193,4 +193,42 @@ describe('mission beats', () => {
     expect(r.log.rngDraws).toBe(hitsN * 2)
     for (const b of beats(r)) expect(b.note.length).toBeGreaterThan(0)
   })
+
+  describe('futility: nothing the party holds can hurt the foes left', () => {
+    const warden = (id = 'warden') => enemy(id, { maxHP: 500, spd: 5, mAtk: 1, pAtk: 1 }, { keywords: [{ kind: 'immune', damageType: 'physical' }] })
+    const bolt = { id: 'bolt', name: 'Bolt', skillMult: 1, damageType: 'magic' as const, element: null, target: 'single' as const, spCost: 10 }
+
+    it('blades against a physical-immune Warden fall back at once — no swinging IMMUNE to the death', () => {
+      const r = runBattle([hero('a', { spd: 100 }), hero('b', { spd: 90 })], enc([[warden()]], [{ kind: 'annihilate' }]), 12)
+      expect(r.outcome).toBe('retreat')
+      expect(r.fallenHeroIds).toEqual([])
+      const f = beats(r, 'futile')
+      expect(f).toHaveLength(1)
+      expect(f[0]!.params).toEqual({ unitId: 'warden' })
+      expect(r.log.events.at(-2)).toBe(f[0])
+      expect(r.log.events.filter((e) => e.kind === 'act' && e.actorId !== 'warden').length).toBe(1)
+    })
+
+    it('only once the foes it could hurt are down', () => {
+      const r = runBattle([hero('a', { spd: 100, pAtk: 500 })], enc([[frail('goblin'), warden()]], [{ kind: 'annihilate' }]), 13)
+      expect(r.outcome).toBe('retreat')
+      expect(r.log.events.some((e) => e.kind === 'death' && e.unitId === 'goblin')).toBe(true)
+      expect(beats(r, 'futile')).toHaveLength(1)
+    })
+
+    it('a spell in hand keeps the fight on — until the SP to cast it is spent', () => {
+      const withSp = runBattle([hero('m', { spd: 100, mAtk: 2000 }, { skills: [bolt], maxSP: 100, currentSP: 100 })], enc([[warden()]], [{ kind: 'annihilate' }]), 14)
+      expect(withSp.outcome).toBe('win')
+      expect(beats(withSp, 'futile')).toEqual([])
+      const dry = runBattle([hero('m', { spd: 100, mAtk: 2000 }, { skills: [bolt], maxSP: 100, currentSP: 5 })], enc([[warden()]], [{ kind: 'annihilate' }]), 14)
+      expect(dry.outcome).toBe('retreat')
+    })
+
+    it('never on a mission waiting or walking can win (a Survival holds to the bell)', () => {
+      const r = runBattle([hero('a', { maxHP: 1e6, spd: 100 })], enc([[warden()]], [{ kind: 'survive', ticks: 120 }], 120), 15)
+      expect(r.outcome).toBe('win')
+      expect(r.ticksElapsed).toBe(120)
+      expect(beats(r, 'futile')).toEqual([])
+    })
+  })
 })

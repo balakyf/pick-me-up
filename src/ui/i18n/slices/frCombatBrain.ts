@@ -27,4 +27,5 @@ export default {
   "{name}'s shield breaks — strike now!": 'Le bouclier de {name} se brise — frappez !',
   '{name} wakes…': '{name} s’éveille…',
   'The horde is spent — the floor is held!': 'La horde est épuisée — l’étage est tenu !',
+  'Nothing we have can touch {name} — fall back!': 'Rien ne peut atteindre {name} — repli !',
 } satisfies Record<string, string>

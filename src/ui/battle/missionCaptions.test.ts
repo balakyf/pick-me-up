@@ -22,7 +22,7 @@ afterEach(() => setLocale('en'))
 describe('mission captions', () => {
   it('every beat has a caption and a timing', () => {
     const all = Object.keys(MISSION_DURATION) as MissionCode[]
-    expect(all).toHaveLength(10)
+    expect(all).toHaveLength(11)
     for (const code of all) {
       const e = beat(code, { wave: 1, waves: 3, pct: 50, left: 10, steps: 5, distance: 10, unitId: 'p' })
       expect(missionCaption(e, nameOf).length, code).toBeGreaterThan(3)
@@ -41,6 +41,7 @@ describe('mission captions', () => {
     expect(missionCaption(beat('escort-low', { unitId: 'vip', pct: 25 }), nameOf)).toBe('Princess Priasis is in grave danger!')
     expect(missionCaption(beat('wakes', { unitId: 'lv' }), nameOf)).toBe('Lv999 Creature wakes…')
     expect(missionCaption(beat('horde-spent', { left: 700 }), nameOf)).toBe('The horde is spent — the floor is held!')
+    expect(missionCaption(beat('futile', { unitId: 'p' }), nameOf)).toBe('Nothing we have can touch the Black Priest — fall back!')
   })
 
   it('a beat from an older log (no code) shows its note', () => {

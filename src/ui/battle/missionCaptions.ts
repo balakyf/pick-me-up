@@ -22,6 +22,7 @@ export const MISSION_DURATION: Record<MissionCode, number> = {
   'shield-down': 1100,
   wakes: 1400,
   'horde-spent': 1400,
+  futile: 1600,
 }
 const PLAIN_MS = 900
 
@@ -61,6 +62,8 @@ export function missionCaption(e: MissionEvent, nameOf: (id: string) => string):
       return t('{name} wakes…', { name })
     case 'horde-spent':
       return t('The horde is spent — the floor is held!')
+    case 'futile':
+      return t('Nothing we have can touch {name} — fall back!', { name })
     case undefined:
       return t(e.note)
   }
