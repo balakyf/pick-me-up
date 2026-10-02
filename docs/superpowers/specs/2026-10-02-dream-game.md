@@ -73,3 +73,4 @@ Each lane's detailed brief lives in its workflow prompt; its notes file records 
 |---|---|---|
 | 1 · A, B | merged, reviewed | `0e7a09b` |
 | 2 · C, D | merged, reviewed (1,300 tests; `npm run sim -- 30 3` in 32 s) | `1256083` |
+| 3 · E, F | merged, reviewed (1,408 tests; combat gate passes with beat timing; sim 64 s). Merge glue: SP bars read `spAfter`/'sp', the turn order replays stuns and speed statuses, the sim's replay length uses `battleFrames.replayLength` | `59fdf5f` |
