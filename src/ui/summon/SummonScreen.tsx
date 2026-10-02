@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { SummonReveal, type RevealAgain } from './SummonReveal'
-import { crystalChargeLeft, mercySummonAvailable, tutorialPullAvailable } from '../../engine/gacha'
+import { summonGate } from './summonGate'
+import { toWorldTime } from '../../engine/time'
 import type { GameState, HeroId, OwnedHero, SummonPool } from '../../engine/types'
 import type { Store } from '../../engine/store'
 import { TUNING } from '../../engine/tuning'
@@ -28,30 +29,32 @@ export function SummonScreen({
 }) {
   const [pool, setPool] = useState<SummonPool>('normal')
   const [revealed, setRevealed] = useState<OwnedHero[]>([])
-  const [ritual, setRitual] = useState<{ heroes: OwnedHero[]; count: 1 | 10; nonce: number } | null>(null)
+  const [ritual, setRitual] = useState<{ heroes: OwnedHero[]; count: 1 | 10; pool: SummonPool; nonce: number } | null>(null)
   const [err, setErr] = useState<string | null>(null)
 
   function pull(count: 1 | 10) {
     setErr(null)
     const prev = new Set(Object.keys(state.heroes))
     try {
-      const next = store.dispatch({ type: 'SUMMON', pool, count })
+      // The real time rides with the pull: the crystal's charge is counted at this moment.
+      const next = store.dispatch({ type: 'SUMMON', pool, count }, Date.now())
       const pulled = Object.keys(next.heroes)
         .filter((id) => !prev.has(id))
         .map((id) => next.heroes[id as HeroId]!)
       setRevealed([])
-      setRitual({ heroes: pulled, count, nonce: (ritual?.nonce ?? 0) + 1 })
+      setRitual({ heroes: pulled, count, pool, nonce: (ritual?.nonce ?? 0) + 1 })
     } catch (e) {
       setErr(t(e instanceof Error ? e.message.replace(/^\w+: /, '') : 'Summon failed'))
     }
   }
 
-  const mercy = pool === 'normal' && mercySummonAvailable(state)
-  const tutorial = tutorialPullAvailable(state)
-  const charge = crystalChargeLeft(state)
-  const canOne = pool === 'normal' ? state.gold >= SUMMON_COST || mercy : state.gems >= ADV.costGems && charge >= 1
-  const canTen = state.gems >= ADV.tenPullGems && charge >= 10
-  const canTenNormal = tutorial || state.gold >= SUMMON_COST * 10
+  // What each button may do, and the true reason when it may not (gold, gems or charge).
+  // The charge is read as of now: the crystal refills with world days, and this scene
+  // does not tick the clock the way the lobby does.
+  const gate = summonGate(state, pool, toWorldTime(Date.now()))
+  const { mercy, tutorial, charge, canOne } = gate
+  const canTen = pool === 'advanced' && gate.canTen
+  const canTenNormal = pool === 'normal' && gate.canTen
 
   /** The lineup's "summon again": same pool, same count, priced from the current state. */
   function againFor(count: 1 | 10): RevealAgain {
@@ -139,13 +142,7 @@ export function SummonScreen({
             </>
           )}
         </div>
-        {!canOne && (
-          <div className="muted">
-            {pool === 'normal'
-              ? t('Not enough Gold — clear tower floors to earn more.')
-              : t('Not enough gems — the Friday Soulforge dungeon pays them.')}
-          </div>
-        )}
+        {gate.why && <div className="muted summon-why">{gate.why}</div>}
         {err && <div className="muted" style={{ color: 'var(--bad)' }}>{err}</div>}
       </div>
       {ritual && (
@@ -153,6 +150,7 @@ export function SummonScreen({
           key={ritual.nonce}
           heroes={ritual.heroes}
           masterLevel={state.meta.masterLevel}
+          pool={ritual.pool}
           onClose={() => {
             setRevealed(ritual.heroes)
             setRitual(null)

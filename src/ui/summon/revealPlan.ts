@@ -6,16 +6,26 @@
  * Purely cosmetic — the heroes are already rolled and saved before the first beam.
  */
 
-/** Beam tiers: 1★ white, 2★ green, 3★ blue, 4★ gold, 5★+ prismatic. */
+/** Beam tiers, in the rarity colours the cards and stars use (bits.tsx STAR_COLOR):
+ *  1★ white, 2★ green, 3★ blue, 4★ purple, 5★+ gold. */
 export type Tier = 1 | 2 | 3 | 4 | 5
 
-/** Solid tint per tier (tier 5 is drawn as a rainbow; this is its fallback/particle colour). */
+/** Solid tint per tier: the beam, the circle, the flash and the motes. */
 export const TIER_TINT: Record<Tier, string> = {
   1: '#f4f0ff',
   2: '#5fd08a',
   3: '#4aa3ff',
-  4: '#f2c75c',
-  5: '#ff9ae0',
+  4: '#b07adb',
+  5: '#f2c75c',
+}
+
+/**
+ * Where a pool's "rare" begins: the stars that get the tease, a word, and a stop for
+ * "Skip to best". The Normal pool tops out at 3★, so its 3★ is its jackpot; the Advanced
+ * pool (3–5★) keeps the 4★ line.
+ */
+export function rareAtFor(pool: 'normal' | 'advanced'): number {
+  return pool === 'normal' ? 3 : 4
 }
 
 export function tierOf(star: number): Tier {
@@ -23,13 +33,23 @@ export function tierOf(star: number): Tier {
 }
 
 /**
- * The colours the beam passes through. A 4★+ starts as a humble 3★ blue and surges
- * up a tier at a time — the classic gacha tease. Reduced motion shows the truth at once.
+ * The colours the beam passes through. A rare pull (4★+ on the Advanced pool, the 3★
+ * jackpot on the Normal one) starts one tier humbler and surges up a tier at a time —
+ * the classic gacha tease. Reduced motion shows the truth at once.
  */
-export function beamSteps(star: number, reducedMotion: boolean): Tier[] {
+export function beamSteps(star: number, reducedMotion: boolean, rareAt = 4): Tier[] {
   const top = tierOf(star)
-  if (reducedMotion || top < 4) return [top]
-  return top === 4 ? [3, 4] : [3, 4, 5]
+  if (reducedMotion || star < rareAt) return [top]
+  const out: Tier[] = []
+  for (let k = tierOf(rareAt - 1); k <= top; k++) out.push(k as Tier)
+  return out
+}
+
+/** The word over a rare card ('Rare!', 'Legendary!'), or null for a common pull. */
+export function rarityWordKey(star: number, rareAt = 4): 'Legendary!' | 'Rare!' | null {
+  if (star >= 5) return 'Legendary!'
+  if (star >= rareAt) return 'Rare!'
+  return null
 }
 
 export interface RevealTiming {
@@ -46,17 +66,17 @@ export function revealTiming(reducedMotion: boolean): RevealTiming {
 }
 
 /** When each tease surge fires (ms after the reveal starts), one per extra beam step. */
-export function surgeTimes(star: number, reducedMotion: boolean): number[] {
+export function surgeTimes(star: number, reducedMotion: boolean, rareAt = 4): number[] {
   const t = revealTiming(reducedMotion)
-  return beamSteps(star, reducedMotion)
+  return beamSteps(star, reducedMotion, rareAt)
     .slice(1)
     .map((_, i) => t.charge + i * t.step)
 }
 
 /** ms from the start of a hero's reveal until its card flips. */
-export function flipAt(star: number, reducedMotion: boolean): number {
+export function flipAt(star: number, reducedMotion: boolean, rareAt = 4): number {
   const t = revealTiming(reducedMotion)
-  return t.charge + (beamSteps(star, reducedMotion).length - 1) * t.step + t.burst
+  return t.charge + (beamSteps(star, reducedMotion, rareAt).length - 1) * t.step + t.burst
 }
 
 /** Rising motes around the pillar: more (and bigger, in CSS) for rarer pulls. */
@@ -65,9 +85,9 @@ export function moteCount(tier: Tier, reducedMotion: boolean): number {
   return reducedMotion ? Math.ceil(n / 3) : n
 }
 
-/** "Skip to best": the first 4★+ reveal at or after `from`, or -1 when none remain. */
-export function nextBestIndex(stars: readonly number[], from: number): number {
-  for (let i = Math.max(0, from); i < stars.length; i++) if (stars[i]! >= 4) return i
+/** "Skip to best": the first rare reveal (`rareAt`+) at or after `from`, or -1 when none remain. */
+export function nextBestIndex(stars: readonly number[], from: number, rareAt = 4): number {
+  for (let i = Math.max(0, from); i < stars.length; i++) if (stars[i]! >= rareAt) return i
   return -1
 }
 

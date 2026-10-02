@@ -1,0 +1,123 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   Summon reveal — one hero at a time (src/ui/summon/SummonReveal.tsx).
+   Moved here from ui.css. Tier tint arrives as --tint, in the card colours
+   (1★ white · 2★ green · 3★ blue · 4★ purple · 5★ gold); the card's own
+   rarity colour as --rar. `.sr-calm` (and the reduced-motion media query)
+   drops flashes, shakes and looping shimmer.
+   ═══════════════════════════════════════════════════════════════════════════ */
+.sr {
+  position: fixed; inset: 0; z-index: 200; overflow: hidden; cursor: pointer; user-select: none;
+  background: radial-gradient(ellipse at 50% 72%, #1e1238 0%, #0a0616 45%, #04030a 80%);
+}
+.sr-stage { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; }
+.sr-circle {
+  position: absolute; left: 50%; bottom: 6%; transform: translateX(-50%);
+  filter: drop-shadow(0 0 10px var(--tint)); animation: sr-circle 0.5s steps(5) both;
+}
+@keyframes sr-circle { from { transform: translateX(-50%) scale(0.3); opacity: 0; } to { transform: translateX(-50%) scale(1); opacity: 1; } }
+
+/* the pillar of light */
+.sr-beam-wrap { position: absolute; left: 50%; bottom: calc(6% + 100px); width: 0; height: 0; }
+.sr-beam {
+  position: absolute; left: 0; bottom: 0; width: 64px; height: 0; transform: translateX(-50%);
+  background: linear-gradient(90deg, transparent 0%, var(--tint) 24%, #fffbea 50%, var(--tint) 76%, transparent 100%);
+  box-shadow: 0 0 36px var(--tint); opacity: 0.92;
+  animation: sr-rise 0.9s steps(9) forwards;
+}
+.sr-t4 .sr-beam, .sr-t5 .sr-beam { width: 92px; }
+.sr-t5 .sr-beam {
+  background: linear-gradient(90deg, transparent 0%, #b8862a 16%, #f2c75c 32%, #fffbea 50%, #f2c75c 68%, #b8862a 84%, transparent 100%);
+  animation: sr-rise 0.9s steps(9) forwards, sr-gold 0.9s steps(6) infinite;
+}
+.sr-beam.sr-surge { height: 100vh; animation: sr-surge 0.55s steps(6) both; }
+.sr-t5 .sr-beam.sr-surge { animation: sr-surge 0.55s steps(6) both, sr-gold 0.9s steps(6) infinite; }
+@keyframes sr-rise { to { height: 100vh; } }
+@keyframes sr-surge { 0% { width: 220px; filter: brightness(2.6); } 100% { filter: none; } }
+/* 5★ is gold (the card and star colour): the pillar breathes brighter, it does not cycle hues. */
+@keyframes sr-gold { 50% { filter: brightness(1.35); } }
+
+/* the Mobius crystal, trembling in the light */
+.sr-crystal {
+  position: absolute; left: 50%; bottom: calc(6% + 64px); transform: translateX(-50%);
+  filter: drop-shadow(0 0 10px var(--tint)); animation: sr-tremble 0.14s steps(2) infinite;
+}
+.sr-t4 .sr-crystal, .sr-t5 .sr-crystal { animation-duration: 0.08s; }
+@keyframes sr-tremble { 50% { transform: translateX(calc(-50% + 2px)); } }
+
+/* motes rising up the pillar; a burst when the card turns */
+.sr-motes { position: absolute; left: 50%; bottom: calc(6% + 90px); width: 240px; height: 0; transform: translateX(-50%); pointer-events: none; }
+.sr-motes.sr-burst { bottom: 50%; }
+.sr-mote { position: absolute; bottom: 0; width: 4px; height: 4px; opacity: 0; box-shadow: 0 0 4px currentColor; animation: sr-mote 1.3s steps(10) infinite; }
+.sr-t4 .sr-mote, .sr-t5 .sr-mote { width: 6px; height: 6px; }
+.sr-burst .sr-mote { width: 6px; height: 6px; animation: sr-burst 0.9s steps(9) forwards; }
+@keyframes sr-mote { 0% { opacity: 0; transform: translate(0, 0); } 15% { opacity: 1; } 100% { opacity: 0; transform: translate(var(--drift), -62vh); } }
+@keyframes sr-burst { 0% { opacity: 1; transform: translate(0, 0); } 100% { opacity: 0; transform: translate(var(--drift), -34vh); } }
+
+.sr-flash {
+  position: absolute; inset: 0; pointer-events: none;
+  background: radial-gradient(circle at 50% 50%, #fffbea 0%, var(--tint) 28%, transparent 70%);
+  animation: sr-flash 0.5s steps(5) forwards;
+}
+@keyframes sr-flash { from { opacity: 0.95; } to { opacity: 0; } }
+.sr-ring { position: absolute; left: 50%; top: 50%; width: 80px; height: 80px; margin: -40px 0 0 -40px; border: 6px solid var(--tint); border-radius: 50%; pointer-events: none; animation: sr-ring 0.6s steps(6) forwards; }
+@keyframes sr-ring { from { transform: scale(0.3); opacity: 1; } to { transform: scale(7); opacity: 0; } }
+
+/* the card turns over */
+.sr-card { position: relative; z-index: 2; perspective: 800px; cursor: default; }
+.sr-card-face {
+  position: relative; width: 250px; padding: 16px 14px 14px; text-align: center;
+  background: linear-gradient(180deg, var(--win-top), var(--win-bot));
+  border: 3px solid var(--rar); border-radius: 3px;
+  box-shadow: 0 0 0 2px var(--rim-dark), inset 0 0 0 2px #4a3e8e, 0 0 30px var(--tint);
+  animation: sr-flip 0.5s steps(6) both;
+}
+.sr-c5 .sr-card-face { animation: sr-flip 0.5s steps(6) both, sr-shine 1.6s steps(8) infinite; }
+@keyframes sr-flip { 0% { transform: rotateY(90deg) scale(0.8); filter: brightness(3); } 60% { transform: rotateY(-10deg) scale(1.04); } 100% { transform: none; filter: none; } }
+@keyframes sr-shine { 0%, 100% { border-color: #f2c75c; } 50% { border-color: #fff6e0; } }
+.sr-word {
+  position: absolute; left: 0; right: 0; top: -40px; font-size: 30px; font-weight: 700; color: var(--tint);
+  text-shadow: 3px 3px 0 #06040c; animation: sr-word 0.5s steps(4) both 0.2s;
+}
+@keyframes sr-word { from { opacity: 0; transform: scale(2); } to { opacity: 1; transform: scale(1); } }
+.sr-portrait { position: relative; width: 160px; height: 160px; margin: 0 auto 10px; border: 2px solid var(--rim-dark); box-shadow: 0 0 0 2px #3e3478; }
+.sr-portrait img { display: block; }
+.sr-walk { position: absolute; right: -34px; bottom: -6px; }
+.sr-name { font-size: 22px; font-weight: 600; line-height: 1.15; }
+.sr-stars .stars { font-size: 26px; letter-spacing: 3px; }
+.sr-meta { justify-content: center; }
+
+.sr-count { position: absolute; top: 16px; left: 18px; font-size: 18px; color: var(--ink-dim); }
+.sr-hint { position: absolute; bottom: 14px; left: 50%; transform: translateX(-50%); color: var(--ink-faint); font-size: 14px; white-space: nowrap; animation: blink 1.4s steps(1) infinite; }
+.sr-controls { position: absolute; top: 12px; right: 12px; display: flex; gap: 8px; }
+
+/* the lineup */
+.sr-lineup { position: absolute; inset: 0; overflow: auto; padding: 36px 16px 28px; display: flex; flex-direction: column; align-items: center; gap: 22px; cursor: default; }
+.sr-lineup h3 { margin: 0; font-size: 26px; color: var(--gold); text-shadow: 3px 3px 0 #06040c; text-align: center; }
+.sr-grid { display: grid; grid-template-columns: repeat(5, 150px); gap: 16px 12px; padding-top: 8px; }
+.sr-grid.one { grid-template-columns: 200px; }
+@media (max-width: 860px) { .sr-grid { grid-template-columns: repeat(auto-fill, minmax(128px, 1fr)); width: 100%; } }
+.sr-mini {
+  position: relative; text-align: center; padding: 10px 8px 8px;
+  background: linear-gradient(180deg, var(--win-top), var(--win-bot));
+  border: 2px solid var(--rar); border-radius: 3px; box-shadow: 0 0 0 2px var(--rim-dark);
+  animation: sr-mini-in 0.35s steps(4) both;
+}
+.sr-mini.best { border-width: 3px; transform: scale(1.06); box-shadow: 0 0 0 2px var(--rim-dark), 0 0 24px var(--rar); z-index: 1; }
+.sr-mini.sr-c5 { animation: sr-mini-in 0.35s steps(4) both, sr-shine 1.6s steps(8) infinite; }
+@keyframes sr-mini-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; } }
+.sr-best-tag { position: absolute; top: -12px; left: 50%; transform: translateX(-50%); background: var(--gold); color: #2a1a04; font-size: 12px; font-weight: 700; padding: 1px 8px; white-space: nowrap; box-shadow: 0 0 0 2px var(--rim-dark); }
+.sr-mini-portrait { width: 96px; height: 96px; margin: 0 auto 6px; border: 2px solid var(--rim-dark); }
+.sr-mini-portrait img { display: block; }
+.sr-mini-name { font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sr-mini-meta { font-size: 13px; }
+.sr-actions { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+
+/* reduced motion: no flashes, no trembling, no looping shimmer — the same beats, calmer */
+.sr-calm .sr-flash, .sr-calm .sr-ring { display: none; }
+.sr-calm .sr-crystal, .sr-calm .sr-hint { animation: none; }
+.sr-calm .sr-beam, .sr-calm .sr-t5 .sr-beam { animation: sr-rise 0.25s steps(3) forwards; }
+.sr-calm .sr-card-face, .sr-calm .sr-c5 .sr-card-face { animation: sr-fade 0.2s steps(2) both; }
+.sr-calm .sr-mini, .sr-calm .sr-mini.sr-c5 { animation: sr-fade 0.2s steps(2) both; }
+.sr-calm .sr-mote { animation-iteration-count: 1; }
+.sr-calm .sr-word { animation: sr-fade 0.2s steps(2) both; }
+@keyframes sr-fade { from { opacity: 0; } to { opacity: 1; } }
