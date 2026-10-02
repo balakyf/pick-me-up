@@ -61,7 +61,7 @@
 .fc-bar > span { display: block; height: 100%; }
 .fc-deaths { font-size: 15px; }
 .fc-chips { display: flex; flex-wrap: wrap; gap: 4px 6px; margin: 6px 0; }
-.fc-chip { font-size: 13px; padding: 1px 6px; border: 2px solid #3e3478; background: #120e2c; white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+.fc-chip { font-size: 13px; padding: 1px 6px; border: 2px solid #3e3478; background: #120e2c; max-width: 100%; overflow-wrap: anywhere; }
 .fc-chip.good { border-color: #2e6a3a; color: #bfeccb; }
 .fc-chip.warn { border-color: #8a5a24; color: #ffd6a8; }
 .fc-chip.bad { border-color: #8a2a34; color: #ffc0c6; }
@@ -149,3 +149,4 @@
 .war-command > .result-card { max-width: none; margin: 0 !important; }
 .ps-slot.out .ps-line { color: #ffc0c6; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
 .ps-slot.dead .ps-name { text-decoration: line-through; color: var(--ink-faint); }
+@media (max-width: 760px) { .ps-why { display: none; } }

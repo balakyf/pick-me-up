@@ -72,7 +72,11 @@ export function PartyStrip({ state }: { state: GameState }) {
                 <span key={i} className="ps-pip" style={i < lit ? { background: sanityColor(r.sanity) } : undefined} />
               ))}
             </span>
-            <span className="ps-line muted small">{r.fit ? t(LINE_LABEL[r.line]) : r.reason && r.reason !== 'empty' ? `${REASON_GLYPH[r.reason]} ${t(REASON_SHORT[r.reason])}` : ''}</span>
+            <span className="ps-line muted small">{r.fit ? t(LINE_LABEL[r.line]) : r.reason && r.reason !== 'empty' ? (
+                  <>
+                    {REASON_GLYPH[r.reason]} <span className="ps-why">{t(REASON_SHORT[r.reason])}</span>
+                  </>
+                ) : null}</span>
           </div>
         )
       })}
