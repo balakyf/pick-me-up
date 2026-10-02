@@ -8,6 +8,11 @@ export const FR_FOUNDATION: Record<string, string> = {
   'no one is fit to fight': 'personne n’est en état de se battre',
   'the hall is still being cleaned': 'la salle est encore en cours de nettoyage',
   'insufficient gold': 'pas assez d’or',
+  // The rails keep more heroes home now (promotion, bounty, burnout), so these two
+  // refusals are reachable: the queued tournament after a heavy-loss F41 (prefix stripped
+  // by the Tower screen) and the Daily Dungeon panel (shown with its prefix).
+  'no deployable heroes in the party': 'aucun héros du groupe n’est en état de concourir',
+  'attemptDaily: no deployable heroes': 'attemptDaily : aucun héros n’est en état de combattre',
 
   // ── Deploy rails: why a hero stays behind ───────────────────────────────────
   'has fallen': 'est tombé au combat',

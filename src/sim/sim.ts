@@ -375,6 +375,14 @@ class Bot {
     for (const o of [...pref, ...ev.options]) {
       if (ev.options.includes(o) && this.try({ type: 'RESOLVE_EVENT', option: o })) return
     }
+    // A tournament queued behind a recovery (B19) can open on a party of the fallen: field
+    // whoever is fit and enter, rather than wait on the graves.
+    if (ev.kind === 'tournament') {
+      this.setParty()
+      for (const o of [...pref, ...ev.options]) {
+        if (ev.options.includes(o) && this.try({ type: 'RESOLVE_EVENT', option: o })) return
+      }
+    }
   }
 
   private buildFacilities(): void {
