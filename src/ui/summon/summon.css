@@ -65,7 +65,7 @@
 /* the card turns over */
 .sr-card { position: relative; z-index: 2; perspective: 800px; cursor: default; }
 .sr-card-face {
-  position: relative; width: 250px; padding: 16px 14px 14px; text-align: center;
+  position: relative; width: var(--card-w, 250px); padding: 16px 14px 14px; text-align: center;
   background: linear-gradient(180deg, var(--win-top), var(--win-bot));
   border: 3px solid var(--rar); border-radius: 3px;
   box-shadow: 0 0 0 2px var(--rim-dark), inset 0 0 0 2px #4a3e8e, 0 0 30px var(--tint);
@@ -79,8 +79,8 @@
   text-shadow: 3px 3px 0 #06040c; animation: sr-word 0.5s steps(4) both 0.2s;
 }
 @keyframes sr-word { from { opacity: 0; transform: scale(2); } to { opacity: 1; transform: scale(1); } }
-.sr-portrait { position: relative; width: 160px; height: 160px; margin: 0 auto 10px; border: 2px solid var(--rim-dark); box-shadow: 0 0 0 2px #3e3478; }
-.sr-portrait img { display: block; }
+.sr-portrait { position: relative; width: var(--portrait, 160px); height: var(--portrait, 160px); margin: 0 auto 10px; border: 2px solid var(--rim-dark); box-shadow: 0 0 0 2px #3e3478; }
+.sr-portrait img { display: block; width: 100%; height: 100%; }
 .sr-walk { position: absolute; right: -34px; bottom: -6px; }
 .sr-name { font-size: 22px; font-weight: 600; line-height: 1.15; }
 .sr-stars .stars { font-size: 26px; letter-spacing: 3px; }
