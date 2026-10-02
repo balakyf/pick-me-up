@@ -272,7 +272,16 @@ const FIREFLY_HOMES: Pt[] = [
  * lantern light after dark, rain / snow / fog / lightning, fireflies. `dark` is the
  * night overlay's strength (0..0.62).
  */
-export function drawSky(ctx: CanvasRenderingContext2D, st: GameState, worldMs: number, time: number, v: View, dark: number): void {
+export function drawSky(
+  ctx: CanvasRenderingContext2D,
+  st: GameState,
+  worldMs: number,
+  time: number,
+  v: View,
+  dark: number,
+  /** Screen rects with an open roof: rain, snow, fog and petals stay out of them. */
+  shelters: readonly { x: number; y: number; w: number; h: number }[] = [],
+): void {
   const season = seasonAt(worldMs)
   const weather = weatherAt(st.seed, worldMs)
   const still = prefersReducedMotion()
@@ -322,6 +331,16 @@ export function drawSky(ctx: CanvasRenderingContext2D, st: GameState, worldMs: n
         ctx.fillRect(Math.round(x), Math.round(y) - 1, 1, 3)
       }
     })
+  }
+
+  // Weather falls outdoors only: clip out every building whose roof is open.
+  const sheltered = shelters.length > 0
+  if (sheltered) {
+    ctx.save()
+    ctx.beginPath()
+    ctx.rect(0, 0, VW, VH)
+    for (const s of shelters) ctx.rect(s.x, s.y, s.w, s.h)
+    ctx.clip('evenodd')
   }
 
   // Precipitation (in screen space, anchored loosely to the camera so it doesn't slide).
@@ -382,6 +401,7 @@ export function drawSky(ctx: CanvasRenderingContext2D, st: GameState, worldMs: n
       ctx.fillRect(Math.round(x), Math.round(y) - 10, 2, 1)
     }
   }
+  if (sheltered) ctx.restore()
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

@@ -74,6 +74,16 @@ export const ENEMY_TEMPLATES: Record<string, EnemyTemplate> = {
     // Tank: huge VIT + STR, sluggish AGI.
     attrMult: { str: 1.6, agi: 0.4, vit: 1.8, int: 0.2, wil: 0.6 },
   },
+  // The side room's Mimic (challenge/rooms.ts): "a chest that breathes". Its own template
+  // so it is drawn as a chest and logged as itself in the Codex; it keeps the ogre's
+  // statline, so a Mimic fight resolves exactly as it did when it borrowed the ogre.
+  mimic: {
+    id: 'mimic',
+    name: 'Mimic',
+    family: 'construct',
+    element: 'physical',
+    attrMult: { str: 1.6, agi: 0.4, vit: 1.8, int: 0.2, wil: 0.6 },
+  },
   dark_mage: {
     id: 'dark_mage',
     name: 'Dark Disciple',
@@ -131,6 +141,8 @@ export const ENEMY_TEMPLATES: Record<string, EnemyTemplate> = {
     id: 'lv999_creature',
     name: 'Lv999 Creature',
     element: 'dark',
+    // It is fielded far below 999 (anchors.ts levelBonus); the name is the truth the UI shows.
+    displayLevel: 999,
     // Catastrophically high everything.
     attrMult: { str: 3.0, agi: 2.5, vit: 4.0, int: 2.5, wil: 3.0 },
     keywords: [{ kind: 'enrage', afterTick: 300, multiplier: 5 }, { kind: 'looming' }],

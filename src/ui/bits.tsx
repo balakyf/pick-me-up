@@ -35,11 +35,12 @@ export const STAR_COLOR: Record<Star, string> = {
   7: '#ef5d6b',
 }
 
+/** A hero with no class yet is 'Untrained' (a commoner who answered the call), not 'Classless'. */
 export function classLabel(c: HeroClass | null): string {
-  return c === null ? t('Classless') : t(CLASS_VIS[c].label)
+  return c === null ? t('Untrained') : t(CLASS_VIS[c].label)
 }
 export function classGlyph(c: HeroClass | null): string {
-  return c === null ? '—' : CLASS_VIS[c].glyph
+  return c === null ? '🔰' : CLASS_VIS[c].glyph
 }
 
 /** Display CP — the same number the combat unit carries (stats + skills term). */
@@ -120,11 +121,24 @@ export function ElementBadge({ element }: { element: Element }) {
   )
 }
 
-export function ClassBadge({ heroClass }: { heroClass: HeroClass | null }) {
+/**
+ * The class badge. With `trade` (hero/heroLabel bornTrade) an untrained hero also shows
+ * the trade they were born to, as a chip of its own beside it; a classed hero carries it
+ * in the tooltip.
+ */
+export function ClassBadge({ heroClass, trade }: { heroClass: HeroClass | null; trade?: string }) {
+  const title = trade ? t('{cls} · by trade: {trade}', { cls: classLabel(heroClass), trade }) : classLabel(heroClass)
   return (
-    <span className="tag" title={classLabel(heroClass)}>
-      {classGlyph(heroClass)} {classLabel(heroClass)}
-    </span>
+    <>
+      <span className="tag" title={title}>
+        {classGlyph(heroClass)} {classLabel(heroClass)}
+      </span>
+      {trade && heroClass === null && (
+        <span className="tag class-trade" title={title}>
+          🏠 {trade}
+        </span>
+      )}
+    </>
   )
 }
 

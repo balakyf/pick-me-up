@@ -3,8 +3,8 @@
  * read from the state (the engine records only what it cannot see, like a first talk),
  * so the checklist can never drift from what actually happened.
  */
-import { useState } from 'react'
-import type { GameState } from '../../engine/types'
+import { useEffect, useState } from 'react'
+import type { FacilityId, GameState } from '../../engine/types'
 import type { Store } from '../../engine/store'
 import { TUNING } from '../../engine/tuning'
 import { t } from '../i18n/i18n'
@@ -17,7 +17,14 @@ export interface GuideStep {
   done: (s: GameState) => boolean
 }
 
-const BUILDINGS = ['tavern', 'garden', 'forge', 'infirmary', 'library', 'watchtower', 'market'] as const
+/** Anything raised past where the account started (or a site under way) counts as building. */
+export function builtSomething(s: GameState): boolean {
+  const start = TUNING.lobby.facilityStartLevels as Partial<Record<FacilityId, number>>
+  return (Object.keys(s.facilities) as FacilityId[]).some((f) => {
+    const fac = s.facilities[f]
+    return fac.build !== null || fac.level > (start[f] ?? 0)
+  })
+}
 
 export const GUIDE_STEPS: GuideStep[] = [
   {
@@ -60,19 +67,46 @@ export const GUIDE_STEPS: GuideStep[] = [
       s.meta.masterLevel < TUNING.lobby.facilities.unlockMasterLevel.tavern!
         ? 'The Tavern and the Garden open at Master Lv 2: clear a floor or two first. Then press 🔨 Build, top right.'
         : 'Press 🔨 Build (top right), or walk to a dirt lot marked with a hammer and use its signpost.',
-    done: (s) => BUILDINGS.some((b) => s.facilities[b].level > 0 || s.facilities[b].build !== null),
+    done: builtSomething,
   },
 ]
 
+/** The guide.done key that latches a step once it has been seen done. */
+export const latchKey = (id: string): string => `step:${id}`
+
+/** A step stays done once done (a hero dying never un-ticks 'Set a party of five'). */
+export function stepDone(s: GameState, g: GuideStep): boolean {
+  return s.life.guide.done.includes(latchKey(g.id)) || g.done(s)
+}
+
+/** Steps done right now that are not latched yet (FirstSteps latches them). */
+export function unlatchedSteps(s: GameState): GuideStep[] {
+  return GUIDE_STEPS.filter((g) => !s.life.guide.done.includes(latchKey(g.id)) && g.done(s))
+}
+
+/** Past this floor the Master plainly knows the way: the panel retires on its own. */
+export const GUIDE_RETIRES_AT_FLOOR = 15
+
 export function guideComplete(s: GameState): boolean {
-  return s.life.guide.done.includes('dismissed') || GUIDE_STEPS.every((g) => g.done(s))
+  return (
+    s.life.guide.done.includes('dismissed') ||
+    s.tower.highestCleared >= GUIDE_RETIRES_AT_FLOOR ||
+    GUIDE_STEPS.every((g) => stepDone(s, g))
+  )
 }
 
 export function FirstSteps({ state, store }: { state: GameState; store: Store }) {
   const [open, setOpen] = useState(true)
+  // Latch what is done, so a step never goes back (the store records it like 'talk').
+  // A retired guide latches nothing: no save writes for a panel nobody sees.
+  const toLatch = guideComplete(state) ? '' : unlatchedSteps(state).map((g) => g.id).join(',')
+  useEffect(() => {
+    if (!toLatch) return
+    for (const id of toLatch.split(',')) store.dispatch({ type: 'GUIDE_STEP', step: latchKey(id) })
+  }, [toLatch, store])
   if (guideComplete(state)) return null
-  const done = GUIDE_STEPS.filter((g) => g.done(state)).length
-  const next = GUIDE_STEPS.find((g) => !g.done(state))
+  const done = GUIDE_STEPS.filter((g) => stepDone(state, g)).length
+  const next = GUIDE_STEPS.find((g) => !stepDone(state, g))
   return (
     <div className="hud hud-guide">
       <button className="guide-head" onClick={() => setOpen(!open)}>
@@ -82,8 +116,8 @@ export function FirstSteps({ state, store }: { state: GameState; store: Store })
         <>
           <ul className="guide-list">
             {GUIDE_STEPS.map((g) => (
-              <li key={g.id} className={g.done(state) ? 'done' : g === next ? 'next' : ''}>
-                {g.done(state) ? '✓' : g === next ? '▶' : '·'} {t(g.label)}
+              <li key={g.id} className={stepDone(state, g) ? 'done' : g === next ? 'next' : ''}>
+                {stepDone(state, g) ? '✓' : g === next ? '▶' : '·'} {t(g.label)}
               </li>
             ))}
           </ul>

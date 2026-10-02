@@ -6,6 +6,7 @@ import { CHALLENGE, RAID_FLOORS, raidChestReady, raidsOpen, weeklyAttemptsLeft, 
 import { toWorldTime } from '../../engine/time'
 import { BattleScene } from '../battle/BattleScene'
 import { t } from '../i18n/i18n'
+import { tn } from '../text'
 import { BonusRoomPanel, RoomOutcomeCard } from './BonusRoom'
 import { RaidPlanner } from './RaidPlanner'
 import { WeeklyTrial, ruleName } from './WeeklyTrial'
@@ -13,8 +14,7 @@ import './challenge.css'
 
 /**
  * Everything beyond the plain climb, on the Tower screen: the optional side room an anchor
- * revealed, the raid table (cleared raid anchors, replayable), and the weekly Crack of Time
- * trial.
+ * revealed, the raid table (cleared raid anchors, replayable), and the weekly Echo Trial.
  */
 export function TowerChallenges({ state, store }: { state: GameState; store: Store }) {
   const [outcome, setOutcome] = useState<RoomOutcome | null>(null)
@@ -54,16 +54,16 @@ export function TowerChallenges({ state, store }: { state: GameState; store: Sto
             {raids.length === 0
               ? t('(clear F{n})', { n: RAID_FLOORS[0]! })
               : chests > 0
-                ? t('· {n} chests waiting', { n: chests })
+                ? tn(chests, '· 1 chest waiting', '· {n} chests waiting')
                 : t('· chests taken this week')}
           </span>
         </button>
         <button className="pbtn" onClick={() => setWin('weekly')} disabled={!weeklyOpen}>
-          ⟡ {t('Weekly trial')}
+          ⟡ {t('Echo Trial')}
           <span className="muted small">
             {' '}
             {weeklyOpen
-              ? `· ${ruleName(rule)} · ${t('{n} attempts left', { n: weeklyAttemptsLeft(state, nowWorld) })}`
+              ? `· ${ruleName(rule)} · ${tn(weeklyAttemptsLeft(state, nowWorld), '1 attempt left', '{n} attempts left')}`
               : t('(clear F{n})', { n: CHALLENGE.weekly.unlockFloor })}
           </span>
         </button>

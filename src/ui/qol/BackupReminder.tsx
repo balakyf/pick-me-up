@@ -3,6 +3,7 @@ import type { GameState } from '../../engine/types'
 import { t } from '../i18n/i18n'
 import { backupMilestone, lastExportAt, lastNudgedFloor, markNudged } from './saveBackup'
 import { lastExportText } from './SaveTransfer'
+import { useAnyWindowOpen } from './windowRegistry'
 import './qol.css'
 
 /**
@@ -11,9 +12,11 @@ import './qol.css'
  */
 export function BackupReminder({ state, onExport }: { state: GameState; onExport: () => void }) {
   const [hidden, setHidden] = useState<number | null>(null)
+  // A letter, a facility window or a conversation comes first: the nudge waits.
+  const busy = useAnyWindowOpen()
   const now = Date.now()
   const floor = backupMilestone(state.tower.highestCleared, lastNudgedFloor(), lastExportAt(), now)
-  if (floor === null || hidden === floor) return null
+  if (floor === null || hidden === floor || busy) return null
   const dismiss = () => {
     markNudged(floor)
     setHidden(floor)

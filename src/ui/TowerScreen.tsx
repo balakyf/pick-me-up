@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type Ref } from 'react'
 import type { GameState, FloorResult, CombatLog, BattleOrder } from '../engine/types'
 import { scoutFloor, suggestParty, type ScoutReport } from '../engine/scout'
 import { ordersAllowed } from '../engine/tower'
@@ -20,6 +20,10 @@ import { CodexButton } from './codex/CodexWindow'
 import { ScoutCodexNote } from './codex/ScoutCodexNote'
 import { SynergyPanel } from './tower/SynergyPanel'
 import { FloorModBadge, FloorModsLine } from './tower/FloorMods'
+import { enterBlock, enterBlockText, eventWhere } from './tower/towerText'
+import { shownLevel } from './battle/battleFrames'
+import { tn } from './text'
+import './tower/tower.css'
 
 const MAX_FLOOR = TUNING.tower.sliceTopFloor
 const EV = TUNING.events
@@ -55,13 +59,21 @@ function optionBlurb(option: string, floor: number): string {
 const EVENT_TITLE = { bonus: 'Event Floor', recovery: 'Recovery', tournament: 'Tournament' } as const
 
 /** The open event floor: pick one option (the climb waits on it). */
-function EventPanel({ state, onResolve }: { state: GameState; onResolve: (option: string) => void }) {
+function EventPanel({
+  state,
+  onResolve,
+  panelRef,
+}: {
+  state: GameState
+  onResolve: (option: string) => void
+  panelRef?: Ref<HTMLDivElement>
+}) {
   const ev = state.tower.event!
   return (
-    <div className="pframe event-panel">
+    <div className="pframe event-panel" ref={panelRef}>
       <div className="event-head">
         <span className="event-kind">{t(EVENT_TITLE[ev.kind])}</span>
-        <span className="muted">{t('between F{a} and F{b}', { a: ev.floor, b: ev.floor + 1 })}</span>
+        <span className="muted">{eventWhere(ev, state.tower.currentFloor)}</span>
       </div>
       <p className="muted" style={{ margin: '4px 0 10px' }}>
         {ev.kind === 'tournament'
@@ -257,7 +269,7 @@ function ScoutPanel({ state, report, onSuggest }: { state: GameState; report: Sc
       <div className="event-head">
         <span className="event-kind">{t('Scouting report · F{n}', { n: report.floor })}</span>
         <span className="muted">
-          {t(report.mission)} · {report.waves === 1 ? t('1 wave') : t('{n} waves', { n: report.waves })}
+          {t(report.mission)} · {tn(report.waves, '1 wave', '{n} waves')}
         </span>
       </div>
       <div className="threat-row">
@@ -285,7 +297,7 @@ function ScoutPanel({ state, report, onSuggest }: { state: GameState; report: Sc
               <span className="el-dot" style={{ background: ELEMENT_VIS[e.element].color }} title={t(ELEMENT_VIS[e.element].label)} />
               <b>{t(e.name)}</b>
               {e.count > 1 && <span className="muted">×{e.count}</span>}
-              <span className="muted small">Lv{e.level}</span>
+              <span className="muted small">Lv{shownLevel(e)}</span>
               {e.target && <span className="chip">{t('target')}</span>}
               {notes.length > 0 && <span className="scout-notes">{notes.join(' · ')}</span>}
               <ScoutCodexNote enemy={e} floorStudied={report.studied} />
@@ -320,10 +332,15 @@ export function TowerScreen({ state, store }: { state: GameState; store: Store }
 
   const current = state.tower.currentFloor
   const currentRef = useRef<HTMLDivElement>(null)
-  // The tower is drawn bottom-up; bring the floor you're standing on into view.
+  const eventRef = useRef<HTMLDivElement>(null)
+  const hasEvent = state.tower.event !== null
+  // The tower is drawn bottom-up; bring the floor you're standing on into view — or the
+  // event floor the climb is waiting on, which sits above the list.
   useEffect(() => {
-    currentRef.current?.scrollIntoView?.({ block: 'center' })
-  }, [current])
+    if (hasEvent) eventRef.current?.scrollIntoView?.({ block: 'center' })
+    else currentRef.current?.scrollIntoView?.({ block: 'center' })
+  }, [current, hasEvent])
+  const toEvent = () => eventRef.current?.scrollIntoView?.({ block: 'center', behavior: 'smooth' })
   useEffect(() => {
     setOpenActs((cur) => new Set([...cur, actForFloor(current).id]))
   }, [current])
@@ -335,6 +352,8 @@ export function TowerScreen({ state, store }: { state: GameState; store: Store }
   const summit = state.tower.highestCleared >= MAX_FLOOR
   const event = state.tower.event
   const loop = state.tower.loop
+  // A disabled Enter always says why (and an event floor can be reached from here).
+  const block = enterBlock(state, deployable)
 
   function enter() {
     if (!deployable || current > MAX_FLOOR || event !== null) return
@@ -445,14 +464,14 @@ export function TowerScreen({ state, store }: { state: GameState; store: Store }
         </div>
       )}
 
-      {event && <EventPanel state={state} onResolve={resolve} />}
+      {event && <EventPanel state={state} onResolve={resolve} panelRef={eventRef} />}
       {err && <div className="muted" style={{ color: 'var(--bad)' }}>{err}</div>}
       <TowerChallenges state={state} store={store} />
 
       {report && <ScoutPanel state={state} report={report} onSuggest={suggest} />}
       {report && <SynergyPanel state={state} />}
 
-      {!deployable && !event && (
+      {block === 'party' && (
         <div className="empty" style={{ color: 'var(--warn)' }}>
           {t("No deployable heroes — set your Party (heroes in training or broken down can't fight).")}
         </div>
@@ -498,16 +517,28 @@ export function TowerScreen({ state, store }: { state: GameState; store: Store }
                 </div>
                 <div className="fs">
                   {t(mission)}
-                  {enemyCount !== null && ` · ${t('{n} enemies', { n: enemyCount })}`}
+                  {enemyCount !== null && ` · ${tn(enemyCount, '1 enemy', '{n} enemies')}`}
                   {f === current && state.tower.attemptIndex > 0 && ` · ${t('attempt {n}', { n: state.tower.attemptIndex + 1 })}`}
                   {anchor?.minigame === 'ballista' && ` · 🎯 ${t('ballista')}`}
                 </div>
                 {isCurrent && preview && state.meta.peekedFloors.includes(f) && <PeekLine preview={preview} />}
+                {isCurrent && f <= MAX_FLOOR && block && (
+                  <div className="enter-why">
+                    {enterBlockText(block)}{' '}
+                    {block === 'event' && (
+                      <button className="linkish" onClick={toEvent}>
+                        {t('Go to the event ↑')}
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
               {isCurrent && f <= MAX_FLOOR && (
-                <button className="btn primary" onClick={enter} disabled={!deployable || event !== null}>
-                  {f === TUNING.tower.worldEndFloor && !state.tower.worldSaved ? t('Clear it ▸') : t('Enter ▸')}
-                </button>
+                <span className="enter-wrap" title={block ? enterBlockText(block) : undefined}>
+                  <button className="btn primary" onClick={enter} disabled={block !== null}>
+                    {f === TUNING.tower.worldEndFloor && !state.tower.worldSaved ? t('Clear it ▸') : t('Enter ▸')}
+                  </button>
+                </span>
               )}
               {isCurrent && f === TUNING.tower.worldEndFloor && state.tower.hiddenFound.length >= TUNING.lifecycle.subvertTruths && (
                 <button

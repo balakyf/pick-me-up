@@ -21,6 +21,7 @@ import { TimingGame } from '../metaPanels'
 import { cpOf } from '../bits'
 import { t } from '../i18n/i18n'
 import { HeroChip, lootLine } from './common'
+import { tn } from '../text'
 
 const RD = CHALLENGE.raids
 const SIZE = 5
@@ -160,7 +161,7 @@ export function RaidPlanner({ state, store, onClose }: { state: GameState; store
                     </span>
                     <span className="raid-row-heroes">
                       {r.length === 0 && <span className="muted small">{active === i ? t('pick heroes below') : t('empty')}</span>}
-                      {r.map((id) => state.heroes[id] && <HeroChip key={id} hero={state.heroes[id]!} onClick={() => toggle(id)} selected />)}
+                      {r.map((id) => state.heroes[id] && <HeroChip key={id} state={state} hero={state.heroes[id]!} onClick={() => toggle(id)} selected />)}
                     </span>
                   </div>
                 ))}
@@ -173,6 +174,7 @@ export function RaidPlanner({ state, store, onClose }: { state: GameState; store
               <div className="raid-roster">
                 {fit.map((h) => (
                   <HeroChip
+                    state={state}
                     key={h.id}
                     hero={h}
                     selected={placed.has(h.id)}
@@ -255,7 +257,7 @@ function RaidResult({ outcome, state, onReplay, onDone }: { outcome: RaidOutcome
         </div>
       )}
       {outcome.fallen.length > 0 && (
-        <div className="muted">{t('{n} heroes did not come back from the raid.', { n: outcome.fallen.length })}</div>
+        <div className="muted">{tn(outcome.fallen.length, '1 hero did not come back from the raid.', '{n} heroes did not come back from the raid.')}</div>
       )}
       <button className="btn primary" onClick={onDone} style={{ marginTop: 12 }}>
         {t('Back to the raid table')}

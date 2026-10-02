@@ -1,0 +1,4 @@
+/* ── Hero names in pickers and lists (hero/heroLabel.tsx) ─────────────────────── */
+.hero-tag { color: var(--ink-dim); font-size: 12px; font-weight: 400; white-space: nowrap; }
+.syn-chip .hero-tag, .hero-chip .hero-tag { margin-left: 2px; }
+.class-trade { color: var(--ink-dim); font-weight: 400; }

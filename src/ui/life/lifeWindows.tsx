@@ -30,6 +30,7 @@ import { PixelWindow, Gauge } from '../kit'
 import { heroBustUrl } from '../pixel/sprites'
 import { JOB_NAME, accountDay, chronicleLine, diaryLine, groupedChronicle, placeName, shortName, speak, statusLine, tradeName } from './speech'
 import { t } from '../i18n/i18n'
+import { ta } from '../text'
 import { BondList } from '../bond/BondBadge'
 import { BOUNTIES } from '../../engine/estate'
 import { EstateNotes } from './EstatePanels'
@@ -91,7 +92,7 @@ export function memoryLine(state: GameState, m: Memory): string {
     gift: t('Received a gift from the Master'),
     promoted: t('Promoted to {n}★', { n: m.detail ?? '?' }),
     forged: t('Forged {item}', { item: m.detail ?? '' }),
-    jobTier: t('Became a {tier} {job}', {
+    jobTier: ta('Became a {tier} {job}', {
       tier: t(TIER_NAMES[Number((m.detail ?? ':0').split(':')[1])] ?? 'Novice'),
       job: t(JOB_NAME[(m.detail ?? 'cook').split(':')[0] as JobId] ?? ''),
     }),
@@ -259,7 +260,7 @@ export function HeroProfile({
           <img className="px profile-bust" src={heroBustUrl(hero)} width={72} height={72} alt="" />
           <div>
             <div>
-              {hero.star}★ · {t(hero.heroClass ? hero.heroClass[0]!.toUpperCase() + hero.heroClass.slice(1) : 'Classless')} · Lv{hero.xp.level} ·{' '}
+              {hero.star}★ · {t(hero.heroClass ? hero.heroClass[0]!.toUpperCase() + hero.heroClass.slice(1) : 'Untrained')} · Lv{hero.xp.level} ·{' '}
               {t('Sanity')} {Math.round(hero.sanity)}
             </div>
             <div className="muted">
@@ -395,7 +396,8 @@ export function LetterWindow({ state, onClose }: { state: GameState; onClose: ()
         {entries.some((e) => e.kind === 'stalled') && <p className="muted">{t('The Forge went cold for want of gold or Promotion Stones.')}</p>}
         <h4 className="panel-sub">{t('From their diaries')}</h4>
         {(() => {
-          const taken = new Set<string>()
+          // A diary never repeats a line already in the letter, or another diarist's.
+          const taken = new Set<string>([...rest, ...deaths.map((e) => chronicleLine(state, e))])
           return diarists.map((h) => ({ h, line: diaryLine(state, h, taken) }))
         })().map(({ h, line }) => (
           <div key={h.id} className="diary">

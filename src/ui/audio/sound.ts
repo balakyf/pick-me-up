@@ -35,7 +35,10 @@ const MUTE_KEY = 'pmu.muted'
 let ctx: AudioContext | null = null
 let master: GainNode | null = null
 let musicTimer: ReturnType<typeof setInterval> | null = null
+/** The track actually playing. */
 let currentMusic: Music = 'none'
+/** The track the current scene asked for (kept while muted or before the first gesture). */
+let wantedMusic: Music = 'none'
 
 function readMuted(): boolean {
   try {
@@ -65,7 +68,9 @@ export function setMuted(m: boolean): void {
     /* storage may be unavailable */
   }
   if (master) master.gain.value = m ? 0 : 0.18
+  // Muting stops the loop; unmuting starts the scene's track again.
   if (m) stopMusic()
+  else startMusic()
   for (const fn of listeners) fn()
 }
 
@@ -183,11 +188,28 @@ const THEMES: Record<Exclude<Music, 'none'>, { notes: number[]; step: number; ty
   battle: { notes: [57, 60, 64, 60, 57, 60, 65, 64, 62, 59, 62, 64], step: 0.16, type: 'square', bass: [33, 33, 29, 31] },
 }
 
+/** Ask for a scene's track. It plays now if sound is on and the audio context runs;
+ *  otherwise it waits for unmute or the first gesture (unlockAudio). */
 export function playMusic(m: Music): void {
-  if (m === currentMusic) return
+  wantedMusic = m
+  startMusic()
+}
+
+/** The track the scene wants (whether or not it can play yet). */
+export function wantedTrack(): Music {
+  return wantedMusic
+}
+
+/** Start the wanted track unless it already plays (or sound is off / still locked). */
+function startMusic(): void {
+  if (wantedMusic === currentMusic && musicTimer !== null) return
   stopMusic()
+  const m = wantedMusic
+  if (m === 'none' || muted) return
+  // Never create the context here: browsers only allow it after a gesture (unlockAudio).
+  const a = ctx
+  if (!a || a.state !== 'running') return
   currentMusic = m
-  if (m === 'none' || muted || !audio()) return
   const theme = THEMES[m]
   let i = 0
   const tick = () => {
@@ -208,5 +230,7 @@ export function stopMusic(): void {
 /** Resume the context after a user gesture (browsers start it suspended). */
 export function unlockAudio(): void {
   const a = audio()
-  if (a && a.state === 'suspended') void a.resume()
+  if (!a) return
+  if (a.state === 'suspended') void a.resume().then(startMusic, () => {})
+  else startMusic()
 }

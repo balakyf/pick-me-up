@@ -1,0 +1,16 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   Fonts. Pixelify Sans sets every word; its numerals do not read at UI sizes
+   (5 looks like S, 2 like Z, so F15 reads F18 and CP 152 reads 182). The digits
+   0–9 alone come from Silkscreen, a pixel face with plain, open numerals, through
+   a unicode-range face that sits first in --font (ui.css). Canvas text uses the
+   same stack (canvasText.ts).
+   ═══════════════════════════════════════════════════════════════════════════ */
+@font-face {
+  font-family: 'PMU Digits';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 400;
+  src: url('@fontsource/silkscreen/files/silkscreen-latin-400-normal.woff2') format('woff2'),
+    url('@fontsource/silkscreen/files/silkscreen-latin-400-normal.woff') format('woff');
+  unicode-range: U+0030-0039;
+}

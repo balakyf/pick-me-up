@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { GameState, OwnedHero } from '../../engine/types'
 import type { Store } from '../../engine/store'
 import { synthesisUnlocked } from '../../engine/synthesis'
@@ -57,6 +57,9 @@ import { heroBustUrl, heroFrameCanvas, iselBustUrl, masterBustUrl, masterFrameCa
 import type { Dir, WalkFrame } from '../pixel/heroSprite'
 import { hashString } from '../pixel/rand'
 import { t, t as tr } from '../i18n/i18n'
+import { breakLigatures, canvasFont, plainText } from '../canvasText'
+import { withToasts } from '../qol/toastStore'
+import { placeBubble, shelterRects, toCanvasRect, type Rect } from './overlayLayout'
 
 /**
  * The waiting room as a walkable campus (Living Lobby spec §3). The Master walks with
@@ -261,9 +264,10 @@ const KEY_DIR: Record<string, Dir> = {
   d: 'right',
 }
 
-/** A speech bubble that wraps to up to three lines above a hero. */
-function drawBubble(ctx: CanvasRenderingContext2D, text: string, x: number, y: number): void {
-  ctx.font = '8px "Pixelify Sans", monospace'
+/** A speech bubble that wraps to up to three lines above a hero (kept on screen, clear of the HUD). */
+function drawBubble(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, hud: readonly Rect[] = [], VW = Infinity, VH = Infinity): void {
+  plainText(ctx, canvasFont(8))
+  text = breakLigatures(text)
   const maxW = 128
   const words = text.split(' ')
   const lines: string[] = []
@@ -282,11 +286,12 @@ function drawBubble(ctx: CanvasRenderingContext2D, text: string, x: number, y: n
   }
   const w = Math.min(maxW, Math.ceil(Math.max(...lines.map((l) => ctx.measureText(l).width))) + 8)
   const h = lines.length * 9 + 4
-  const bx = Math.round(x - w / 2)
-  const by = Math.round(y - h)
+  const at = placeBubble({ x: Math.round(x - w / 2), y: Math.round(y - h), w, h }, hud, VW, VH)
+  const bx = Math.round(at.x)
+  const by = Math.round(at.y)
   ctx.fillStyle = '#fff6e0'
   ctx.fillRect(bx, by, w, h)
-  ctx.fillRect(Math.round(x) - 1, by + h, 3, 2)
+  if (!at.moved) ctx.fillRect(Math.round(x) - 1, by + h, 3, 2)
   ctx.strokeStyle = '#1b1225'
   ctx.strokeRect(bx + 0.5, by + 0.5, w - 1, h - 1)
   ctx.fillStyle = '#1b1225'
@@ -456,6 +461,8 @@ export function LobbyWorld({
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const miniRef = useRef<HTMLCanvasElement>(null)
   const stageRef = useRef<HTMLDivElement>(null)
+  /** The store for the Master's one-click rewards and actions: each says what it did. */
+  const told = useMemo(() => withToasts(store), [store])
   const [vp, setVp] = useState<Viewport>({ w: VIEW_W, h: VIEW_H, zoom: 3 })
   const vpRef = useRef(vp)
   vpRef.current = vp
@@ -707,6 +714,17 @@ export function LobbyWorld({
     let raf = 0
     let last = performance.now()
     let miniAt = 0
+    // The HTML HUD's boxes in canvas pixels (bubbles keep clear of them), a few times a second.
+    let hudRects: Rect[] = []
+    let hudAt = -1000
+    const measureHud = (VW: number, VH: number): Rect[] => {
+      const stage = stageRef.current
+      if (!stage) return []
+      const c = cv.getBoundingClientRect()
+      return Array.from(stage.querySelectorAll('.hud-tl, .hud-tr, .hud-guide, .hud-follow, .hud-help, .hud-zoom, .hud-mini')).map((el) =>
+        toCanvasRect(el.getBoundingClientRect(), c, VW, VH),
+      )
+    }
 
     const step = (now: number) => {
       const dt = Math.min(0.05, (now - last) / 1000)
@@ -850,6 +868,10 @@ export function LobbyWorld({
         ctx.imageSmoothingEnabled = false
       }
       const { camX, camY } = cameraFor(focus.px, focus.py, VW, VH)
+      if (now - hudAt > 250) {
+        hudAt = now
+        hudRects = measureHud(VW, VH)
+      }
       const onScreen = (x: number, y: number, pad = 48) => x > camX - pad && x < camX + VW + pad && y > camY - pad && y < camY + VH + pad
       ctx.fillStyle = '#0a0710'
       ctx.fillRect(0, 0, VW, VH)
@@ -955,7 +977,7 @@ export function LobbyWorld({
               ctx.strokeStyle = '#f2c75c'
               ctx.strokeRect(Math.round(px - 7 - camX) + 0.5, Math.round(py - 1 - camY) + 0.5, 14, 4)
             }
-            if (hw.bubble) drawBubble(ctx, hw.bubble.text, px - camX, py - (hw.lying ? 20 : 36) - camY)
+            if (hw.bubble) drawBubble(ctx, hw.bubble.text, px - camX, py - (hw.lying ? 20 : 36) - camY, hudRects, VW, VH)
             else if (emote && Math.floor(w.time + hw.x) % 4 < 2) {
               const e = cachedCanvas(`emote|${emote}`, () => drawEmote(emote))
               if (e) ctx.drawImage(e, Math.round(px - 5 - camX), Math.round(py - (hw.lying ? 26 : 44) - camY))
@@ -1020,7 +1042,7 @@ export function LobbyWorld({
       // Markers over every unbuilt place: a hammer (build here), a padlock (not yet), an
       // hourglass (under way). Labels show once the Master is close enough to read them.
       const bob = Math.round(Math.sin(w.time * 3) * 1.5)
-      ctx.font = '8px "Pixelify Sans", monospace'
+      plainText(ctx, canvasFont(8))
       ctx.textAlign = 'center'
       for (const mk of siteMarkers(st)) {
         const mx = mk.x - camX
@@ -1030,12 +1052,14 @@ export function LobbyWorld({
         if (icon) ctx.drawImage(icon, Math.round(mx - 7), Math.round(my - 16))
         const near = Math.abs(mk.x / TILE - m.x) + Math.abs(mk.y / TILE - m.y) < 16
         if (near) {
-          const text = mk.text
+          const text = breakLigatures(mk.text)
           const tw = ctx.measureText(text).width
+          // The label keeps on screen and clear of the HUD (the help line, the minimap…).
+          const at = placeBubble({ x: Math.round(mx - tw / 2 - 3), y: Math.round(my - 28), w: Math.ceil(tw + 6), h: 10 }, hudRects, VW, VH)
           ctx.fillStyle = 'rgba(20,12,32,0.8)'
-          ctx.fillRect(Math.round(mx - tw / 2 - 3), Math.round(my - 28), Math.ceil(tw + 6), 10)
+          ctx.fillRect(at.x, at.y, at.w, at.h)
           ctx.fillStyle = mk.kind === 'build' ? '#ffe07a' : '#e8e0f0'
-          ctx.fillText(text, Math.round(mx), Math.round(my - 20))
+          ctx.fillText(text, Math.round(at.x + at.w / 2), Math.round(at.y + 8))
         }
       }
       ctx.textAlign = 'start'
@@ -1079,7 +1103,9 @@ export function LobbyWorld({
       }
 
       // the sky: weather, season, lantern light, fireflies
-      drawSky(ctx, st, toWorldTime(Date.now()), w.time, { camX, camY, VW, VH }, dark)
+      // Rain, snow and fog stay outdoors: not over a building whose roof is open.
+      const shelters = shelterRects(BUILDINGS, (id) => (inside?.id === id ? 0 : w.roofAlpha.get(id) ?? 1), TILE, ROOF_LIFT, camX, camY)
+      drawSky(ctx, st, toWorldTime(Date.now()), w.time, { camX, camY, VW, VH }, dark, shelters)
 
       // warm vignette
       const g = ctx.createRadialGradient(VW / 2, VH / 2, Math.min(VW, VH) * 0.45, VW / 2, VH / 2, Math.max(VW, VH) * 0.7)
@@ -1232,7 +1258,7 @@ export function LobbyWorld({
           </button>
         )}
         {!loginClaimed(state, toWorldTime(Date.now())) && (
-          <button className="pbtn gem" onClick={() => store.dispatch({ type: 'CLAIM_LOGIN' }, Date.now())} title="Daily login reward">
+          <button className="pbtn gem" onClick={() => told.dispatch({ type: 'CLAIM_LOGIN' }, Date.now())} title={t('Daily login reward')}>
             🎁 {t('Daily')}
           </button>
         )}
@@ -1312,7 +1338,7 @@ export function LobbyWorld({
       {adviceOpen && (
         <AdviceWindow
           state={state}
-          store={store}
+          store={told}
           tips={advice.tips}
           onDismiss={advice.dismiss}
           onProfile={(id) => setProfile(id)}

@@ -6,6 +6,7 @@
 import type { GameState, OwnedHero } from '../../engine/types'
 import { hashString } from '../pixel/rand'
 import { t } from '../i18n/i18n'
+import { ta } from '../text'
 
 const COMMONER_JOBS = ['farmer', 'carpenter', 'baker', 'fisher', 'weaver', 'shepherd', 'miller', 'tanner']
 
@@ -32,12 +33,12 @@ export function heroLines(hero: OwnedHero, inParty: boolean): string[] {
   else if (hero.xp.atCap) mood = t('I’ve hit a wall, Master. Something in the Promotion Chamber could break it.')
   else if (inParty) mood = t('Party’s ready. Say the word and we climb.')
   else if (hero.heroClass === null && hero.star <= 1)
-    mood = t('I was a {job} back home. Why was I the one summoned?', { job: t(pick(COMMONER_JOBS, hero.id)) })
+    mood = ta('I was a {job} back home. Why was I the one summoned?', { job: t(pick(COMMONER_JOBS, hero.id)) })
   else if (hero.heroClass === null) mood = t('Coin is coin. Point me at something and I’ll hit it.')
   else mood = t(pick(CLASS_LINES[hero.heroClass]!, hero.id))
 
-  const cls = t(hero.heroClass ? hero.heroClass[0]!.toUpperCase() + hero.heroClass.slice(1) : 'Classless')
-  const status = `${first} · ${hero.star}★ ${cls} · Lv ${hero.xp.level} · ${t('Sanity')} ${hero.sanity}/100`
+  const cls = t(hero.heroClass ? hero.heroClass[0]!.toUpperCase() + hero.heroClass.slice(1) : 'Untrained')
+  const status = `${first} · ${hero.star}★ ${cls} · Lv ${hero.xp.level} · ${t('Sanity')} ${Math.round(hero.sanity)}/100`
   return [mood, status]
 }
 

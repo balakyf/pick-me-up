@@ -178,7 +178,7 @@ function makeItem(state: GameState, slot: EquipmentSlot, grade: EquipmentGrade):
 /** The Mimic: one chest-bound brute a little below the floor's own enemies. */
 export function buildMimic(floor: number, worldMult: number): CombatUnit {
   const level = Math.max(1, Math.round(mobLevel(floor, worldMult) * R.mimicLevelShare))
-  return { ...buildEnemyUnit(ENEMY_TEMPLATES.ogre_brute!, level, `mimic_${floor}`, { targetTag: 'mimic' }), name: 'Mimic' }
+  return buildEnemyUnit(ENEMY_TEMPLATES.mimic!, level, `mimic_${floor}`, { targetTag: 'mimic' })
 }
 
 /**

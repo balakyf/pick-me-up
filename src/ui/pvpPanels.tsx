@@ -19,6 +19,7 @@ import {
 import { BattleScene } from './battle/BattleScene'
 import { Portrait } from './bits'
 import { t } from './i18n/i18n'
+import { HeroTag, pickerName } from './hero/heroLabel'
 
 const P = TUNING.pvp
 
@@ -112,7 +113,7 @@ export function PvpPanel({ state, store }: { state: GameState; store: Store }) {
       </div>
       <div className="ta-row">
         <span>{t('Protection shield')}</span>
-        <span className="ta-val">{shielded ? worldTimeLeft(state.pvp.shieldUntil - nowWorld) : 'down — raiders can come'}</span>
+        <span className="ta-val">{shielded ? worldTimeLeft(state.pvp.shieldUntil - nowWorld) : t('down — raiders can come')}</span>
       </div>
       <div className="syn-modes">
         {(['raid', 'defense', 'captives', 'log'] as const).map((tb) => (
@@ -156,8 +157,7 @@ export function PvpPanel({ state, store }: { state: GameState; store: Store }) {
       {tab === 'defense' && (
         <div>
           <div className="muted" style={{ fontSize: 13 }}>
-            While you are away, this roster defends the lobby. Below Lv{P.protectionLevel} a fallen defender is scarred; at Lv
-            {P.protectionLevel}+ they can be carried off.
+            {t('While you are away, this roster defends the lobby. Below Lv{n} a fallen defender is scarred; at Lv{n}+ they can be carried off.', { n: P.protectionLevel })}
           </div>
           <div className="syn-row">
             {living
@@ -183,7 +183,7 @@ export function PvpPanel({ state, store }: { state: GameState; store: Store }) {
                   >
                     <Portrait hero={h} size="sm" />
                     <span className="syn-chip-name">
-                      {h.name.split(/\s+/)[0]} <span className="muted">{t('Lv{level}', { level: h.xp.level })}</span>
+                      {pickerName(state, h)} <HeroTag hero={h} />
                     </span>
                   </button>
                 )

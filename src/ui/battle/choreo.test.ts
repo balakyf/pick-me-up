@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { CombatEvent, CombatUnitInit } from '../../engine/types'
-import { attackStyle, choreograph, popupOffsets } from './choreo'
+import { attackStyle, choreograph, popupLanes } from './choreo'
 
 const unit = (id: string, side: 'hero' | 'enemy', extra: Partial<CombatUnitInit> = {}): CombatUnitInit => ({
   id,
@@ -62,6 +62,32 @@ describe('battle choreography', () => {
   })
 
   it('damage numbers on the same target stack; the newest sits lowest', () => {
-    expect(popupOffsets([{ target: 'a' }, { target: 'b' }, { target: 'a' }])).toEqual([1, 0, 0])
+    const box = { x: 100, y: 120, w: 24, h: 12 }
+    const lifts = popupLanes([box, box, box])
+    expect(lifts[2]).toBe(0)
+    expect(lifts[1]).toBeGreaterThanOrEqual(12)
+    expect(lifts[0]).toBeGreaterThanOrEqual(lifts[1]! + 12)
+  })
+
+  it('numbers over neighbouring units never overlap; distant ones stay put', () => {
+    const crit = { x: 100, y: 120, w: 44, h: 26 }
+    const hit = { x: 124, y: 122, w: 28, h: 12 }
+    const [a, b] = popupLanes([crit, hit])
+    const top = (p: typeof crit, lift: number) => p.y - lift
+    // The older crit rises clear of the newer hit's box.
+    expect(top(crit, a!) + crit.h).toBeLessThanOrEqual(top(hit, b!))
+    expect(b).toBe(0)
+    expect(popupLanes([{ x: 40, y: 120, w: 30, h: 12 }, { x: 200, y: 120, w: 30, h: 12 }])).toEqual([0, 0])
+  })
+
+  it('a follow-up is the friend striking: an archer friend looses an arrow at the target', () => {
+    const pos = { h1: { x: 250, y: 160 }, h2: { x: 300, y: 170 }, e1: { x: 120, y: 160 } }
+    const byId = { h1: unit('h1', 'hero'), h2: unit('h2', 'hero', { unitClass: 'archer' }), e1: unit('e1', 'enemy') }
+    const e: CombatEvent = { seq: 9, tick: 4, kind: 'followup', unitId: 'h2', allyId: 'h1', targetId: 'e1' }
+    const { poses, shot } = choreograph(e, pos, byId, 'arrow', () => 24, () => 32, 'wind')
+    expect(poses.h2).toBeDefined()
+    expect(poses.h1).toBeUndefined()
+    expect(shot?.style).toBe('arrow')
+    expect(shot?.element).toBe('wind')
   })
 })

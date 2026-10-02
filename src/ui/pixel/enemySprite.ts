@@ -172,6 +172,54 @@ function ogre(): Bitmap {
   return outline(b, INK)
 }
 
+/** The Mimic: a treasure chest with a mouth — teeth along the lid, a lolling tongue, eyes in the dark. */
+function mimic(): Bitmap {
+  const b = createBitmap(36, 32)
+  const MAW = hex('#2a0e18')
+  const TONGUE = ramp('#7a1a2e', '#c8405a', '#f07a8e')
+  // the lid, thrown back
+  roundRect(b, 3, 1, 30, 9, WOOD.m)
+  hline(b, 4, 1, 28, WOOD.l)
+  hline(b, 3, 9, 30, WOOD.d)
+  vline(b, 9, 1, 9, GOLD.m)
+  vline(b, 26, 1, 9, GOLD.m)
+  // the maw
+  rect(b, 5, 10, 26, 9, MAW)
+  // eyes in the dark
+  rect(b, 11, 12, 2, 2, RED_EYE)
+  rect(b, 23, 12, 2, 2, RED_EYE)
+  // the chest body
+  rect(b, 3, 19, 30, 10, WOOD.m)
+  hline(b, 3, 19, 30, WOOD.l)
+  hline(b, 3, 28, 30, WOOD.d)
+  vline(b, 9, 19, 10, GOLD.m)
+  vline(b, 26, 19, 10, GOLD.m)
+  // the lock plate
+  rect(b, 16, 21, 4, 5, GOLD.l)
+  set(b, 17, 23, INK)
+  set(b, 18, 23, INK)
+  // teeth: down from the lid, up from the rim
+  for (let x = 6; x <= 29; x += 3) {
+    set(b, x, 10, BONE.l)
+    set(b, x + 1, 10, BONE.l)
+    set(b, x, 11, BONE.m)
+  }
+  for (let x = 7; x <= 29; x += 3) {
+    set(b, x, 18, BONE.l)
+    set(b, x + 1, 18, BONE.l)
+    set(b, x, 17, BONE.m)
+  }
+  // the tongue, lolling out over the front toward the party
+  rect(b, 20, 16, 8, 3, TONGUE.m)
+  rect(b, 26, 18, 4, 6, TONGUE.m)
+  hline(b, 21, 16, 6, TONGUE.l)
+  vline(b, 29, 19, 4, TONGUE.d)
+  // stubby feet
+  rect(b, 5, 29, 4, 2, WOOD.d)
+  rect(b, 27, 29, 4, 2, WOOD.d)
+  return outline(b, INK)
+}
+
 function lv999(): Bitmap {
   const b = createBitmap(60, 60)
   const flesh = ramp('#1a0a24', '#3a1a4e', '#6a3a8e')
@@ -434,6 +482,7 @@ const DRAWERS: Record<string, () => Bitmap> = {
       }),
     ),
   ogre_brute: ogre,
+  mimic,
   dark_mage: () =>
     humanoid(
       baseLook({

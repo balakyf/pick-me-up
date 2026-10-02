@@ -1,9 +1,10 @@
 /**
  * The summon reveal: one hero at a time. The circle wakes, a pillar of light rises in
- * the rarity's colour (4★+ start as a lower colour and surge — the tease), a burst, and
- * the card turns over. Click / Space / Enter advances; Skip (or Esc) jumps to the
- * lineup; "Skip to best" stops on the next 4★+. It ends on a lineup of everyone new,
- * best first, with the ways onward (Party Board, Registry, summon again).
+ * the rarity's colour (a rare pull starts one colour humbler and surges — the tease), a
+ * burst, and the card turns over. "Rare" is relative to the pool: 4★+ on the Advanced
+ * pool, the 3★ jackpot on the Normal one. Click / Space / Enter advances; Skip (or Esc)
+ * jumps to the lineup; "Skip to best" stops on the next rare pull. It ends on a lineup of
+ * everyone new, best first, with the ways onward (Party Board, Registry, summon again).
  *
  * Cosmetic only: the SUMMON command has already resolved and saved before this mounts.
  */
@@ -18,7 +19,9 @@ import { drawSummonCircle } from '../pixel/summonFx'
 import { drawProp } from '../pixel/props'
 import { scale } from '../pixel/bitmap'
 import { t } from '../i18n/i18n'
-import { TIER_TINT, beamSteps, flipAt, lineupOrder, moteCount, motePlacement, nextBestIndex, surgeTimes, tierOf, type Tier } from './revealPlan'
+import { bornTrade } from '../hero/heroLabel'
+import { TIER_TINT, beamSteps, flipAt, lineupOrder, moteCount, motePlacement, nextBestIndex, rareAtFor, rarityWordKey, surgeTimes, tierOf, type Tier } from './revealPlan'
+import './summon.css'
 
 export interface RevealAgain {
   label: string
@@ -29,6 +32,8 @@ export interface RevealAgain {
 interface Props {
   heroes: OwnedHero[]
   masterLevel: number
+  /** The pool pulled from: its top is its jackpot (the Normal pool's 3★ gets the tease). */
+  pool?: 'normal' | 'advanced'
   /** Back to the summon screen. */
   onClose: () => void
   /** Leave for another scene (the lineup's Party Board / Registry buttons). */
@@ -56,22 +61,25 @@ function vars(v: Record<string, string>): CSSProperties {
   return v as CSSProperties
 }
 
-export function SummonReveal({ heroes, masterLevel, onClose, onNavigate, again }: Props) {
+export function SummonReveal({ heroes, masterLevel, pool = 'advanced', onClose, onNavigate, again }: Props) {
   const reduced = useMemo(prefersReducedMotion, [])
+  const rareAt = rareAtFor(pool)
   const stars = useMemo(() => heroes.map((h) => shownStar(h, masterLevel)), [heroes, masterLevel])
   const [idx, setIdx] = useState(0)
   const [phase, setPhase] = useState<Phase>('beam')
   const [step, setStep] = useState(0)
 
   const star = stars[idx] ?? 1
-  const steps = beamSteps(star, reduced)
-  const tier: Tier = steps[Math.min(step, steps.length - 1)]!
+  const steps = beamSteps(star, reduced, rareAt)
+  // While the beam rises it may still be teasing; once the card turns, it shows the truth
+  // (a click that skips the beam must not leave a 4★ card in the 3★ blue).
+  const tier: Tier = phase === 'card' ? tierOf(star) : steps[Math.min(step, steps.length - 1)]!
 
   const flip = useCallback(() => {
     setPhase('card')
-    const top = tierOf(stars[idx] ?? 1)
-    sfx(top >= 5 ? 'legend' : top === 4 ? 'rare' : top === 3 ? 'levelup' : 'flip')
-  }, [idx, stars])
+    const s = stars[idx] ?? 1
+    sfx(s >= 5 ? 'legend' : s >= rareAt ? 'rare' : s === 3 ? 'levelup' : 'flip')
+  }, [idx, stars, rareAt])
 
   // One hero's beat: charge → (surges) → burst → flip.
   useEffect(() => {
@@ -79,15 +87,15 @@ export function SummonReveal({ heroes, masterLevel, onClose, onNavigate, again }
     setStep(0)
     sfx('charge')
     const s = stars[idx] ?? 1
-    const timers = surgeTimes(s, reduced).map((at, i) =>
+    const timers = surgeTimes(s, reduced, rareAt).map((at, i) =>
       setTimeout(() => {
         setStep(i + 1)
         sfx('surge')
       }, at),
     )
-    timers.push(setTimeout(flip, flipAt(s, reduced)))
+    timers.push(setTimeout(flip, flipAt(s, reduced, rareAt)))
     return () => timers.forEach(clearTimeout)
-  }, [idx, phase, stars, reduced, flip])
+  }, [idx, phase, stars, reduced, flip, rareAt])
 
   const advance = useCallback(() => {
     if (phase === 'beam') flip()
@@ -103,14 +111,14 @@ export function SummonReveal({ heroes, masterLevel, onClose, onNavigate, again }
   const skipAll = useCallback(() => setPhase('lineup'), [])
 
   const skipToBest = useCallback(() => {
-    const best = nextBestIndex(stars, phase === 'card' ? idx + 1 : idx)
+    const best = nextBestIndex(stars, phase === 'card' ? idx + 1 : idx, rareAt)
     if (best < 0) setPhase('lineup')
     else if (best !== idx || phase !== 'beam') {
       setIdx(best)
       setStep(0)
       setPhase('beam')
     }
-  }, [stars, phase, idx])
+  }, [stars, phase, idx, rareAt])
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -130,7 +138,7 @@ export function SummonReveal({ heroes, masterLevel, onClose, onNavigate, again }
     return () => window.removeEventListener('keydown', onKey)
   }, [phase, advance, skipAll, onClose])
 
-  const hasBestAhead = nextBestIndex(stars, phase === 'card' ? idx + 1 : idx) >= 0
+  const hasBestAhead = nextBestIndex(stars, phase === 'card' ? idx + 1 : idx, rareAt) >= 0
   // Buttons must not keep focus, or Space would press them instead of advancing.
   const press = (fn: () => void) => (e: ReactMouseEvent<HTMLButtonElement>) => {
     e.stopPropagation()
@@ -141,7 +149,7 @@ export function SummonReveal({ heroes, masterLevel, onClose, onNavigate, again }
   if (phase === 'lineup') {
     return (
       <div className={`sr ${reduced ? 'sr-calm' : ''}`} role="dialog" aria-label={t('Your new heroes')}>
-        <Lineup heroes={heroes} stars={stars} onClose={onClose} onNavigate={onNavigate} again={again} press={press} />
+        <Lineup heroes={heroes} stars={stars} rareAt={rareAt} onClose={onClose} onNavigate={onNavigate} again={again} press={press} />
       </div>
     )
   }
@@ -179,7 +187,7 @@ export function SummonReveal({ heroes, masterLevel, onClose, onNavigate, again }
             <div key={`flash${idx}`} className="sr-flash" />
             <div key={`ring${idx}`} className="sr-ring" />
             <Motes key={`burst${idx}`} tier={tierOf(star)} reduced={reduced} burst />
-            <RevealCard key={`card${idx}`} hero={hero} star={star as Star} />
+            <RevealCard key={`card${idx}`} hero={hero} star={star as Star} rareAt={rareAt} />
           </>
         )}
       </div>
@@ -208,7 +216,7 @@ function Motes({ tier, reduced, burst = false }: { tier: Tier; reduced: boolean;
     <div className={`sr-motes ${burst ? 'sr-burst' : ''}`} aria-hidden>
       {Array.from({ length: n }, (_, i) => {
         const p = motePlacement(i)
-        const color = tier === 5 ? ['#ff6b6b', '#f2c75c', '#6be29a', '#4aa3ff', '#b07adb', '#fff6e0'][i % 6]! : TIER_TINT[tier]
+        const color = tier === 5 ? ['#f2c75c', '#fff6e0', '#ffd98a'][i % 3]! : TIER_TINT[tier]
         return (
           <span
             key={i}
@@ -227,16 +235,11 @@ function Motes({ tier, reduced, burst = false }: { tier: Tier; reduced: boolean;
   )
 }
 
-function rarityWord(star: number): string | null {
-  if (star >= 5) return t('Legendary!')
-  if (star === 4) return t('Rare!')
-  return null
-}
-
-function RevealCard({ hero, star }: { hero: OwnedHero; star: Star }) {
+function RevealCard({ hero, star, rareAt }: { hero: OwnedHero; star: Star; rareAt: number }) {
   const bust = heroBustUrl(hero)
   const walk = heroFrameUrl(hero, 'down', 0)
-  const word = rarityWord(star)
+  const key = rarityWordKey(star, rareAt)
+  const word = key ? t(key) : null
   const el = ELEMENT_VIS[hero.element].color
   return (
     <div className={`sr-card sr-c${tierOf(star)}`} onClick={(e) => e.stopPropagation()}>
@@ -251,7 +254,7 @@ function RevealCard({ hero, star }: { hero: OwnedHero; star: Star }) {
           <Stars star={star} />
         </div>
         <div className="hmeta sr-meta">
-          <ClassBadge heroClass={hero.heroClass} />
+          <ClassBadge heroClass={hero.heroClass} trade={bornTrade(hero)} />
           <ElementBadge element={hero.element} />
         </div>
       </div>
@@ -262,6 +265,7 @@ function RevealCard({ hero, star }: { hero: OwnedHero; star: Star }) {
 function Lineup({
   heroes,
   stars,
+  rareAt,
   onClose,
   onNavigate,
   again,
@@ -269,6 +273,7 @@ function Lineup({
 }: {
   heroes: OwnedHero[]
   stars: number[]
+  rareAt: number
   onClose: () => void
   onNavigate?: (view: 'party' | 'roster') => void
   again?: RevealAgain
@@ -284,7 +289,7 @@ function Lineup({
           const h = heroes[i]!
           const s = stars[i]! as Star
           const bust = heroBustUrl(h)
-          const isBest = i === best && (heroes.length > 1 || s >= 4)
+          const isBest = i === best && (heroes.length > 1 || s >= rareAt)
           return (
             <div
               key={h.id}

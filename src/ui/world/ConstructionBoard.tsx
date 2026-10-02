@@ -6,8 +6,9 @@ import { toWorldTime } from '../../engine/time'
 import { masterXpToNext } from '../../engine/master'
 import { canUpgrade } from '../../engine/facilities'
 import { PixelWindow } from '../kit'
-import { timeLeft } from '../facilityPanels'
+import { timeLeft } from '../facilities/shared'
 import { t } from '../i18n/i18n'
+import { withToasts } from '../qol/toastStore'
 import { allSites, type Site, type SiteStatus } from './sites'
 import { PLACE_ICON } from './LobbyWorld'
 import type { PlaceId } from './lobbyMap'
@@ -39,7 +40,7 @@ export function ConstructionBoard({
   function build(s: Site) {
     setErr(null)
     try {
-      store.dispatch({ type: 'UPGRADE_FACILITY', facility: s.facility }, Date.now())
+      withToasts(store).dispatch({ type: 'UPGRADE_FACILITY', facility: s.facility }, Date.now())
     } catch (e) {
       setErr(t(e instanceof Error ? e.message : 'Action failed'))
     }

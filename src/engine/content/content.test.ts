@@ -204,6 +204,15 @@ describe('ENEMY_TEMPLATES', () => {
     expect(enrage).toEqual({ kind: 'enrage', afterTick: 300, multiplier: 5 })
   })
 
+  it('the Lv999 Creature shows as Lv999 whatever level it is fielded at', () => {
+    expect(ENEMY_TEMPLATES.lv999_creature!.displayLevel).toBe(999)
+  })
+
+  it('the Mimic has its own template with the ogre statline it used to borrow', () => {
+    expect(ENEMY_TEMPLATES.mimic!.name).toBe('Mimic')
+    expect(ENEMY_TEMPLATES.mimic!.attrMult).toEqual(ENEMY_TEMPLATES.ogre_brute!.attrMult)
+  })
+
   it('goblin is low across the board; ogre_brute is a high VIT+STR tank', () => {
     const gob = ENEMY_TEMPLATES.goblin
     for (const k of ATTR_KEYS) expect(gob.attrMult[k]).toBeLessThan(1)
