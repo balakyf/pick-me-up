@@ -226,7 +226,10 @@ function invasion(state: GameState, day: number, nowWorld: number): GameState {
   const cp = Math.max(100, cpOf(defense)) * (lo + ratio.value * (hi - lo)) * (raider.whale ? P.whaleCpMult : 1)
   const attackers = ghostParty(state, raider, Math.max(3, defense.length), cp, `inv${day}`)
   const now = day * WORLD_DAY_MS
-  const shieldUntil = now + P.shieldMs
+  // B40: the shield runs from the END of the invasion's day, so the whole next world-day is
+  // protected (from its start it reached only the next day's first instant, protecting
+  // nothing: resolveInvasions skips a day only when it starts before shieldUntil).
+  const shieldUntil = now + WORLD_DAY_MS + P.shieldMs
 
   const res = defense.length > 0 ? runBattle(defense, encounterOf(attackers, raider.floor), hash(state.seed, 'invasion', day)) : null
   if (res !== null && res.outcome === 'win') {

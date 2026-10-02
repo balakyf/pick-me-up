@@ -645,15 +645,14 @@ export function playFloor(
   if (found.length > 0) nextTower.hiddenFound = [...nextTower.hiddenFound, ...found.map((h) => h.id)].sort()
 
   // ── 6c. Event floors: a bonus after an anchor's first clear, the tournament after
-  //        F41, a recovery event after a battle that cost the main team (§5.1). ─────
-  let event: TowerEvent | null = null
-  const E = TUNING.events
-  if (fallenSet.size >= E.recoveryDeaths) event = { kind: 'recovery', floor, options: ['reinforcement', 'rest'] }
-  else if (firstClear && floor === 41) event = { kind: 'tournament', floor, options: [...TOURNAMENT_FORMATS] }
-  else if (firstClear && floor % 5 === 0 && floor < T.sliceTopFloor) {
-    event = { kind: 'bonus', floor, options: ['rest', 'treasure', 'merchant', 'gamble'] }
-  }
+  //        F41, a recovery event after a battle that cost the main team (§5.1). They
+  //        queue rather than erase each other (B19): the recovery comes first, then the
+  //        tournament or the anchor's bonus. ─────
+  const events = eventsAfter(floor, firstClear, fallenSet.size)
+  const event: TowerEvent | null = events[0] ?? null
   nextTower.event = event
+  if (events.length > 1) nextTower.eventQueue = events.slice(1)
+  else delete nextTower.eventQueue
 
   // ── 6d. The world ends on the first clear of F90 (canon). ────────────────────
   const atEnd = cleared && floor === T.worldEndFloor && !state.tower.worldEnded && !state.tower.worldSaved
@@ -710,6 +709,22 @@ export function playFloor(
 
 /** The five canon tournament formats (F41/42). */
 export const TOURNAMENT_FORMATS = ['battle_royale', 'party_raid', 'team', 'pair', 'deathmatch'] as const
+
+/**
+ * The event floors an attempt opens, in the order the Master meets them (B19). A battle
+ * that cost the main team opens the recovery first; the F41 tournament or an anchor's
+ * bonus waits behind it instead of being lost forever. The first clear of F90 (the world
+ * just ended) opens no cheerful "quiet floor". PURE.
+ */
+export function eventsAfter(floor: number, firstClear: boolean, fallen: number): TowerEvent[] {
+  const out: TowerEvent[] = []
+  if (fallen >= TUNING.events.recoveryDeaths) out.push({ kind: 'recovery', floor, options: ['reinforcement', 'rest'] })
+  if (firstClear && floor === 41) out.push({ kind: 'tournament', floor, options: [...TOURNAMENT_FORMATS] })
+  else if (firstClear && floor % 5 === 0 && floor < T.sliceTopFloor && floor !== T.worldEndFloor) {
+    out.push({ kind: 'bonus', floor, options: ['rest', 'treasure', 'merchant', 'gamble'] })
+  }
+  return out
+}
 
 /**
  * The tower after one attempt. A clear advances one floor; a failure retries the same

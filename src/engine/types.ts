@@ -647,6 +647,9 @@ export interface TowerState {
   attemptIndex: number
   /** An open event floor (bonus / recovery / tournament); the climb waits on it (schema v7). */
   event: TowerEvent | null
+  /** Event floors waiting behind the open one (B19: a heavy-loss first clear of F41 opens
+   *  the recovery first, then the tournament — neither is lost). Absent = none. */
+  eventQueue?: TowerEvent[]
   /** The F36–40 looped mission, while inside it. */
   loop: LoopState | null
   /** Hidden objectives found so far (sorted ids). */

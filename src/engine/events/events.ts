@@ -282,5 +282,10 @@ export function resolveEvent(state: GameState, option: string): { state: GameSta
 
   if (option !== 'merchant') next = { ...next, gold: next.gold + outcome.gold }
   next = { ...addMaterials(next, outcome.materials), gems: next.gems + outcome.gems }
-  return { state: { ...next, tower: { ...next.tower, event: null } }, outcome }
+  // The next queued event floor (if any) opens as this one closes (B19).
+  const [queued, ...rest] = next.tower.eventQueue ?? []
+  const tower = { ...next.tower, event: queued ?? null }
+  if (rest.length > 0) tower.eventQueue = rest
+  else delete tower.eventQueue
+  return { state: { ...next, tower }, outcome }
 }
