@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { favorTier, favorStatMult, giftPreferences, giftDelta, giveGift, withFavor, rebellionChance, isDefiant, GIFTS, shiftFavor } from './favor'
+import { favorTier, favorStatMult, giftPreferences, giftDelta, giftRepeats, giveGift, withFavor, rebellionChance, isDefiant, GIFTS, shiftFavor } from './favor'
 import { createAccount } from '../account'
 import { buildCombatUnit } from '../unit'
 import { banquet } from '../kitchen'
@@ -74,6 +74,47 @@ describe('gifts', () => {
     expect(gains[1]).toBeLessThan(gains[0]!)
     expect(gains[3]).toBe(-F.sourLoss)
     expect(s.gold).toBe(state.gold - liked.gold * 4)
+  })
+
+  it('alternating two gifts no longer resets the decay (B47)', () => {
+    const { state, id } = withHero()
+    const pref = giftPreferences(id)
+    const pickNeutral = (not: string) =>
+      Object.values(GIFTS).find((g) => g.gems === 0 && g.category !== pref.liked && g.category !== pref.disliked && g.id !== not)!
+    const a = pickNeutral('')
+    const b = pickNeutral(a.id)
+    let s = state
+    const gains: number[] = []
+    for (const g of [a, b, a, b, a, b, a]) {
+      const before = s.heroes[id]!.favor
+      s = giveGift(s, id, g.id)
+      gains.push(s.heroes[id]!.favor - before)
+    }
+    // First of each: full value; second of each (A·B·A·B): halved — not reset.
+    expect(gains[0]).toBe(a.favor)
+    expect(gains[1]).toBe(b.favor)
+    expect(gains[2]).toBe(Math.round(a.favor * F.repeatDecay))
+    expect(gains[3]).toBe(Math.round(b.favor * F.repeatDecay))
+    // Third of A: two in the window, quartered — and it stays there while the pair alternates.
+    expect(gains[4]).toBe(Math.round(a.favor * F.repeatDecay * F.repeatDecay))
+    expect(gains[6]).toBe(Math.round(a.favor * F.repeatDecay * F.repeatDecay))
+    expect(giftRepeats(s.heroes[id]!, a.id)).toBe(3)
+    expect(s.heroes[id]!.gift.recent!.length).toBeLessThanOrEqual(F.repeatWindow)
+  })
+
+  it('variety heals: a gift falls out of the window after enough others', () => {
+    const { state, id } = withHero()
+    const free = Object.values(GIFTS).filter((g) => g.gems === 0)
+    let s = giveGift(state, id, free[0]!.id)
+    for (let i = 0; i < F.repeatWindow; i++) s = giveGift(s, id, free[1 + (i % (free.length - 1))]!.id)
+    expect(giftRepeats(s.heroes[id]!, free[0]!.id)).toBe(0)
+  })
+
+  it('an older save (streak only, no recent list) still counts its streak', () => {
+    const { state, id } = withHero()
+    const h = { ...state.heroes[id]!, gift: { last: 'honey_cake', streak: 2 } }
+    expect(giftRepeats(h, 'honey_cake')).toBe(2)
+    expect(giftRepeats(h, 'old_tome')).toBe(0)
   })
 
   it('high-rank gifts cost gems and are refused without them', () => {

@@ -324,7 +324,14 @@ export interface OwnedHero extends Omit<Hero, 'skillIds'> {
   /** Intervention Points (Layer 3 §D2). */
   ip: number
   /** The last gift given and how many times in a row (repeat gifts decay). */
-  gift: { last: string | null; streak: number }
+  gift: {
+    last: string | null
+    streak: number
+    /** The latest gifts, oldest first (at most TUNING.favor.repeatWindow): repeats are
+     *  counted here, so alternating two gifts no longer resets the decay. Absent on older
+     *  saves (read through favor.recentGifts). */
+    recent?: string[]
+  }
   /** Whale-bait inflation: the star the summon SHOWED (engine always uses `star`). */
   displayStar?: Star
   /** Guarantee an action: the next tower battle's first strike lands ×2. */
