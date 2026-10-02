@@ -4,7 +4,7 @@
  * picker tags and the strings newly wrapped in t(). Keys are the English source strings
  * exactly as passed to `t()` / `ta()` / `tn()`; placeholders must match.
  */
-export const FR_FOUNDATION: Record<string, string> = {
+export const FR_FOUNDATION_UI: Record<string, string> = {
   // ── App shell, windows, toasts ─────────────────────────────────────────────
   'Chiptune sound effects and music': 'Effets sonores et musique chiptune',
   'Language / Langue': 'Langue / Language',

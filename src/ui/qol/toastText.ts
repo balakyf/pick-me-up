@@ -39,7 +39,9 @@ export function describeCommand(before: GameState, after: GameState, cmd: Comman
   switch (cmd.type) {
     case 'CLAIM_LOGIN': {
       const streak = after.meta.login?.streak ?? 0
-      const purse = purseDelta(before, after)
+      // The login pays gems only; gold that time paid on the same dispatch (a job's wage
+      // landing at a slot boundary) is not the Daily's to claim.
+      const purse = purseDelta(before, { ...after, gold: before.gold })
       return {
         icon: '🎁',
         text:

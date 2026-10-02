@@ -12,7 +12,7 @@ import { FR_COMBAT_DEPTH } from './frCombatDepth'
 import { FR_CHALLENGE } from './frChallenge'
 import { FR_ESTATE } from './frEstate'
 import { FR_ADVICE } from './frAdvice'
-import { FR_FOUNDATION } from './frFoundation'
+import { FR_FOUNDATION_UI } from './frFoundationUi'
 
 const FR_UI: Record<string, string> = {
   // ── App shell & menus ──────────────────────────────────────────────────────
@@ -512,4 +512,4 @@ const FR_UI: Record<string, string> = {
   'Unequip failed': 'Échec du retrait',
 }
 
-export const FR: Record<string, string> = { ...FR_CONTENT, ...FR_LIFE, ...FR_UI, ...FR_BUILD, ...FR_QOL, ...FR_SUMMON, ...FR_BATTLE_FX, ...FR_COMBAT_DEPTH, ...FR_CHALLENGE, ...FR_ESTATE, ...FR_ADVICE, ...FR_FOUNDATION }
+export const FR: Record<string, string> = { ...FR_CONTENT, ...FR_LIFE, ...FR_UI, ...FR_BUILD, ...FR_QOL, ...FR_SUMMON, ...FR_BATTLE_FX, ...FR_COMBAT_DEPTH, ...FR_CHALLENGE, ...FR_ESTATE, ...FR_ADVICE, ...FR_FOUNDATION_UI }

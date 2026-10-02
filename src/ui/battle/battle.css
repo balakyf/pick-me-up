@@ -118,7 +118,12 @@
 /* Small screens (moved from ui.css) */
 @media (max-width: 640px) {
   .battle-windows { flex-direction: column; }
-  .party-row { grid-template-columns: 24px 1fr auto 100px; font-size: 14px; }
+  /* The plain digits are wider than Pixelify's: the HP column grows so the bar keeps a
+     readable length next to "3347/3347" (it shrank to a 9px sliver at 390px). */
+  .party-row { grid-template-columns: 24px minmax(0, 1fr) auto 132px; font-size: 14px; }
+  .party-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .party-hp .gauge { min-width: 30px; }
+  .party-hpnum { font-size: 12px; min-width: 0; }
 }
 
 /* ── Battle: orders, the death moment, juice; the scouting report ───────────── */
@@ -283,5 +288,7 @@ kbd.bkey {
 .battle.beside .battle-foes.many { grid-template-columns: 1fr; max-height: 120px; }
 /* A trial is an echo: a hero who drops kneels, faded, but is no corpse. */
 .battle.trial .bunit.hero.ko .bsprite { transform: none; filter: saturate(0.3) brightness(0.8); opacity: 0.5; }
+/* …and the party window greys them out instead of listing them in the colour of the dead. */
+.battle.trial .party-row.dead { color: var(--ink-dim); }
 .battle-banner.trial-end { color: var(--accent-2); }
 .banner-sub { display: block; margin-top: 2px; font-size: 10px; letter-spacing: 2px; color: var(--ink); }

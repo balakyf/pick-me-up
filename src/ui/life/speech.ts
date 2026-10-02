@@ -666,10 +666,17 @@ const LAST_WORDS: ByVoice = {
  * A fallen hero's last words — the same every time they are remembered. With `taken`
  * (the words already spoken by others who fell beside them), the pick moves on through
  * the hero's own lines, deterministically, so two heroes never share their last words.
+ * Without it, a hero whose grave stands in a row (same floor, day and cause) gets the
+ * words the row assigns them, so the Memorial never repeats a line within a row and
+ * agrees with the battle they fell in.
  */
 export function lastWords(state: GameState, rec: Pick<FallenRecord, 'heroId' | 'name'>, taken?: Set<string>): string {
   const hero = state.heroes[rec.heroId]
   if (!hero) return t('…')
+  if (!taken) {
+    const row = graveRow(state, rec.heroId)
+    if (row.length > 1) return lastWordsTogether(state, row).get(rec.heroId) ?? t('…')
+  }
   const p = personalityOf(hero)
   const { friend } = bondsOf(state, rec.heroId)
   const pool = [...(LAST_WORDS[p.voice] ?? []), ...(LAST_WORDS.any ?? [])].filter((s) => friend || !s.includes('{friend}'))
@@ -683,6 +690,13 @@ export function lastWords(state: GameState, rec: Pick<FallenRecord, 'heroId' | '
     }
   }
   return t(pool[start]!, vars)
+}
+
+/** The graves that fell with this hero (same floor, world-day and cause), theirs included. */
+function graveRow(state: GameState, heroId: HeroId): FallenRecord[] {
+  const grave = state.life.memorial.find((g) => g.heroId === heroId)
+  if (!grave) return []
+  return state.life.memorial.filter((g) => g.floor === grave.floor && g.day === grave.day && g.cause === grave.cause)
 }
 
 /**

@@ -16,6 +16,7 @@ import { heroBustUrl } from '../pixel/sprites'
 import { t } from '../i18n/i18n'
 import { JOB_NAME, shortName, tradeName } from './speech'
 import { JOB_ICON } from './lifeWindows'
+import { ta } from '../text'
 
 const BUILDING: Record<string, string> = {
   forge: 'Forge',
@@ -39,7 +40,8 @@ function whyFits(state: GameState, heroId: string, job: JobId, aptitude: number,
   if (h) {
     const bg = personalityOf(h).background
     const trade = tradeName(bg)
-    if (trade) bits.push(t('a {trade} back home', { trade }))
+    // "an armorer back home": the article follows the trade.
+    if (trade) bits.push(ta('a {trade} back home', { trade }))
   }
   bits.push(t('aptitude {a}', { a: aptitude.toFixed(2) }))
   if (likes) bits.push(t('would enjoy it'))

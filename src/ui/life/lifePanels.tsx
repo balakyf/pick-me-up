@@ -22,7 +22,7 @@ import {
 } from '../../engine/life'
 import { forgeCost, forgeGrade, smithyUnlocked } from '../../engine/equipment'
 import { heroBustUrl } from '../pixel/sprites'
-import { JOB_NAME, accountDay, lastWords, lastWordsTogether, shortName, statusLine, tradeName } from './speech'
+import { JOB_NAME, accountDay, lastWords, shortName, statusLine, tradeName } from './speech'
 import { JOB_BLURB, JOB_ICON } from './lifeWindows'
 import { t } from '../i18n/i18n'
 
@@ -186,14 +186,6 @@ export function ForgeOrderSection({ state, store }: { state: GameState; store: S
 export function MemorialPanel({ state }: { state: GameState }) {
   const graves = [...state.life.memorial].reverse()
   if (graves.length === 0) return <div className="lr-empty">{t('The lawn is empty. Keep it that way, Master.')}</div>
-  // Heroes who fell together (same floor, day and cause) never share their last words.
-  const together = new Map<string, typeof graves>()
-  for (const g of graves) {
-    const k = `${g.floor}|${g.day}|${g.cause}`
-    together.set(k, [...(together.get(k) ?? []), g])
-  }
-  const words = new Map<string, string>()
-  for (const group of together.values()) for (const [id, w] of lastWordsTogether(state, group)) words.set(id, w)
   const cause = (c: string, floor: number) =>
     c === 'synthesis' ? t('lost to the Synthesis Chamber') : c === 'captor' ? t('never ransomed') : t('fell on floor {n}', { n: floor })
   return (
@@ -208,7 +200,7 @@ export function MemorialPanel({ state }: { state: GameState }) {
             {cause(g.cause, g.floor)} · {t('day {n}', { n: accountDay(state, g.day) })} · {t('served {n} days', { n: g.daysServed })}
             {g.mourners.length > 0 && ` · ${t('mourned by {names}', { names: g.mourners.map((m) => shortName(state, m)).join(', ') })}`}
           </div>
-          <div className="last-words">“{words.get(g.heroId) ?? lastWords(state, g)}”</div>
+          <div className="last-words">“{lastWords(state, g)}”</div>
         </div>
       ))}
     </div>

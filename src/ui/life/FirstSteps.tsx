@@ -98,7 +98,8 @@ export function guideComplete(s: GameState): boolean {
 export function FirstSteps({ state, store }: { state: GameState; store: Store }) {
   const [open, setOpen] = useState(true)
   // Latch what is done, so a step never goes back (the store records it like 'talk').
-  const toLatch = unlatchedSteps(state).map((g) => g.id).join(',')
+  // A retired guide latches nothing: no save writes for a panel nobody sees.
+  const toLatch = guideComplete(state) ? '' : unlatchedSteps(state).map((g) => g.id).join(',')
   useEffect(() => {
     if (!toLatch) return
     for (const id of toLatch.split(',')) store.dispatch({ type: 'GUIDE_STEP', step: latchKey(id) })
