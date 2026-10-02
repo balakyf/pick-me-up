@@ -223,6 +223,13 @@ export const ANCHORS: Record<number, AnchorDef> = {
         { templateId: 'dark_knight', count: 2 },
       ],
     ],
+    // Lane G: at half his blood, Valention recalls his officers to his side.
+    reserves: {
+      officers: [
+        { templateId: 'rodvick', count: 1 },
+        { templateId: 'lazenca', count: 1 },
+      ],
+    },
   },
   // Canon F41: [Chase] hunt the scattered soldiers; Versace of Silver Lightning.
   41: {
@@ -288,6 +295,11 @@ export const ANCHORS: Record<number, AnchorDef> = {
         { templateId: 'the_egg', count: 1, levelBonus: 12, targetTag: 'the_egg' },
       ],
     ],
+    // Lane G: the Egg hatches more (two at a time), and screams for the rest as its shell cracks.
+    reserves: {
+      brood: [{ templateId: 'egg_brood', count: 4 }],
+      brood2: [{ templateId: 'egg_brood', count: 2 }],
+    },
   },
   55: {
     floor: 55,
@@ -422,6 +434,10 @@ export const ANCHORS: Record<number, AnchorDef> = {
       ],
       [{ templateId: 'herald_of_end', count: 1, levelBonus: 80, targetTag: 'herald_of_end' }],
     ],
+    // Lane G: the Herald calls the void to its side, two at a time.
+    reserves: {
+      void: [{ templateId: 'void_spawn', count: 4 }],
+    },
   },
   95: {
     floor: 95,
@@ -452,5 +468,17 @@ export const ANCHORS: Record<number, AnchorDef> = {
       ],
       [{ templateId: 'tell', count: 1, levelBonus: 120, targetTag: 'tell' }],
     ],
+    // Lane G: Tell's three drafts call back the echoes of the anchors the Master beat.
+    reserves: {
+      echo1: [{ templateId: 'echo_halgiraf', count: 1, levelBonus: 60 }],
+      echo2: [
+        { templateId: 'echo_el_cid', count: 1, levelBonus: 60 },
+        { templateId: 'echo_valention', count: 1, levelBonus: 60 },
+      ],
+      echo3: [
+        { templateId: 'echo_pryos', count: 1, levelBonus: 60 },
+        { templateId: 'echo_herald', count: 1, levelBonus: 60 },
+      ],
+    },
   },
 }

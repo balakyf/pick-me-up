@@ -14,6 +14,9 @@ import {
   hex,
   hline,
   line,
+  mix,
+  rgbaParts,
+  withAlpha,
   outline,
   rect,
   roundRect,
@@ -605,8 +608,38 @@ const DRAWERS: Record<string, () => Bitmap> = {
   abyss_knight: () =>
     humanoid(baseLook({ skin: VOID_CLOTH, hair: VOID_CLOTH, eyes: hex('#ff3aff'), outfit: 'warrior', cloth: VOID_CLOTH, headgear: 'helm', weapon: 'sword', shield: true, accent: ramp('#3a0a3a', '#7a1a7a', '#ff3aff') })),
   herald_of_end: () => bossScale(voidSpawn),
+  // Lane G — the echoes Tell calls back (F100).
+  echo_halgiraf: () => echoOf(halgiraf),
+  echo_el_cid: () => echoOf(DRAWERS.el_cid!),
+  echo_valention: () => echoOf(DRAWERS.valention!),
+  echo_pryos: () => echoOf(DRAWERS.pryos!),
+  echo_herald: () => echoOf(() => bossScale(voidSpawn)),
   tell: () =>
     humanoid(baseLook({ skin: FAIR, hair: ramp('#8a8a9a', '#d0d0e0', '#ffffff'), hairStyle: 'short', eyes: hex('#ffd24a'), outfit: 'master', cloth: ramp('#e0d8f0', '#fff6e0', '#ffffff'), headgear: 'circlet', weapon: 'staff', cape: GOLD, trim: true, accent: GOLD })),
+}
+
+/**
+ * An echo (lane G): an anchor boss redrawn in the Architect's spectral light — every pixel's
+ * brightness kept, its colour washed to a pale blue-violet, the outline left dark. Tell calls
+ * them back in his three drafts.
+ */
+function echoOf(draw: () => Bitmap): Bitmap {
+  const src = draw()
+  const b = createBitmap(src.w, src.h)
+  const deep = hex('#2a2458')
+  const pale = hex('#d8e4ff')
+  for (let i = 0; i < src.px.length; i++) {
+    const c = src.px[i]!
+    if (c === 0) continue
+    if (c === INK) {
+      b.px[i] = c
+      continue
+    }
+    const [r, g, bl, a] = rgbaParts(c)
+    const lum = (r * 3 + g * 6 + bl) / 2550
+    b.px[i] = withAlpha(mix(deep, pale, Math.min(1, lum * 1.2)), a)
+  }
+  return b
 }
 
 /** A crystal shard in another colour (the F30 crystal cores). */

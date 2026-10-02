@@ -86,9 +86,10 @@ describe('five classes, five kits', () => {
 describe('enemy kits', () => {
   it('a priest heals, a shaman poisons, a knight taunts — riding beside their basic attack', () => {
     const kitOf = (id: string) => buildEnemyUnit(ENEMY_TEMPLATES[id]!, 30, 'e1').skills.map((s) => s.id)
-    expect(kitOf('order_saint')).toEqual(['e_spell', 'e_saints_grace'])
-    expect(kitOf('lizard_shaman')).toEqual(['e_spell', 'e_venom_spit'])
-    expect(kitOf('knight')).toEqual(['e_basic', 'e_shield_wall'])
+    // (Lane G gave each a fuller kit: the saint shelters, the shaman mends, the knight bashes.)
+    expect(kitOf('order_saint')).toEqual(['e_spell', 'e_saints_grace', 'e_sanctuary', 'e_holy_light'])
+    expect(kitOf('lizard_shaman')).toEqual(['e_spell', 'e_venom_spit', 'e_swamp_mending'])
+    expect(kitOf('knight')).toEqual(['e_basic', 'e_shield_wall', 'e_shield_bash'])
     expect(kitOf('goblin')).toEqual(['e_basic'])
   })
 

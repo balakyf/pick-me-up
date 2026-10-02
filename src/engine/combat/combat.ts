@@ -27,6 +27,19 @@
  * The brain prices every effect in the coin damage is scored in (HP). Every new roll (a
  * status's chance) is drawn only when 0 < chance < 100, so a battle without such a status
  * keeps its exact draw order. A stalemate guard ends a fight whose foes stop wearing down.
+ *
+ * ENEMY KITS, TELEGRAPHS, PHASES, ORDERS 2.0 (lane G): a skill may carry a `cooldown` (the
+ * caster's own turns) and a `charge`: the caster spends its turn winding up — a 'telegraph'
+ * event names the move, the tick it fires and whom it threatens — its gauge stops, and the
+ * move fires on that tick on its own ('act' with `charged`). A stun or its death cancels it
+ * ('telegraph-end'); the Master's Guard (the party braces: less damage, no attacks until it
+ * lands) and Protect (a protected hero takes it softened) answer it; a retreat escapes it. A
+ * `phase` keyword turns a boss at an HP threshold (a blow never carries it past one): new
+ * keywords and skills, a speed change, a cleanse, reserves called onto the field ('phase',
+ * 'summon'). A `summon` effect calls reserves too (the Egg's brood). The Master's new orders:
+ * Unleash (a hero's gauge fills and it casts its best skill now), Guard, Hold (SP is kept for
+ * a crowd or the boss) and Swap (two heroes trade places); a Focus also makes a sweep land on
+ * the mark at fuller force. None of it draws RNG.
  */
 
 import type {
@@ -49,6 +62,10 @@ import type {
   DotKind,
   ResolvedEffect,
   StatusKey,
+  PhaseKeyword,
+  KeywordTag,
+  EnemyFamily,
+  BattleOrder,
 } from '../types'
 import { TUNING, ELEMENT_ADVANTAGE } from '../tuning'
 import { createRng, makeSeed, nextFloat, chance, type Rng } from '../rng'
@@ -66,6 +83,9 @@ import {
 } from '../depth/combatDepth'
 import { modEnrageTick, modSpeed } from '../depth/floorMods'
 import { DEPTH } from '../depth/depthTuning'
+import { resolveSkillEffect } from '../skills'
+import { SKILLS } from '../content'
+import { BOSS, ORDERS } from './bossTuning'
 
 const C = TUNING.combat
 const R = TUNING.roles
@@ -103,6 +123,21 @@ interface MutUnit {
   healsTaken: number
   /** Wound-to-SP remainder (HP × spPerBarTaken not yet worth a whole SP). */
   spBank: number
+  /** Skills on cooldown: actions left before each can be cast again (lane G). */
+  cooldowns: Record<string, number>
+  /** A move it is winding up (lane G), or null. */
+  charge: Charge | null
+  /** Its boss phases, highest threshold first, and how many it has passed. */
+  phases: PhaseKeyword[]
+  phasesDone: number
+}
+
+/** A wound-up move (lane G): it fires at `firesAt` unless a stun or a death cancels it. */
+interface Charge {
+  skill: SkillEffect
+  firesAt: number
+  /** Whom it threatened as it wound up (a single blow still aims there if it can). */
+  targets: MutUnit[]
 }
 
 /** A status on a unit (lane F). */
@@ -128,12 +163,17 @@ const UNTIL_ACTS = Number.MAX_SAFE_INTEGER
 function copyUnit(u: CombatUnit, spawnIndex: number, wave: number): MutUnit {
   let aegis = 0
   for (const k of u.keywords) if (k.kind === 'aegis') aegis += k.charges
+  const phases = u.keywords.filter((k): k is PhaseKeyword => k.kind === 'phase').sort((a, b) => b.atHpPct - a.atHpPct)
   return {
     actions: 0,
     aegis,
     statuses: [],
     healsTaken: 0,
     spBank: 0,
+    cooldowns: {},
+    charge: null,
+    phases,
+    phasesDone: 0,
     ref: u,
     id: u.id,
     side: u.side,
@@ -210,6 +250,11 @@ export function statKey(stat: BuffStat, up: boolean): StatusKey {
   return `${stat}-${up ? 'up' : 'down'}` as StatusKey
 }
 
+/** Does this status hurt its bearer (a debuff, a DoT, a daze)? — what a phase's cleanse drops. */
+function isBane(key: StatusKey): boolean {
+  return key.endsWith('-down') || key === 'bleed' || key === 'poison' || key === 'burn' || key === 'stun'
+}
+
 /** The net % (crit: points) the unit's buffs and debuffs bend `stat` by. 0 with none. */
 function statMod(statuses: readonly Status[], stat: BuffStat): number {
   let v = 0
@@ -225,6 +270,24 @@ function bend(v: number, pct: number): number {
   if (pct === 0) return v
   return (v * Math.max(10, 100 + pct)) / 100
 }
+
+/** Does a `guard` keyword's source cover this blow? (ranged: archers and mages; melee:
+ *  everyone else — a dragon in the air; an element: blows of it.) */
+function guardCovers(vs: KeywordTag & { kind: 'guard' }, ranged: boolean, el: Element): boolean {
+  if (vs.vs === undefined) return true
+  if (vs.vs === 'ranged') return ranged
+  if (vs.vs === 'melee') return !ranged
+  return vs.vs === el
+}
+
+/** The family a `bane` keyword reads: an enemy's own; a hero is human (lane G: the Order's
+ *  Inquisitors hunt them). */
+function familyOf(u: CombatUnit): EnemyFamily | undefined {
+  return u.family ?? (u.side === 'hero' ? 'humanoid' : undefined)
+}
+
+/** The brace a guarding hero spends its turn on (lane G): no blow, no cost. */
+export const BRACE_ID = 'brace'
 
 /** Does `target` shrug off this kind of damage entirely? */
 function immuneTo(target: CombatUnit, skill: SkillEffect): boolean {
@@ -292,6 +355,8 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
   for (const h of heroUnits) snapshot(h)
   for (const a of allyUnits) snapshot(a)
   for (const w of encounter.waves) for (const e of w.units) snapshot(e)
+  // Lane G: units a phase or a summoning skill may call onto the field (the replay knows them).
+  for (const group of Object.values(encounter.reserves ?? {})) for (const e of group) snapshot(e)
 
   // ── Spawn heroes (wave -1) + wave 0 ───────────────────────────────────────
   let spawnCounter = 0
@@ -330,6 +395,16 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
   // Focus / overlook start from the pre-battle directive; mid-battle orders may change them.
   let focusEnemyId: string | undefined = encounter.focus?.focusEnemyId
   let overlooked: string[] = encounter.focus?.overlookedAllyIds ?? []
+  // ORDERS 2.0 (lane G): the party braces until this tick (Guard); a standing Guard waits for
+  // the first wind-up; Hold keeps SP for a crowd or the boss; Unleashed heroes cast now.
+  let guardUntil = 0
+  let guardArmed = false
+  let holdSp = false
+  const unleashed = new Set<string>()
+  /** Reserve units not yet called, by group (in their authored order). */
+  const reserveLeft = new Map<string, CombatUnit[]>(Object.entries(encounter.reserves ?? {}).map(([g, us]) => [g, [...us]]))
+  /** A charged move firing now (its blows on a protected hero land softened). */
+  let firing = false
 
   // ── Helpers over the live rosters ─────────────────────────────────────────
   /** Everyone alive on the hero side, NPC allies included (what enemies can target). */
@@ -466,7 +541,7 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
       if (kw.kind === 'enrage' && tick >= modEnrageTick(depth.mods, kw.afterTick)) est = scale(est, permille(kw.multiplier))
       else if (kw.kind === 'frenzy' && actor.currentHP * 100 < actor.ref.stats.maxHP * kw.belowHpPct) est = scale(est, permille(kw.multiplier))
       else if (kw.kind === 'opener' && actor.actions === 0) est = scale(est, permille(kw.multiplier))
-      else if (kw.kind === 'bane' && target.ref.family === kw.family) est = scale(est, permille(kw.multiplier))
+      else if (kw.kind === 'bane' && familyOf(target.ref) === kw.family) est = scale(est, permille(kw.multiplier))
     }
     let guardPm = 1000
     const ranged = actor.ref.unitClass === 'archer' || actor.ref.unitClass === 'mage'
@@ -475,7 +550,7 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
         guardPm = scale(guardPm, 1000 - permille(kw.reduction))
       } else if (kw.kind === 'vulnerable' && kw.element === el) {
         est = scale(est, permille(C.vulnerableMult))
-      } else if (kw.kind === 'guard' && (kw.vs === undefined || (kw.vs === 'ranged' ? ranged : kw.vs === el))) {
+      } else if (kw.kind === 'guard' && guardCovers(kw, ranged, el)) {
         guardPm = scale(guardPm, 1000 - permille(kw.reduction))
       }
     }
@@ -484,8 +559,16 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
     if (guardStatus !== 0) guardPm = scale(guardPm, Math.max(0, 1000 - guardStatus * 10))
     est = scale(est, Math.max(permille(MIN_GUARD_MULT), guardPm))
     est = scale(est, permille(depthDamageMult(depth, actor, target, el, all)))
-    est = scale(est, aoeSpreadPermille(spread))
+    est = scale(est, sweepSharePm(actor, target, spread))
     return Math.max(0, est) * (skill.hits ?? 1)
+  }
+
+  /** A sweep's share of its force on one of `spread` foes (per-mille): the falloff — but the
+   *  Master's mark takes a sweep at no less than focusSweepFloorPct (lane G). */
+  const sweepSharePm = (actor: MutUnit, target: MutUnit, spread: number): number => {
+    const pm = aoeSpreadPermille(spread)
+    if (spread > 1 && actor.side === 'hero' && focusEnemyId === target.id) return Math.max(pm, ORDERS.focusSweepFloorPct * 10)
+    return pm
   }
 
   // ── Wounds, shields, SP and statuses (lane F) ─────────────────────────────
@@ -495,6 +578,11 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
     if (target.currentHP <= 0 && target.alive) {
       target.alive = false
       emit({ kind: 'death', unitId: target.id })
+      // A move it was winding up dies with it.
+      if (target.charge !== null) {
+        emit({ kind: 'telegraph-end', unitId: target.id, skillId: target.charge.skill.id, reason: 'fell' })
+        target.charge = null
+      }
       // Record Defeat(target) tags as tagged enemies fall.
       const tag = target.ref.targetTag
       if (tag !== undefined && !defeatedTargetTags.includes(tag)) {
@@ -505,7 +593,68 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
       }
     } else {
       watchEscort(target)
+      if (target.alive) maybePhase(target)
     }
+  }
+
+  // ── Boss phases and summons (lane G) ──────────────────────────────────────
+  /** The next phase `u` has not reached, if any. */
+  const nextPhase = (u: MutUnit): PhaseKeyword | undefined => u.phases[u.phasesDone]
+  /** The HP a phase's threshold stands at. */
+  const phaseHp = (u: MutUnit, ph: PhaseKeyword): number => Math.floor((u.ref.stats.maxHP * ph.atHpPct) / 100)
+  /** A blow never carries a boss past a phase it has not reached: what `amount` may take. */
+  const capForPhase = (u: MutUnit, amount: number): number => {
+    const ph = nextPhase(u)
+    if (ph === undefined || amount <= 0) return amount
+    const floor = phaseHp(u, ph)
+    return u.currentHP > floor ? Math.min(amount, u.currentHP - floor) : amount
+  }
+
+  /** Call up to `count` units of a reserve group onto the field beside `summoner`. */
+  const summonReserve = (summoner: MutUnit, group: string, count: number): number => {
+    const left = reserveLeft.get(group) ?? []
+    const called = left.splice(0, Math.max(0, count))
+    if (called.length === 0) return 0
+    const spawned = called.map((u) => copyUnit(u, spawnCounter++, summoner.wave))
+    for (const sp of spawned) enemies.push(sp)
+    emit({ kind: 'summon', unitId: summoner.id, enemyIds: spawned.map((x) => x.id), wave: summoner.wave })
+    // New foes on the field: the stalemate watch starts over, and a phased boss may be
+    // shielded again by its brood.
+    foeHpLow = Number.MAX_SAFE_INTEGER
+    stallActs = 0
+    watchShields()
+    return spawned.length
+  }
+
+  /** `u` reached its next phase's threshold: it turns (once per phase, in order). */
+  const maybePhase = (u: MutUnit): void => {
+    const ph = nextPhase(u)
+    if (ph === undefined || u.currentHP * 100 > ph.atHpPct * u.ref.stats.maxHP) return
+    u.phasesDone++
+    const added = ph.addKeywords ?? []
+    for (const k of added) if (k.kind === 'aegis') u.aegis += k.charges
+    const learned = (ph.skills ?? [])
+      .map((id) => resolveSkillEffect({ id, level: 1, xp: 0 }, SKILLS))
+      .filter((x): x is SkillEffect => x !== null && !u.ref.skills.some((o) => o.id === x.id))
+    const spd = ph.spdPct !== undefined && ph.spdPct !== 0 ? Math.max(1, Math.floor((u.ref.stats.spd * (100 + ph.spdPct)) / 100)) : null
+    u.ref = {
+      ...u.ref,
+      keywords: [...u.ref.keywords, ...added],
+      skills: [...u.ref.skills, ...learned],
+      ...(spd !== null ? { stats: { ...u.ref.stats, spd } } : {}),
+    }
+    emit({
+      kind: 'phase',
+      unitId: u.id,
+      phase: u.phasesDone,
+      phases: u.phases.length,
+      ...(ph.title !== undefined ? { title: ph.title } : {}),
+      ...(ph.line !== undefined ? { line: ph.line } : {}),
+      ...(spd !== null ? { spd } : {}),
+    })
+    // It shakes off what the party left on it.
+    if (ph.cleanse) for (const st of [...u.statuses]) if (isBane(st.key)) dropStatus(u, st, 'expired')
+    if (ph.summonWave !== undefined) summonReserve(u, ph.summonWave, Number.MAX_SAFE_INTEGER)
   }
 
   const statusOf = (u: MutUnit, key: StatusKey): Status | undefined => u.statuses.find((st) => st.key === key)
@@ -668,8 +817,16 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
         const floor = -Math.floor((C.actionGaugeMax * R.stunFloorPm) / 1000)
         u.actionGauge = Math.max(floor, u.actionGauge - Math.floor((C.actionGaugeMax * e.push) / 100))
         putStatus(u, 'stun', caster.id, UNTIL_ACTS, e.push, 0, nth)
+        // A daze breaks a wind-up: the move dies in its throat (lane G).
+        if (u.charge !== null) {
+          emit({ kind: 'telegraph-end', unitId: u.id, skillId: u.charge.skill.id, reason: 'stunned' })
+          u.charge = null
+        }
         return
       }
+      case 'summon':
+        summonReserve(caster, e.group, e.count)
+        return
       case 'taunt':
         putStatus(u, 'taunt', caster.id, turnsToTicks(caster, e.turns), 0, 0, nth)
         return
@@ -701,7 +858,7 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
           st.pulses--
           if (st.key === 'regen') restore(u, st.value, st.sourceId, true)
           else if (st.key === 'bleed' || st.key === 'poison' || st.key === 'burn') {
-            const raw = st.value - absorb(u, st.value, st.sourceId)
+            const raw = capForPhase(u, st.value - absorb(u, st.value, st.sourceId))
             // A frenzy's own bleed (Berserk) wears its bearer down but never kills them: like an
             // HP-cost ultimate, a hero's own skill never takes their life — only a foe does.
             const amount = st.sourceId === u.id ? Math.min(raw, u.currentHP - 1) : raw
@@ -795,7 +952,7 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
         damage *= kw.multiplier
       } else if (kw.kind === 'opener' && actor.actions === 0 && !followUp) {
         damage *= kw.multiplier
-      } else if (kw.kind === 'bane' && target.ref.family === kw.family) {
+      } else if (kw.kind === 'bane' && familyOf(target.ref) === kw.family) {
         damage *= kw.multiplier
       }
     }
@@ -818,7 +975,7 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
       } else if (kw.kind === 'vulnerable' && kw.element === el) {
         damage *= C.vulnerableMult
         affinity *= C.vulnerableMult
-      } else if (kw.kind === 'guard' && (kw.vs === undefined || (kw.vs === 'ranged' ? ranged : kw.vs === el))) {
+      } else if (kw.kind === 'guard' && guardCovers(kw, ranged, el)) {
         guardMult *= 1 - kw.reduction
       }
     }
@@ -828,8 +985,14 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
     damage *= Math.max(MIN_GUARD_MULT, guardMult)
     // Formation, rivalry and the floor's conditions (all 1 in a plain battle).
     damage *= depthDamageMult(depth, actor, target, el, everyone())
-    // AoE FALLOFF: a sweep spreads its force over every foe it strikes.
-    if (spread > 1) damage = (damage * 100) / (100 + C.aoeFalloffK * (spread - 1))
+    // AoE FALLOFF: a sweep spreads its force over every foe it strikes (the Master's mark
+    // takes it at fuller force — lane G).
+    if (spread > 1) {
+      const share = 100 / (100 + C.aoeFalloffK * (spread - 1))
+      damage *= actor.side === 'hero' && focusEnemyId === target.id ? Math.max(share, ORDERS.focusSweepFloorPct / 100) : share
+    }
+    // PROTECT answers a charged move: the protected take it softened (lane G).
+    if (firing && overlooked.includes(target.id)) damage = (damage * (100 - ORDERS.protectChargeCutPct)) / 100
     // CLEAVE: the neighbour takes a share of the blow.
     if (sharePct !== 100) damage = (damage * sharePct) / 100
     const eff: HitEffect | undefined = immune ? 'immune' : affinity > 1 ? 'weak' : affinity < 1 ? 'resist' : undefined
@@ -862,6 +1025,8 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
     const soaked = absorb(target, amount, actor.id)
     amount -= soaked
     if (soaked > 0 && amount === 0) return target
+    // A boss never falls past a phase it has not reached (lane G).
+    amount = capForPhase(target, amount)
     target.currentHP -= amount
     gainSpOnHit(target, amount)
     emit({
@@ -1093,7 +1258,8 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
   // damage it takes away — a Mark goes on the boss. Ties (both kill, or both do nothing)
   // never pay HP for nothing, then go to the bigger uncapped blow (a hero practises its
   // skills), then to the cheaper SP, then to list order. No RNG is drawn.
-  const castable = (actor: MutUnit, s: SkillEffect): boolean => canCast(actor.currentSP, actor.currentHP, actor.ref.stats.maxHP, s)
+  const castable = (actor: MutUnit, s: SkillEffect): boolean =>
+    (actor.cooldowns[s.id] ?? 0) <= 0 && canCast(actor.currentSP, actor.currentHP, actor.ref.stats.maxHP, s)
   /** Equal expected value (both kill, both do nothing): never pay HP for nothing; else
    *  the bigger blow — a hero practises the skill it knows (skills level by use) — else
    *  the cheaper one. */
@@ -1279,8 +1445,10 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
           for (const r of recips) {
             if (r.side === actor.side || statusOf(r, 'stun') !== undefined) continue
             const a = aim(r)
-            if (a === null) continue
-            const v = Math.floor((a.blow * e.push) / 100)
+            // A daze breaks a wind-up (lane G): the whole move it would have landed.
+            const cancel = r.charge !== null ? scale(chargeHarm(r), BOSS.cancelValuePm) : 0
+            if (a === null && cancel === 0) continue
+            const v = Math.floor(((a?.blow ?? 0) * e.push) / 100) + cancel
             total += w(Math.floor((v * holdChance(actor, r, e.chance)) / 100), BRAIN.buffWeightPm)
           }
           break
@@ -1312,15 +1480,54 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
             }
           }
           break
+        case 'summon': {
+          // What the units it calls would strike over their first turns (never past a crowded field).
+          const left = reserveLeft.get(e.group) ?? []
+          const standing = alliesOf(actor).length
+          const n = Math.min(e.count, left.length, BOSS.summonFieldCap - standing)
+          const victim = targetableFoes(actor)[0]
+          if (n <= 0 || victim === undefined) break
+          for (let i = 0; i < n; i++) {
+            const tmp = copyUnit(left[i]!, -1, actor.wave)
+            total += estimateBlow(tmp, tmp.ref.skills[0] ?? BASIC_ATTACK, victim, 1, sight.all) * BOSS.summonTurns
+          }
+          break
+        }
       }
     }
     return total
   }
 
+  /** What a wound-up move by `u` is expected to land on the party (capped at each one's HP). */
+  const chargeHarm = (u: MutUnit): number => {
+    const c = u.charge
+    if (c === null) return 0
+    const all = everyone()
+    const foes = targetableFoes(u)
+    const hitList = c.skill.target === 'all-enemies' ? foes : c.skill.target === 'front-row' ? frontRow(foes) : c.targets.filter((x) => x.alive)
+    let harm = 0
+    for (const t of hitList) harm += Math.min(estimateBlow(u, c.skill, t, hitList.length > 1 && c.skill.target !== 'cleave' ? hitList.length : 1, all), Math.max(0, t.currentHP))
+    return harm
+  }
+
+  /** A boss, as Hold reads it: an objective's target, a phased boss, or a foe with a charged move. */
+  const isBoss = (u: MutUnit): boolean =>
+    u.side === 'enemy' &&
+    ((u.ref.targetTag !== undefined && (objectiveKind(u.ref.targetTag) === 'defeat' || objectiveKind(u.ref.targetTag) === 'acquire')) ||
+      u.phases.length > 0 ||
+      u.ref.skills.some((x) => x.charge !== undefined))
+
+  /** Is the party bracing (the Master's Guard)? */
+  const guarding = (): boolean => tick < guardUntil
+
   const chooseSkill = (actor: MutUnit): SkillEffect => {
     const own = actor.ref.skills
+    const hero = actor.side === 'hero'
+    const unleash = hero && unleashed.has(actor.id)
+    // GUARD (lane G): a bracing hero holds its attacks — it may still tend a friend.
+    const bracing = hero && !unleash && guarding()
     // One skill (every enemy's lone Strike or Spell): nothing to weigh.
-    if (own.length <= 1) return own[0] !== undefined && castable(actor, own[0]) ? own[0] : BASIC_ATTACK
+    if (own.length <= 1 && !bracing) return own[0] !== undefined && castable(actor, own[0]) ? own[0] : BASIC_ATTACK
     const foes = targetableFoes(actor)
     const all = everyone()
     const spread = foes.length
@@ -1328,13 +1535,19 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
     let seen: Sight | null = null
     const sight = (): Sight => (seen ??= sightFor(actor, foes))
     const mine = actor.currentHP * 100
+    // HOLD (lane G): SP is for a crowd or the boss (or a friend's wound).
+    const holding = hero && holdSp && !unleash
     let best: SkillEffect | null = null
     let bestScore = -1
     let bestRaw = -1
     /** The chosen skill's own blow (before what its effects are worth). */
     let bestBlow = 0
+    /** UNLEASH: the best skill that costs something (the big one), whatever a free swing scores. */
+    let paid: SkillEffect | null = null
+    let paidScore = -1
     for (const s of own) {
       if (!castable(actor, s)) continue
+      if (bracing && !tendsAllies(s)) continue
       // A frenzy that bleeds its caster is never started when already low.
       if (drainsSelf(s) && mine < BRAIN.selfDrainFloorPct * actor.ref.stats.maxHP) continue
       let score = 0
@@ -1346,10 +1559,12 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
         raw += blow
         score += Math.min(blow, Math.max(0, t.currentHP))
         // A KILL also takes the foe's next blow off the board (lane F: so a healer weighs
-        // binding a wound against ending the one who keeps opening it).
+        // binding a wound against ending the one who keeps opening it) — and a foe winding
+        // up a big move takes that move with it (lane G).
         if (blow >= t.currentHP && t.currentHP > 0 && BRAIN.killWeightPm > 0 && !isLooming(t)) {
           const a = sight().aim(t)
           if (a !== null) score += scale(a.blow, BRAIN.killWeightPm)
+          if (t.charge !== null) score += scale(chargeHarm(t), BOSS.cancelValuePm)
         }
         struck.push(t)
       }
@@ -1371,15 +1586,26 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
           }
         }
       }
+      if (holding && s.spCost > 0 && strikes(s) && !tendsWounds(s)) {
+        const sweep = s.target === 'all-enemies' || s.target === 'front-row'
+        if (!(sweep && struck.length >= ORDERS.holdSweepTargets) && !struck.some(isBoss)) continue
+      }
       const blowScore = score
       if (s.effects !== undefined) score = Math.max(0, score + effectsValue(actor, s, struck, tended, sight()))
+      if (bracing && score <= 0) continue
       if (score > bestScore || (score === bestScore && best !== null && tieGoesTo(s, raw, best, bestRaw))) {
         best = s
         bestScore = score
         bestRaw = raw
         bestBlow = blowScore
       }
+      if (unleash && (s.spCost > 0 || (s.hpCost ?? 0) > 0) && score > paidScore) {
+        paid = s
+        paidScore = score
+      }
     }
+    if (bracing) return best ?? BRACE
+    if (unleash && paid !== null && paidScore > 0) return paid
     // SAVING UP: when nothing the hero can afford hurts the foes but a blow it knows would
     // (a mage's burst against the physical-immune Wardens), it keeps its SP for that blow
     // and swings for free meanwhile — only in place of a blow that does nothing (a taunt, a
@@ -1399,12 +1625,13 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
   /** Pay a skill's costs and tally the cast. */
   const payAndTally = (actor: MutUnit, skill: SkillEffect): void => {
     actor.currentSP -= skill.spCost
+    if (skill.cooldown !== undefined && skill.cooldown > 0) actor.cooldowns[skill.id] = skill.cooldown
     if (skill.hpCost !== undefined && skill.hpCost > 0) {
       actor.currentHP -= skill.hpCost
       emit({ kind: 'hp-cost', unitId: actor.id, amount: skill.hpCost, hpAfter: actor.currentHP })
     }
     const sid = actor.ref.sourceHeroId
-    if (sid !== undefined && skill.id !== 'basic' && skill.id !== BASIC_ATTACK.id) {
+    if (sid !== undefined && skill.id !== 'basic' && skill.id !== BASIC_ATTACK.id && skill.id !== BRACE_ID) {
       const tally = (skillCasts[sid] ??= {})
       tally[skill.id] = (tally[skill.id] ?? 0) + 1
     }
@@ -1574,6 +1801,113 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
     }
   }
 
+  /** Where a blow lands: its targets, the sweep's spread and a cleave's shares. Null: nothing to strike. */
+  interface BlowAim {
+    targets: MutUnit[]
+    spread: number
+    shares: number[] | null
+  }
+  const aimBlow = (actor: MutUnit, skill: SkillEffect, aimAt?: MutUnit): BlowAim | null => {
+    let targets: MutUnit[]
+    let shares: number[] | null = null
+    let spread = 1
+    if (skill.target === 'all-enemies' || skill.target === 'front-row') {
+      // No single pick here: a rival's chase from an earlier pick must not be announced.
+      chasing = null
+      const foes = targetableFoes(actor).slice().sort((a, b) => a.spawnIndex - b.spawnIndex)
+      targets = skill.target === 'front-row' ? frontRow(foes) : foes
+      spread = targets.length
+    } else {
+      const primary = aimAt !== undefined && aimAt.alive && isTargetable(aimAt) ? aimAt : pickSingleTarget(actor, skill)
+      targets = primary === null ? [] : [primary]
+      if (primary !== null && skill.target === 'cleave') {
+        const nb = neighbourOf(primary, hurtable(targetableFoes(actor), skill))
+        if (nb !== null) {
+          targets.push(nb)
+          shares = [100, R.cleavePct]
+        }
+      }
+    }
+    return targets.length === 0 ? null : { targets, spread, shares }
+  }
+
+  /** The blow lands (every hit rolls on its own), then its riders, then a friend may press it. */
+  const strike = (actor: MutUnit, skill: SkillEffect, aim: BlowAim): void => {
+    const { targets, spread, shares } = aim
+    const struck: MutUnit[] = []
+    if (strikes(skill)) {
+      // MULTI-HIT: each hit rolls and lands on its own (a flurry is three blows).
+      const hits = Math.max(1, skill.hits ?? 1)
+      for (let h = 0; h < hits; h++) {
+        for (let i = 0; i < targets.length; i++) {
+          const t = targets[i]!
+          if (!t.alive) continue
+          const got = resolveHit(actor, skill, t, spread, false, shares?.[i] ?? 100)
+          if (got !== null && !struck.includes(got)) struck.push(got)
+        }
+        if (!actor.alive) break
+      }
+    } else {
+      struck.push(...targets)
+    }
+    // The blow's riders (a bleed, a Mark, a daze) and any self-effects — unless the blow
+    // ended the fight (no frenzy after the last foe falls).
+    const over = actor.side === 'hero' ? livingEnemies().length === 0 && !moreWavesToSpawn() : livingHeroSide().length === 0
+    if (!over) for (const e of skill.effects ?? []) recipientsOf(actor, skill, e, struck, []).forEach((u, i) => applyEffect(actor, skill, e, u, i))
+    // A friend presses the attack on the first target still standing.
+    const standing = targets.find((t) => t.alive)
+    if (standing !== undefined) followUp(actor, standing)
+  }
+
+  /** GUARD (lane G): every living unit on the party's side braces — less damage — and the
+   *  heroes hold their attacks until the big blows now wound up have landed (at least one of
+   *  an average hero's turns). */
+  const raiseGuard = (): void => {
+    const party = livingHeroSide()
+    if (party.length === 0) return
+    let spd = 0
+    for (const h of party) spd += Math.max(1, speedOf(h))
+    const mean = Math.max(1, Math.floor(spd / party.length))
+    let until = tick + Math.max(R.minStatusTicks, Math.ceil((ORDERS.guardMinTurns * C.actionGaugeMax) / mean))
+    for (const e of enemies) if (e.alive && e.charge !== null) until = Math.max(until, e.charge.firesAt + 1)
+    guardUntil = Math.max(guardUntil, until)
+    party.forEach((u, i) => putStatus(u, 'guard-up', u.id, guardUntil - tick, ORDERS.guardPct, 0, i))
+  }
+
+  /** The wind-up: costs paid, the move telegraphed, the caster's gauge stopped until it fires. */
+  const windUp = (actor: MutUnit, skill: SkillEffect, targets: MutUnit[]): void => {
+    const ticks = turnsToTicks(actor, Math.max(1, skill.charge!.turns))
+    actor.charge = { skill, firesAt: tick + ticks, targets }
+    payAndTally(actor, skill)
+    emit({ kind: 'telegraph', unitId: actor.id, skillId: skill.id, firesAtTick: tick + ticks, targets: targets.map((t) => t.id) })
+    // A standing Guard braces the party the moment a foe winds up.
+    if (guardArmed && actor.side === 'enemy') {
+      guardArmed = false
+      raiseGuard()
+    }
+  }
+
+  /** A wound-up move fires on its tick (not a turn of its own: the wind-up was). */
+  const fireCharge = (u: MutUnit): void => {
+    const c = u.charge
+    u.charge = null
+    if (c === null || !u.alive || outcome !== null) return
+    const aim = aimBlow(u, c.skill, c.targets[0])
+    if (aim === null) return
+    const answered = aim.targets.some((t) => (guarding() && t.side !== u.side && statusOf(t, 'guard-up') !== undefined))
+      ? ('guard' as const)
+      : aim.targets.some((t) => overlooked.includes(t.id))
+        ? ('protect' as const)
+        : undefined
+    emit({ kind: 'act', actorId: u.id, skillId: c.skill.id, targetId: aim.targets[0]!.id, spAfter: u.currentSP, charged: true, ...(answered ? { answered } : {}) })
+    firing = true
+    strike(u, c.skill, aim)
+    firing = false
+    maybeAdvanceWave()
+    watchShields()
+    evaluateState()
+  }
+
   // One unit takes its action.
   const act = (actor: MutUnit): void => {
     if (!actor.alive || outcome !== null) return
@@ -1603,6 +1937,8 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
         rngDraws++
         if (draw.value) {
           emit({ kind: 'panic', unitId: actor.id })
+          // An Unleash order is spent on a frozen turn too.
+          unleashed.delete(actor.id)
           return
         }
       }
@@ -1618,6 +1954,8 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
     }
 
     const skill = chooseSkill(actor)
+    // The Master's Unleash is spent on this turn, whatever it cast.
+    unleashed.delete(actor.id)
 
     if (tendsAllies(skill)) {
       // A support skill: it tends the caster's own side (and may still bend the foes).
@@ -1630,57 +1968,23 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
       for (const e of skill.effects ?? []) recipientsOf(actor, skill, e, [], tended).forEach((u, i) => applyEffect(actor, skill, e, u, i))
     } else {
       // A blow: one foe, every foe, the front line, or a foe and its neighbour.
-      let targets: MutUnit[]
-      let shares: number[] | null = null
-      let spread = 1
-      if (skill.target === 'all-enemies' || skill.target === 'front-row') {
-        // No single pick here: a rival's chase from an earlier pick must not be announced.
-        chasing = null
-        const foes = targetableFoes(actor).slice().sort((a, b) => a.spawnIndex - b.spawnIndex)
-        targets = skill.target === 'front-row' ? frontRow(foes) : foes
-        spread = targets.length
+      const aim = aimBlow(actor, skill)
+      if (aim === null) return // no valid target → action fizzles, SP retained
+      if (skill.charge !== undefined) {
+        // A CHARGED MOVE (lane G): the turn goes into the wind-up; it fires on its own tick.
+        windUp(actor, skill, aim.targets)
       } else {
-        const primary = pickSingleTarget(actor, skill)
-        targets = primary === null ? [] : [primary]
-        if (primary !== null && skill.target === 'cleave') {
-          const nb = neighbourOf(primary, hurtable(targetableFoes(actor), skill))
-          if (nb !== null) {
-            targets.push(nb)
-            shares = [100, R.cleavePct]
-          }
-        }
+        if (chasing !== null && aim.spread === 1) emit({ kind: 'rivalry', unitId: actor.id, rivalId: chasing, targetId: aim.targets[0]!.id })
+        // 'act' names the first target as a representative of a sweep.
+        emit({ kind: 'act', actorId: actor.id, skillId: skill.id, targetId: aim.targets[0]!.id, spAfter: actor.currentSP - skill.spCost })
+        payAndTally(actor, skill)
+        strike(actor, skill, aim)
       }
-      if (targets.length === 0) return // no valid target → action fizzles, SP retained
-      if (chasing !== null && spread === 1) emit({ kind: 'rivalry', unitId: actor.id, rivalId: chasing, targetId: targets[0]!.id })
-      // 'act' names the first target as a representative of a sweep.
-      emit({ kind: 'act', actorId: actor.id, skillId: skill.id, targetId: targets[0]!.id, spAfter: actor.currentSP - skill.spCost })
-      payAndTally(actor, skill)
-      const struck: MutUnit[] = []
-      if (strikes(skill)) {
-        // MULTI-HIT: each hit rolls and lands on its own (a flurry is three blows).
-        const hits = Math.max(1, skill.hits ?? 1)
-        for (let h = 0; h < hits; h++) {
-          for (let i = 0; i < targets.length; i++) {
-            const t = targets[i]!
-            if (!t.alive) continue
-            const got = resolveHit(actor, skill, t, spread, false, shares?.[i] ?? 100)
-            if (got !== null && !struck.includes(got)) struck.push(got)
-          }
-          if (!actor.alive) break
-        }
-      } else {
-        struck.push(...targets)
-      }
-      // The blow's riders (a bleed, a Mark, a daze) and any self-effects — unless the blow
-      // ended the fight (no frenzy after the last foe falls).
-      const over = actor.side === 'hero' ? livingEnemies().length === 0 && !moreWavesToSpawn() : livingHeroSide().length === 0
-      if (!over) for (const e of skill.effects ?? []) recipientsOf(actor, skill, e, struck, []).forEach((u, i) => applyEffect(actor, skill, e, u, i))
-      // A friend presses the attack on the first target still standing.
-      const standing = targets.find((t) => t.alive)
-      if (standing !== undefined) followUp(actor, standing)
     }
 
     actor.actions++
+    // Its skills come off cooldown one action at a time (lane G).
+    for (const id of Object.keys(actor.cooldowns)) if (actor.cooldowns[id]! > 0) actor.cooldowns[id]!--
     watchProgress(actor)
     // SP RHYTHM: every action feeds the pool a little (skills come back).
     if (actor.alive && R.spPerAction > 0) actor.currentSP = Math.min(actor.ref.maxSP, actor.currentSP + R.spPerAction)
@@ -1691,6 +1995,49 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
     evaluateState()
   }
 
+  /** The Master's order lands (at the start of its tick, before anyone acts). */
+  const applyOrder = (o: BattleOrder): void => {
+    switch (o.kind) {
+      case 'retreat':
+        outcome = 'retreat'
+        return
+      case 'focus':
+        focusEnemyId = o.enemyId
+        return
+      case 'protect':
+        if (!overlooked.includes(o.allyId)) overlooked = [...overlooked, o.allyId]
+        return
+      case 'unleash': {
+        // UNLEASH: the hero's gauge fills at once; it casts its best skill this tick.
+        const h = heroes.find((x) => x.id === o.allyId && x.alive && !x.ref.isNpc)
+        if (h === undefined) return
+        h.actionGauge = Math.max(h.actionGauge, C.actionGaugeMax)
+        unleashed.add(h.id)
+        return
+      }
+      case 'guard':
+        if (o.onTelegraph) guardArmed = true
+        else raiseGuard()
+        return
+      case 'hold':
+        holdSp = true
+        return
+      case 'swap': {
+        // SWAP: two heroes trade places — their lines and their order in the line.
+        const a = heroes.find((x) => x.id === o.a && !x.ref.isNpc)
+        const b = heroes.find((x) => x.id === o.b && !x.ref.isNpc)
+        if (a === undefined || b === undefined || a === b) return
+        const lineA = a.ref.line
+        a.ref = { ...a.ref, line: b.ref.line }
+        b.ref = { ...b.ref, line: lineA }
+        const idx = a.spawnIndex
+        a.spawnIndex = b.spawnIndex
+        b.spawnIndex = idx
+        return
+      }
+    }
+  }
+
   // ── ATB main loop ─────────────────────────────────────────────────────────
   const orders = [...(encounter.orders ?? [])].sort((a, b) => a.tick - b.tick)
   let nextOrder = 0
@@ -1699,9 +2046,14 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
     while (nextOrder < orders.length && orders[nextOrder]!.tick <= tick) {
       const o = orders[nextOrder++]!
       emit({ kind: 'order', order: o })
-      if (o.kind === 'retreat') outcome = 'retreat'
-      else if (o.kind === 'focus') focusEnemyId = o.enemyId
-      else if (o.kind === 'protect' && !overlooked.includes(o.allyId)) overlooked = [...overlooked, o.allyId]
+      applyOrder(o)
+    }
+    if (outcome !== null) break
+
+    // Wound-up moves fire on their tick, before anyone acts (lane G).
+    for (const u of [...heroes, ...enemies].filter((x) => x.alive && x.charge !== null && x.charge.firesAt <= tick).sort(byId)) {
+      fireCharge(u)
+      if (outcome !== null) break
     }
     if (outcome !== null) break
 
@@ -1714,7 +2066,8 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
     if (outcome !== null) break
 
     // Fill action gauges for every living unit (stable order by id).
-    const all = [...heroes, ...enemies].filter((u) => u.alive).sort(byId)
+    // (A unit winding up a move waits: its gauge stands still until the move fires.)
+    const all = [...heroes, ...enemies].filter((u) => u.alive && u.charge === null).sort(byId)
     for (const u of all) {
       u.actionGauge += speedOf(u)
     }
@@ -1722,7 +2075,7 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
     // Everyone whose gauge >= actionGaugeMax acts this tick. Process highest
     // gauge first, ties by id; subtract actionGaugeMax (carry overflow).
     while (outcome === null) {
-      const ready = [...heroes, ...enemies].filter((u) => u.alive && u.actionGauge >= C.actionGaugeMax)
+      const ready = [...heroes, ...enemies].filter((u) => u.alive && u.charge === null && u.actionGauge >= C.actionGaugeMax)
       if (ready.length === 0) break
       ready.sort((a, b) => (b.actionGauge !== a.actionGauge ? b.actionGauge - a.actionGauge : byId(a, b)))
       const actor = ready[0]!
@@ -1808,6 +2161,17 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
     skillCasts,
     log,
   }
+}
+
+/** A bracing hero's turn (the Master's Guard, lane G): no blow, no cost, nobody tended but itself. */
+const BRACE: SkillEffect = {
+  id: BRACE_ID,
+  name: 'Brace',
+  skillMult: 0,
+  damageType: 'physical',
+  element: null,
+  target: 'self',
+  spCost: 0,
 }
 
 /** The implicit basic attack synthesized for every unit (spCost 0, always

@@ -455,9 +455,8 @@ describe('buildEnemyUnit', () => {
 
   it('a caster template casts a magic Spell instead of a Strike (B5)', () => {
     const unit = buildEnemyUnit(ENEMY_TEMPLATES.order_mage!, 40, 'e_om_0')
-    expect(unit.skills).toEqual([
-      { id: 'e_spell', name: 'Spell', skillMult: 1.0, damageType: 'magic', element: 'light', target: 'single', spCost: 0 },
-    ])
+    // Its basic attack is the Spell (its kit — lane G's Judgment Flare — rides beside it).
+    expect(unit.skills[0]).toEqual({ id: 'e_spell', name: 'Spell', skillMult: 1.0, damageType: 'magic', element: 'light', target: 'single', spCost: 0 })
     // Its mAtk is the stat that now strikes — and it dwarfs the pAtk it used to swing with.
     expect(unit.stats.mAtk).toBeGreaterThan(unit.stats.pAtk * 2)
   })
