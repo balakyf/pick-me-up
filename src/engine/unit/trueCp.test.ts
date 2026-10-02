@@ -64,6 +64,27 @@ describe('true CP (B23)', () => {
     expect(heroCpFull(withdrawn, withdrawn.heroes[id]!)).toBeLessThan(base)
   })
 
+  it('the memo never serves a stale number: the same hero object re-reads a new armory or a withdrawal', () => {
+    const { s, id } = account()
+    let g = craftEquipment(s, 'weapon')
+    g = equipItem(g, id, g.inventory.at(-1)!.id)
+    const h = g.heroes[id]!
+    const armed = heroCpFull(g, h)
+    expect(heroCpFull(g, h)).toBe(armed)
+    // The worn blade is reforged to a higher grade (a new inventory array; the hero object is unchanged).
+    const reforged = { ...g, inventory: g.inventory.map((i) => (i.id === h.equipment.weapon ? { ...i, statBonus: { pAtk: 999, mAtk: 999 } } : i)) }
+    expect(heroCpFull(reforged, h)).toBeGreaterThan(armed)
+    expect(heroCpFull(g, h)).toBe(armed)
+    const e = estateOf(g)
+    const withdrawn = {
+      ...g,
+      estate: { ...e, trauma: { [id]: { fatigue: 0, foughtAt: 0, burnoutUntil: null, veteran: false, lowSince: null, withdrawn: { since: 0, cause: null, comfort: 0, lastTalkDay: 0 } } } },
+    }
+    expect(heroCpFull(withdrawn, h)).toBeLessThan(armed)
+    expect(heroCpFull(g, h)).toBe(armed)
+    expect(heroCpFull(g, h)).toBe(heroUnitFull(g, h).cp)
+  })
+
   it('is exactly the CP the tower fields', () => {
     const { s, id } = account()
     let g = craftEquipment(s, 'armor')

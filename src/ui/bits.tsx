@@ -57,10 +57,13 @@ export function statsOf(hero: OwnedHero, state?: CpContext | null): DerivedStats
   return heroStatsFull(cpContextFor(hero, state), hero)
 }
 
+/** Bare-handed (one shared object, so heroCpFull's memo can hit). */
+const NO_GEAR: CpContext = { inventory: [] }
+
 function cpContextFor(hero: OwnedHero, state?: CpContext | null): CpContext {
   if (state) return state
   const live = peekState()
-  return live && live.heroes[hero.id] === hero ? live : { inventory: [] }
+  return live && live.heroes[hero.id] === hero ? live : NO_GEAR
 }
 
 /** A hero's engraving/imprint (4★+ identity layer) as a small graded badge. */
