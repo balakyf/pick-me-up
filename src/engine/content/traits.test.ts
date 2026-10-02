@@ -54,9 +54,9 @@ describe('the trait registry', () => {
     for (const [id, d] of Object.entries(TRAITS)) expect(d.id).toBe(id)
   })
 
-  it('every effect is small: no stat swings by more than 11 %, no flat bonus above 14 points', () => {
+  it('every effect is small: no stat swings by more than 9 %, no flat bonus above 14 points', () => {
     for (const d of Object.values(TRAITS)) {
-      for (const v of Object.values({ ...(d.statPct ?? {}), ...(d.alonePct ?? {}) })) expect(Math.abs(v)).toBeLessThanOrEqual(0.11)
+      for (const v of Object.values({ ...(d.statPct ?? {}), ...(d.alonePct ?? {}) })) expect(Math.abs(v)).toBeLessThanOrEqual(0.09)
       for (const v of Object.values(d.flat ?? {})) expect(Math.abs(v)).toBeLessThanOrEqual(14)
       expect(d.name.length).toBeGreaterThan(0)
       expect(d.blurb.length).toBeGreaterThan(0)
@@ -194,16 +194,16 @@ describe('traits in the combat unit', () => {
   })
 
   it('keywords ride on the unit: Brave a frenzy, Steadfast a guard, Fortune’s Child an aegis, Spearhead an opener', () => {
-    expect(bare(wearing('courage', false)).keywords).toContainEqual({ kind: 'frenzy', belowHpPct: 40, multiplier: 1.08 })
-    expect(bare(wearing('steadfast', false)).keywords).toContainEqual({ kind: 'guard', reduction: 0.04 })
+    expect(bare(wearing('courage', false)).keywords).toContainEqual({ kind: 'frenzy', belowHpPct: 40, multiplier: 1.06 })
+    expect(bare(wearing('steadfast', false)).keywords).toContainEqual({ kind: 'guard', reduction: 0.03 })
     expect(bare(wearing('luck', true)).keywords).toContainEqual({ kind: 'aegis', charges: 1 })
-    expect(bare(wearing('leader', false)).keywords).toContainEqual({ kind: 'opener', multiplier: 1.2 })
+    expect(bare(wearing('leader', false)).keywords).toContainEqual({ kind: 'opener', multiplier: 1.15 })
     expect(bare(wearing('night', false)).keywords).toContainEqual({ kind: 'bane', family: 'undead', multiplier: 1.08 })
   })
 
   it('flat points: Lucky adds crit points, Iron Stomach status resistance', () => {
     const steady = bare(wearing('steadfast', false))
-    expect(bare(wearing('luck', false)).stats.critPct).toBe(steady.stats.critPct + 4)
+    expect(bare(wearing('luck', false)).stats.critPct).toBe(steady.stats.critPct + 3)
     expect(bare(wearing('stomach', false)).stats.statusRes).toBe(steady.stats.statusRes + 8)
   })
 

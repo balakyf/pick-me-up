@@ -13,7 +13,7 @@ import { tacticalFocusBonus } from '../tactical'
 import { addMasterXp } from '../master'
 import { PVP_DEFAULTS } from '../account'
 import { TUNING } from '../tuning'
-import { ANCHORS, ENEMY_TEMPLATES } from '../content'
+import { ANCHORS, ENEMY_TEMPLATES, traitOf } from '../content'
 import { combatPower, deriveStatsForHero, applyXp, xpToNext } from '../stats'
 import { buildEnemyUnit } from '../unit'
 import { makeSeed } from '../rng/rng'
@@ -615,7 +615,12 @@ describe('hero CP sanity', () => {
     const state = makeState({ heroes: [crusher], currentFloor: 1 })
     const { result } = playFloor(state)
     const heroInit = result.result.log.unitsInit.find((u) => u.id === 'h_crush')!
-    const expectedCp = combatPower(deriveStatsForHero(crusher, 25))
+    // The stats module's derivation, plus the innate trait (lane J): this identity is Lucky —
+    // three crit points and the trait's CP term.
+    const trait = traitOf(crusher)
+    expect(trait.id).toBe('lucky')
+    const stats = deriveStatsForHero(crusher, 25)
+    const expectedCp = combatPower({ ...stats, critPct: stats.critPct + 3 }, TUNING.traits.cp[trait.rarity])
     expect(heroInit.cp).toBe(expectedCp)
   })
 })

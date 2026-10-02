@@ -88,7 +88,7 @@ export const TRAITS: Record<TraitId, TraitDef> = {
     rarity: 'common',
     name: 'Brave',
     blurb: 'Scared like everyone else. Goes anyway.',
-    keywords: [{ kind: 'frenzy', belowHpPct: 40, multiplier: 1.08 }],
+    keywords: [{ kind: 'frenzy', belowHpPct: 40, multiplier: 1.06 }],
     flat: { statusRes: 6 },
   },
   lionheart: {
@@ -97,7 +97,7 @@ export const TRAITS: Record<TraitId, TraitDef> = {
     rarity: 'rare',
     name: 'Lionheart',
     blurb: 'The worse it gets, the steadier the hand.',
-    keywords: [{ kind: 'frenzy', belowHpPct: 50, multiplier: 1.14 }],
+    keywords: [{ kind: 'frenzy', belowHpPct: 50, multiplier: 1.12 }],
     flat: { statusRes: 12 },
   },
   // ── Temper: all in, every time.
@@ -107,7 +107,7 @@ export const TRAITS: Record<TraitId, TraitDef> = {
     rarity: 'common',
     name: 'Hot-Blooded',
     blurb: 'Swings first. Thinks about it later, maybe.',
-    statPct: { ...ATK(0.05), pDef: -0.03 },
+    statPct: { ...ATK(0.04), pDef: -0.03 },
   },
   glass_cannon: {
     id: 'glass_cannon',
@@ -115,7 +115,7 @@ export const TRAITS: Record<TraitId, TraitDef> = {
     rarity: 'rare',
     name: 'Glass Cannon',
     blurb: 'Hits like a falling tower. Breaks like a teacup.',
-    statPct: { ...ATK(0.11), maxHP: -0.06 },
+    statPct: { ...ATK(0.09), maxHP: -0.06 },
   },
   // ── Diligence: the one who is still standing.
   steadfast: {
@@ -124,7 +124,7 @@ export const TRAITS: Record<TraitId, TraitDef> = {
     rarity: 'common',
     name: 'Steadfast',
     blurb: 'Plants their feet and does not move.',
-    keywords: [{ kind: 'guard', reduction: 0.04 }],
+    keywords: [{ kind: 'guard', reduction: 0.03 }],
   },
   unbreakable: {
     id: 'unbreakable',
@@ -132,7 +132,7 @@ export const TRAITS: Record<TraitId, TraitDef> = {
     rarity: 'rare',
     name: 'Unbreakable',
     blurb: 'They have been knocked down before. It did not take.',
-    keywords: [{ kind: 'guard', reduction: 0.07 }],
+    keywords: [{ kind: 'guard', reduction: 0.06 }],
     statPct: { pDef: 0.04 },
   },
   // ── Curiosity: learns everything twice as fast, including how to dodge.
@@ -162,7 +162,7 @@ export const TRAITS: Record<TraitId, TraitDef> = {
     rarity: 'common',
     name: 'Lucky',
     blurb: 'Finds coins in the dirt. Finds the gap in the armour.',
-    flat: { critPct: 4 },
+    flat: { critPct: 3 },
   },
   fortunes_child: {
     id: 'fortunes_child',
@@ -171,7 +171,7 @@ export const TRAITS: Record<TraitId, TraitDef> = {
     name: "Fortune's Child",
     blurb: 'The first blow of every fight somehow misses them.',
     keywords: [{ kind: 'aegis', charges: 1 }],
-    flat: { critPct: 5 },
+    flat: { critPct: 4 },
   },
   // ── Warmth: patches people up, themselves included.
   healers_hands: {
@@ -180,7 +180,7 @@ export const TRAITS: Record<TraitId, TraitDef> = {
     rarity: 'common',
     name: "Healer's Hands",
     blurb: 'Binds a wound mid-swing. Theirs or yours.',
-    keywords: [{ kind: 'lifesteal', fraction: 0.04 }],
+    keywords: [{ kind: 'lifesteal', fraction: 0.03 }],
     life: { aptitude: { healer: 1 } },
   },
   saints_touch: {
@@ -189,7 +189,7 @@ export const TRAITS: Record<TraitId, TraitDef> = {
     rarity: 'rare',
     name: "Saint's Touch",
     blurb: 'The wounded feel better when they walk in.',
-    keywords: [{ kind: 'lifesteal', fraction: 0.07 }],
+    keywords: [{ kind: 'lifesteal', fraction: 0.06 }],
     statPct: { mDef: 0.04 },
     life: { aptitude: { healer: 2 } },
   },
@@ -200,7 +200,7 @@ export const TRAITS: Record<TraitId, TraitDef> = {
     rarity: 'common',
     name: 'Spearhead',
     blurb: 'First through the door, every time.',
-    keywords: [{ kind: 'opener', multiplier: 1.2 }],
+    keywords: [{ kind: 'opener', multiplier: 1.15 }],
   },
   born_leader: {
     id: 'born_leader',
@@ -208,7 +208,7 @@ export const TRAITS: Record<TraitId, TraitDef> = {
     rarity: 'rare',
     name: 'Born Leader',
     blurb: 'People fall in behind them without being asked.',
-    keywords: [{ kind: 'opener', multiplier: 1.3 }],
+    keywords: [{ kind: 'opener', multiplier: 1.25 }],
     statPct: { spd: 0.03 },
     life: { aptitude: { instructor: 1 } },
   },
@@ -219,7 +219,7 @@ export const TRAITS: Record<TraitId, TraitDef> = {
     rarity: 'common',
     name: 'Lone Wolf',
     blurb: 'Works best when nobody is watching their back.',
-    alonePct: { ...ATK(0.05), spd: 0.02 },
+    alonePct: { ...ATK(0.04), spd: 0.02 },
   },
   one_man_army: {
     id: 'one_man_army',
@@ -227,8 +227,8 @@ export const TRAITS: Record<TraitId, TraitDef> = {
     rarity: 'rare',
     name: 'One-Man Army',
     blurb: 'Send the others home. They have got this.',
-    statPct: ATK(0.03),
-    alonePct: { ...ATK(0.05), spd: 0.03 },
+    statPct: ATK(0.02),
+    alonePct: { ...ATK(0.04), spd: 0.03 },
   },
   // ── Night owls: at home in the dark, and with what lives there.
   night_fighter: {
@@ -261,7 +261,7 @@ export const TRAITS: Record<TraitId, TraitDef> = {
     rarity: 'common',
     name: 'Iron Stomach',
     blurb: 'Has eaten worse than poison. Ask about the stew.',
-    statPct: { maxHP: 0.03 },
+    statPct: { maxHP: 0.02 },
     flat: { statusRes: 8 },
     life: { hungerSlower: 0.25 },
   },
@@ -271,7 +271,7 @@ export const TRAITS: Record<TraitId, TraitDef> = {
     rarity: 'rare',
     name: 'Strong as an Ox',
     blurb: 'Never sick a day in their life. Never.',
-    statPct: { maxHP: 0.06 },
+    statPct: { maxHP: 0.05 },
     flat: { statusRes: 14 },
     life: { hungerSlower: 0.4 },
   },
