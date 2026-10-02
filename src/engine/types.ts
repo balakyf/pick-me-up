@@ -400,8 +400,10 @@ export interface OwnedHero extends Omit<Hero, 'skillIds'> {
   alive: boolean
   /** 0..100; drains in the tower, regens in the lobby (Phase 3). */
   sanity: number
-  /** In-progress promotion timer; null when not promoting (Phase 4). */
-  promotion: { completesAtWorld: number } | null
+  /** In-progress promotion timer; null when not promoting (Phase 4). The Master's choices at
+   *  the ceremony (lane J) ride along: the class a classless hero takes up and the skill it
+   *  learns (absent = the chamber chooses, as before). */
+  promotion: { completesAtWorld: number; heroClass?: HeroClass; skillId?: string } | null
   /** Equipped item ids per slot (Layer 1 §5); each references GameState.inventory. */
   equipment: HeroEquipment
   /** In-progress Training Center drill; null when not training (schema v5). */
@@ -1569,8 +1571,10 @@ export type Command =
   | { type: 'TICK' }
   /** Kitchen Banquet: spend gold to restore Sanity across the living roster. */
   | { type: 'BANQUET' }
-  /** Start a promotion for an at-cap hero: pay materials, begin the world-time timer. */
-  | { type: 'PROMOTE_HERO'; heroId: HeroId }
+  /** Start a promotion for an at-cap hero: pay materials, begin the world-time timer. The
+   *  ceremony's choices are optional (lane J): one of `promotionPreview`'s class offers (a
+   *  classless hero reaching 3★) and one of its skill offers. */
+  | { type: 'PROMOTE_HERO'; heroId: HeroId; heroClass?: HeroClass; skillId?: string }
   /** Start a facility upgrade: pay gold, begin the world-time build timer. */
   | { type: 'UPGRADE_FACILITY'; facility: FacilityId }
   /** Gem pay-to-skip a running timer. `'promotion'`/`'training'` → HeroId; `'facility'` → FacilityId. */
