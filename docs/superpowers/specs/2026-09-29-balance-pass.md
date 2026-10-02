@@ -314,3 +314,71 @@ new roll is drawn without a chance-based status).
 - **The Wall breaks more often** (whales 4/6 by day 29, one engaged run); the Herald holds.
 - **Engaged loses a few more heroes** (median 8.5 → 14 over 30 days) while casual and whales
   lose far fewer; Act V's archers (the Demon's Marksman strikes the weakest) do most of it.
+
+## Enemy kits, telegraphs and phases (2026-10-02, lane G)
+
+Lane G gave every elite and boss its own kit (2–4 abilities, with cooldowns), wound-up big
+moves the party can answer, boss phases and summons, and the Master's orders 2.0 (notes:
+`docs/superpowers/specs/2026-10-02-lane-g.md`). Base: `365c4ac` (lanes E and F merged).
+
+### What moved (and why)
+
+| Knob | Before → after | Why |
+|---|---|---|
+| Enemy kits (`content/enemySkills.ts`) | 7 one-skill kits → 75 enemy skills; cooldowns on every boss skill | a boss's SP pool is deep, so its rhythm is set by cooldowns, not SP |
+| `e_dragon_breath` | ×0.8 sweep, every turn → ×1.7 sweep, wound up a turn, cooldown 4 | the breath is now an event to answer, not a tax |
+| `e_saints_grace` | no cooldown → cooldown 2 | a Saint no longer heals every turn |
+| `combat/bossTuning.ts` (new) | — | Guard −30 % for at least a party turn or until the move lands; Protect −50 % on a charged blow; a Focus mark takes a sweep at ≥ 60 %; Hold spends SP on 3+ foes or the boss; one order back per cleared wave |
+| Anchor budgets | unchanged | progression stayed within a step of the base (below), so no budget was retuned; reserves (summons) scale with their anchor but are not counted in its budget |
+
+The golden combat values did **not** move: the golden Goblin has no kit, and no new roll is
+drawn (charges, phases, summons, cooldowns and orders are all deterministic).
+
+### Before → after (30 days, from F41, every attempt)
+
+| | AoE share | Median rounds | Enemies act | Deaths / attempt | Median replay 1× |
+|---|---|---|---|---|---|
+| before · 6 seeds | 19.0 % | 3.40 | 99.4 % | 0.179 | 46.0 s |
+| **after · 6 seeds** | **19.5 %** | **3.40** | **99.1 %** | **0.167** | **48.0 s** |
+| before · 3 seeds | 23.0 % | 3.20 | 99.7 % | 0.212 | 43.3 s |
+| after · 3 seeds | 20.4 % | 3.40 | 99.0 % | 0.161 | 50.3 s |
+
+Every gate passes at both sample sizes.
+
+**Progression** (`npm run sim -- 30 6`, medians; highest floor cleared by the end of day *d*):
+
+| Profile | d0 | d1 | d2 | d3 | d5 | d7 | d10 | d14 | d20 | d29 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| casual before | 6 | 12 | 18 | 24 | 36 | 40 | 40 | 55 | 79 | 79 |
+| casual after | 6 | 12 | 18 | 24 | 36 | 40 | 40 | 56 | 79 | 79 |
+| engaged before | 16 | 32 | 40 | 40 | 59 | 59 | 79 | 79 | 79 | 79 |
+| engaged after | 16 | 32 | 39 | 40 | 67 | 79 | 79 | 79 | 79 | 80 |
+| whale before | 25 | 50 | 72 | 79 | 79 | 79 | 79 | 79 | 84 | 89 |
+| whale after | 25 | 49 | 72 | 79 | 79 | 79 | 79 | 79 | 84 | 89 |
+
+| Profile | Finals (6 seeds) | Dead (median) |
+|---|---|---|
+| casual before | 79, 79, 79, 79, 64, 79 | 16.5 |
+| casual after | 79, 79, 79, 79, 72, 79 | 19 |
+| engaged before | 79, 84, 79, 89, 79, 79 | 12 |
+| engaged after | 80, 84, 79, 80, 79, 89 | 9 |
+| whale before | 84, 89, 89, 84, 89, 89 | 11.5 |
+| whale after | 89, 89, 89, 85, 89, 89 | 14 |
+
+`npm run sim -- 30 3`: casual 79/79/79 → 79/79/79, engaged 79/84/79 → 80/84/79, whale
+84/89/89 → 89/89/89; dead casual 21/29/12 → 22/30/11, engaged 20/20/14 → 10/12/5, whale
+6/20/16 → 11/17/7.
+
+**Boss beats and orders** (6 seeds, per fight): wind-ups 0.24 from F41 (0.38 at the Wall),
+47 % of them answered (cancelled by a stun or a kill, braced for, or covered); phases 0.07;
+summoned units 0.08 (0.27 in F41–60: the Egg, Valention). The bots give a Guard or an Unleash
+in about 1 % of fights (they re-resolve only fights that went badly).
+
+### Still open (for lane R)
+
+- **The Wall breaks a little more** for whales (5/6 reach F89 by day 29, was 4/6); the Herald
+  holds every run. Pryos's seals add aegis, but a whale's sweep strips aegis charges quickly.
+- **Engaged climbs Act V faster** (d7 F79, was F59) and loses fewer heroes: the kits make
+  foes spend turns on taunts, bracing and wind-ups the party can kill through. Act V filler
+  could take a small budget step if lane R wants the old pace back.
+- Casual deaths per attempt are level (0.506 → 0.522 over 6 seeds): casual never orders.
