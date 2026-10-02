@@ -190,9 +190,10 @@ export const TUNING = {
      *  Encounters fill to the CP budget, so the level bonus alone mostly trades enemy count
      *  for level; once the bots learned to retreat (keeping their best alive) they walked
      *  through at +20 levels (balance pass 2). Only the gate: F81+ keep their curve.
-     *  1.8 → 2.2 (lane D): with the lower base and anchorBudgetMult 1.4 the gate stands at
-     *  ≈ its old CP, and it still holds for 5 whales in 6 over 30 days. */
-    wallPowerMult: 2.2,
+     *  1.8 → 2.3 (lane D): with the lower base and anchorBudgetMult 1.4 the gate stands at
+     *  about its old CP, and it holds for 6 whales in 6 over 30 days (at 2.2 two broke
+     *  through to F84; before the combat brain one reached F89). */
+    wallPowerMult: 2.3,
     /** Past the inflection the budget exponent eases to this (the LEVEL curve steepens
      *  instead), so a maxed party can reach the summit. 1.04 → 1.045 (lane D): Act VI had
      *  gone soft under the lower base (whales cleared it on day 4 instead of day 12). */
