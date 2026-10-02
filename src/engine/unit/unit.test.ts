@@ -453,6 +453,26 @@ describe('buildEnemyUnit', () => {
     expect(unit.sourceHeroId).toBeUndefined()
   })
 
+  it('a caster template casts a magic Spell instead of a Strike (B5)', () => {
+    const unit = buildEnemyUnit(ENEMY_TEMPLATES.order_mage!, 40, 'e_om_0')
+    expect(unit.skills).toEqual([
+      { id: 'e_spell', name: 'Spell', skillMult: 1.0, damageType: 'magic', element: 'light', target: 'single', spCost: 0 },
+    ])
+    // Its mAtk is the stat that now strikes — and it dwarfs the pAtk it used to swing with.
+    expect(unit.stats.mAtk).toBeGreaterThan(unit.stats.pAtk * 2)
+  })
+
+  it('flags exactly the INT-built templates as casters', () => {
+    const casters = Object.values(ENEMY_TEMPLATES).filter((t) => t.caster).map((t) => t.id).sort()
+    expect(casters).toEqual(
+      ['black_priest', 'crystal_core', 'dark_mage', 'fragment_warden', 'kurushahr', 'lizard_shaman', 'mage_golem', 'order_inquisitor', 'order_mage', 'order_saint', 'wraith'].sort(),
+    )
+    // Every caster leans on INT over STR.
+    for (const t of Object.values(ENEMY_TEMPLATES)) {
+      if (t.caster) expect(t.attrMult.int, t.id).toBeGreaterThan(t.attrMult.str)
+    }
+  })
+
   it('defaults targetTag to the template id', () => {
     const unit = buildEnemyUnit(ENEMY_TEMPLATES.wolf, 5, 'e_wolf_0')
     expect(unit.targetTag).toBe('wolf')

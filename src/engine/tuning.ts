@@ -69,6 +69,20 @@ export const TUNING = {
     maxTicks: 5000,
     /** Damage multiplier a `vulnerable` keyword applies to hits of its element. */
     vulnerableMult: 1.5,
+    /** An HP-cost skill is cast only if the caster keeps at least this % of max HP after
+     *  paying (an ultimate is a gamble, not a suicide). */
+    hpCostFloorPct: 30,
+    /** AoE falloff: an all-enemies skill that strikes n foes hits each for
+     *  ×100 / (100 + aoeFalloffK × (n − 1)) — a sweep spreads its force (2 foes ×0.63
+     *  each, 4 ×0.36, 8 ×0.19). It ended the AoE monopoly: from F41 sweeps dealt 87% of
+     *  the party's damage; now ~46%, and single-target skills finish what a sweep softens
+     *  (lane D, combat brain). */
+    aoeFalloffK: 60,
+    /** Every blow lands at this share of the damage formula: the pace of a fight — how many
+     *  exchanges it lasts — without touching HP, CP or the floor budgets. At 1 a late fight
+     *  was ~1 round and enemies often never acted; at 0.58 it lasts ~3 rounds a side
+     *  (lane D; see docs/superpowers/specs/2026-09-29-balance-pass.md). */
+    damageScale: 0.58,
   },
 
   cp: {

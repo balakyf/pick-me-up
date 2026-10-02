@@ -184,13 +184,21 @@ export function buildCombatUnit(
 // EnemyTemplate → CombatUnit
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** The implicit basic attack every enemy fights with (physical single-strike). */
-function enemyBasicAttack(template: EnemyTemplate): SkillEffect {
+/** The skill id of a caster enemy's basic attack (the replay shows it as a Spell). */
+export const ENEMY_SPELL_ID = 'e_spell'
+
+/**
+ * The implicit basic attack every enemy fights with: a single physical Strike — or, for
+ * a caster template (Order Battlemage, Kurushahr, a Wraith…), a Spell: magic damage from
+ * its mAtk against the target's mDef, so a hero's WIL and magic guards matter.
+ */
+export function enemyBasicAttack(template: EnemyTemplate): SkillEffect {
+  const caster = template.caster === true
   return {
-    id: 'e_basic',
-    name: 'Strike',
+    id: caster ? ENEMY_SPELL_ID : 'e_basic',
+    name: caster ? 'Spell' : 'Strike',
     skillMult: 1.0,
-    damageType: 'physical',
+    damageType: caster ? 'magic' : 'physical',
     element: template.element,
     target: 'single',
     spCost: 0,

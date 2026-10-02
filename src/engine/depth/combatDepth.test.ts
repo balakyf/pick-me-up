@@ -92,7 +92,8 @@ const bond = (a: string, b: string, kind: CombatBond['kind'], affinity = kind ==
 describe('formation', () => {
   const F = DEPTH.formation
   function strike(cls: HeroClass | null, line: Line): number {
-    return firstHit(runBattle([hero({ id: 'h', cls, line, stats: { spd: 200, pAtk: 200 } })], enc([dummy()]), 7), 'h')
+    // A heavy hitter, so rounding the blow never blurs the ratio.
+    return firstHit(runBattle([hero({ id: 'h', cls, line, stats: { spd: 200, pAtk: 2000 } })], enc([dummy()]), 7), 'h')
   }
 
   it('ranged heroes hit harder from the back and softer from the front', () => {
@@ -134,7 +135,7 @@ describe('formation', () => {
 
   it('a mid-line hero heals better (lifesteal)', () => {
     const heal = (line: Line) => {
-      const h = hero({ id: 'h', line, hp: 10, stats: { maxHP: 100_000, spd: 200, pAtk: 400 }, keywords: [{ kind: 'lifesteal', fraction: 0.5 }] })
+      const h = hero({ id: 'h', line, hp: 10, stats: { maxHP: 100_000, spd: 200, pAtk: 4000 }, keywords: [{ kind: 'lifesteal', fraction: 0.5 }] })
       const r = runBattle([h], enc([dummy()]), 5)
       return (r.log.events.find((e) => e.kind === 'heal') as Extract<CombatEvent, { kind: 'heal' }>).amount
     }

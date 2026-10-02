@@ -63,8 +63,10 @@ export const CHALLENGE = {
     bosses: { 20: 'halgiraf', 35: 'kthat', 60: 'el_cid', 80: 'pryos' } as Record<number, string>,
     maxParties: 3,
     maxCrew: 3,
-    /** The raid boss's HP pool is its anchor self × this (three parties' worth). */
-    hpMult: 4,
+    /** The raid boss's HP pool is its anchor self × this (three parties' worth). 4 → 2.4
+     *  with the combat brain's pacing (TUNING.combat.damageScale 0.58): each party still
+     *  carves the same share of the pool in its partyTicks. */
+    hpMult: 2.4,
     /** Each party fights for at most this many ticks before it falls back. */
     partyTicks: 250,
     /** The scales: damage of both types ×(1 − reduction) while they hold. */
