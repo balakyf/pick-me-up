@@ -301,7 +301,9 @@ describe('App smoke — the full climb', () => {
       getStore().load()
     })
     openPlace('Tower Gate')
-    expect(container.textContent).toContain('Act VIII — The Unfinished Floors')
+    // The war room names the acts reached; the ones ahead stay sealed (no spoilers).
+    expect(container.textContent).toContain('Act I — The Prairie')
+    expect(container.textContent).not.toContain('The Unfinished Floors')
     expect(container.textContent).toContain('Event Floor')
     expect(container.textContent).toContain('Chronicle')
     const enter = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('Enter'))
