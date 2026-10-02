@@ -34,7 +34,11 @@ import { beatPopups, flinchDelays } from './popupStyle'
 import { FoeHud } from './FoeHud'
 import { PartyRows } from './PartyRows'
 import { BattleControls } from './BattleControls'
-import type { Aim } from './OrderBar'
+import type { Aim, AimOrder } from './OrderBar'
+import { aimable, clickOrder, guardUp, holdGiven, ordersInHand, swappedPositions } from './ordersPlan'
+import { anyCharge } from './bossCaptions'
+import { Telegraphs } from './Telegraph'
+import { PhaseCinematic } from './PhaseCinematic'
 import { DeathCard, DeathVeil, ResultBanner } from './ResultBanner'
 import { resumeCursor } from './orderResume'
 import { objectiveView } from './objectives'
@@ -86,6 +90,8 @@ export function BattleScene({
   const [log, setLog] = useState(initialLog)
   const [aim, setAim] = useState<Aim>(null)
   const [given, setGiven] = useState(0)
+  // A swap waits for its second hero (lane G).
+  const [swapFirst, setSwapFirst] = useState<string | null>(null)
   const byId = useMemo(() => Object.fromEntries(log.unitsInit.map((u) => [u.id, u])), [log])
   const nameOf = (id: string) => {
     const u = byId[id]
@@ -140,7 +146,9 @@ export function BattleScene({
 
   // The layout (wide / a phone upright / on its side) and the stage's fit (useStageFit.ts).
   const sizeOf = (u: CombatUnitInit) => (u.side === 'hero' ? { w: 24, h: 32 } : enemySize(u.name, u.element))
-  const { mode, pos, zoom, stageW, ox, visible, hudRef, mainRef, wrapRef } = useStageFit(log, byId, sizeOf)
+  const { mode, pos: laidOut, zoom, stageW, ox, visible, hudRef, mainRef, wrapRef } = useStageFit(log, byId, sizeOf)
+  // Two heroes who swapped stand in each other's places (lane G).
+  const pos = useMemo(() => swappedPositions(laidOut, log.events, snap.to + 1), [laidOut, log.events, snap.to])
   const beside = mode === 'beside'
   const docked = mode === 'narrow'
   /** A skill name over a unit near the edge of the stage hangs inward instead of off screen. */
@@ -200,7 +208,8 @@ export function BattleScene({
     snap.targets,
   )
   // The parties march in at the start; a new wave charges on.
-  const entering = (u: CombatUnitInit) => cursor <= 1 || (current?.kind === 'wave-spawn' && current.enemyIds.includes(u.id))
+  const entering = (u: CombatUnitInit) =>
+    cursor <= 1 || ((current?.kind === 'wave-spawn' || current?.kind === 'summon') && current.enemyIds.includes(u.id))
 
   const heroes = log.unitsInit.filter((u) => u.side === 'hero')
   const enemies = log.unitsInit.filter((u) => u.side === 'enemy')
@@ -275,6 +284,7 @@ export function BattleScene({
     if (!orders) return
     const next = orders.give(order)
     setAim(null)
+    setSwapFirst(null)
     setRetreatArmed(false)
     if (!next) return
     // The new log replays the old one exactly up to the order's tick, so the replay goes on
@@ -286,26 +296,38 @@ export function BattleScene({
     setPlaying(true)
     if (order.kind !== 'retreat') setGiven((n) => n + 1)
   }
-  const ordersLeft = orders ? orders.left - given : 0
+  // Orders in hand: the battle's allowance, a refill per wave cleared (lane G), less those given.
+  const ordersLeft = orders ? ordersInHand(orders.left, given, log, tick + 1) : 0
+  const canAim = (u: CombatUnitInit) => aimable(aim, u, !!snap.dead[u.id], !!snap.visible[u.id])
   const aimAt = (u: CombatUnitInit) => {
-    if (!aim || atEnd || snap.dead[u.id]) return
-    if (aim === 'focus' && u.side === 'enemy' && snap.visible[u.id]) give({ tick: tick + 1, kind: 'focus', enemyId: u.id })
+    if (!aim || atEnd || !canAim(u)) return
     // B3: Protect shields anyone on the party's side — the escort too (combat steers enemies
-    // off any overlooked ally, mission NPCs included).
-    if (aim === 'protect' && u.side === 'hero') give({ tick: tick + 1, kind: 'protect', allyId: u.id })
+    // off any overlooked ally, mission NPCs included). Unleash and Swap are for heroes.
+    const r = clickOrder(aim, u, tick + 1, swapFirst)
+    if (r === null) return
+    if ('swapFirst' in r) setSwapFirst(r.swapFirst)
+    else give(r.order)
+  }
+  /** Guard and Hold land at once (no target). */
+  const orderNow = (kind: 'guard' | 'hold') => {
+    if (!orders || atEnd || ordersLeft <= 0) return
+    if (kind === 'hold' && holdGiven(log.events, applied)) return
+    give(kind === 'guard' ? { tick: tick + 1, kind: 'guard' } : { tick: tick + 1, kind: 'hold' })
   }
   /** Play / pause; resuming puts away an aim or an armed retreat (the prompt never lingers). */
   const togglePlay = () => {
     if (!playing) {
       setAim(null)
+      setSwapFirst(null)
       setRetreatArmed(false)
     }
     setPlaying(!playing)
   }
   const hasEscort = heroes.some((u) => u.isNpc)
-  const toggleAim = (which: 'focus' | 'protect') => {
+  const toggleAim = (which: AimOrder) => {
     if (ordersLeft <= 0) return
     setAim(aim === which ? null : which)
+    setSwapFirst(null)
     setRetreatArmed(false)
     setPlaying(false)
   }
@@ -321,8 +343,8 @@ export function BattleScene({
 
   // Keyboard: the battle is a modal overlay, so it listens first (capture phase) and
   // keeps every key from reaching the lobby or the windows underneath.
-  const live = useRef({ atEnd, hasOrders: !!orders, retreat, toggleAim, togglePlay, onDone, last: frames.length - 1 })
-  live.current = { atEnd, hasOrders: !!orders, retreat, toggleAim, togglePlay, onDone, last: frames.length - 1 }
+  const live = useRef({ atEnd, hasOrders: !!orders, retreat, toggleAim, togglePlay, orderNow, onDone, last: frames.length - 1 })
+  live.current = { atEnd, hasOrders: !!orders, retreat, toggleAim, togglePlay, orderNow, onDone, last: frames.length - 1 }
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (isTypingTarget(e.target)) return
@@ -346,18 +368,26 @@ export function BattleScene({
           return
         case 'skip':
           setAim(null)
+          setSwapFirst(null)
           setRetreatArmed(false)
           setCursor(L.last)
           return
         case 'focus':
         case 'protect':
+        case 'unleash':
+        case 'swap':
           if (L.hasOrders) L.toggleAim(act.kind)
+          return
+        case 'guard':
+        case 'hold':
+          if (L.hasOrders) L.orderNow(act.kind)
           return
         case 'retreat':
           if (L.hasOrders) L.retreat()
           return
         case 'escape':
           setAim(null)
+          setSwapFirst(null)
           setRetreatArmed(false)
           return
       }
@@ -434,7 +464,7 @@ export function BattleScene({
                         falling: fallen?.id === u.id,
                         entering: entering(u),
                         cheering: atEnd && outcome === 'win' && isHero && !dead,
-                        aimable: (aim === 'focus' && !isHero && !dead) || (aim === 'protect' && isHero && !dead),
+                        aimable: canAim(u),
                         hpPct: (Math.max(0, snap.hp[u.id] ?? u.maxHP) / u.maxHP) * 100,
                         skillFlash: skillHit ? snap.skill!.color : null,
                         banner: casting ? { name: snap.skill!.name, color: snap.skill!.color, edge: bannerEdge(p.x, snap.skill!.name) } : null,
@@ -465,6 +495,8 @@ export function BattleScene({
                   />
                 )}
 
+                <Telegraphs view={snap.boss} pos={pos} heightOf={(id) => (byId[id] ? sizeOf(byId[id]!).h : 32)} dead={snap.dead} tick={tick} atEnd={atEnd} />
+
                 <DamagePopups
                   items={popups}
                   pos={pos}
@@ -489,6 +521,7 @@ export function BattleScene({
           {cutIn && <SkillCutIn key={cutIn.key} bust={cutIn.bust} name={cutIn.name} color={cutIn.color} side="right" />}
           {!atEnd && waveBanner && <WaveBanner key={`w${current!.seq}`} n={waveBanner.n} total={waveBanner.total} />}
           {!atEnd && waveCleared && <WaveCleared key={`c${current!.seq}`} n={waveCleared.n} total={waveCleared.total} calm={reduced} />}
+          {!atEnd && current?.kind === 'phase' && <PhaseCinematic key={`p${current.seq}`} e={current} name={nameOf(current.unitId)} calm={reduced} />}
           <div className="stage-top">
             <div className="stage-top-left">{!docked && !beside && objective}</div>
             <div className="battle-caption pframe">{snap.caption}</div>
@@ -509,7 +542,7 @@ export function BattleScene({
         {beside && turns}
         {beside && hintCard}
         <FoeHud live={liveEnemies} snap={snap} aiming={aim === 'focus'} onAim={aimAt} marked={view?.marked ?? []} />
-        <PartyRows heroes={heroes} snap={snap} aiming={aim === 'protect'} bustOf={bustOf} onAim={aimAt} />
+        <PartyRows heroes={heroes} snap={snap} aiming={aim === 'protect'} aimableFor={canAim} picked={swapFirst} bustOf={bustOf} onAim={aimAt} />
         <BattleControls
           atEnd={atEnd}
           playing={playing}
@@ -520,7 +553,21 @@ export function BattleScene({
           onDone={onDone}
           orders={
             orders
-              ? { aim, left: ordersLeft, retreatArmed, onAim: toggleAim, onRetreat: retreat, focusBonus: orders.focusBonus ?? 0, escort: hasEscort }
+              ? {
+                  aim,
+                  left: ordersLeft,
+                  retreatArmed,
+                  onAim: toggleAim,
+                  onRetreat: retreat,
+                  focusBonus: orders.focusBonus ?? 0,
+                  escort: hasEscort,
+                  onGuard: () => orderNow('guard'),
+                  onHold: () => orderNow('hold'),
+                  bigMove: anyCharge(snap.boss),
+                  holding: holdGiven(log.events, applied),
+                  guarding: guardUp(log.events, applied),
+                  swapFirst,
+                }
               : null
           }
           kbd={kbd}

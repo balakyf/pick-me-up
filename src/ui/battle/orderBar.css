@@ -1,0 +1,24 @@
+/* Lane G — the Master's orders 2.0: icons + labels, a Guard that calls for attention when a
+   foe winds up, the hero picked first for a swap, and thumb-sized tiles on a phone. */
+.order-bar .ord { display: inline-flex; align-items: center; gap: 3px; }
+.order-bar .ord-ico { font-size: 1.05em; line-height: 1; }
+.order-bar .ord-left { white-space: nowrap; }
+.order-bar .ord-guard.urgent {
+  border-color: #ff5a3a; color: #ffe08a;
+  box-shadow: 0 0 0 1px #ff5a3a, 0 0 8px #ff5a3a88;
+  animation: ordUrgent 0.6s steps(3) infinite alternate;
+}
+@keyframes ordUrgent { from { box-shadow: 0 0 0 1px #ff5a3a, 0 0 2px #ff5a3a55; } to { box-shadow: 0 0 0 1px #ff5a3a, 0 0 10px #ff5a3aaa; } }
+.battle.calm .order-bar .ord-guard.urgent { animation: none; }
+.party-row.picked { outline: 2px solid var(--gold); background: #f2c75c22; }
+
+/* A phone upright: the orders become a 4-column grid of 44px tiles (icon over label). */
+.battle.narrow .order-bar {
+  display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; width: 100%;
+}
+.battle.narrow .order-bar .ord {
+  flex-direction: column; justify-content: center; gap: 0; min-height: 44px; padding: 2px 2px; font-size: 12px; line-height: 1.1;
+}
+.battle.narrow .order-bar .ord-ico { font-size: 16px; }
+.battle.narrow .order-bar .ord-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.battle.narrow .order-bar .ord-left { grid-column: span 4; text-align: center; order: 9; }

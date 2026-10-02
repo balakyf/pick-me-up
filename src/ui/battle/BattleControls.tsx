@@ -2,7 +2,7 @@ import type { ReactNode } from 'react'
 import { t } from '../i18n/i18n'
 import { BATTLE_KEYS } from './battleFx'
 import { SPEEDS } from './battleFrames'
-import { OrderBar, type Aim } from './OrderBar'
+import { OrderBar, type Aim, type AimOrder } from './OrderBar'
 
 /** Play/pause, speed, skip and the Master's orders; Continue once the replay ends. */
 export function BattleControls({
@@ -28,8 +28,17 @@ export function BattleControls({
     aim: Aim
     left: number
     retreatArmed: boolean
-    onAim: (which: 'focus' | 'protect') => void
+    onAim: (which: AimOrder) => void
     onRetreat: () => void
+    /** Orders 2.0 (lane G): Guard and Hold land at once. */
+    onGuard?: () => void
+    onHold?: () => void
+    /** A foe is winding up a big move (Guard calls for attention). */
+    bigMove?: boolean
+    holding?: boolean
+    guarding?: boolean
+    /** The first hero picked for a swap. */
+    swapFirst?: string | null
     /** The Tactical Center's bonus a Focus carries (0 = none). */
     focusBonus?: number
     /** A mission NPC (an escort) stands on the party's side and can be protected. */
@@ -65,12 +74,28 @@ export function BattleControls({
               onRetreat={orders.onRetreat}
               focusBonus={orders.focusBonus ?? 0}
               escort={!!orders.escort}
+              onGuard={orders.onGuard}
+              onHold={orders.onHold}
+              bigMove={!!orders.bigMove}
+              holding={!!orders.holding}
+              guarding={!!orders.guarding}
+              swapFirst={orders.swapFirst ?? null}
               kbd={kbd}
             />
           )}
           {orders?.aim && (
             <span className="aim-hint">
-              {orders.aim === 'focus' ? t('Click an enemy…') : orders.escort ? t('Click a hero or the escort…') : t('Click a hero…')}
+              {orders.aim === 'focus'
+                ? t('Click an enemy…')
+                : orders.aim === 'unleash'
+                  ? t('Click the hero to unleash…')
+                  : orders.aim === 'swap'
+                    ? orders.swapFirst
+                      ? t('Click the hero to trade places with…')
+                      : t('Click the first hero to swap…')
+                    : orders.escort
+                      ? t('Click a hero or the escort…')
+                      : t('Click a hero…')}
               {kbd(BATTLE_KEYS.close)}
             </span>
           )}
