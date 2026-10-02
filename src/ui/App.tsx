@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import '@fontsource/pixelify-sans/400.css'
 import '@fontsource/pixelify-sans/600.css'
+import './fonts.css'
 import './ui.css'
 import { useGame, getStore } from './useGame'
 import { TitleScreen } from './title/TitleScreen'

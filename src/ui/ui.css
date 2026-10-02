@@ -24,7 +24,8 @@
   --good: #6ad07a;
   --bad: #ef5d6b;
   --warn: #f2a65a;
-  --font: 'Pixelify Sans', 'Courier New', ui-monospace, monospace;
+  /* 'PMU Digits' carries only 0–9 (fonts.css): Pixelify's numerals misread at UI sizes. */
+  --font: 'PMU Digits', 'Pixelify Sans', 'Courier New', ui-monospace, monospace;
 }
 
 * { box-sizing: border-box; }
@@ -38,7 +39,13 @@ body {
   -webkit-font-smoothing: none;
   -moz-osx-font-smoothing: grayscale;
 }
-button { font-family: var(--font); }
+/* Pixelify Sans' fi/fl/ff ligatures draw like a capital A ("Take your Arst summon"):
+   no ligatures anywhere. Form controls don't inherit font settings, so they get it too. */
+body, button, input, select, textarea, kbd, canvas {
+  font-variant-ligatures: none;
+  font-feature-settings: 'liga' 0, 'clig' 0, 'calt' 0;
+}
+button, input, select, textarea { font-family: var(--font); }
 img.px, canvas.px { image-rendering: pixelated; image-rendering: crisp-edges; }
 .app { min-height: 100%; display: flex; flex-direction: column; }
 .spacer { flex: 1; }

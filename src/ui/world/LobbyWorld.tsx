@@ -57,6 +57,7 @@ import { heroBustUrl, heroFrameCanvas, iselBustUrl, masterBustUrl, masterFrameCa
 import type { Dir, WalkFrame } from '../pixel/heroSprite'
 import { hashString } from '../pixel/rand'
 import { t, t as tr } from '../i18n/i18n'
+import { breakLigatures, canvasFont, plainText } from '../canvasText'
 
 /**
  * The waiting room as a walkable campus (Living Lobby spec §3). The Master walks with
@@ -263,7 +264,8 @@ const KEY_DIR: Record<string, Dir> = {
 
 /** A speech bubble that wraps to up to three lines above a hero. */
 function drawBubble(ctx: CanvasRenderingContext2D, text: string, x: number, y: number): void {
-  ctx.font = '8px "Pixelify Sans", monospace'
+  plainText(ctx, canvasFont(8))
+  text = breakLigatures(text)
   const maxW = 128
   const words = text.split(' ')
   const lines: string[] = []
@@ -1020,7 +1022,7 @@ export function LobbyWorld({
       // Markers over every unbuilt place: a hammer (build here), a padlock (not yet), an
       // hourglass (under way). Labels show once the Master is close enough to read them.
       const bob = Math.round(Math.sin(w.time * 3) * 1.5)
-      ctx.font = '8px "Pixelify Sans", monospace'
+      plainText(ctx, canvasFont(8))
       ctx.textAlign = 'center'
       for (const mk of siteMarkers(st)) {
         const mx = mk.x - camX
@@ -1030,7 +1032,7 @@ export function LobbyWorld({
         if (icon) ctx.drawImage(icon, Math.round(mx - 7), Math.round(my - 16))
         const near = Math.abs(mk.x / TILE - m.x) + Math.abs(mk.y / TILE - m.y) < 16
         if (near) {
-          const text = mk.text
+          const text = breakLigatures(mk.text)
           const tw = ctx.measureText(text).width
           ctx.fillStyle = 'rgba(20,12,32,0.8)'
           ctx.fillRect(Math.round(mx - tw / 2 - 3), Math.round(my - 28), Math.ceil(tw + 6), 10)

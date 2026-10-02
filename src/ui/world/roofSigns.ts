@@ -8,6 +8,7 @@ import { TILE } from './lobbyMap'
 import { BUILDING_ICON, type Building, type RoomId, type Zone, type ZoneId } from './lobbyMap'
 import { ROOF_LIFT } from '../pixel/campusProps'
 import { t } from '../i18n/i18n'
+import { breakLigatures, canvasFont, plainText } from '../canvasText'
 
 export type SignState = 'built' | 'site' | 'building'
 
@@ -53,13 +54,14 @@ function drawSign(
   const k = 1 / Math.max(0.5, zoom)
   const namePx = Math.max(7, NAME_PX * k)
   const iconPx = Math.max(10, ICON_PX * k)
-  const sub = state === 'site' ? t('not built yet') : state === 'building' ? t('under construction') : ''
+  const sub = breakLigatures(state === 'site' ? t('not built yet') : state === 'building' ? t('under construction') : '')
+  label = breakLigatures(label)
   ctx.save()
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'
-  ctx.font = `600 ${namePx}px 'Pixelify Sans', 'Courier New', monospace`
+  plainText(ctx, canvasFont(namePx, 600))
   const nameW = ctx.measureText(label).width
-  ctx.font = `${namePx * 0.8}px 'Pixelify Sans', 'Courier New', monospace`
+  ctx.font = canvasFont(namePx * 0.8)
   const subW = sub ? ctx.measureText(sub).width : 0
   const pad = 4 * k
   const lineGap = 2 * k
@@ -83,12 +85,12 @@ function drawSign(
   ctx.fillText(state === 'built' ? icon : '🔨', cx, ly)
   ctx.globalAlpha /= state === 'built' ? 1 : 0.7
   ly += iconPx / 2 + lineGap + namePx / 2
-  ctx.font = `600 ${namePx}px 'Pixelify Sans', 'Courier New', monospace`
+  ctx.font = canvasFont(namePx, 600)
   ctx.fillStyle = state === 'built' ? '#f6e6b8' : '#c8c2d8'
   ctx.fillText(label, cx, ly, boxW - pad)
   if (sub) {
     ly += namePx / 2 + lineGap + (namePx * 0.8) / 2
-    ctx.font = `${namePx * 0.8}px 'Pixelify Sans', 'Courier New', monospace`
+    ctx.font = canvasFont(namePx * 0.8)
     ctx.fillStyle = '#9a94b0'
     ctx.fillText(sub, cx, ly, boxW - pad)
   }
