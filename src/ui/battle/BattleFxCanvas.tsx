@@ -21,8 +21,8 @@ export interface FxHandle {
   burst(kind: BurstKind, element: Element, x: number, y: number, dir: 1 | -1): void
   /** Hit-stop: hold every particle still for `ms`. */
   freeze(ms: number): void
-  /** Lane I: a skill's effect (skillFx.ts) playing over `ms` real milliseconds. */
-  skill(cast: FxCast, ms: number): void
+  /** Lane I: a skill's effect (skillFx.ts) playing over `ms` real milliseconds, after `delay`. */
+  skill(cast: FxCast, ms: number, delay?: number): void
 }
 
 const MAX_PARTICLES = 500
@@ -72,9 +72,9 @@ export const BattleFxCanvas = forwardRef<
     freeze(ms) {
       sim.current.frozenUntil = performance.now() + ms
     },
-    skill(cast, ms) {
+    skill(cast, ms, delay = 0) {
       const s = sim.current
-      s.casts.push({ cast, ms: Math.max(120, ms), elapsed: 0 })
+      s.casts.push({ cast, ms: Math.max(120, ms), elapsed: -Math.max(0, delay) })
       if (s.casts.length > MAX_CASTS) s.casts.splice(0, s.casts.length - MAX_CASTS)
     },
   }))
@@ -132,6 +132,7 @@ export const BattleFxCanvas = forwardRef<
       // Skills' effects (lane I): whole logical pixels, drawn over the sparks.
       let flash: string | null = null
       for (const lc of s.casts) {
+        if (lc.elapsed < 0) continue // a striker still running in
         const t = lc.elapsed / lc.ms
         for (const op of fxOps(lc.cast, t)) {
           ctx.globalAlpha = op.alpha

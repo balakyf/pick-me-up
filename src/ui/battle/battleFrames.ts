@@ -117,8 +117,13 @@ export function layout(
   const reserve = new Set(log.events.flatMap((e) => (e.kind === 'summon' ? e.enemyIds : [])))
   const unseen = (u: CombatUnitInit) => u.side === 'enemy' && waveOf[u.id] === undefined && /_r[^_]*_\d+$/.test(u.id) && !reserve.has(u.id)
   const groups = new Map<string, CombatUnitInit[]>()
+  const waveKey = (u: CombatUnitInit) => `${u.side}|${u.side === 'enemy' ? (unseen(u) ? 'r' : waveOf[u.id] ?? 0) : 0}`
+  // Lane I: a wave with a towering foe in it forms one rank around it, whatever their lines.
+  const towering = new Set(
+    sizeOf ? log.unitsInit.filter((u) => u.side === 'enemy' && sizeOf(u.id).h >= TALL).map(waveKey) : [],
+  )
   for (const u of log.unitsInit) {
-    const key = `${u.side}|${u.side === 'enemy' ? (unseen(u) ? 'r' : waveOf[u.id] ?? 0) : 0}|${u.line}`
+    const key = towering.has(waveKey(u)) ? `${waveKey(u)}|front` : `${waveKey(u)}|${u.line}`
     if (!groups.has(key)) groups.set(key, [])
     groups.get(key)!.push(u)
   }
@@ -129,17 +134,28 @@ export function layout(
     // stands abreast, front to back, instead of stacking bodies twice a hero's height.
     const tall = sizeOf ? units.filter((u) => sizeOf(u.id).h >= TALL) : []
     if (side === 'enemy' && sizeOf && units.length > 1 && tall.length > 0) {
-      const big = [...tall, ...units.filter((u) => !tall.includes(u))]
-      const front = ENEMY_X[units[0]!.line]
+      // The towering ones abreast from the front, alternating a little up and down…
+      const front = ENEMY_X.front
+      const small = units.filter((u) => !tall.includes(u))
       const xs: number[] = []
-      big.forEach((u, i) => xs.push(i === 0 ? front : xs[i - 1]! - ((sizeOf(big[i - 1]!.id).w + sizeOf(u.id).w) * 0.32 + 6)))
-      // A crowd that would run off the stage's edge closes ranks to fit.
-      const last = big[big.length - 1]!
-      const minX = sizeOf(last.id).w / 2 + 4
-      const k = xs[xs.length - 1]! < minX ? (front - minX) / Math.max(1, front - xs[xs.length - 1]!) : 1
-      big.forEach((u, i) => {
-        const x = front - (front - xs[i]!) * k
-        pos[u.id] = { x: Math.round(CANON_MID + (x - CANON_MID) * squeeze), y: i % 2 === 0 ? 176 : 150 }
+      tall.forEach((u, i) => xs.push(i === 0 ? front : xs[i - 1]! - ((sizeOf(tall[i - 1]!.id).w + sizeOf(u.id).w) * 0.32 + 6)))
+      // …the rest of the rank in a file behind them (two files past three)…
+      const lastTall = tall[tall.length - 1]!
+      const behind = xs[xs.length - 1]! - sizeOf(lastTall.id).w / 2 - 14
+      const files = small.length > 3 ? 2 : small.length > 0 ? 1 : 0
+      const backmost = behind - (files - 1) * 30 - 12
+      // …and a crowd that would run off the stage's edge closes ranks to fit.
+      const minX = small.length > 0 ? 16 : sizeOf(lastTall.id).w / 2 + 4
+      const leftmost = small.length > 0 ? backmost : xs[xs.length - 1]!
+      const k = leftmost < minX ? (front - minX) / Math.max(1, front - leftmost) : 1
+      const at = (x: number) => Math.round(CANON_MID + (front - (front - x) * k - CANON_MID) * squeeze)
+      tall.forEach((u, i) => (pos[u.id] = { x: at(xs[i]!), y: i % 2 === 0 ? 176 : 150 }))
+      const n = Math.ceil(small.length / Math.max(1, files))
+      small.forEach((u, idx) => {
+        const col = idx % files
+        const i = Math.floor(idx / files)
+        const y = n === 1 ? 168 : 134 + (66 * i) / (n - 1)
+        pos[u.id] = { x: at(behind - col * 30 - (i % 2) * 8), y: Math.round(y) }
       })
       continue
     }

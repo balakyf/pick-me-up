@@ -27,6 +27,7 @@ import {
   cutInActs,
   eventActor,
   frameAtEvents,
+  DURATION,
   frameHold,
   showHoldsFor,
   type Snap,
@@ -325,7 +326,13 @@ export function BattleScene({
     const targets = castTargets(log.events, leadIndex)
       .map(at)
       .filter((p): p is NonNullable<typeof p> => p !== null)
-    fx.current?.skill({ profile, caster, targets, dir: actor.side === 'enemy' ? 1 : -1, seed: (log.seed ^ (current.seq * 2654435761)) >>> 0 }, profile.ms / pace)
+    // A striker who runs across the field lands the effect when it arrives.
+    const runs = style === 'melee' && profile.shape !== 'aura-up' && profile.shape !== 'dome' && profile.shape !== 'motes'
+    fx.current?.skill(
+      { profile, caster, targets, dir: actor.side === 'enemy' ? 1 : -1, seed: (log.seed ^ (current.seq * 2654435761)) >>> 0 },
+      profile.ms / pace,
+      runs ? DURATION.act / pace : 0,
+    )
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cursor, log])
 
