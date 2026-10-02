@@ -106,7 +106,10 @@ export function advanceTime(state: GameState, nowWorld: number): GameState {
     promotionsCompleted * TUNING.lobby.master.xpPerPromotion +
     facilitiesCompleted * TUNING.lobby.master.xpPerFacilityUpgrade +
     drillsCompleted * TUNING.lobby.master.xpPerTrainingDrill
-  if (masterGain > 0) meta = addMasterXp(meta, masterGain)
+  // Always settle (even a gain of 0): a save written under the old Master-Level curve may
+  // hold more XP than the baked table's next level needs — it carries over on the first tick
+  // instead of showing "1500 / 1260 XP" until the next clear (B21; no migration needed).
+  meta = addMasterXp(meta, masterGain)
 
   // The account lifecycle (Layer 4 §5.2): a world at zero Probability Interference greys,
   // and after six months (real) it is deleted — the canon grey towers.

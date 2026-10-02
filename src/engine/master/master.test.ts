@@ -3,6 +3,7 @@ import { masterXpToNext, masterXpTotal, addMasterXp, floorClearMasterXp } from '
 import { MASTER_XP_TO_NEXT } from './masterXpTable'
 import { TUNING } from '../tuning'
 import { createAccount } from '../account'
+import { advanceTime } from '../time'
 import type { MetaState } from '../types'
 
 const BASE_META = createAccount(1).meta
@@ -97,5 +98,15 @@ describe('addMasterXp', () => {
     addMasterXp(m, masterXpToNext(1) + 5)
     expect(m.masterLevel).toBe(1)
     expect(m.masterXp).toBe(0)
+  })
+
+  it('an older save holding more XP than the new table asks settles on the next tick', () => {
+    // Saved under round(60·L^1.8): ML7 with 1,900 of the 1,998 it then needed.
+    const acct = createAccount(4, { now: 0 })
+    const old = { ...acct, meta: { ...acct.meta, masterLevel: 7, masterXp: 1900, lastSeenAtWorld: 0 } }
+    const next = advanceTime(old, 1000).meta
+    expect(next.masterLevel).toBeGreaterThan(7)
+    expect(next.masterXp).toBeLessThan(masterXpToNext(next.masterLevel))
+    expect(masterXpTotal(next.masterLevel) + next.masterXp).toBe(masterXpTotal(7) + 1900)
   })
 })
