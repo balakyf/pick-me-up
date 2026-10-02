@@ -204,7 +204,7 @@ kbd {
 .menu-item:hover::after { content: '◀'; position: absolute; right: 8px; color: var(--gold); font-size: 12px; }
 .menu-icon { width: 22px; text-align: center; }
 .menu-confirm { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.menu-foot { display: flex; justify-content: space-between; margin-top: 16px; padding-top: 12px; border-top: 2px solid #4a3e8e; gap: 8px; }
+.menu-foot { display: flex; flex-wrap: wrap; justify-content: space-between; margin-top: 16px; padding-top: 12px; border-top: 2px solid #4a3e8e; gap: 8px; }
 
 /* Facility panels (inside windows) */
 .place-blurb { margin: 0 0 12px; color: var(--ink-dim); font-size: 15px; font-style: italic; }
@@ -400,6 +400,12 @@ span.arm-slot { padding: 2px 8px; border: 2px dashed #3e3478; color: var(--ink-f
 .title-parade { display: flex; gap: 6px; align-items: flex-end; margin: 18px 0 6px; min-height: 96px; }
 .title-parade img { animation: float 1.2s steps(2) infinite; }
 .title-parade img:nth-child(2n) { animation-delay: -0.6s; }
+/* A phone fits the whole parade of seven (each scales down to share the width). */
+@media (max-width: 600px) {
+  .title-parade { gap: 4px; min-height: 0; }
+  .title-parade img { width: calc((100vw - 56px) / 7); height: auto; }
+  .title-wrap .btns { gap: 12px; flex-wrap: wrap; justify-content: center; }
+}
 
 /* Skill progress on results */
 .skill-progress { margin: 10px 0 4px; display: flex; flex-direction: column; gap: 4px; text-align: left; }
