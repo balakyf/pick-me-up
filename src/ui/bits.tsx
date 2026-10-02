@@ -5,6 +5,7 @@ import { ENGRAVINGS, SKILLS } from '../engine/content'
 import { maxLevelFor, skillCp } from '../engine/skills'
 import { engravingCp } from '../engine/engravings'
 import { t } from './i18n/i18n'
+import { fixArticles } from './text'
 
 /** Visual tokens for elements. */
 export const ELEMENT_VIS: Record<Element, { glyph: string; color: string; label: string }> = {
@@ -35,11 +36,12 @@ export const STAR_COLOR: Record<Star, string> = {
   7: '#ef5d6b',
 }
 
+/** A hero with no class yet is 'Untrained' (a commoner who answered the call), not 'Classless'. */
 export function classLabel(c: HeroClass | null): string {
-  return c === null ? t('Classless') : t(CLASS_VIS[c].label)
+  return c === null ? t('Untrained') : t(CLASS_VIS[c].label)
 }
 export function classGlyph(c: HeroClass | null): string {
-  return c === null ? '—' : CLASS_VIS[c].glyph
+  return c === null ? '🔰' : CLASS_VIS[c].glyph
 }
 
 /** Display CP — the same number the combat unit carries (stats + skills term). */
@@ -120,10 +122,13 @@ export function ElementBadge({ element }: { element: Element }) {
   )
 }
 
-export function ClassBadge({ heroClass }: { heroClass: HeroClass | null }) {
+/** The class badge; with `trade` (hero/heroLabel bornTrade) an untrained hero shows the trade they were born to. */
+export function ClassBadge({ heroClass, trade }: { heroClass: HeroClass | null; trade?: string }) {
+  const title = trade ? fixArticles(t('{cls} · a {trade} before the summon', { cls: classLabel(heroClass), trade })) : classLabel(heroClass)
   return (
-    <span className="tag" title={classLabel(heroClass)}>
+    <span className="tag" title={title}>
       {classGlyph(heroClass)} {classLabel(heroClass)}
+      {trade && heroClass === null && <span className="class-trade"> · {trade}</span>}
     </span>
   )
 }

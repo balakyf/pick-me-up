@@ -6,6 +6,8 @@ import { upgradeCost, canUpgrade, unlockMasterLevel } from '../../engine/facilit
 import { toWorldTime } from '../../engine/time'
 import { Portrait } from '../bits'
 import { t } from '../i18n/i18n'
+import { PickerName, pickerName, starLevel } from '../hero/heroLabel'
+import { fmtInt } from '../text'
 
 /**
  * Pieces shared by the facility panels (src/ui/facilities/*): where a hero "is", the
@@ -34,14 +36,14 @@ export function sanityColor(s: number): string {
 }
 
 /** Heroes currently in a room, as bust chips with their morale gauge. */
-export function Occupants({ heroes, empty }: { heroes: OwnedHero[]; empty: string }) {
-  if (heroes.length === 0) return <div className="lr-empty">{empty}</div>
+export function Occupants({ state, heroes, empty }: { state: GameState; heroes: OwnedHero[]; empty: string }) {
+  if (heroes.length === 0) return <div className="lr-empty">{t(empty)}</div>
   return (
     <div className="occupants">
       {heroes.map((h) => (
-        <div key={h.id} className="occupant" title={`${h.name} · ${t('Sanity')} ${h.sanity}/${SANITY_MAX}`}>
+        <div key={h.id} className="occupant" title={`${h.name} · ${starLevel(h)} · ${t('Sanity')} ${Math.round(h.sanity)}/${SANITY_MAX}`}>
           <Portrait hero={h} size="sm" />
-          <span className="lh-name">{h.name.split(/\s+/)[0]}</span>
+          <span className="lh-name">{pickerName(state, h)}</span>
           <span className="lh-sanity">
             <span style={{ width: `${Math.round((h.sanity / SANITY_MAX) * 100)}%`, background: sanityColor(h.sanity) }} />
           </span>
@@ -115,7 +117,7 @@ export function UpgradeControl({ state, store, facility }: { state: GameState; s
       <span className="lr-action-note">{note}</span>
       {!maxed && (
         <button className="btn sm" onClick={() => dispatch({ type: 'UPGRADE_FACILITY', facility })} disabled={!ok}>
-          {isBuild ? '🔨 Build' : '⬆ Upgrade'} · {cost.toLocaleString()} ◆
+          {isBuild ? t('🔨 Build · {gold} ◆', { gold: fmtInt(cost) }) : t('⬆ Upgrade · {gold} ◆', { gold: fmtInt(cost) })}
         </button>
       )}
       {err && <div className="lr-action-note" style={{ color: 'var(--bad)' }}>{err}</div>}
@@ -131,13 +133,19 @@ const MAT_LABEL: Record<string, string> = {
 export const matLabel = (id: string): string =>
   MAT_LABEL[id] !== undefined ? t(MAT_LABEL[id]) : id.startsWith('attrStone_') ? `🔹 ${id.slice('attrStone_'.length)}` : id
 
-/** A clickable hero chip used by the synthesis pickers. */
+/**
+ * A clickable hero chip used by the facility pickers (Synthesis, Transfer, Training):
+ * the name is disambiguated and carries star and level, so the wrong Maren is never
+ * the one sacrificed.
+ */
 export function HeroChip({
+  state,
   hero,
   selected,
   onClick,
   label,
 }: {
+  state: GameState
   hero: OwnedHero
   selected: boolean
   onClick: () => void
@@ -148,10 +156,12 @@ export function HeroChip({
       type="button"
       className={`syn-chip ${selected ? 'sel' : ''}`}
       onClick={onClick}
-      title={`${hero.name} · ${hero.star}★ · Sanity ${hero.sanity}`}
+      title={`${hero.name} · ${starLevel(hero)} · ${t('Sanity')} ${Math.round(hero.sanity)}`}
     >
       <Portrait hero={hero} size="sm" />
-      <span className="syn-chip-name">{hero.name.split(/\s+/)[0]}</span>
+      <span className="syn-chip-name">
+        <PickerName state={state} hero={hero} />
+      </span>
       {label && <span className="muted"> {label}</span>}
     </button>
   )

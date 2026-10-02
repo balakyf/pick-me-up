@@ -3,6 +3,7 @@ import { TUNING } from '../../engine/tuning'
 import { HIDDEN_OBJECTIVES } from '../../engine/content'
 import { t } from '../i18n/i18n'
 import { skillProgressLine } from './skillProgress'
+import { fmtInt } from '../text'
 
 // ── Results ──────────────────────────────────────────────────────────────────
 export function ResultsScreen({
@@ -31,11 +32,11 @@ export function ResultsScreen({
 
         <div className="reward-row">
           <div className="r">
-            <div className="n" style={{ color: 'var(--gold)' }}>+{result.goldAwarded.toLocaleString()}</div>
+            <div className="n" style={{ color: 'var(--gold)' }}>+{fmtInt(result.goldAwarded)}</div>
             <div className="l">{t('Gold')}</div>
           </div>
           <div className="r">
-            <div className="n" style={{ color: 'var(--accent-2)' }}>+{result.xpAwarded}</div>
+            <div className="n" style={{ color: 'var(--accent-2)' }}>+{fmtInt(result.xpAwarded)}</div>
             <div className="l">{t('XP each')}</div>
           </div>
         </div>

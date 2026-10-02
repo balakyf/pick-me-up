@@ -7,6 +7,8 @@ import { upgradeCost as forgeUpgradeCost, upgradeOdds, upgradeRefusal } from '..
 import { upgradeEquipmentWithResult } from '../../engine/store'
 import { TimingGame } from '../metaPanels'
 import { t } from '../i18n/i18n'
+import { HeroTag, pickerName } from '../hero/heroLabel'
+import { fmtInt, ta, tn } from '../text'
 
 const EQUIP = TUNING.lobby.equipment
 /** Forged item names come from the engine in English ("S Blade", "Aria's Oath-Blade"). */
@@ -82,7 +84,7 @@ export function Armory({ state, store }: { state: GameState; store: Store }) {
       {/* Forge — one button per slot, each forging the best grade the Master Level allows. */}
       <div className="syn-section">
         <div className="syn-label">
-          Forge · grade {grade} · ◆ {cost.gold.toLocaleString()} + {cost.promotionStone} stone{cost.promotionStone === 1 ? '' : 's'}
+          {tn(cost.promotionStone, 'Forge · grade {grade} · ◆ {gold} + 1 stone', 'Forge · grade {grade} · ◆ {gold} + {n} stones', { grade, gold: fmtInt(cost.gold) })}
         </div>
         <div className="syn-modes">
           {EQUIP_SLOTS.map((slot) => (
@@ -91,9 +93,9 @@ export function Armory({ state, store }: { state: GameState; store: Store }) {
               className="btn sm"
               disabled={!affordable}
               onClick={() => run({ type: 'CRAFT_EQUIPMENT', slot }, 'Forge failed')}
-              title={`Forge a ${itemName(slot, grade)}`}
+              title={ta('Forge a {item}', { item: itemLabel(itemName(slot, grade)) })}
             >
-              {SLOT_GLYPH[slot]} {itemName(slot, grade)}
+              {SLOT_GLYPH[slot]} {itemLabel(itemName(slot, grade))}
             </button>
           ))}
         </div>
@@ -102,7 +104,7 @@ export function Armory({ state, store }: { state: GameState; store: Store }) {
 
       {/* Forged items not currently worn by anyone. */}
       <div className="syn-section">
-        <div className="syn-label">Forged &amp; free ({freeItems.length})</div>
+        <div className="syn-label">{t('Forged & free ({n})', { n: freeItems.length })}</div>
         <div className="syn-row">
           {freeItems.length === 0 ? (
             <span className="lr-empty">{t('Nothing forged yet.')}</span>
@@ -162,7 +164,9 @@ export function Armory({ state, store }: { state: GameState; store: Store }) {
         <div className="syn-label">{t('Loadouts')}</div>
         {living.map((h) => (
           <div key={h.id} className="arm-hero">
-            <span className="arm-hero-name">{h.name.split(/\s+/)[0]}</span>
+            <span className="arm-hero-name">
+              {pickerName(state, h)} <HeroTag hero={h} />
+            </span>
             {EQUIP_SLOTS.map((slot) => {
               const wornId = h.equipment[slot]
               const worn = wornId ? state.inventory.find((i) => i.id === wornId) ?? null : null

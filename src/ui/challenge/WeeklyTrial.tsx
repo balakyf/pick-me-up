@@ -162,7 +162,7 @@ export function WeeklyTrial({ state, store, onClose }: { state: GameState; store
           <div className="raid-roster">
             {eligible.length === 0 && <div className="muted">{t('No hero of yours meets this week’s rule.')}</div>}
             {eligible.map((h) => (
-              <HeroChip key={h.id} hero={h} selected={team.includes(h.id)} onClick={() => toggle(h.id)} />
+              <HeroChip key={h.id} state={state} hero={h} selected={team.includes(h.id)} onClick={() => toggle(h.id)} />
             ))}
           </div>
           <div className="raid-actions">

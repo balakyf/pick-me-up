@@ -29,6 +29,7 @@ import { hashString } from '../pixel/rand'
 import { toWorldTime } from '../../engine/time'
 import { slotOf } from '../../engine/life'
 import { t } from '../i18n/i18n'
+import { ta } from '../text'
 import { bountyStatus, estatePair, estateTopics } from './speechEstate'
 import { BOUNTIES, traumaOf } from '../../engine/estate'
 
@@ -65,7 +66,8 @@ function choose<T>(arr: readonly T[], seed: string): T {
 
 function render(bank: ByVoice, voice: Voice, seed: string, vars: Vars): string {
   const pool = [...(bank[voice] ?? []), ...(bank.any ?? [])]
-  return t(choose(pool, seed), vars)
+  // Lines put trades and titles after "a" ("I was a {trade}"): fix the article in English.
+  return ta(choose(pool, seed), vars)
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -687,12 +689,12 @@ export function chronicleLine(state: GameState, e: ChronicleEntry): string {
     case 'argument':
       return t('{a} and {b} had a shouting match in the {place}.', { a: A, b: B, place: t('Great Hall') })
     case 'forged':
-      return t('{a} finished a {item} at the Forge.', { a: A, item: e.detail ?? t('blade') })
+      return ta('{a} finished a {item} at the Forge.', { a: A, item: e.detail ?? t('blade') })
     case 'masterwork':
       return t('{a} forged a masterwork: {item}!', { a: A, item: e.detail ?? t('blade') })
     case 'jobTier': {
       const [job, tier] = (e.detail ?? 'cook:1').split(':')
-      return t('{a} is now a {tier} {job}.', { a: A, tier: t(TIER_NAMES[Number(tier)] ?? 'Novice'), job: t(JOB_NAME[job as JobId] ?? job ?? '') })
+      return ta('{a} is now a {tier} {job}.', { a: A, tier: t(TIER_NAMES[Number(tier)] ?? 'Novice'), job: t(JOB_NAME[job as JobId] ?? job ?? '') })
     }
     case 'death':
       return e.detail === 'synthesis'

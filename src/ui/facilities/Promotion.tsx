@@ -6,6 +6,7 @@ import { canPromote, canAfford, promotionCost, promotionPayment, promotionTarget
 import { toWorldTime } from '../../engine/time'
 import { t } from '../i18n/i18n'
 import { matLabel, timeLeft } from './shared'
+import { HeroTag, pickerName } from '../hero/heroLabel'
 
 const SKIP_GEMS = TUNING.lobby.promotion.skipGemCost
 
@@ -34,7 +35,9 @@ export function PromotionAction({ state, store }: { state: GameState; store: Sto
     <div className="lr-action promo-action">
       {promoting.map((h) => (
         <div key={h.id} className="promo-row">
-          <span className="promo-name">{h.name.split(/\s+/)[0]} → {promotionTargetStar(h)}★</span>
+          <span className="promo-name">
+            {pickerName(state, h)} <HeroTag hero={h} /> → {promotionTargetStar(h)}★
+          </span>
           <span className="muted">{timeLeft(h.promotion!.completesAtWorld - nowWorld)}</span>
           <button
             className="btn gem sm"
@@ -52,7 +55,9 @@ export function PromotionAction({ state, store }: { state: GameState; store: Sto
         const rankCover = promotionPayment(state, h)?.rankMaterial ?? 0
         return (
           <div key={h.id} className="promo-row">
-            <span className="promo-name">{h.name.split(/\s+/)[0]} → {promotionTargetStar(h)}★</span>
+            <span className="promo-name">
+              {pickerName(state, h)} <HeroTag hero={h} /> → {promotionTargetStar(h)}★
+            </span>
             <span className="muted">
               {Object.entries(cost)
                 .map(([k, v]) => `${v} ${matLabel(k)}`)

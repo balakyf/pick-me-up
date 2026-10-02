@@ -44,7 +44,7 @@ export function TransferAction({ state, store }: { state: GameState; store: Stor
       {free
         .filter((h) => h.id !== exclude)
         .map((h) => (
-          <HeroChip key={h.id} hero={h} selected={selected?.id === h.id} onClick={() => pick(selected?.id === h.id ? null : h.id)} />
+          <HeroChip key={h.id} state={state} hero={h} selected={selected?.id === h.id} onClick={() => pick(selected?.id === h.id ? null : h.id)} />
         ))}
     </div>
   )

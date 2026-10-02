@@ -136,7 +136,7 @@ export function PlacePanel({
           <TacticalAction state={state} />
           <UpgradeControl state={state} store={store} facility="tacticalCenter" />
           <h4 className="panel-sub">{t('On duty')}</h4>
-          <Occupants heroes={here('tacticalCenter')} empty="No party assigned — use the party board." />
+          <Occupants state={state} heroes={here('tacticalCenter')} empty="No party assigned — use the party board." />
         </>
       )}
       {place === 'promotionChamber' && (
@@ -144,7 +144,7 @@ export function PlacePanel({
           <PromotionAction state={state} store={store} />
           <UpgradeControl state={state} store={store} facility="promotionChamber" />
           <h4 className="panel-sub">{t('Waiting at the cap')}</h4>
-          <Occupants heroes={here('promotionChamber')} empty="No one is waiting here." />
+          <Occupants state={state} heroes={here('promotionChamber')} empty="No one is waiting here." />
         </>
       )}
       {place === 'trainingCenter' && (

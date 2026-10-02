@@ -20,6 +20,7 @@ import { Portrait } from './bits'
 import { PvpPanel } from './pvpPanels'
 import { t } from './i18n/i18n'
 import { withToasts } from './qol/toastStore'
+import { HeroTag, pickerName } from './hero/heroLabel'
 
 const SHOP = TUNING.shop
 const PI = TUNING.interference
@@ -329,7 +330,7 @@ export function RiftPanel({ state, store }: { state: GameState; store: Store }) 
           <h4 className="panel-sub">{t('In the Ruins')}</h4>
           {away.map((h) => (
             <div key={h.id} className="promo-row">
-              <span className="promo-name">{h.name.split(/\s+/)[0]}</span>
+              <span className="promo-name">{pickerName(state, h)}</span>
               <span className="muted">{t('{n} world-min', { n: Math.max(0, Math.ceil((h.expedition!.completesAtWorld - nowWorld) / 60_000)) })}</span>
             </div>
           ))}
@@ -345,7 +346,9 @@ export function RiftPanel({ state, store }: { state: GameState; store: Store }) 
             onClick={() => setTeam((t) => (t.includes(h.id) ? t.filter((x) => x !== h.id) : [...t, h.id]))}
           >
             <Portrait hero={h} size="sm" />
-            <span className="syn-chip-name">{h.name.split(/\s+/)[0]}</span>
+            <span className="syn-chip-name">
+              {pickerName(state, h)} <HeroTag hero={h} />
+            </span>
           </button>
         ))}
       </div>

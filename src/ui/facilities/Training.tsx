@@ -8,7 +8,8 @@ import { maxTrainableGrade, drillXp, trainingOptions, practiceFocus, practiceRat
 import { lifeOf } from '../../engine/life'
 import { Portrait, SkillList } from '../bits'
 import { t } from '../i18n/i18n'
-import { timeLeft } from './shared'
+import { HeroChip, timeLeft } from './shared'
+import { HeroTag, pickerName } from '../hero/heroLabel'
 
 const TRAIN = TUNING.skills.training
 
@@ -53,7 +54,7 @@ export function TrainingAction({ state, store }: { state: GameState; store: Stor
           {drilling.map((h) => (
             <div key={h.id} className="promo-row">
               <span className="promo-name">
-                {h.name.split(/\s+/)[0]} · {h.training!.mode === 'learn' ? t('learning') : t('refining')} {t(SKILLS[h.training!.skillId]?.name ?? '')}
+                {pickerName(state, h)} · {h.training!.mode === 'learn' ? t('learning') : t('refining')} {t(SKILLS[h.training!.skillId]?.name ?? '')}
               </span>
               <span className="muted">{timeLeft(h.training!.completesAtWorld - nowWorld)}</span>
               <button
@@ -78,15 +79,7 @@ export function TrainingAction({ state, store }: { state: GameState; store: Stor
       ) : (
         <div className="syn-row">
           {free.map((h) => (
-            <button
-              key={h.id}
-              type="button"
-              className={`syn-chip ${selected?.id === h.id ? 'sel' : ''}`}
-              onClick={() => setHeroId(selected?.id === h.id ? null : h.id)}
-            >
-              <Portrait hero={h} size="sm" />
-              <span className="syn-chip-name">{h.name.split(/\s+/)[0]}</span>
-            </button>
+            <HeroChip key={h.id} state={state} hero={h} selected={selected?.id === h.id} onClick={() => setHeroId(selected?.id === h.id ? null : h.id)} />
           ))}
         </div>
       )}
@@ -151,7 +144,7 @@ export function SelfPractice({ state, heroes }: { state: GameState; heroes: Owne
               <li key={h.id} className={`practice-row ${here ? 'here' : ''}`}>
                 <Portrait hero={h} size="sm" />
                 <span className="practice-name">
-                  <b>{h.name.split(/\s+/)[0]}</b> · {focus!.mode === 'learn' ? t('learning {skill}', { skill: t(def.name) }) : t('{skill} Lv {n}', { skill: t(def.name), n: owned?.level ?? 1 })}
+                  <b>{pickerName(state, h)}</b> <HeroTag hero={h} /> · {focus!.mode === 'learn' ? t('learning {skill}', { skill: t(def.name) }) : t('{skill} Lv {n}', { skill: t(def.name), n: owned?.level ?? 1 })}
                   <span className="practice-bar" aria-hidden="true">
                     <span style={{ width: `${Math.min(100, Math.round(pct * 100))}%` }} />
                   </span>

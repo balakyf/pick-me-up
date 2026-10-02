@@ -1,7 +1,8 @@
-import type { MaterialId, OwnedHero } from '../../engine/types'
+import type { GameState, MaterialId, OwnedHero } from '../../engine/types'
 import { Portrait, classGlyph, cpOf, ELEMENT_VIS } from '../bits'
 import { BondBadge } from '../bond/BondBadge'
 import { t } from '../i18n/i18n'
+import { pickerName } from '../hero/heroLabel'
 
 /** Material ids as the challenge windows show them. */
 const MAT_LABEL: Record<string, string> = {
@@ -29,14 +30,17 @@ export function lootLine(loot: { gold?: number; gems?: number; materials?: Recor
   return parts.join(' · ')
 }
 
-/** A compact, clickable hero chip for the pickers (portrait, name, class, CP, bond). */
+/** A compact, clickable hero chip for the pickers (portrait, name, star, level, class, CP, bond). */
 export function HeroChip({
+  state,
   hero,
   onClick,
   selected,
   tag,
   disabled,
 }: {
+  /** When given, a name two living heroes share is shown in full. */
+  state?: GameState
   hero: OwnedHero
   onClick?: () => void
   selected?: boolean
@@ -48,7 +52,8 @@ export function HeroChip({
       <Portrait hero={hero} size="sm" />
       <span className="hc-body">
         <span className="hc-name">
-          {hero.name.split(' ')[0]} <span className="hc-star">{hero.star}★</span>
+          {state ? pickerName(state, hero) : hero.name.split(' ')[0]} <span className="hc-star">{hero.star}★</span>{' '}
+          <span className="hero-tag">{t('Lv{level}', { level: hero.xp.level })}</span>
         </span>
         <span className="hc-meta">
           {classGlyph(hero.heroClass)} {ELEMENT_VIS[hero.element].glyph} · {cpOf(hero).toLocaleString()}

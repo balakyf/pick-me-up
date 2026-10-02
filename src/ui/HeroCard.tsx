@@ -4,6 +4,7 @@ import { favorTierName } from '../engine/favor'
 import { deriveStatsForHero, levelCapForStar } from '../engine/stats'
 import { Stars, ElementBadge, ClassBadge, Portrait, STAR_COLOR, cpOf, gradeLetters, SkillList, EngravingBadge } from './bits'
 import { t } from './i18n/i18n'
+import { bornTrade } from './hero/heroLabel'
 import { BondBadge } from './bond/BondBadge'
 
 interface Props {
@@ -39,7 +40,7 @@ export function HeroCard({ hero, onClick, selected, showStats, masterLevel = 1 }
         </span>
       </div>
       <div className="hmeta">
-        <ClassBadge heroClass={hero.heroClass} />
+        <ClassBadge heroClass={hero.heroClass} trade={bornTrade(hero)} />
         <ElementBadge element={hero.element} />
         {hero.alive && <span className="favor-chip" title={t('Favorability {n}/100', { n: hero.favor })}>♥ {t(favorTierName(hero.favor))}</span>}
       </div>

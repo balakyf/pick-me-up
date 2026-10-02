@@ -18,6 +18,7 @@ import { drawSummonCircle } from '../pixel/summonFx'
 import { drawProp } from '../pixel/props'
 import { scale } from '../pixel/bitmap'
 import { t } from '../i18n/i18n'
+import { bornTrade } from '../hero/heroLabel'
 import { TIER_TINT, beamSteps, flipAt, lineupOrder, moteCount, motePlacement, nextBestIndex, surgeTimes, tierOf, type Tier } from './revealPlan'
 
 export interface RevealAgain {
@@ -251,7 +252,7 @@ function RevealCard({ hero, star }: { hero: OwnedHero; star: Star }) {
           <Stars star={star} />
         </div>
         <div className="hmeta sr-meta">
-          <ClassBadge heroClass={hero.heroClass} />
+          <ClassBadge heroClass={hero.heroClass} trade={bornTrade(hero)} />
           <ElementBadge element={hero.element} />
         </div>
       </div>

@@ -6,6 +6,8 @@ import { canSynthesize, rescueOptions, synthesisPreview, synthesisUnlocked, type
 import { SKILLS } from '../../engine/content'
 import { t } from '../i18n/i18n'
 import { HeroChip, matLabel } from './shared'
+import { attrLabel, gradeDeltaLine, rescueLabel } from './facilityText'
+import { tn } from '../text'
 
 const SYN = TUNING.lobby.synthesis
 
@@ -89,7 +91,7 @@ export function SynthesisChamber({ state, store }: { state: GameState; store: St
         </div>
         <div className="syn-row">
           {living.map((h) => (
-            <HeroChip key={h.id} hero={h} selected={survivorId === h.id} onClick={() => chooseSurvivor(h.id)} />
+            <HeroChip key={h.id} state={state} hero={h} selected={survivorId === h.id} onClick={() => chooseSurvivor(h.id)} />
           ))}
         </div>
       </div>
@@ -98,7 +100,7 @@ export function SynthesisChamber({ state, store }: { state: GameState; store: St
         <div className="syn-label">{t('Sacrifices (permanently destroyed)')}</div>
         <div className="syn-row">
           {sacrificeable.map((h) => (
-            <HeroChip key={h.id} hero={h} selected={sacrificeIds.includes(h.id)} onClick={() => toggleSac(h.id)} />
+            <HeroChip key={h.id} state={state} hero={h} selected={sacrificeIds.includes(h.id)} onClick={() => toggleSac(h.id)} />
           ))}
         </div>
       </div>
@@ -112,7 +114,7 @@ export function SynthesisChamber({ state, store }: { state: GameState; store: St
               const on = rescue !== null && rescueKey(rescue) === key
               return (
                 <button key={key} type="button" className={`btn sm ${on ? 'primary' : ''}`} onClick={() => setRescue(on ? null : r)}>
-                  {r.kind === 'skill' ? `✦ ${t(SKILLS[r.skillId]?.name ?? r.skillId)}` : `▲ ${t('{attr} grade', { attr: r.attr.toUpperCase() })}`}
+                  {r.kind === 'skill' ? `✦ ${t(SKILLS[r.skillId]?.name ?? r.skillId)}` : `▲ ${t('{attr} grade', { attr: attrLabel(r.attr) })}`}
                 </button>
               )
             })}
@@ -125,7 +127,7 @@ export function SynthesisChamber({ state, store }: { state: GameState; store: St
           {mode === 'transfer' ? (
             <span>
               {Object.keys(preview.gradeDeltas).length > 0
-                ? t('Grades') + ' ' + Object.entries(preview.gradeDeltas).map(([k, v]) => `${k} +${v}`).join(', ')
+                ? t('Grades') + ' ' + gradeDeltaLine(preview.gradeDeltas)
                 : t('No grade gain')}
               {' · '}
               {preview.skillCopyOdds.length > 0
@@ -136,7 +138,7 @@ export function SynthesisChamber({ state, store }: { state: GameState; store: St
           ) : (
             <span>
               {t('Yields')} {Object.entries(preview.materialYield).map(([k, v]) => `${v} × ${matLabel(k)}`).join(', ') || '—'}
-              {preview.rescue ? ` · ${t('rescue')} ${t(preview.rescue)}` : ''}
+              {preview.rescue ? ` · ${t('rescue')} ${rescueLabel(preview.rescue)}` : ''}
             </span>
           )}
           <span className="muted">
@@ -154,7 +156,7 @@ export function SynthesisChamber({ state, store }: { state: GameState; store: St
         ) : (
           <>
             <button className="btn sm syn-destroy" onClick={run}>
-              Permanently destroy {sacrificeIds.length} hero{sacrificeIds.length === 1 ? '' : 'es'}
+              {tn(sacrificeIds.length, 'Permanently destroy 1 hero', 'Permanently destroy {n} heroes')}
             </button>
             <button className="btn sm" onClick={() => setConfirming(false)}>{t('Cancel')}</button>
           </>
