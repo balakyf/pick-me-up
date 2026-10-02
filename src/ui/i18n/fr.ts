@@ -15,6 +15,13 @@ import { FR_ADVICE } from './frAdvice'
 import { FR_FOUNDATION_UI } from './frFoundationUi'
 import { FR_FOUNDATION } from './frFoundation'
 
+/**
+ * Feature slices: every `./slices/fr*.ts` default-exports a `Record<string, string>` and is
+ * merged here automatically (in file-name order), so features never need to edit this file.
+ */
+const SLICES = import.meta.glob<Record<string, string>>('./slices/fr*.ts', { eager: true, import: 'default' })
+const FR_SLICES: Record<string, string> = Object.assign({}, ...Object.keys(SLICES).sort().map((k) => SLICES[k]))
+
 const FR_UI: Record<string, string> = {
   // ── App shell & menus ──────────────────────────────────────────────────────
   Lobby: 'Salle d’attente',
@@ -513,4 +520,4 @@ const FR_UI: Record<string, string> = {
   'Unequip failed': 'Échec du retrait',
 }
 
-export const FR: Record<string, string> = { ...FR_CONTENT, ...FR_LIFE, ...FR_UI, ...FR_BUILD, ...FR_QOL, ...FR_SUMMON, ...FR_BATTLE_FX, ...FR_COMBAT_DEPTH, ...FR_CHALLENGE, ...FR_ESTATE, ...FR_ADVICE, ...FR_FOUNDATION_UI, ...FR_FOUNDATION }
+export const FR: Record<string, string> = { ...FR_CONTENT, ...FR_LIFE, ...FR_UI, ...FR_BUILD, ...FR_QOL, ...FR_SUMMON, ...FR_BATTLE_FX, ...FR_COMBAT_DEPTH, ...FR_CHALLENGE, ...FR_ESTATE, ...FR_ADVICE, ...FR_FOUNDATION_UI, ...FR_FOUNDATION, ...FR_SLICES }

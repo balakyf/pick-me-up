@@ -2,7 +2,7 @@ import { useState } from 'react'
 import type { GameState } from '../../engine/types'
 import type { Store } from '../../engine/store'
 import { TUNING } from '../../engine/tuning'
-import { banquetWouldHelp } from '../../engine/kitchen'
+import { banquetRefusal, banquetWouldHelp } from '../../engine/kitchen'
 import { t } from '../i18n/i18n'
 import { withToasts } from '../qol/toastStore'
 
@@ -13,14 +13,15 @@ export function BanquetAction({ state, store }: { state: GameState; store: Store
   const [err, setErr] = useState<string | null>(null)
   const canAfford = state.gold >= BANQUET.gold
   const helps = banquetWouldHelp(state)
-  const disabled = !canAfford || !helps
+  const cleaning = canAfford && banquetRefusal(state) !== null
+  const disabled = !canAfford || !helps || cleaning
 
   function hold() {
     setErr(null)
     try {
       withToasts(store).dispatch({ type: 'BANQUET' }, Date.now())
     } catch (e) {
-      setErr(t(e instanceof Error ? e.message : 'Banquet failed'))
+      setErr(t(e instanceof Error ? e.message.replace(/^\w+: /, '') : 'Banquet failed'))
     }
   }
 
@@ -32,7 +33,9 @@ export function BanquetAction({ state, store }: { state: GameState; store: Store
       <div className="lr-action-note">
         {!canAfford
           ? t('Not enough gold.')
-          : !helps
+          : cleaning
+            ? t('The hall is still being cleaned — one banquet a day.')
+            : !helps
             ? t('Everyone is at full morale.')
             : t('+{n} Sanity to all living heroes.', { n: BANQUET.restore })}
       </div>

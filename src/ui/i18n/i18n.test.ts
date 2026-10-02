@@ -42,3 +42,10 @@ describe('i18n', () => {
     expect(Object.entries(FR).filter(([, fr]) => fr.trim() === '')).toEqual([])
   })
 })
+
+describe('i18n slices', () => {
+  it('feature slices under ./slices are merged into the French dictionary', () => {
+    setLocale('fr')
+    expect(t('The hall is still being cleaned — one banquet a day.')).toBe('La salle est encore en cours de nettoyage — un banquet par jour.')
+  })
+})

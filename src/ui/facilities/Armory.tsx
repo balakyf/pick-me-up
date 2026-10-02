@@ -2,7 +2,7 @@ import { useState } from 'react'
 import type { GameState, OwnedHero, EquipmentSlot, Command, EquipmentItem } from '../../engine/types'
 import type { Store } from '../../engine/store'
 import { TUNING } from '../../engine/tuning'
-import { smithyUnlocked, forgeGrade, forgeCost, canCraft, itemName, equippedItemIds } from '../../engine/equipment'
+import { smithyUnlocked, forgeGrade, forgeCost, canCraft, itemName, equippedItemIds, wieldable } from '../../engine/equipment'
 import { upgradeCost as forgeUpgradeCost, upgradeOdds, upgradeRefusal } from '../../engine/minigames'
 import { upgradeEquipmentWithResult } from '../../engine/store'
 import { TimingGame } from '../metaPanels'
@@ -171,7 +171,7 @@ export function Armory({ state, store }: { state: GameState; store: Store }) {
               const wornId = h.equipment[slot]
               const worn = wornId ? state.inventory.find((i) => i.id === wornId) ?? null : null
               const candidate =
-                freeItems.find((i) => i.slot === slot && (i.exclusiveTo === undefined || i.exclusiveTo === h.id)) ?? null
+                freeItems.find((i) => i.slot === slot && wieldable(state, i, h.id)) ?? null
               if (worn) {
                 return (
                   <button

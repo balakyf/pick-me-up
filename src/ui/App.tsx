@@ -15,6 +15,7 @@ import { LobbyWorld, MENU_PLACES, PLACE_ICON, type WorldView } from './world/Lob
 import { PLACE_LABEL, type PlaceId } from './world/lobbyMap'
 import { PixelWindow } from './kit'
 import { attemptFloorWithResult } from '../engine/store'
+import { fitCount } from '../engine/tower'
 import type { CombatLog, GameState } from '../engine/types'
 import type { Store } from '../engine/store'
 import { sfx, unlockAudio } from './audio/sound'
@@ -213,7 +214,7 @@ export function App() {
   const wantFight = typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('fight')
   const [demoLog, setDemoLog] = useState<CombatLog | null>(null)
   useEffect(() => {
-    if (wantFight && state && demoLog === null) {
+    if (wantFight && state && demoLog === null && fitCount(state) > 0) {
       setDemoLog(attemptFloorWithResult(state).result.result.log)
     }
   }, [wantFight, state, demoLog])
