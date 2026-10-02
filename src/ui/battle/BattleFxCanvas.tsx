@@ -28,8 +28,10 @@ export interface FxHandle {
 const MAX_PARTICLES = 500
 /** A phone keeps fewer particles in the air (lane I). */
 const MAX_PARTICLES_PHONE = 220
-/** At most this many skill effects at once (a late fight's casts overlap). */
+/** At most this many skill effects at once (a late fight's casts overlap); a phone keeps
+ *  fewer, since one effect can fill a thousand rectangles a frame (thunder columns on six). */
 const MAX_CASTS = 6
+const MAX_CASTS_PHONE = 3
 
 interface LiveCast {
   cast: FxCast
@@ -75,7 +77,8 @@ export const BattleFxCanvas = forwardRef<
     skill(cast, ms, delay = 0) {
       const s = sim.current
       s.casts.push({ cast, ms: Math.max(120, ms), elapsed: -Math.max(0, delay) })
-      if (s.casts.length > MAX_CASTS) s.casts.splice(0, s.casts.length - MAX_CASTS)
+      const most = cfg.current.phone ? MAX_CASTS_PHONE : MAX_CASTS
+      if (s.casts.length > most) s.casts.splice(0, s.casts.length - most)
     },
   }))
 

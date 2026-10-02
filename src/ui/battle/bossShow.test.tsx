@@ -169,6 +169,11 @@ describe('boss shows in the replay (lane I)', () => {
     expect(wakes).toBe(true)
     expect(shatter).toBe(true)
     expect(slow).toBe(true)
+    // once the finisher has played the boss stays broken (its KO dissolve does not replay)
+    for (let i = 0; i < 40 && $('.boss-shatter'); i++) tick(250)
+    expect($('.boss-shatter')).toBeNull()
+    expect($('.bunit.enemy.ko.shattered')).not.toBeNull()
+    expect($('.bunit.enemy.ko:not(.shattered)')).toBeNull()
   })
 
   it('heroes are posed: they strike, and the winners cheer', () => {
