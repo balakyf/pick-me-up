@@ -116,6 +116,9 @@ interface Status {
   every: number
   /** Ticks to the next pulse. */
   nextPulse: number
+  /** Pulses still to come (a DoT or regeneration pulses exactly its `turns`, however the
+   *  ticks divide), else 0. */
+  pulses: number
   sourceId: string
 }
 
@@ -574,15 +577,16 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
   }
 
   /** Put (or refresh) a status: one per key — the stronger value and the longer clock win. */
-  const putStatus = (u: MutUnit, key: StatusKey, sourceId: string, ticks: number, value: number, every = 0, nth = 0): void => {
+  const putStatus = (u: MutUnit, key: StatusKey, sourceId: string, ticks: number, value: number, every = 0, nth = 0, pulses = 0): void => {
     const had = statusOf(u, key)
     if (had !== undefined) {
       had.left = Math.max(had.left, ticks)
       had.value = Math.max(had.value, value)
       had.sourceId = sourceId
       if (every > 0) had.every = every
+      had.pulses = Math.max(had.pulses, pulses)
     } else {
-      u.statuses.push({ key, left: ticks, value, every, nextPulse: every, sourceId })
+      u.statuses.push({ key, left: ticks, value, every, nextPulse: every, pulses, sourceId })
     }
     emit({ kind: 'status', unitId: u.id, status: key, sourceId, ticks: ticks === UNTIL_ACTS ? 0 : ticks, value, ...(nth > 0 ? { nth } : {}) })
   }
@@ -631,7 +635,7 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
         const ticks = turnsToTicks(caster, e.turns)
         const per = Math.max(1, Math.floor((healAmount(caster, u, e.from, e.pct) * fatiguePct(u)) / 100))
         u.healsTaken++
-        putStatus(u, 'regen', caster.id, ticks, per, Math.max(1, Math.floor(ticks / Math.max(1, e.turns))), nth)
+        putStatus(u, 'regen', caster.id, ticks, per, Math.max(1, Math.floor(ticks / Math.max(1, e.turns))), nth, Math.max(1, e.turns))
         return
       }
       case 'shield': {
@@ -654,7 +658,7 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
         if (!takesHold(caster, u, e.chance)) return
         const ticks = turnsToTicks(caster, e.turns)
         const kind = e.dot === 'element' ? dotKindFor(skill.element ?? caster.ref.element) : e.dot
-        putStatus(u, kind, caster.id, ticks, dotAmount(caster, u, e.from, e.pct), Math.max(1, Math.floor(ticks / Math.max(1, e.turns))), nth)
+        putStatus(u, kind, caster.id, ticks, dotAmount(caster, u, e.from, e.pct), Math.max(1, Math.floor(ticks / Math.max(1, e.turns))), nth, Math.max(1, e.turns))
         return
       }
       case 'stun': {
@@ -692,11 +696,15 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
         if (!u.alive) break
         if (st.left === UNTIL_ACTS) continue
         st.left--
-        if (st.every > 0 && --st.nextPulse <= 0) {
+        if (st.every > 0 && st.pulses > 0 && --st.nextPulse <= 0) {
           st.nextPulse = st.every
+          st.pulses--
           if (st.key === 'regen') restore(u, st.value, st.sourceId, true)
           else if (st.key === 'bleed' || st.key === 'poison' || st.key === 'burn') {
-            const amount = st.value - absorb(u, st.value, st.sourceId)
+            const raw = st.value - absorb(u, st.value, st.sourceId)
+            // A frenzy's own bleed (Berserk) wears its bearer down but never kills them: like an
+            // HP-cost ultimate, a hero's own skill never takes their life — only a foe does.
+            const amount = st.sourceId === u.id ? Math.min(raw, u.currentHP - 1) : raw
             if (amount > 0) {
               u.currentHP -= amount
               emit({ kind: 'dot', unitId: u.id, status: st.key, amount, hpAfter: u.currentHP, sourceId: st.sourceId })
@@ -1374,8 +1382,9 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
     }
     // SAVING UP: when nothing the hero can afford hurts the foes but a blow it knows would
     // (a mage's burst against the physical-immune Wardens), it keeps its SP for that blow
-    // and swings for free meanwhile — unless what it chose tends a wound.
-    if (best !== null && best.spCost > 0 && bestBlow === 0 && R.spPerAction > 0 && !tendsWounds(best)) {
+    // and swings for free meanwhile — only in place of a blow that does nothing (a taunt, a
+    // buff or a ward it chose is never swallowed), and never in place of a heal.
+    if (best !== null && strikes(best) && best.spCost > 0 && bestBlow === 0 && R.spPerAction > 0 && !tendsWounds(best)) {
       const later = own.some(
         (s) => strikes(s) && s.spCost > actor.currentSP && s.spCost <= actor.ref.maxSP && foes.some((f) => !immuneTo(f.ref, s)),
       )
@@ -1493,7 +1502,9 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
   }
   /** The foe the stalemate beat names (the front-most standing), or null while the fight moves. */
   const stalemateFoe = (): MutUnit | null => {
-    if (winsWithoutBlows || stallActs < Math.max(R.stallMinActs, R.stallActsPerHero * livingHeroes().length)) return null
+    // A fight with its own clock ends at it anyway — and in a damage race (a raid, the guild
+    // boss, a tournament round) every chip until then is the score: the guard stands aside.
+    if (winsWithoutBlows || timer !== null || stallActs < Math.max(R.stallMinActs, R.stallActsPerHero * livingHeroes().length)) return null
     const standing = livingEnemies().filter((e) => !isLooming(e))
     return standing.length > 0 ? frontMost(standing) : null
   }
@@ -1623,6 +1634,8 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
       let shares: number[] | null = null
       let spread = 1
       if (skill.target === 'all-enemies' || skill.target === 'front-row') {
+        // No single pick here: a rival's chase from an earlier pick must not be announced.
+        chasing = null
         const foes = targetableFoes(actor).slice().sort((a, b) => a.spawnIndex - b.spawnIndex)
         targets = skill.target === 'front-row' ? frontRow(foes) : foes
         spread = targets.length

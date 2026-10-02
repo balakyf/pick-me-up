@@ -92,7 +92,11 @@ export function guildRaid(state: GameState, nowWorld: number): { state: GameStat
     hash(state.seed, 'guildraid', week),
   )
   let hp = bossHp
-  for (const e of res.log.events) if (e.kind === 'hit' && e.targetId === boss.id) hp = e.hpAfter
+  // A blow, a DoT pulse or a heal (lane F) moves the boss's HP.
+  for (const e of res.log.events) {
+    if (e.kind === 'hit' && e.targetId === boss.id) hp = e.hpAfter
+    else if ((e.kind === 'dot' || e.kind === 'heal') && e.unitId === boss.id) hp = e.hpAfter
+  }
   const dealt = bossHp - Math.max(0, hp)
   let r = rngFor(state.seed, 'guildmates', week)
   const share = nextFloat(r)

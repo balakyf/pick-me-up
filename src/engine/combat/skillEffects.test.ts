@@ -220,6 +220,25 @@ describe('damage over time', () => {
     expect(r.outcome).toBe('win')
   })
 
+  it('pulses exactly its turns, however the ticks divide (a quick caster’s 3-turn poison is 3 pulses)', () => {
+    const sting = skill('sting', 'single', [{ kind: 'dot', dot: 'poison', from: 'maxHP', pct: 1, turns: 3 }], { skillMult: 0.01, spCost: 100 })
+    const r = runBattle([hero('h', { spd: 600, pAtk: 1 }, { skills: [basic, sting], sp: 100, maxSP: 100 })], enc([[dummy()]], survive(30), 30), 11)
+    const put = of(r.log.events, 'status').filter((e) => e.status === 'poison')
+    expect(put).toHaveLength(1)
+    expect(put[0]!.ticks % 3).not.toBe(0) // the clock does not divide by the turns…
+    expect(of(r.log.events, 'dot')).toHaveLength(3) // …and still three pulses
+  })
+
+  it("a frenzy's own bleed never kills its bearer (only a foe does)", () => {
+    const frenzy = skill('frenzy', 'single', [{ kind: 'dot', dot: 'bleed', from: 'maxHP', pct: 60, turns: 3, to: 'self' }], { skillMult: 50, spCost: 10 })
+    const r = runBattle([hero('h', { spd: 100 }, { skills: [basic, frenzy], sp: 10, maxSP: 10 })], enc([[dummy()]], survive(30), 30), 19)
+    const dots = of(r.log.events, 'dot').filter((e) => e.unitId === 'h')
+    expect(dots.length).toBeGreaterThanOrEqual(2)
+    expect(dots.every((e) => e.hpAfter >= 1)).toBe(true)
+    expect(r.outcome).toBe('win')
+    expect(r.fallenHeroIds).toEqual([])
+  })
+
   it('an element DoT picks its kind by element; an immune foe shrugs it off', () => {
     const scorch = skill('scorch', 'single', [{ kind: 'dot', dot: 'element', from: 'atk', pct: 60, turns: 2 }], { skillMult: 0.5, element: 'fire', spCost: 5 })
     const r = runBattle([hero('h', { spd: 100 }, { skills: [basic, scorch] })], enc([[dummy()]], survive(30), 30), 12)
@@ -297,6 +316,15 @@ describe('taunt', () => {
   it('the brain taunts when a squishier friend is the one being hit — not when it is itself the mark', () => {
     const alone = runBattle([hero('tank', { spd: 300, maxHP: 3000 }, { skills: [basic, shieldUp] })], enc([[foe('brute', { maxHP: 1e7, pAtk: 30, spd: 60 })]], survive(30), 30), 17)
     expect(actsOf(alone.log.events, 'tank')).not.toContain('shield_up')
+  })
+
+  it('a dearer blow out of reach never swallows the taunt (saving up replaces only a blow that does nothing)', () => {
+    const big: SkillEffect = { ...basic, id: 'big', name: 'big', skillMult: 2, spCost: 90 }
+    const tank = hero('tank', { spd: 100, maxHP: 3000 }, { skills: [basic, shieldUp, big], sp: 20, maxSP: 100 })
+    const squishy = hero('squishy', { spd: 1, maxHP: 300 }, { line: 'back' })
+    const assassin = foe('assassin', { maxHP: 1e7, pAtk: 400, spd: 60 }, { cls: 'archer' })
+    const r = runBattle([tank, squishy], enc([[assassin]], survive(40), 40), 16)
+    expect(actsOf(r.log.events, 'tank')).toContain('shield_up')
   })
 
   it("the Master's focus still beats a foe's taunt", () => {
@@ -431,6 +459,15 @@ describe('stalemate', () => {
     expect(r.outcome).toBe('retreat')
     expect(r.log.events.some((e) => e.kind === 'mission' && e.code === 'futile')).toBe(true)
     expect(r.ticksElapsed).toBeLessThan(TUNING.combat.maxTicks)
+  })
+
+  it('never in a fight with its own clock (a raid or the guild boss: every chip until the timer counts)', () => {
+    const grace = skill('grace', 'ally-lowest', [{ kind: 'heal', from: 'mAtk', pct: 100 }], { spCost: 0 })
+    const priest = foe('priest', { maxHP: 1e6, mAtk: 500, spd: 200, pAtk: 0 }, { skills: [basic, grace], line: 'back' })
+    const knight = foe('knight', { maxHP: 5000, pAtk: 1, spd: 50 })
+    const r = runBattle([hero('h', { spd: 100, pAtk: 100 })], enc([[knight, priest]], [{ kind: 'annihilate' }], 400), 40)
+    expect(r.outcome).toBe('timeout')
+    expect(r.log.events.some((e) => e.kind === 'mission' && e.code === 'futile')).toBe(false)
   })
 
   it('never on a Survival (waiting wins it)', () => {

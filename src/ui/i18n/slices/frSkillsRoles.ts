@@ -129,7 +129,7 @@ export default {
   'staggers the foe (its turn comes {n}% later)': 'fait chanceler l’ennemi (son tour arrive {n} % plus tard)',
   'taunts: foes must strike {who} for {turns}': 'provoque : les ennemis doivent frapper {who} pendant {turns}',
   'gives {who} {n} SP': 'donne {n} PS à {who}',
-  'drains {n} SP from {who}': 'draine {n} PS de {who}',
+  'drains {n} SP from {who}': 'draine {n} PS à {who}',
   '{hits} hits on {who} ({m} each, {kind})': '{hits} coups sur {who} ({m} chacun, {kind})',
   'strikes a foe ({m}) and the one beside it (half), {kind}': 'frappe un ennemi ({m}) et son voisin (moitié), {kind}',
   'strikes {who} ({m}, spread over them), {kind}': 'frappe {who} ({m}, réparti entre eux), {kind}',

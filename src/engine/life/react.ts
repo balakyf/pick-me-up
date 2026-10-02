@@ -31,7 +31,7 @@ function lowestHpShare(result: FloorResult): Map<string, number> {
   const max = new Map(result.result.log.unitsInit.map((u) => [u.id, u.maxHP]))
   const low = new Map<string, number>()
   for (const e of result.result.log.events) {
-    if (e.kind === 'hit' || e.kind === 'hp-cost') {
+    if (e.kind === 'hit' || e.kind === 'hp-cost' || e.kind === 'dot') {
       const id = e.kind === 'hit' ? e.targetId : e.unitId
       const m = max.get(id)
       if (!m) continue

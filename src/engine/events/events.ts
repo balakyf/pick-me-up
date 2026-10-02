@@ -186,7 +186,11 @@ export function runTournament(state: GameState, format: TournamentFormat): { rou
       hash(state.seed, 'event', floor, format),
     )
     let hp = bossUnit.stats.maxHP
-    for (const e of res.log.events) if (e.kind === 'hit' && e.targetId === bossUnit.id) hp = e.hpAfter
+    // A blow, a DoT pulse or a heal (lane F) moves the boss's HP.
+    for (const e of res.log.events) {
+      if (e.kind === 'hit' && e.targetId === bossUnit.id) hp = e.hpAfter
+      else if ((e.kind === 'dot' || e.kind === 'heal') && e.unitId === bossUnit.id) hp = e.hpAfter
+    }
     const dealt = Math.min(1, (bossUnit.stats.maxHP - Math.max(0, hp)) / bossUnit.stats.maxHP)
     const wins = res.outcome === 'win' ? 3 : Math.min(2, Math.floor(dealt * 3))
     for (let i = 0; i < 3; i++) rounds.push({ won: i < wins, rivalCp: bossUnit.cp, log: res.log })
