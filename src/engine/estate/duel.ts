@@ -20,8 +20,8 @@ import type { BattleResult, CombatUnit, DuelRecord, Encounter, GameState, HeroId
 import { addMemory, relationKey } from '../life/life'
 import { personalityOf } from '../life/personality'
 import { DUEL } from './constants'
-import { onBounty } from './bounty'
-import { isBurntOut, markAttention } from './trauma'
+import { markAttention } from './trauma'
+import { fitToDeploy } from '../tower/deploy'
 import { worldDay } from './weather'
 
 const R = TUNING.life.relation
@@ -39,8 +39,11 @@ export function duelsLeft(state: GameState, nowWorld = state.meta.lastSeenAtWorl
   return Math.max(0, DUEL.perDay - d.today)
 }
 
+/** Away, held, in the chamber or the yard, on a bounty or burnt out — the deploy rails
+ *  (tower/deploy.ts); low Sanity is judged on its own below. */
 function busy(state: GameState, h: OwnedHero): boolean {
-  return Boolean(h.training || h.promotion || h.expedition || h.captiveOf || onBounty(state, h.id) || isBurntOut(state, h.id))
+  const c = fitToDeploy(state, h, { rebellion: false })
+  return !c.ok && c.reason !== 'exhausted' && c.reason !== 'dead'
 }
 
 /** Why these two can't duel now, or null. */
