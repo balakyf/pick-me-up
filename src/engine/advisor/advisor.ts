@@ -76,6 +76,63 @@ function inParty(state: GameState): Set<HeroId> {
   return new Set(state.party.slots.filter((s): s is HeroId => s !== null))
 }
 
+const WORLD_DAY_MS = 24 * 3_600_000
+
+/**
+ * A cheap fingerprint of everything `advise` reads that can change (B9: the lobby's 1 Hz
+ * TICK makes a new state every second, but almost nothing advice depends on moves that
+ * fast). The UI memoizes `advise` on it. Covers commands (party, gold, gear, jobs,
+ * materials, facilities, the roster) and the clock's slow beats: the life slot (relations,
+ * jobs, needs), the world-day (dailies, the banquet hall), whole points of Sanity, timers
+ * finishing, bounties coming home and burnout ending.
+ */
+export function adviceSignature(state: GameState): string {
+  const parts: (string | number)[] = [
+    state.life?.slot ?? 0,
+    Math.floor(state.meta.lastSeenAtWorld / WORLD_DAY_MS),
+    state.gold,
+    state.gems,
+    state.party.slots.join(','),
+    state.party.lines.join(','),
+    state.inventory.length,
+    state.dailies.attemptsUsed,
+    state.dailies.lastResetWorldDay,
+    state.meta.banquetDay ?? -1,
+    state.meta.masterLevel,
+    state.tower.highestCleared,
+    JSON.stringify(state.materials),
+    (state.estate?.bounties ?? []).map((b) => b.id).join(','),
+  ]
+  for (const [id, f] of Object.entries(state.facilities)) parts.push(`${id}${f.level}${f.build ? '+' : ''}`)
+  for (const h of Object.values(state.heroes) as OwnedHero[]) {
+    if (!h.alive) {
+      parts.push(`${h.id}†`)
+      continue
+    }
+    const e = h.equipment
+    parts.push(
+      [
+        h.id,
+        Math.floor(h.sanity),
+        h.favor,
+        h.star,
+        h.xp.level,
+        h.xp.atCap ? 'c' : '',
+        h.training ? 't' : '',
+        h.promotion ? 'p' : '',
+        h.expedition ? 'x' : '',
+        h.captiveOf ? 'k' : '',
+        h.life?.job ?? '',
+        `${e.weapon ?? ''}/${e.armor ?? ''}/${e.accessory ?? ''}`,
+        h.skills.length,
+        `${h.gift.last ?? ''}${h.gift.streak}`,
+        refusesDeploy(state, h.id) ? 'r' : '',
+      ].join(':'),
+    )
+  }
+  return parts.join('|')
+}
+
 /** Every tip for the waiting room right now, most useful first. */
 export function advise(state: GameState): Advice[] {
   const out: Advice[] = []

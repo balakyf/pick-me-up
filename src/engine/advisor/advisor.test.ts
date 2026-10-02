@@ -4,7 +4,7 @@ import { reduce } from '../store'
 import { TUNING } from '../tuning'
 import type { GameState, HeroId, OwnedHero } from '../types'
 import { aptitude, lifeOf } from '../life'
-import { advise, type Advice } from './advisor'
+import { advise, adviceSignature, type Advice } from './advisor'
 
 /** An account with `n` extra Normal pulls. */
 function roster(seed: number, n = 9): GameState {
@@ -47,6 +47,23 @@ describe('advisor', () => {
     const fed = run(pale, tip!)
     const again = { ...fed, heroes: Object.fromEntries(Object.entries(fed.heroes).map(([id, h]) => [id, { ...h, sanity: 20 }])) }
     expect(advise(again).some((a) => a.kind === 'banquet')).toBe(false)
+  })
+
+  it('the advice fingerprint ignores a quiet tick but moves with anything advice reads', () => {
+    const s = roster(4)
+    const sig = adviceSignature(s)
+    // A few real seconds later (the 1 Hz lobby TICK): same advice inputs.
+    const ticked = reduce(s, { type: 'TICK' }, s.meta.lastSeenAtWorld + 3_000 * TUNING.time.worldTimeFactor)
+    expect(ticked).not.toBe(s)
+    expect(adviceSignature(ticked)).toBe(sig)
+    expect(advise(ticked)).toEqual(advise(s))
+    // Things the advice depends on move it.
+    const id = living(s)[0]!.id
+    expect(adviceSignature({ ...s, gold: s.gold + 1 })).not.toBe(sig)
+    expect(adviceSignature({ ...s, heroes: { ...s.heroes, [id]: { ...s.heroes[id]!, sanity: s.heroes[id]!.sanity - 1 } } })).not.toBe(sig)
+    expect(adviceSignature({ ...s, party: { ...s.party, slots: [null, null, null, null, null] } })).not.toBe(sig)
+    expect(adviceSignature({ ...s, life: { ...s.life, slot: s.life.slot + 1 } })).not.toBe(sig)
+    expect(adviceSignature({ ...s, meta: { ...s.meta, banquetDay: 3 } })).not.toBe(sig)
   })
 
   it('points out empty party slots when rested heroes are waiting', () => {

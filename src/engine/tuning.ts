@@ -445,6 +445,12 @@ export const TUNING = {
     worldTimeFactor: 3,
   },
 
+  /** Save hygiene (B9): the lobby's 1 Hz TICK reaches storage only every Nth tick; every
+   *  other command (and the page hiding or closing) saves at once. */
+  persistence: {
+    tickPersistEvery: 15,
+  },
+
   // ⚠ BALANCE PASS PENDING — every constant in `lobby` below (Sanity pressure/regen,
   // promotion costs & timers, daily reward amounts, tactical bonuses, gem costs) is a
   // FIRST-PASS value chosen for structure, not tuned for pacing. Treat as the primary

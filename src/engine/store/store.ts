@@ -445,10 +445,17 @@ export function weeklyTrialWithResult(state: GameState | null, heroIds: HeroId[]
 // ─────────────────────────────────────────────────────────────────────────────
 
 export interface StoreOpts {
-  /** Optional persistence backend; when present, every dispatch saves the state. */
+  /** Optional persistence backend; when present, dispatches save the state (see below). */
   storage?: StoragePort
   /** Persistence key; defaults to the account module's DEFAULT_SAVE_KEY. */
   saveKey?: string
+  /**
+   * The lobby pumps a TICK every second; writing the whole save each time is a hitch on
+   * phones (B9). A TICK is persisted only every Nth one (the rest leave the save "dirty"
+   * until the next command, the next Nth TICK or flush()); every other command persists
+   * at once. Defaults to TUNING.persistence.tickPersistEvery.
+   */
+  tickPersistEvery?: number
 }
 
 export interface Store {
@@ -469,6 +476,15 @@ export interface Store {
   revise(cmd: Command): GameState
   /** Erase the save: forget the current state, clear storage and notify (back to the title). */
   reset(): void
+  /** Write any state not yet saved (throttled TICKs) now — the UI calls this when the page
+   *  is hidden or closed. A no-op when everything is saved. */
+  flush(): void
+  /**
+   * The last failed save (storage full or refused), or null — cleared by the next save that
+   * succeeds. A failed save never blocks play: the new state still applies and subscribers
+   * are notified, so the UI can read this and offer an export.
+   */
+  getSaveError(): Error | null
 }
 
 /**
@@ -480,13 +496,33 @@ export interface Store {
 export function createStore(opts: StoreOpts = {}): Store {
   const storage = opts.storage
   const saveKey = opts.saveKey ?? DEFAULT_SAVE_KEY
+  const tickEvery = Math.max(1, Math.floor(opts.tickPersistEvery ?? TUNING.persistence.tickPersistEvery))
 
   let current: GameState | null = null
   let last: { before: GameState | null; nowReal: number; type: Command['type'] } | null = null
   const listeners = new Set<() => void>()
+  /** The held state is newer than the save (a throttled TICK, or a failed write). */
+  let dirty = false
+  let ticks = 0
+  let saveError: Error | null = null
 
   function notify(): void {
     for (const fn of listeners) fn()
+  }
+
+  /** Write `state`; a failure is recorded (and warned once), never thrown. */
+  function save(state: GameState): void {
+    if (storage === undefined) return
+    try {
+      persist(storage, state, saveKey)
+      dirty = false
+      saveError = null
+    } catch (e) {
+      dirty = true
+      const first = saveError === null
+      saveError = e instanceof Error ? e : new Error(String(e))
+      if (first && typeof console !== 'undefined') console.warn(`[store] the save could not be written: ${saveError.message}`)
+    }
   }
 
   return {
@@ -500,7 +536,13 @@ export function createStore(opts: StoreOpts = {}): Store {
       last = cmd.type === 'ATTEMPT_FLOOR' ? { before, nowReal, type: cmd.type } : null
       current = next
       if (storage !== undefined) {
-        persist(storage, next, saveKey)
+        if (cmd.type !== 'TICK') save(next)
+        else if (next !== before || dirty) {
+          // The 1 Hz clock pump: only every Nth tick reaches storage.
+          ticks++
+          if (ticks % tickEvery === 0) save(next)
+          else dirty = true
+        }
       }
       notify()
       return next
@@ -512,9 +554,17 @@ export function createStore(opts: StoreOpts = {}): Store {
       }
       const next = reduce(last.before, cmd, toWorldTime(last.nowReal))
       current = next
-      if (storage !== undefined) persist(storage, next, saveKey)
+      save(next)
       notify()
       return next
+    },
+
+    flush(): void {
+      if (dirty && current !== null) save(current)
+    },
+
+    getSaveError(): Error | null {
+      return saveError
     },
 
     subscribe(fn: () => void): () => void {
@@ -527,13 +577,25 @@ export function createStore(opts: StoreOpts = {}): Store {
     reset(): void {
       current = null
       last = null
-      if (storage !== undefined) storage.clear(saveKey)
+      dirty = false
+      ticks = 0
+      if (storage !== undefined) {
+        try {
+          storage.clear(saveKey)
+        } catch (e) {
+          saveError = e instanceof Error ? e : new Error(String(e))
+        }
+      }
       notify()
     },
 
     load(): GameState | null {
       const restored = storage !== undefined ? hydrate(storage, saveKey) : null
       current = restored
+      // What was just read IS the save: nothing pending (an import must never be
+      // overwritten by a stale throttled state on the next flush).
+      dirty = false
+      ticks = 0
       notify()
       return restored
     },
