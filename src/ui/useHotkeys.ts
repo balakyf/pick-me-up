@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react'
 
 /**
  * App-level scene shortcuts (T Tower, P Party Board, R Registry, U/G Summon, L/Backspace
- * back to the Lobby, M/Esc Menu in a scene, ? keyboard help). They never collide with the
+ * back to the Lobby, M/Esc Menu in a scene, O settings, ? keyboard help). They never collide with the
  * lobby's own keys (arrows/WASD/ZQSD, E/Space/Enter, H, N, M/Esc) and stand aside whenever
  * something else owns the keyboard: a text field, an open window or dialog, a battle,
  * a results overlay or the summoning ritual.
@@ -10,7 +10,12 @@ import { useEffect, useRef } from 'react'
 
 export type SceneView = 'lobby' | 'tower' | 'summon' | 'party' | 'roster'
 
-export type HotkeyAction = { kind: 'go'; view: Exclude<SceneView, 'lobby'> } | { kind: 'back' } | { kind: 'menu' } | { kind: 'help' }
+export type HotkeyAction =
+  | { kind: 'go'; view: Exclude<SceneView, 'lobby'> }
+  | { kind: 'back' }
+  | { kind: 'menu' }
+  | { kind: 'help' }
+  | { kind: 'settings' }
 
 const GO: Record<string, Exclude<SceneView, 'lobby'>> = { t: 'tower', p: 'party', r: 'roster', u: 'summon', g: 'summon' }
 
@@ -18,6 +23,7 @@ const GO: Record<string, Exclude<SceneView, 'lobby'>> = { t: 'tower', p: 'party'
 export function hotkeyFor(key: string, view: SceneView): HotkeyAction | null {
   const k = key.length === 1 ? key.toLowerCase() : key
   if (k === '?') return { kind: 'help' }
+  if (k === 'o') return { kind: 'settings' }
   const target = GO[k]
   if (target) return target === view ? null : { kind: 'go', view: target }
   if (view === 'lobby') return null // the lobby handles its own Menu / Esc

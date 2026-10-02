@@ -5,6 +5,7 @@ import { backupMilestone, lastExportAt, lastNudgedFloor, markNudged } from './sa
 import { lastExportText } from './SaveTransfer'
 import { useAnyWindowOpen } from './windowRegistry'
 import './qol.css'
+import { PxIcon } from '../bits'
 
 /**
  * A gentle nudge after every tenth floor: permadeath makes a save precious, and it only
@@ -24,7 +25,7 @@ export function BackupReminder({ state, onExport }: { state: GameState; onExport
   return (
     <div className="qol-toast" role="status">
       <span>
-        💾 {t('Floor {n} cleared — back up your save?', { n: floor })} <span className="muted">{lastExportText(now)}</span>
+        <PxIcon name="save" /> {t('Floor {n} cleared — back up your save?', { n: floor })} <span className="muted">{lastExportText(now)}</span>
       </span>
       <button
         className="pbtn sm primary"

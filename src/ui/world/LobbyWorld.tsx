@@ -60,6 +60,9 @@ import { t, t as tr } from '../i18n/i18n'
 import { breakLigatures, canvasFont, plainText } from '../canvasText'
 import { withToasts } from '../qol/toastStore'
 import { placeBubble, shelterRects, toCanvasRect, type Rect } from './overlayLayout'
+import { useLobbyAudio } from '../audio/useLobbyAudio'
+import { PxIcon } from '../bits'
+import { fmtInt } from '../text'
 
 /**
  * The waiting room as a walkable campus (Living Lobby spec §3). The Master walks with
@@ -463,6 +466,8 @@ export function LobbyWorld({
   const stageRef = useRef<HTMLDivElement>(null)
   /** The store for the Master's one-click rewards and actions: each says what it did. */
   const told = useMemo(() => withToasts(store), [store])
+  /** The lobby's ambience around the camera (the music is the App's: useCampMusic). */
+  const feedAudio = useLobbyAudio(state)
   const [vp, setVp] = useState<Viewport>({ w: VIEW_W, h: VIEW_H, zoom: 3 })
   const vpRef = useRef(vp)
   vpRef.current = vp
@@ -996,6 +1001,7 @@ export function LobbyWorld({
       })
       // Roofs: sorted at the building's front wall, faded away while the Master is inside.
       const inside = insideBuilding(m.x, m.y) ?? buildingAt(m.x, m.y)
+      feedAudio({ camX, camY, VW, VH, indoors: inside !== null })
       const roofFrame = Math.floor(w.time * 8)
       for (const b of BUILDINGS) {
         const target = inside === b ? 0 : 1
@@ -1259,24 +1265,28 @@ export function LobbyWorld({
         )}
         {!loginClaimed(state, toWorldTime(Date.now())) && (
           <button className="pbtn gem" onClick={() => told.dispatch({ type: 'CLAIM_LOGIN' }, Date.now())} title={t('Daily login reward')}>
-            🎁 {t('Daily')}
+            <PxIcon name="daily" /> {t('Daily')}
           </button>
         )}
         <button className="pbtn cb-hud" onClick={() => setAdviceOpen(true)} title={t('Isel’s advice: who suits which job, who needs rest, what to do next')}>
-          💡 {t('Advice')}
+          <PxIcon name="advice" /> {t('Advice')}
           {advice.tips.length > 0 && <span className="badge">{advice.tips.length}</span>}
         </button>
         <button className="pbtn cb-hud" onClick={() => setBoard(true)} title={t('Construction: build and upgrade (B)')}>
-          🔨 {t('Build')}
+          <PxIcon name="build" /> {t('Build')}
           {buildable > 0 && <span className="badge">{buildable}</span>}
         </button>
         <button className="pbtn" onClick={() => setTracker(true)} title={t('Where is everyone? (H)')}>
-          👥 {t('Heroes')}
+          <PxIcon name="heroes" /> {t('Heroes')}
         </button>
-        <span className="coin gold">◆ {state.gold.toLocaleString()}</span>
-        <span className="coin gem">♦ {state.gems.toLocaleString()}</span>
+        <span className="coin gold" title={t('Gold')}>
+          <PxIcon name="gold" /> {fmtInt(state.gold)}
+        </span>
+        <span className="coin gem" title={t('Gems')}>
+          <PxIcon name="gem" /> {fmtInt(state.gems)}
+        </span>
         <button className="pbtn" onClick={onMenu}>
-          ☰ {t('Menu')}
+          <PxIcon name="menu" /> {t('Menu')}
         </button>
       </div>
 
@@ -1312,9 +1322,9 @@ export function LobbyWorld({
         </div>
       )}
       <div className="hud hud-help">
-        {t('↑↓←→ / WASD / ZQSD · E interact · click to walk · H heroes · B build · N map · −/+ zoom · M menu')} · {t('? all keys')}
-        <button className="pbtn sm ghost" onClick={() => setShowMap((v) => !v)} style={{ marginLeft: 6 }}>
-          🗺
+        {t('↑↓←→ / WASD / ZQSD · E interact · click to walk · H heroes · B build · N map · −/+ zoom · M menu')} · {t('O settings')} · {t('? all keys')}
+        <button className="pbtn sm ghost" onClick={() => setShowMap((v) => !v)} style={{ marginLeft: 6 }} aria-label={t('Map')} title={t('Map')}>
+          <PxIcon name="map" />
         </button>
       </div>
 

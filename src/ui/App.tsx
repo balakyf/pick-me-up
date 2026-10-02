@@ -19,7 +19,15 @@ import { fitCount } from '../engine/tower'
 import type { CombatLog, GameState } from '../engine/types'
 import type { Store } from '../engine/store'
 import { sfx, unlockAudio } from './audio/sound'
-import { useMusic, useMuted } from './audio/useSound'
+import { useMuted } from './audio/useSound'
+import { useCampMusic } from './audio/useLobbyAudio'
+import { installToastSounds, uiCueFor } from './audio/uiSfx'
+import { installAudioDevHook } from './audio/devAudio'
+import { SettingsWindow } from './qol/Settings'
+import { mirrorSettingsToDocument } from './qol/useSettings'
+import { installMotionMirror } from './motion'
+import { PxIcon } from './bits'
+import { fmtInt } from './text'
 import { useLocale } from './i18n/useLocale'
 import { t } from './i18n/i18n'
 import { useHotkeys } from './useHotkeys'
@@ -56,8 +64,12 @@ function urlParams() {
 function Coins({ state }: { state: GameState }) {
   return (
     <>
-      <span className="coin gold">◆ {state.gold.toLocaleString()}</span>
-      <span className="coin gem">♦ {state.gems.toLocaleString()}</span>
+      <span className="coin gold" title={t('Gold')}>
+        <PxIcon name="gold" /> {fmtInt(state.gold)}
+      </span>
+      <span className="coin gem" title={t('Gems')}>
+        <PxIcon name="gem" /> {fmtInt(state.gems)}
+      </span>
     </>
   )
 }
@@ -86,7 +98,7 @@ function Scene({
         <span className="spacer" />
         <Coins state={state} />
         <button className="pbtn" onClick={onMenu}>
-          ☰ {t('Menu')}
+          <PxIcon name="menu" /> {t('Menu')}
         </button>
       </div>
       <div className="scene-body">{children}</div>
@@ -100,19 +112,21 @@ function GameMenu({
   onClose,
   onSave,
   onKeys,
+  onSettings,
 }: {
   store: Store
   onGo: (p: PlaceId) => void
   onClose: () => void
   onSave: () => void
   onKeys: () => void
+  onSettings: () => void
 }) {
   // In-page confirmation (browser confirm() dialogs are blocked in embedded viewers).
   const [confirmReset, setConfirmReset] = useState(false)
   const [muted, setMuted] = useMuted()
   const [locale, setLocale] = useLocale()
   return (
-    <PixelWindow title={t('Menu')} icon="☰" onClose={onClose}>
+    <PixelWindow title={t('Menu')} icon={<PxIcon name="menu" size={18} />} onClose={onClose}>
       <div className="menu-grid">
         {MENU_PLACES.map((p) => (
           <button key={p} className="menu-item" onClick={() => onGo(p)}>
@@ -123,20 +137,29 @@ function GameMenu({
       </div>
       <div className="menu-extra">
         <button className="pbtn" onClick={onSave}>
-          💾 {t('Export / import save')}
+          <PxIcon name="save" /> {t('Export / import save')}
         </button>
         <span className="muted">{lastExportText(Date.now())}</span>
         <span className="spacer" />
         <button className="pbtn ghost" onClick={onKeys} title={t('Keyboard shortcuts')}>
-          ⌨ {t('Keys')} <kbd>?</kbd>
+          <PxIcon name="keys" /> {t('Keys')} <kbd>?</kbd>
+        </button>
+        <button className="pbtn ghost" onClick={onSettings} title={t('Sound, comfort, speed and language')}>
+          <PxIcon name="settings" /> {t('Settings')} <kbd>O</kbd>
         </button>
       </div>
       <div className="menu-foot">
-        <button className="pbtn ghost" onClick={() => setMuted(!muted)} title={t('Chiptune sound effects and music')}>
-          {muted ? `🔇 ${t('Sound off')}` : `🔊 ${t('Sound on')}`}
+        <button
+          className="pbtn ghost"
+          role="switch"
+          aria-checked={!muted}
+          onClick={() => setMuted(!muted)}
+          title={t('Chiptune sound effects and music')}
+        >
+          <PxIcon name={muted ? 'sound-off' : 'sound-on'} /> {muted ? t('Sound off') : t('Sound on')}
         </button>
-        <button className="pbtn ghost" onClick={() => setLocale(locale === 'fr' ? 'en' : 'fr')} title={t('Language / Langue')}>
-          {locale === 'fr' ? '🇬🇧 English' : '🇫🇷 Français'}
+        <button className="pbtn ghost" onClick={() => setLocale(locale === 'fr' ? 'en' : 'fr')} title={t('Language / Langue')} lang={locale === 'fr' ? 'en' : 'fr'}>
+          <PxIcon name={locale === 'fr' ? 'flag-gb' : 'flag-fr'} /> {locale === 'fr' ? 'English' : 'Français'}
         </button>
         {/* A developer's convenience: only in a dev build or with ?dev=1. */}
         {devToolsEnabled() && (
@@ -181,17 +204,31 @@ export function App() {
   const { state, store } = useGame()
   // Re-render the whole tree when the language changes (every t() re-reads it).
   const [locale] = useLocale()
-  // The scene picks the music (the lobby theme here; a battle pushes its own on top).
-  useMusic('lobby')
-  // Every pixel button clicks; the first gesture wakes the audio context (and the scene's track).
+  // The scene picks the music: the title, then the camp's theme by the hour and the weather
+  // (a battle or the summoning circle pushes its own on top).
+  useCampMusic(state)
+  // Every pixel button sounds (a click, a confirm, a cancel); the first gesture (a click or a
+  // key) wakes the audio context and the scene's track. Clicks never choose the music.
   useEffect(() => {
     const onClick = (e: MouseEvent) => {
       unlockAudio()
-      const b = (e.target as HTMLElement | null)?.closest?.('button')
-      if (b && !(b as HTMLButtonElement).disabled) sfx('click')
+      const cue = uiCueFor(e.target)
+      if (cue) sfx(cue)
     }
+    const onKey = () => unlockAudio()
     window.addEventListener('click', onClick, true)
-    return () => window.removeEventListener('click', onClick, true)
+    window.addEventListener('keydown', onKey, true)
+    const offToasts = installToastSounds()
+    const offSettings = mirrorSettingsToDocument()
+    const offMotion = installMotionMirror()
+    installAudioDevHook()
+    return () => {
+      window.removeEventListener('click', onClick, true)
+      window.removeEventListener('keydown', onKey, true)
+      offToasts()
+      offSettings()
+      offMotion()
+    }
   }, [])
   const params = urlParams()
   const [view, setView] = useState<View>(params.view)
@@ -199,7 +236,7 @@ export function App() {
   const [travel, setTravel] = useState<{ place: PlaceId; nonce: number } | null>(null)
   // Quality-of-life windows (save export/import, keyboard help); `epoch` remounts the
   // world after an import so nothing holds on to the replaced save.
-  const [panel, setPanel] = useState<'save' | 'keys' | null>(null)
+  const [panel, setPanel] = useState<'save' | 'keys' | 'settings' | null>(null)
   const [epoch, setEpoch] = useState(0)
   // Rewards that arrive with time (a building finished, a promotion done) are announced.
   useTimeToasts(state, epoch)
@@ -230,6 +267,7 @@ export function App() {
         setTravel(null)
         setView(a.kind === 'go' ? a.view : 'lobby')
       } else if (a.kind === 'menu') setMenuOpen(true)
+      else if (a.kind === 'settings') setPanel('settings')
       else setPanel('keys')
     },
     state !== null && !state.meta.deleted && demoLog === null,
@@ -310,6 +348,7 @@ export function App() {
           onClose={() => setMenuOpen(false)}
           onSave={() => (setMenuOpen(false), setPanel('save'))}
           onKeys={() => (setMenuOpen(false), setPanel('keys'))}
+          onSettings={() => (setMenuOpen(false), setPanel('settings'))}
         />
       )}
       {panel === 'save' && (
@@ -324,6 +363,7 @@ export function App() {
         />
       )}
       {panel === 'keys' && <KeyboardHelp onClose={() => setPanel(null)} />}
+      {panel === 'settings' && <SettingsWindow onClose={() => setPanel(null)} />}
       {view === 'lobby' && !menuOpen && panel === null && <BackupReminder state={state} onExport={() => setPanel('save')} />}
       {demoLog && <BattleScene log={demoLog} state={state} onDone={() => setDemoLog(null)} />}
       {/* A floor attempt the Master never saw the end of (a reload mid-battle) plays first (B14). */}

@@ -1,5 +1,6 @@
 import type { GameState, MaterialId, OwnedHero } from '../../engine/types'
-import { Portrait, classGlyph, cpOf, ELEMENT_VIS } from '../bits'
+import { Portrait, ClassIcon, ElementIcon, ELEMENT_VIS, cpOf } from '../bits'
+import { fmtInt } from '../text'
 import { BondBadge } from '../bond/BondBadge'
 import { t } from '../i18n/i18n'
 import { pickerName } from '../hero/heroLabel'
@@ -56,7 +57,7 @@ export function HeroChip({
           <span className="hero-tag">{t('Lv{level}', { level: hero.xp.level })}</span>
         </span>
         <span className="hc-meta">
-          {classGlyph(hero.heroClass)} {ELEMENT_VIS[hero.element].glyph} · {cpOf(hero).toLocaleString()}
+          <ClassIcon heroClass={hero.heroClass} label /> <ElementIcon element={hero.element} label /> · {fmtInt(cpOf(hero))}
           {hero.sanity < 40 && <span className="hc-tired"> · {t('Sanity')} {Math.round(hero.sanity)}</span>}
         </span>
         <BondBadge hero={hero} />

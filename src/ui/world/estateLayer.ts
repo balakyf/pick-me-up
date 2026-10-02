@@ -10,7 +10,7 @@
  *   banks, fireflies on summer nights, lantern light after dark.
  *
  * Everything reads the engine's deterministic calendar (`seasonAt`, `weatherAt`); motion
- * is cosmetic and honours `prefers-reduced-motion`. Presentation only.
+ * is cosmetic and honours reduced motion (ui/motion.ts). Presentation only.
  */
 import type { GameState } from '../../engine/types'
 import { seasonAt, weatherAt, type Season, type Weather } from '../../engine/estate'
@@ -23,6 +23,8 @@ import { heroLook } from '../pixel/sprites'
 import { hashString } from '../pixel/rand'
 import { BUILDINGS, PROPS, TILE, tileAt, type Building } from './lobbyMap'
 import { t } from '../i18n/i18n'
+import { reducedMotion } from '../motion'
+import { flashesOn } from '../qol/settings'
 
 export interface View {
   camX: number
@@ -57,14 +59,9 @@ export const ESTATE_SPOTS = {
   statues: [[56, 53], [58, 53], [60, 53], [62, 53], [64, 45], [64, 47], [64, 49], [64, 51], [56, 44], [58, 44], [61, 44], [63, 44]] as Pt[],
 }
 
-let reducedMotion: boolean | null = null
+/** Reduced motion (the Settings window's choice or the OS's): see ui/motion.ts. */
 export function prefersReducedMotion(): boolean {
-  if (reducedMotion === null) {
-    const mq = typeof window !== 'undefined' && window.matchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)') : null
-    reducedMotion = Boolean(mq?.matches)
-    mq?.addEventListener?.('change', (e) => (reducedMotion = e.matches))
-  }
-  return reducedMotion
+  return reducedMotion()
 }
 
 function sprite(key: string, make: () => PropSprite): { img: HTMLCanvasElement | null; dx: number; dy: number } {
@@ -357,7 +354,7 @@ export function drawSky(
       ctx.fillRect(px, py, 1, 5)
       ctx.fillRect(px - 1, py + 5, 1, 2)
     }
-    if (weather === 'storm' && !still) {
+    if (weather === 'storm' && !still && flashesOn()) {
       // Lightning: a double flash every ten seconds or so, at seeded moments.
       const cycle = 9 + (hashString(`bolt|${Math.floor(time / 11)}`) % 5)
       const ph = time % cycle

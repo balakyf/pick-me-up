@@ -1,5 +1,6 @@
 import { PixelWindow } from '../kit'
 import { t } from '../i18n/i18n'
+import { PxIcon } from '../bits'
 import './qol.css'
 
 /** Every keyboard shortcut in the game, grouped by where it works. */
@@ -13,6 +14,7 @@ const GROUPS: { title: string; keys: [string[], string][] }[] = [
       [['U', 'G'], 'Mobius Summon'],
       [['L', '⌫'], 'Back to the Lobby'],
       [['M', 'Esc'], 'Menu'],
+      [['O'], 'Settings'],
       [['?'], 'This list'],
     ],
   },
@@ -62,7 +64,7 @@ const GROUPS: { title: string; keys: [string[], string][] }[] = [
 
 export function KeyboardHelp({ onClose }: { onClose: () => void }) {
   return (
-    <PixelWindow title={t('Keyboard shortcuts')} icon="⌨" onClose={onClose}>
+    <PixelWindow title={t('Keyboard shortcuts')} icon={<PxIcon name="keys" size={18} />} onClose={onClose}>
       <div className="qol-keys">
         {GROUPS.map((g) => (
           <section key={g.title}>

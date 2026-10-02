@@ -3,7 +3,7 @@
  * dev backdrop preview, the reduced-motion preference, and the camera punch and screen
  * shake that sell a heavy blow.
  */
-import { useEffect, useState } from 'react'
+import { screenShakeOn } from '../qol/settings'
 import { bgTheme, drawBattleLayers, LAYER_ORDER, type BattleLayerName, type BattleLayers } from '../pixel/battleBg'
 import { canvasAvailable, cachedDataUrl } from '../pixel/render'
 
@@ -34,24 +34,13 @@ export function devFxFloor(): number | null {
   return Number.isInteger(v) && v > 0 ? v : null
 }
 
-/** The player's reduced-motion preference (no shake or zoom, sparse weather). */
-export function useReducedMotion(): boolean {
-  const query = () =>
-    typeof window !== 'undefined' && typeof window.matchMedia === 'function' ? window.matchMedia('(prefers-reduced-motion: reduce)') : null
-  const [reduce, setReduce] = useState(() => !!query()?.matches)
-  useEffect(() => {
-    const q = query()
-    if (!q || typeof q.addEventListener !== 'function') return
-    const on = () => setReduce(q.matches)
-    q.addEventListener('change', on)
-    return () => q.removeEventListener('change', on)
-  }, [])
-  return reduce
-}
+/** The reduced-motion answer (the Settings window's choice, or the OS's): see ui/motion.ts. */
+export { useReducedMotion } from '../motion'
 
 /** Camera punch: a quick zoom toward (x, y) and back, after `delay` ms of hit-stop. */
 export function punch(el: HTMLElement | null, at: { x: number; y: number }, amount: number, delay: number) {
-  if (!el || typeof el.animate !== 'function') return
+  // The camera's lurch is screen shake too: the Settings window can turn both off.
+  if (!el || typeof el.animate !== 'function' || !screenShakeOn()) return
   el.style.transformOrigin = `${at.x}px ${at.y}px`
   el.animate([{ transform: 'scale(1)' }, { transform: `scale(${amount})`, offset: 0.3 }, { transform: 'scale(1)' }], {
     duration: 380,
@@ -62,7 +51,7 @@ export function punch(el: HTMLElement | null, at: { x: number; y: number }, amou
 
 /** Screen shake of the whole stage, `px` screen pixels at its strongest. */
 export function shake(el: HTMLElement | null, px: number, delay: number) {
-  if (!el || typeof el.animate !== 'function') return
+  if (!el || typeof el.animate !== 'function' || !screenShakeOn()) return
   const k = (a: number, b: number) => ({ transform: `translate(${Math.round(a * px)}px, ${Math.round(b * px)}px)` })
   el.animate([k(0, 0), k(-1, 0.5), k(1, -0.5), k(-0.75, -0.25), k(0.75, 0.5), k(-0.25, 0), k(0, 0)], {
     duration: px > 2 ? 320 : 220,

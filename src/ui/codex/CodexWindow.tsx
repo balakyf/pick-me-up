@@ -10,7 +10,7 @@ import { ACTS } from '../../engine/content'
 import { DEPTH } from '../../engine/depth'
 import { actOfTemplate, codexTemplates, intelOf } from '../../engine/codex'
 import { PixelWindow } from '../kit'
-import { ELEMENT_VIS } from '../bits'
+import { ELEMENT_VIS, ElementIcon } from '../bits'
 import { t } from '../i18n/i18n'
 import { codexSpriteUrl } from './codexArt'
 import { familyLabel, keywordText } from './codexText'
@@ -51,14 +51,14 @@ function Detail({ state, tpl }: { state: GameState; tpl: EnemyTemplate }) {
       {entry.studied ? (
         <div className="codex-intel">
           <div>
-            {t('Element')}: <span style={{ color: ELEMENT_VIS[intel.element].color }}>{ELEMENT_VIS[intel.element].glyph} {t(ELEMENT_VIS[intel.element].label)}</span>
+            {t('Element')}: <span style={{ color: ELEMENT_VIS[intel.element].color }}><ElementIcon element={intel.element} /> {t(ELEMENT_VIS[intel.element].label)}</span>
           </div>
           <div>
             {t('Weak to')}:{' '}
             {intel.weakTo.length > 0
               ? intel.weakTo.map((el) => (
                   <span key={el} className="codex-weak" style={{ color: ELEMENT_VIS[el].color }}>
-                    {ELEMENT_VIS[el].glyph} {t(ELEMENT_VIS[el].label)}
+                    <ElementIcon element={el} /> {t(ELEMENT_VIS[el].label)}
                   </span>
                 ))
               : t('nothing in particular')}

@@ -42,6 +42,7 @@ import { heroFrameUrl } from '../pixel/sprites'
 import { shortName } from './speech'
 import { t } from '../i18n/i18n'
 import './estate.css'
+import { reducedMotion } from '../motion'
 
 const first = (n: string) => n.split(/\s+/)[0] ?? n
 
@@ -368,7 +369,7 @@ function DuelSection({ state, store }: { state: GameState; store: Store }) {
 
 /** A small replay of a duel: the two duellists face off, HP bars drain hit by hit. */
 export function DuelScene({ state, log, a, b, onDone }: { state: GameState; log: CombatLog; a: OwnedHero; b: OwnedHero; onDone: () => void }) {
-  const reduce = typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+  const reduce = reducedMotion()
   const steps = useMemo(() => log.events.filter((e) => e.kind === 'hit' || e.kind === 'miss' || e.kind === 'guard' || e.kind === 'heal' || e.kind === 'panic'), [log])
   const [i, setI] = useState(reduce ? steps.length : 0)
   useEffect(() => {

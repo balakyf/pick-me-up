@@ -39,6 +39,7 @@ describe('text helpers', () => {
     expect(fmtInt(12500, 'en')).toBe('12,500')
     expect(fmtInt(999.6, 'en')).toBe('1,000')
     expect(fmtInt(12500, 'fr').replace(/\s/g, ' ')).toBe('12 500')
+    expect(fmtInt(94075, 'fr')).toBe('94\u00a0075')
   })
 
   it('tn() picks the singular or plural sentence', () => {

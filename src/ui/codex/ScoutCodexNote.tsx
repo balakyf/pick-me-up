@@ -2,7 +2,7 @@
 import type { ScoutedEnemy } from '../../engine/scout'
 import { ENEMY_TEMPLATES } from '../../engine/content'
 import { intelOf } from '../../engine/codex'
-import { ELEMENT_VIS } from '../bits'
+import { ELEMENT_VIS, ElementIcon } from '../bits'
 import { t } from '../i18n/i18n'
 
 export function ScoutCodexNote({ enemy, floorStudied }: { enemy: ScoutedEnemy; floorStudied: boolean }) {
@@ -12,8 +12,12 @@ export function ScoutCodexNote({ enemy, floorStudied }: { enemy: ScoutedEnemy; f
   return (
     <span className="scout-codex" title={enemy.studied ? t('In the Enemy Codex') : undefined}>
       {enemy.studied ? '📖 ' : ''}
+      {weak.map((el) => (
+        <ElementIcon key={el} element={el} />
+      ))}
+      {weak.length > 0 ? ' ' : ''}
       {weak.length > 0
-        ? t('beaten by {what}', { what: weak.map((el) => `${ELEMENT_VIS[el].glyph} ${t(ELEMENT_VIS[el].label)}`).join(' / ') })
+        ? t('beaten by {what}', { what: weak.map((el) => t(ELEMENT_VIS[el].label)).join(' / ') })
         : t('no elemental weakness')}
     </span>
   )
