@@ -122,14 +122,24 @@ export function ElementBadge({ element }: { element: Element }) {
   )
 }
 
-/** The class badge; with `trade` (hero/heroLabel bornTrade) an untrained hero shows the trade they were born to. */
+/**
+ * The class badge. With `trade` (hero/heroLabel bornTrade) an untrained hero also shows
+ * the trade they were born to, as a chip of its own beside it; a classed hero carries it
+ * in the tooltip.
+ */
 export function ClassBadge({ heroClass, trade }: { heroClass: HeroClass | null; trade?: string }) {
   const title = trade ? fixArticles(t('{cls} · a {trade} before the summon', { cls: classLabel(heroClass), trade })) : classLabel(heroClass)
   return (
-    <span className="tag" title={title}>
-      {classGlyph(heroClass)} {classLabel(heroClass)}
-      {trade && heroClass === null && <span className="class-trade"> · {trade}</span>}
-    </span>
+    <>
+      <span className="tag" title={title}>
+        {classGlyph(heroClass)} {classLabel(heroClass)}
+      </span>
+      {trade && heroClass === null && (
+        <span className="tag class-trade" title={title}>
+          🏠 {trade}
+        </span>
+      )}
+    </>
   )
 }
 

@@ -17,4 +17,5 @@
 .toast-text { min-width: 0; overflow-wrap: anywhere; }
 @keyframes toastIn { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { .toast { animation: none; } }
-@media (max-width: 640px) { .toast-stack { top: 64px; } .toast { font-size: 14px; } }
+/* Phones: below the stacked HUD box (the clock and the Master's card), not on it. */
+@media (max-width: 640px) { .toast-stack { top: 134px; } .toast { font-size: 14px; } }
