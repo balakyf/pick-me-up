@@ -24,6 +24,8 @@ export function TowerExterior({ state, hold = false }: { state: GameState; hold?
   const target = Math.min(tw.currentFloor, 100)
   const [marker, setMarker] = useState(target)
   const [arrived, setArrived] = useState(false)
+  // A fall back down (the F40 loop) jumps; only a climb glides.
+  const [falling, setFalling] = useState(false)
   const shown = useRef(target)
 
   useEffect(() => {
@@ -32,6 +34,7 @@ export function TowerExterior({ state, hold = false }: { state: GameState; hold?
     if (from === target) return
     shown.current = target
     setMarker(target)
+    setFalling(target < from)
     // The CSS transition carries the climb; a fall back down (the F40 loop) is instant.
     if (target > from) {
       const id = setTimeout(() => setArrived(true), 1100)
@@ -75,7 +78,7 @@ export function TowerExterior({ state, hold = false }: { state: GameState; hold?
           <span
             className="tower-marker"
             aria-hidden="true"
-            style={{ ['--mx' as string]: at.x, ['--my' as string]: at.y } as CSSProperties}
+            style={{ ['--mx' as string]: at.x, ['--my' as string]: at.y, ...(falling ? { transition: 'none' } : {}) } as CSSProperties}
           />
         )}
       </div>

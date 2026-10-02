@@ -127,7 +127,8 @@
 
 /* A replay shown after a reload (B14). */
 .replay-note {
-  position: fixed; left: 50%; top: 8px; transform: translateX(-50%); z-index: 2000; pointer-events: none;
+  /* Below the battle's own caption bar (which sits at the top of the stage). */
+  position: fixed; left: 50%; top: 58px; transform: translateX(-50%); z-index: 2000; pointer-events: none;
   max-width: min(560px, 94vw); padding: 4px 12px; font-size: 14px; text-align: center;
   background: #1c1640; border: 2px solid var(--gold-deep); color: var(--gold);
 }
@@ -137,6 +138,7 @@
   .crystal-wait { animation: none; }
 }
 @media (max-width: 760px) {
+  .replay-note { top: 34px; font-size: 12px; padding: 2px 8px; }
   .fc-pct { font-size: 36px; }
   .fc-win { min-width: 76px; }
   .fc-alt { flex-direction: column; align-items: stretch; }

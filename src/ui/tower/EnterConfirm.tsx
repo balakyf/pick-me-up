@@ -10,13 +10,14 @@ import type { EnterConcern, Forecast } from '../../engine/scout/forecast'
 import { t } from '../i18n/i18n'
 import { tn } from '../text'
 import { useRegisterWindow } from '../qol/windowRegistry'
-import { concernLines, truthStanding } from './warRoomText'
+import { concernLines, deathsLine, threatLabel, truthStanding } from './warRoomText'
 
 export function EnterConfirm({
   state,
   forecast,
   concerns,
   worldEnd,
+  subverted = null,
   onBack,
   onEnter,
   onSubvert,
@@ -26,6 +27,8 @@ export function EnterConfirm({
   concerns: EnterConcern | null
   /** This is the ninetieth floor, and clearing it would end the world. */
   worldEnd: boolean
+  /** At F90, the forecast of the subverted fight (the Herald without her aegis). */
+  subverted?: Forecast | null
   onBack: () => void
   onEnter: () => void
   /** Offered at F90 when the Master knows enough truths. */
@@ -72,6 +75,11 @@ export function EnterConfirm({
                     })
                   : t('With {k} you could have refused the win condition. Too many of them lie on floors behind you.', { k: truths.need })}
             </p>
+            {onSubvert && subverted && subverted.fielded > 0 && (
+              <p className="muted">
+                {t('Subverted, the crystal gives this party {p}% — {band}.', { p: subverted.winPct, band: threatLabel(subverted.threat) })} {deathsLine(subverted)}
+              </p>
+            )}
           </div>
         )}
 

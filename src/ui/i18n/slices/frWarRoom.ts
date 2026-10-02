@@ -107,6 +107,7 @@ export default {
   'Only {n} of {m} will fight.': 'Seuls {n} sur {m} combattront.',
   '{name} is at Sanity {s} and may panic ({p}% of their turns).': '{name} est à {s} de santé mentale et peut paniquer ({p} % de ses tours).',
   'The crystal gives this party {p}% — {band}.': 'Le cristal donne à ce groupe {p} % — {band}.',
+  'Subverted, the crystal gives this party {p}% — {band}.': 'En subvertissant, le cristal donne à ce groupe {p} % — {band}.',
   '1 slot is empty.': '1 place est vide.',
   '{n} slots are empty.': '{n} places sont vides.',
 

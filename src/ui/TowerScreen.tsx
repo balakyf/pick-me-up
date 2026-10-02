@@ -55,6 +55,8 @@ interface Confirm {
   concerns: EnterConcern | null
   worldEnd: boolean
   subvert: boolean
+  /** At F90, when the Master may refuse: the odds of the subverted fight. */
+  subverted?: Forecast | null
 }
 
 /**
@@ -130,10 +132,14 @@ export function TowerScreen({ state: live, store }: { state: GameState; store: S
   /** Enter: ask first when the war room has something to say (or the world would end). */
   function enter(subvert = false) {
     if (block !== null || current > MAX_FLOOR) return
-    const f = view.forecast ?? forecastNow(live, plan)
+    // Subverting strips the Herald's aegis: the sheet must weigh THAT fight, not the plain clear.
+    const f = subvert ? forecastNow(live, { ...plan, subvert: true }) : (view.forecast ?? forecastNow(live, plan))
     const concerns = f ? enterConcerns(f) : null
     if ((worldEnd && !subvert) || concerns) {
-      setConfirm({ forecast: f, concerns, worldEnd: worldEnd && !subvert, subvert })
+      const sheetWorld = worldEnd && !subvert
+      // The world sheet offers Subvert too: give its odds beside the plain clear's.
+      const subverted = sheetWorld && truthStanding(live).qualified ? forecastNow(live, { ...plan, subvert: true }) : undefined
+      setConfirm({ forecast: f, concerns, worldEnd: sheetWorld, subvert, subverted })
       return
     }
     go(subvert)
@@ -320,6 +326,7 @@ export function TowerScreen({ state: live, store }: { state: GameState; store: S
           forecast={confirm.forecast}
           concerns={confirm.concerns}
           worldEnd={confirm.worldEnd}
+          subverted={confirm.subverted ?? null}
           onBack={() => setConfirm(null)}
           onEnter={() => go(confirm.subvert)}
           onSubvert={confirm.worldEnd && truths.qualified ? () => go(true) : undefined}

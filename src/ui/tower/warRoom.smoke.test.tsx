@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { App } from '../App'
@@ -11,6 +11,7 @@ import { attemptFloorWithResult } from '../../engine/store'
 import { HIDDEN_OBJECTIVES } from '../../engine/content'
 import type { GameState, HeroId, OwnedHero } from '../../engine/types'
 import { PENDING_KEY, savePendingReplay } from './pendingReplay'
+import { cachedForecast, clearForecastCache, forecastInput } from '../../engine/scout/forecast'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
@@ -29,6 +30,10 @@ beforeEach(() => {
   container = document.createElement('div')
   document.body.appendChild(container)
   root = createRoot(container)
+})
+// Unmount each test's App, so no old clock keeps ticking into the next test.
+afterEach(() => {
+  act(() => root.unmount())
 })
 
 /** A ten-hero account with a full party, put in the store through a save (as a reload would). */
@@ -182,7 +187,32 @@ describe('the war room', () => {
     expect(sheet.textContent).toContain('You know 7 of the tower’s 10 truths.')
     expect(button('Subvert ✦')).toBeDefined()
     expect(button('Clear it — end the world')).toBeDefined()
+    // The Subvert it offers comes with its own odds (the Herald without her aegis).
+    expect(sheet.textContent).toMatch(/Subverted, the crystal gives this party \d+%/)
     click('Back')
+    expect(getStore().getState()!.tower.worldEnded).toBe(false)
+  })
+
+  it('Subvert weighs the subverted fight (the Herald without her aegis), not the plain clear', () => {
+    load(account(90, (s) => ({ ...s, tower: { ...s.tower, hiddenFound: HIDDEN_OBJECTIVES.slice(0, 7).map((h) => h.id) } })))
+    mount()
+    toTower()
+    const live = getStore().getState()!
+    const plain = forecastInput(live, { opening: [] })!
+    const subverted = forecastInput(live, { opening: [], subvert: true })!
+    expect(subverted.key).not.toBe(plain.key)
+    clearForecastCache()
+    const sv = container.querySelector('.war-enter .btn.gem') as HTMLButtonElement
+    expect(sv?.textContent).toContain('Subvert')
+    act(() => sv.click())
+    // The sheet asked the crystal about the subversion itself.
+    expect(cachedForecast(subverted)).toBeDefined()
+    const sheet = container.querySelector('.enter-sheet')
+    if (sheet) {
+      expect(sheet.classList.contains('world')).toBe(false)
+      expect(sheet.textContent).toContain(`gives this party ${cachedForecast(subverted)!.winPct}%`)
+      click('Back')
+    }
     expect(getStore().getState()!.tower.worldEnded).toBe(false)
   })
 
