@@ -63,8 +63,15 @@ export function useBossShow({
   shattered: string | null
   /** When (real ms into the beat) the killing blow lands. */
   shatterAt: number
+  /** Bosses whose finisher has already played: they stay broken (no second dissolve). */
+  gone: ReadonlySet<string>
 } {
   const shows = useMemo(() => bossShows(log, byId), [log, byId])
+  const gone = useMemo(() => {
+    const out = new Set<string>()
+    for (const [i, s] of shows) if (s.kind === 'finisher' && (atEnd ? i <= snap.to : i < snap.from)) out.add(s.unitId)
+    return out
+  }, [shows, atEnd, snap.from, snap.to])
   const found = atEnd ? null : showIn(shows, snap.from, snap.to)
   const show = found?.show ?? null
   const key = found ? `${found.at}|${log.seed}|${log.events.length}` : null
@@ -96,10 +103,11 @@ export function useBossShow({
     if (!show || !focus) return
     const timers: ReturnType<typeof setTimeout>[] = []
     const el = cam.current
+    let ease: Animation | null = null
     if ((show.kind === 'intro' || show.kind === 'wakes') && !reduced && el && typeof el.animate === 'function') {
       el.style.transformOrigin = `${focus.x}px ${focus.y}px`
       const zoom = show.kind === 'wakes' ? 1.12 : show.kind === 'intro' && show.tier === 'boss' ? 1.18 : 1.08
-      el.animate(
+      ease = el.animate(
         [
           { transform: 'scale(1)' },
           { transform: `scale(${zoom})`, offset: 0.22 },
@@ -124,6 +132,8 @@ export function useBossShow({
     }
     return () => {
       for (const tm of timers) clearTimeout(tm)
+      // A skipped card takes the camera's ease with it (the next beat plays unzoomed).
+      ease?.cancel()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key])
@@ -161,5 +171,5 @@ export function useBossShow({
       ) : null
     }
   }
-  return { show, pace, card, spotlight, shatter, shattered: finisher?.unitId ?? null, shatterAt }
+  return { show, pace, card, spotlight, shatter, shattered: finisher?.unitId ?? null, shatterAt, gone }
 }

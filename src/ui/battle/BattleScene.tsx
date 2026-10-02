@@ -556,11 +556,13 @@ export function BattleScene({
                         banner: casting ? { name: snap.skill!.name, color: snap.skill!.color, edge: bannerEdge(p.x, snap.skill!.name) } : null,
                         turnMark: snap.actor === u.id && !dead && !atEnd && !casting,
                         panic: snap.panic === u.id,
-                        enterDelayMs: (isHero ? heroes.indexOf(u) : enemies.indexOf(u) % 6) * 70,
+                        // A boss under its title card steps in at once, into its own spotlight.
+                        enterDelayMs: boss.show?.kind === 'intro' && boss.show.units.includes(u.id) ? 0 : (isHero ? heroes.indexOf(u) : enemies.indexOf(u) % 6) * 70,
                         status,
                         mark: markOf(u.id),
                         hurtDelayMs: Math.round((hurtDelay[u.id] ?? 0) / pace),
-                        shatterAtMs: boss.shattered === u.id ? boss.shatterAt : undefined,
+                        // A shattered boss stays gone: without the class its KO dissolve would replay.
+                        shatterAtMs: boss.shattered === u.id ? boss.shatterAt : boss.gone.has(u.id) ? 0 : undefined,
                       }}
                     />
                   )

@@ -86,11 +86,17 @@ export function bossBarView(log: CombatLog, byId: Record<string, CombatUnitInit>
   const phases = phaseKws.map((p, i) => ({ atHpPct: p.atHpPct, title: p.title !== undefined ? t(p.title) : t('Phase {n}', { n: i + 2 }), passed: i < passed }))
   const gained = phaseKws.slice(0, passed).flatMap((p) => p.addKeywords ?? [])
 
-  // Aegis: what it came with and what its phases added, less every blow one turned.
+  // Aegis: what it came with, plus what each phase adds as it turns, less every blow one
+  // turned. A blow that lands while the count says a charge is left proves there is none
+  // (the engine always spends a charge first): F90's subverted Herald comes without his.
   let aegis = 0
-  for (const k of [...kws, ...gained]) if (k.kind === 'aegis') aegis += k.charges
-  aegis -= played.filter((e) => e.kind === 'guard' && e.targetId === unitId).length
-  aegis = Math.max(0, aegis)
+  for (const k of kws) if (k.kind === 'aegis') aegis += k.charges
+  for (const e of played) {
+    if (e.kind === 'phase' && e.unitId === unitId) {
+      for (const k of phaseKws[e.phase - 1]?.addKeywords ?? []) if (k.kind === 'aegis') aegis += k.charges
+    } else if (e.kind === 'guard' && e.targetId === unitId) aegis = Math.max(0, aegis - 1)
+    else if (e.kind === 'hit' && e.targetId === unitId) aegis = 0
+  }
 
   // Enraged: a phase that turned it (afterTick 0), or its enrage tick come and gone.
   let enraged: number | null = null

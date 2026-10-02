@@ -58,11 +58,22 @@ describe('the boss bar (lane I)', () => {
       { seq: 0, tick: 0, kind: 'battle-start', heroIds: ['h1'], enemyIds: ['p'] },
       { seq: 1, tick: 2, kind: 'guard', actorId: 'h1', targetId: 'p' },
       { seq: 2, tick: 3, kind: 'guard', actorId: 'h1', targetId: 'p' },
+      { seq: 3, tick: 4, kind: 'phase', unitId: 'p', phase: 1, phases: 2, title: 'The Second Seal' },
     ]
     const log = logOf(80, [unit('p', 'enemy', tpl('pryos'))], ev)
     expect(bossBarView(log, byIdOf(log), field(), 1)!.aegis).toBe(3)
     expect(bossBarView(log, byIdOf(log), field(), 3)!.aegis).toBe(1)
-    expect(bossBarView(log, byIdOf(log), field({ boss: { passed: { p: 1 } } }), 3)!.aegis).toBe(3)
+    expect(bossBarView(log, byIdOf(log), field({ boss: { passed: { p: 1 } } }), 4)!.aegis).toBe(3)
+  })
+
+  it('a blow that lands proves the aegis gone (the subverted Herald has none)', () => {
+    const ev: CombatEvent[] = [
+      { seq: 0, tick: 0, kind: 'battle-start', heroIds: ['h1'], enemyIds: ['he'] },
+      { seq: 1, tick: 2, kind: 'hit', actorId: 'h1', targetId: 'he', amount: 50, crit: false, hpAfter: 950 },
+    ]
+    const log = logOf(90, [unit('he', 'enemy', tpl('herald_of_end'))], ev)
+    expect(bossBarView(log, byIdOf(log), field(), 1)!.aegis).toBeGreaterThan(0)
+    expect(bossBarView(log, byIdOf(log), field(), 2)!.aegis).toBe(0)
   })
 
   it('runs the enrage clock down, then says the boss is enraged', () => {
