@@ -55,7 +55,7 @@ export function Telegraphs({
           <div
             key={`tg-${c.unitId}`}
             className="tg-mark"
-            style={{ left: p.x, top: p.y - heightOf(c.unitId) - 4 }}
+            style={{ left: p.x, top: p.y - heightOf(c.unitId) - 16 }}
             role="img"
             aria-label={t('{move} in {n} ticks', { move: moveName(c.skillId), n: left })}
           >

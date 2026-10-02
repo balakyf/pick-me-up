@@ -57,7 +57,7 @@ describe('boss captions and timings', () => {
   it('a phase sets the cinematic and counts the boss’s passed phases; a summon shows its units', () => {
     const f = frame()
     const d = bossSnap(ev({ seq: 30, tick: 40, kind: 'phase', unitId: 'dragon', phase: 1, phases: 1, title: 'Takes flight', line: 'Halgiraf beats his black wings and takes to the sky!' }), nameOf, f)!
-    expect(d.caption).toBe('Halgiraf — Takes flight: “Halgiraf beats his black wings and takes to the sky!”')
+    expect(d.caption).toBe('Halgiraf — Takes flight')
     expect(f.boss!.phase).toMatchObject({ unitId: 'dragon', phase: 1, seq: 30 })
     expect(f.boss!.passed).toEqual({ dragon: 1 })
     expect(phaseTitle({ phase: 2 })).toBe('Phase 3')

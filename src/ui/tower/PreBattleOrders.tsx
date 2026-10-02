@@ -30,8 +30,10 @@ export function bigMoves(enc: Encounter | null): BigMoveNote[] {
   const seen = new Set<string>()
   enc.waves.forEach((w, i) => {
     for (const u of w.units) {
-      const moves = u.skills.filter((s) => s.charge !== undefined).map((s) => s.id)
-      const phases = u.keywords.filter((k): k is PhaseKeyword => k.kind === 'phase').map((k) => ({ atHpPct: k.atHpPct, ...(k.title !== undefined ? { title: k.title } : {}) }))
+      const turns = u.keywords.filter((k): k is PhaseKeyword => k.kind === 'phase')
+      // Its wound-up moves, the ones a phase teaches it included.
+      const moves = [...new Set([...u.skills.map((s) => s.id), ...turns.flatMap((k) => k.skills ?? [])])].filter((id) => SKILLS[id]?.charge !== undefined)
+      const phases = turns.map((k) => ({ atHpPct: k.atHpPct, ...(k.title !== undefined ? { title: k.title } : {}) }))
       const key = u.templateId ?? u.name
       if ((moves.length === 0 && phases.length === 0) || seen.has(key)) continue
       seen.add(key)

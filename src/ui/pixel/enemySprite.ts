@@ -637,7 +637,7 @@ function echoOf(draw: () => Bitmap): Bitmap {
     }
     const [r, g, bl, a] = rgbaParts(c)
     const lum = (r * 3 + g * 6 + bl) / 2550
-    b.px[i] = withAlpha(mix(deep, pale, Math.min(1, lum * 1.2)), a)
+    b.px[i] = withAlpha(mix(deep, pale, Math.min(1, 0.35 + lum * 1.3)), a)
   }
   return b
 }

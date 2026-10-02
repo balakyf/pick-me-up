@@ -49,7 +49,8 @@ describe('before the fight', () => {
     expect(dragon.moves).toContain('e_dragon_breath')
     expect(dragon.phases).toEqual([{ atHpPct: 50, title: 'Takes flight' }])
     act(() => root.render(<Host state={s} />))
-    expect(container.textContent).toContain('Halgiraf winds up Dragon Breath — Guard answers it.')
+    expect(dragon.moves).toContain('e_sky_dive') // taught by his flight
+    expect(container.textContent).toContain('Halgiraf winds up Dragon Breath, Sky Dive — Guard answers it.')
     expect(container.textContent).toContain('Changes once: at 50% — Takes flight.')
   })
 

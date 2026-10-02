@@ -154,7 +154,8 @@ export function bossSnap(
       next.boss = { ...v, phase, passed: { ...v.passed, [e.unitId]: e.phase } }
       const title = phaseTitle(phase)
       return {
-        caption: e.line !== undefined ? `${nameOf(e.unitId)} — ${title}: “${t(e.line)}”` : `${nameOf(e.unitId)} — ${title}`,
+        // (The title card carries the boss's line; the caption names the turn.)
+        caption: `${nameOf(e.unitId)} — ${title}`,
         actor: e.unitId,
         target: null,
       }
