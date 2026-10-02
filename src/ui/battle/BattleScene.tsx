@@ -16,6 +16,7 @@ import { actionSkillId, buildFrames, eventActor, eventDuration, HERO_DEATH_MS, H
 import { useMourning } from './useMourning'
 import { devFxFloor, layerUrls, punch, shake, useReducedMotion } from './stageFx'
 import { UnitSprite } from './UnitSprite'
+import { unitStatus } from './statusCaptions'
 import { DamagePopups, popupEvents } from './DamagePopups'
 import { FoeHud } from './FoeHud'
 import { PartyRows } from './PartyRows'
@@ -393,6 +394,7 @@ export function BattleScene({
                       turnMark: snap.actor === u.id && !dead && !atEnd && !casting,
                       panic: snap.panic === u.id,
                       enterDelayMs: (isHero ? heroes.indexOf(u) : enemies.indexOf(u) % 6) * 70,
+                      status: unitStatus(snap.status, u.id),
                     }}
                   />
                 )

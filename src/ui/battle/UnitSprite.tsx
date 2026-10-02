@@ -1,6 +1,8 @@
 import type { CombatUnitInit } from '../../engine/types'
 import { hpColor } from '../bits'
 import type { Pose } from './choreo'
+import { StatusIcons } from './StatusIcons'
+import type { UnitStatusView } from './statusCaptions'
 
 /** How one unit looks on this frame (BattleScene works it out; this only draws it). */
 export interface UnitLook {
@@ -27,6 +29,8 @@ export interface UnitLook {
   panic: boolean
   /** Staggers the march-in. */
   enterDelayMs: number
+  /** Its statuses and their pops (lane F). */
+  status?: UnitStatusView
 }
 
 /** One fighter on the stage: sprite, shadow, HP sliver, and the marks of the moment. */
@@ -76,6 +80,7 @@ export function UnitSprite({ u, look, onClick }: { u: CombatUnitInit; look: Unit
         </div>
       )}
       {look.panic && <span className="bsweat">💧</span>}
+      {look.status && <StatusIcons view={look.status} dead={look.dead} />}
     </div>
   )
 }

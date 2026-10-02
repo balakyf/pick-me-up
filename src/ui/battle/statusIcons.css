@@ -1,0 +1,51 @@
+/* Lane F · status icons over units and in the party rows, and the words statuses throw. */
+
+.st-icons { pointer-events: none; }
+.st-icons.st-over {
+  position: absolute; left: 50%; top: -19px; transform: translateX(-50%);
+  display: flex; flex-direction: column; align-items: center; z-index: 6;
+}
+.bunit.hero .st-icons.st-over { top: -11px; }
+.st-row { display: flex; gap: 1px; align-items: center; }
+.st-icon { display: block; line-height: 0; }
+.st-glyph { display: block; image-rendering: pixelated; }
+.st-glyph-bg { fill: #120e2c; stroke: #000; stroke-width: 0.5; }
+.st-icon.bad .st-glyph-bg { fill: #2c0e18; }
+.st-more { font-size: 6px; line-height: 7px; color: #fff6e0; text-shadow: 1px 0 0 #000, 0 1px 0 #000; }
+
+/* The words a status throws as it takes hold (and DoT, shield and SP numbers). */
+.st-pop {
+  position: absolute; bottom: 100%; left: 50%; white-space: nowrap;
+  font-family: var(--font); font-weight: 600; font-size: 8px; letter-spacing: 0.5px; color: #fff;
+  text-shadow: 1px 0 0 #000, -1px 0 0 #000, 0 1px 0 #000, 0 -1px 0 #000;
+  animation: stPop 1s steps(10) forwards;
+}
+.st-pop.st-good { color: #9fe8ff; }
+.st-pop.st-bad { color: #ffb0c8; }
+.st-pop.st-bleed { color: #ff5a64; font-size: 10px; }
+.st-pop.st-poison { color: #a8f05a; font-size: 10px; }
+.st-pop.st-burn { color: #ff9a3a; font-size: 10px; }
+.st-pop.st-shield { color: #7fc8ff; font-size: 10px; }
+.st-pop.st-sp { color: #c8a8ff; }
+@keyframes stPop {
+  0% { transform: translate(-50%, 3px); opacity: 1 }
+  25% { transform: translate(-50%, -5px) }
+  80% { opacity: 1 }
+  100% { transform: translate(-50%, -9px); opacity: 0 }
+}
+
+/* The party window: a line of icons after the name. */
+.st-icons.st-inrow { display: inline-flex; vertical-align: middle; margin-left: 4px; }
+.st-icons.st-inrow .st-row { gap: 2px; }
+.battle.beside .st-icons.st-inrow { margin-left: 2px; }
+
+/* Reduced motion: the words appear and fade without the hop. */
+.battle.calm .st-pop { animation: stFade 1s steps(4) forwards; }
+@media (prefers-reduced-motion: reduce) {
+  .st-pop { animation: stFade 1s steps(4) forwards; }
+}
+@keyframes stFade {
+  0% { transform: translate(-50%, -4px); opacity: 1 }
+  80% { opacity: 1 }
+  100% { transform: translate(-50%, -4px); opacity: 0 }
+}
