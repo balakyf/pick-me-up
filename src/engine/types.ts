@@ -1230,6 +1230,8 @@ export interface EnemyTemplate {
   unitClass?: HeroClass | null
   /** Family for `bane` keywords (e.g. Halgiraf is a dragon). */
   family?: EnemyFamily
+  /** Presentation only: the level the UI shows instead of the real one (the F10 Lv999 Creature). */
+  displayLevel?: number
 }
 
 /** A hero-side NPC an anchor fields (e.g. the F15 escort target). */

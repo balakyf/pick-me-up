@@ -111,6 +111,10 @@ describe('side rooms after anchors', () => {
     expect(a.state.gold).toBe(s.gold + R.mimicGoldPerFloor * 20)
     expect(a.outcome.item).toBeDefined()
     for (const id of a.outcome.fallen) expect(a.state.heroes[id]!.alive).toBe(false)
+    // The Mimic is itself: its own template (drawn as a chest, logged as a Mimic in the Codex).
+    const mimic = a.outcome.log!.unitsInit.find((u) => u.side === 'enemy')!
+    expect(mimic.templateId).toBe('mimic')
+    expect(mimic.name).toBe('Mimic')
 
     const weak = withRoom(withParty(veteranState(4, 1, 20), rosterIds(veteranState(4, 1, 20)).slice(-1)), 'mimic', 20)
     const lost = resolveBonusRoom({ ...weak, challenge: { ...challengeOf(weak), room: { kind: 'mimic', floor: 20, bought: [] } } }, 'fight')
