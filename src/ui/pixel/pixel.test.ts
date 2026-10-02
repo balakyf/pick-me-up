@@ -1,8 +1,9 @@
 import { describe, it, expect } from 'vitest'
 import { createBitmap, rect, outline, get, hex, flipX, opaqueCount, CLEAR } from './bitmap'
 import { lookForHero, lookForMaster, type LookSource } from './look'
-import { drawHeroFrame, drawHeroBust, FRAME_W, FRAME_H, BUST } from './heroSprite'
-import { drawEnemy, KNOWN_ENEMIES } from './enemySprite'
+import { drawHeroFrame, drawHeroBust, drawHeroPose, FRAME_W, FRAME_H, BUST, HERO_POSES, KO_H, KO_W } from './heroSprite'
+import { BOSS_SPRITES, drawEnemy, KNOWN_ENEMIES } from './enemySprite'
+import * as BOSS from './bossSprite'
 import { drawBattleBg } from './battleBg'
 import { drawTowerExterior, TOWER_H, TOWER_W } from './towerMap'
 import { drawSummonCircle } from './summonFx'
@@ -214,5 +215,118 @@ describe('tower exterior & summon circle', () => {
 
   it('draws a summoning circle in the rarity colour', () => {
     expect(opaqueCount(drawSummonCircle('#f2c75c'))).toBeGreaterThan(200)
+  })
+})
+
+/** A boss drawer called fresh (no cache), to prove it is a pure function. */
+function drawBoss(id: string, f: 0 | 1) {
+  const fns: Record<string, (f: 0 | 1) => ReturnType<typeof BOSS.drawElCid>> = {
+    black_priest: BOSS.drawBlackPriest,
+    rodvick: BOSS.drawRodvick,
+    lazenca: BOSS.drawLazenca,
+    valention: BOSS.drawValention,
+    versace: BOSS.drawVersace,
+    darkan: BOSS.drawDarkan,
+    el_cid: BOSS.drawElCid,
+    chimera_matriarch: BOSS.drawChimeraMatriarch,
+    pryos: BOSS.drawPryos,
+    herald_of_end: BOSS.drawHerald,
+    tell: BOSS.drawTell,
+  }
+  return (fns[id] ?? ((g: 0 | 1) => drawEnemy(id, 'physical', g)))(f)
+}
+
+describe('boss sprites and idle frames (lane I)', () => {
+  it('every template has two idle frames of one size, both drawn, and they differ', () => {
+    for (const t of Object.values(ENEMY_TEMPLATES)) {
+      const a = drawEnemy(t.id, t.element, 0)
+      const b = drawEnemy(t.id, t.element, 1)
+      expect([b.w, b.h], t.id).toEqual([a.w, a.h])
+      expect(opaqueCount(b), t.id).toBeGreaterThan(100)
+      expect(Array.from(b.px).join(), t.id).not.toBe(Array.from(a.px).join())
+    }
+  })
+
+  it('the anchor bosses are drawn big at native size, not hero-sized or upscaled', () => {
+    for (const id of BOSS_SPRITES) {
+      const b = drawEnemy(id, 'physical')
+      expect(b.h, id).toBeGreaterThanOrEqual(46)
+      expect(opaqueCount(b), id).toBeGreaterThan(600) // a hero frame is about 400
+    }
+    // the six set pieces stand at least twice a hero's height
+    for (const id of ['el_cid', 'versace', 'valention', 'pryos', 'herald_of_end', 'tell']) expect(drawEnemy(id, 'physical').h, id).toBeGreaterThanOrEqual(FRAME_H * 2)
+  })
+
+  it('no boss sprite is a nearest-neighbour upscale (its pixels do not come in uniform 2×2 blocks)', () => {
+    for (const id of BOSS_SPRITES) {
+      const b = drawEnemy(id, 'physical')
+      let blocky = 0
+      let cells = 0
+      for (let y = 0; y + 1 < b.h; y += 2)
+        for (let x = 0; x + 1 < b.w; x += 2) {
+          const c = b.px[y * b.w + x]!
+          if (c === CLEAR) continue
+          cells++
+          if (b.px[y * b.w + x + 1] === c && b.px[(y + 1) * b.w + x] === c && b.px[(y + 1) * b.w + x + 1] === c) blocky++
+        }
+      expect(blocky / cells, id).toBeLessThan(0.85)
+    }
+  })
+
+  it('boss sprites are deterministic', () => {
+    for (const id of BOSS_SPRITES) for (const f of [0, 1] as const) expect(Array.from(drawBoss(id, f).px)).toEqual(Array.from(drawBoss(id, f).px))
+  })
+
+  it("the echoes keep their boss's size and shape in spectral colours", () => {
+    for (const [echo, boss] of [['echo_el_cid', 'el_cid'], ['echo_halgiraf', 'halgiraf'], ['echo_herald', 'herald_of_end'], ['echo_pryos', 'pryos'], ['echo_valention', 'valention']] as const) {
+      const e = drawEnemy(echo, 'dark')
+      const b = drawEnemy(boss, 'dark')
+      expect([e.w, e.h], echo).toEqual([b.w, b.h])
+      expect(opaqueCount(e), echo).toBe(opaqueCount(b))
+      expect(Array.from(e.px).join(), echo).not.toBe(Array.from(b.px).join())
+    }
+  })
+})
+
+describe('hero battle poses (lane I)', () => {
+  const classes = [null, 'warrior', 'spearman', 'thief', 'archer', 'mage'] as const
+  it('every pose is the frame size (the fallen lie in a wider box), drawn and deterministic', () => {
+    for (const heroClass of classes) {
+      const l = lookForHero(hero({ heroClass, star: heroClass === null ? 2 : 4 }))
+      for (const p of HERO_POSES) {
+        const b = drawHeroPose(l, p)
+        if (p === 'ko') expect([b.w, b.h]).toEqual([KO_W, KO_H])
+        else expect([b.w, b.h]).toEqual([FRAME_W, FRAME_H])
+        expect(opaqueCount(b), `${heroClass} ${p}`).toBeGreaterThan(150)
+        expect(Array.from(drawHeroPose(l, p).px)).toEqual(Array.from(b.px))
+      }
+    }
+  })
+
+  it('every pose differs from the standing frame and from every other pose', () => {
+    for (const heroClass of classes) {
+      const l = lookForHero(hero({ heroClass, star: heroClass === null ? 2 : 4 }))
+      const seen = new Set<string>([Array.from(drawHeroFrame(l, 'left', 0).px).join()])
+      for (const p of HERO_POSES) seen.add(Array.from(drawHeroPose(l, p).px).join())
+      expect(seen.size, String(heroClass)).toBe(HERO_POSES.length + 1)
+    }
+  })
+
+  it('the fallen lie down: wider than tall, resting on the floor of their box', () => {
+    const b = drawHeroPose(lookForHero(hero()), 'ko')
+    let top = b.h
+    let bottom = 0
+    let left = b.w
+    let right = 0
+    for (let y = 0; y < b.h; y++)
+      for (let x = 0; x < b.w; x++)
+        if (b.px[y * b.w + x] !== CLEAR) {
+          top = Math.min(top, y)
+          bottom = Math.max(bottom, y)
+          left = Math.min(left, x)
+          right = Math.max(right, x)
+        }
+    expect(right - left).toBeGreaterThan(bottom - top)
+    expect(bottom).toBeGreaterThanOrEqual(KO_H - 2)
   })
 })
