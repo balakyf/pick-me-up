@@ -218,6 +218,7 @@ export function attemptDaily(state: GameState, nowWorld: number): { state: GameS
       highestCleared: state.tower.highestCleared,
       won: false,
       defeatedTargetTags: [],
+      heroClass: h.heroClass,
     })
     skillProgress.push(...learned.progress)
     heroes[id] = { ...h, xp, skills: learned.skills }

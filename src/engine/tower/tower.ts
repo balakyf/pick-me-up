@@ -657,6 +657,7 @@ export function playFloor(
         won: cleared,
         floor,
         defeatedTargetTags: res.defeatedTargetTags,
+        heroClass: hero.heroClass,
       })
       skillProgress.push(...learned.progress)
       // Favor (Layer 3 §C1): a shared victory warms; watching an ally die chills.
