@@ -12,6 +12,9 @@
  *   - deaths/attempt — heroes lost per floor attempt (no worse than before)
  *   - replay        — median estimated replay length at 1× (~15–60 s)
  *
+ * and (lane F) a roles table: heals, shields, taunts and foe statuses per fight, the
+ * healing share (damage taken healed back or soaked) and the share of fights with a role.
+ *
  * The gate reads every attempt from `fromFloor` — a retreat included (the 'fought out' row
  * leaves those out). Below: per profile, per band, and a few diagnostics (overkill,
  * hits wasted on immunity, hits on a weakness). Lane D's before/after is in
@@ -70,5 +73,11 @@ const gate = [
   ['median replay 15–60 s', s.medianReplayS >= 15 && s.medianReplayS <= 60],
 ] as const
 lines.push(`gate (F${fromFloor}+): ${gate.map(([k, ok]) => `${ok ? 'PASS' : 'FAIL'} ${k}`).join(' · ')}`)
+// Roles (lane F): how often the party heals, shields and taunts, and what it saves.
+const roleRow = (label: string, r: FightSummary) =>
+  `${label.padEnd(16)} | heals ${r.healsPerFight.toFixed(2).padStart(5)} | shields ${r.shieldsPerFight.toFixed(2).padStart(5)} | taunts ${r.tauntsPerFight.toFixed(2).padStart(5)} | foe statuses ${r.foeStatusesPerFight.toFixed(2).padStart(5)} | healing share ${pct(r.healingShare).padStart(6)} | fights with a role ${pct(r.roleFightShare).padStart(6)}`
+lines.push('roles (per fight)')
+lines.push(roleRow(`all F${fromFloor}+`, s))
+for (const [a, b] of bands) lines.push(roleRow(`F${a}–${b}`, summarize(fights.filter((f) => f.floor >= a && f.floor <= b))))
 console.log(lines.join('\n'))
 if (out) writeFileSync(out, JSON.stringify({ days, seeds, fromFloor, finals, fights }))
