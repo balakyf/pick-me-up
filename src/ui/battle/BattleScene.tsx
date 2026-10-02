@@ -12,7 +12,7 @@ import type { LookSource } from '../pixel/look'
 import { ELEMENT_VIS } from '../bits'
 import { t } from '../i18n/i18n'
 import { attackStyle, choreograph, type AttackStyle } from './choreo'
-import { actionSkillId, buildFrames, DURATION, eventActor, HERO_DEATH_MS, HITSTOP_MS, layout, type Snap } from './battleFrames'
+import { actionSkillId, buildFrames, eventActor, eventDuration, HERO_DEATH_MS, HITSTOP_MS, layout, type Snap } from './battleFrames'
 import { useMourning } from './useMourning'
 import { devFxFloor, layerUrls, punch, shake, useReducedMotion } from './stageFx'
 import { UnitSprite } from './UnitSprite'
@@ -97,7 +97,7 @@ export function BattleScene({
     if (!playing || atEnd) return
     const ev = log.events[cursor] // the event that produces frame cursor+1
     const shown = cursor > 0 ? log.events[cursor - 1] : undefined
-    let ms = (ev ? DURATION[ev.kind] : 400) / speed
+    let ms = (ev ? eventDuration(ev) : 400) / speed
     // Hit-stop: a critical blow freezes the frame for a beat.
     if (shown?.kind === 'hit' && shown.crit) ms += HITSTOP_MS
     // A hero's death is not rushed, whatever the speed (a trial's knock-out is).

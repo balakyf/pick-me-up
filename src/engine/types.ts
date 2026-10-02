@@ -1115,16 +1115,80 @@ export interface CombatUnitInit {
   templateId?: string
   /** HP at the start of the fight when below max (a raid boss already wounded). */
   startHP?: number
+  /** Speed (the action gauge fills by this each tick) — for a turn-order strip. Always
+   *  written by runBattle; optional only so logs saved before it still load. */
+  spd?: number
+  /** Present on mission objective units only: the tag a Defeat / Capture / Protect
+   *  objective names (the Black Priest, the jewel's carrier, Priasis). */
+  targetTag?: string
+}
+
+/** One mission objective as the replay sees it: the objective itself, plus the units
+ *  that carry its tag (a Defeat target, a Capture carrier, a Protect escort). */
+export type LogObjective = Objective & { unitIds?: string[] }
+
+/** The battle's mission, carried on its log so the replay can show the objective. */
+export interface CombatLogMission {
+  /** The canon mission label ('Survival', 'Escort', 'Capture'…). */
+  type: string
+  objectives: LogObjective[]
+  /** The tick budget, when the mission has one. */
+  timerTicks?: number
+  /** Enemy waves in the fight. */
+  waves: number
+}
+
+/** What a structured 'mission' beat is about (see combat.ts `missionBeat`). */
+export type MissionCode =
+  /** Wave `wave` of `waves` is cleared. */
+  | 'wave-cleared'
+  /** A Survival countdown milestone: `pct`% of the time is behind the party, `left` ticks remain. */
+  | 'hold'
+  /** A mission timer (not a survival) milestone: the deadline approaches. */
+  | 'deadline'
+  /** Escape progress: `steps` of `distance` covered (`pct`%). */
+  | 'escape'
+  /** A Capture objective: the carrier `unitId` fell and the prize is taken. */
+  | 'taken'
+  /** A Defeat objective: `unitId` fell. */
+  | 'defeated'
+  /** The escort `unitId` dropped below `pct`% HP. */
+  | 'escort-low'
+  /** A phased unit `unitId` lost its shield (its wave fell). */
+  | 'shield-down'
+  /** A looming unit `unitId` woke. */
+  | 'wakes'
+  /** Survival: no foe is left and no wave is coming — the floor is held at once. */
+  | 'horde-spent'
+  /** Nothing the party holds can hurt the foes left (`unitId` stands in front): it falls back. */
+  | 'futile'
+
+/** A mission beat's details (which fields are set depends on the code). */
+export interface MissionParams {
+  wave?: number
+  waves?: number
+  pct?: number
+  left?: number
+  steps?: number
+  distance?: number
+  unitId?: string
+  tag?: string
 }
 
 /** `failed` = the mission was lost without a wipe (e.g. the escort target fell). */
 export type CombatOutcome = 'win' | 'wipe' | 'timeout' | 'failed' | 'retreat'
 
+/** How a hit met its target's defences (WEAK! / RESIST / IMMUNE on screen). */
+export type HitEffect = 'weak' | 'resist' | 'immune'
+
 export type CombatEvent = { seq: number; tick: number } & (
   | { kind: 'battle-start'; heroIds: string[]; enemyIds: string[] }
   | { kind: 'wave-spawn'; wave: number; enemyIds: string[] }
   | { kind: 'act'; actorId: string; skillId: string; targetId: string }
-  | { kind: 'hit'; actorId: string; targetId: string; amount: number; crit: boolean; hpAfter: number }
+  /** `eff` says how the blow met its target's defences (absent = plainly): a weakness
+   *  (element advantage or a vulnerability), a resistance (element disadvantage or a
+   *  resist keyword), or an immunity (the hit did nothing). */
+  | { kind: 'hit'; actorId: string; targetId: string; amount: number; crit: boolean; hpAfter: number; eff?: HitEffect }
   | { kind: 'miss'; actorId: string; targetId: string }
   /** An HP-cost ultimate drained its caster (never lethal: casts are gated on HP). */
   | { kind: 'hp-cost'; unitId: string; amount: number; hpAfter: number }
@@ -1135,7 +1199,9 @@ export type CombatEvent = { seq: number; tick: number } & (
   /** A unit recovered HP (lifesteal). */
   | { kind: 'heal'; unitId: string; amount: number; hpAfter: number }
   | { kind: 'death'; unitId: string }
-  | { kind: 'mission'; note: string }
+  /** A mission beat. `note` is a plain-English line (old replays carry only that);
+   *  `code`/`params` say what happened so the replay can caption it in any language. */
+  | { kind: 'mission'; note: string; code?: MissionCode; params?: MissionParams }
   /** The Master gave an order (mid-battle). */
   | { kind: 'order'; order: BattleOrder }
   /** A close friend threw themself in front of a killing blow meant for `allyId`. */
@@ -1158,6 +1224,8 @@ export interface CombatLog {
   outcome: CombatOutcome
   /** Total RNG draws consumed — asserted in snapshot tests to catch reordering. */
   rngDraws: number
+  /** The mission fought (objectives, timer, waves). Absent on logs saved before it. */
+  mission?: CombatLogMission
 }
 
 export interface BattleResult {
@@ -1262,6 +1330,9 @@ export interface EnemyTemplate {
   family?: EnemyFamily
   /** Presentation only: the level the UI shows instead of the real one (the F10 Lv999 Creature). */
   displayLevel?: number
+  /** A caster: its basic attack is a Spell — magic damage from its mAtk against the
+   *  target's mDef — instead of a physical Strike. */
+  caster?: boolean
 }
 
 /** A hero-side NPC an anchor fields (e.g. the F15 escort target). */

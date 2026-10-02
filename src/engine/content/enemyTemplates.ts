@@ -15,6 +15,11 @@
  *
  * Elements theme by biome: undead -> dark, etc. (feeds the element wheel; Light
  * is the natural counter to the dark bosses).
+ *
+ * `caster: true` marks the INT-built templates (Dark Disciple, Black Priest, the
+ * shamans, golems and Order mages, Kurushahr, Wraiths, the Fragment Warden): their
+ * basic attack is a Spell — magic from their mAtk against a hero's mDef — instead of
+ * a Strike through their thin pAtk (unit.ts `enemyBasicAttack`).
  */
 
 import type { EnemyTemplate } from '../types'
@@ -91,6 +96,7 @@ export const ENEMY_TEMPLATES: Record<string, EnemyTemplate> = {
     element: 'dark',
     // Caster: high INT, low VIT/DEF — glass cannon.
     attrMult: { str: 0.3, agi: 0.7, vit: 0.5, int: 1.7, wil: 1.1 },
+    caster: true,
   },
   beast: {
     id: 'beast',
@@ -131,6 +137,7 @@ export const ENEMY_TEMPLATES: Record<string, EnemyTemplate> = {
     element: 'dark',
     // High everything (boss budget), INT/WIL leaning (a dark caster-priest).
     attrMult: { str: 1.4, agi: 1.2, vit: 2.0, int: 2.2, wil: 2.0 },
+    caster: true,
     keywords: [{ kind: 'phased' }],
   },
   // Lv999 creature (canon Townia F10 wave 3). A PUZZLE, not a stat-check: it
@@ -176,6 +183,7 @@ export const ENEMY_TEMPLATES: Record<string, EnemyTemplate> = {
     family: 'humanoid',
     element: 'water',
     attrMult: { str: 0.3, agi: 0.8, vit: 0.6, int: 1.6, wil: 1.2 },
+    caster: true,
     unitClass: 'mage',
   },
   lizard_rider: {
@@ -205,6 +213,7 @@ export const ENEMY_TEMPLATES: Record<string, EnemyTemplate> = {
     family: 'construct',
     element: 'earth',
     attrMult: { str: 0.4, agi: 0.5, vit: 1.6, int: 1.5, wil: 1.2 },
+    caster: true,
     unitClass: 'mage',
   },
   // Truth Seeker Kurushahr (canon F30 boss).
@@ -214,6 +223,7 @@ export const ENEMY_TEMPLATES: Record<string, EnemyTemplate> = {
     family: 'humanoid',
     element: 'dark',
     attrMult: { str: 0.6, agi: 1.2, vit: 1.8, int: 2.6, wil: 2.0 },
+    caster: true,
     unitClass: 'mage',
   },
   // The Ancient Stone Statue (canon F30: a 300m giant; magic-immune; phased until its
@@ -232,6 +242,7 @@ export const ENEMY_TEMPLATES: Record<string, EnemyTemplate> = {
     family: 'construct',
     element: 'light',
     attrMult: { str: 0.5, agi: 0.6, vit: 1.4, int: 1.8, wil: 1.0 },
+    caster: true,
     unitClass: 'mage',
   },
 
@@ -319,6 +330,7 @@ export const ENEMY_TEMPLATES: Record<string, EnemyTemplate> = {
     family: 'humanoid',
     element: 'light',
     attrMult: { str: 0.3, agi: 0.8, vit: 0.7, int: 1.8, wil: 1.3 },
+    caster: true,
     unitClass: 'mage',
   },
   // Canon F40 mini-bosses: Rodvick (strength) and Lazenca (speed).
@@ -386,6 +398,7 @@ export const ENEMY_TEMPLATES: Record<string, EnemyTemplate> = {
     family: 'humanoid',
     element: 'light',
     attrMult: { str: 1.0, agi: 1.0, vit: 2.4, int: 2.4, wil: 2.2 },
+    caster: true,
     unitClass: 'mage',
   },
   // Canon: the Book of Reverse Heaven "dropped after defeating El Cid" — a fallen ranker.
@@ -403,6 +416,7 @@ export const ENEMY_TEMPLATES: Record<string, EnemyTemplate> = {
     family: 'humanoid',
     element: 'light',
     attrMult: { str: 0.8, agi: 1.0, vit: 3.0, int: 2.8, wil: 3.0 },
+    caster: true,
     unitClass: 'mage',
     keywords: [{ kind: 'lifesteal', fraction: 0.2 }],
   },
@@ -421,6 +435,7 @@ export const ENEMY_TEMPLATES: Record<string, EnemyTemplate> = {
     family: 'undead',
     element: 'dark',
     attrMult: { str: 0.6, agi: 1.4, vit: 0.9, int: 1.7, wil: 1.4 },
+    caster: true,
     unitClass: 'mage',
     // Steel passes half-through a wraith: mages (or Light) are the answer, but a party
     // without one is slowed, not locked out of a whole act.
@@ -458,6 +473,7 @@ export const ENEMY_TEMPLATES: Record<string, EnemyTemplate> = {
     family: 'fragment',
     element: 'dark',
     attrMult: { str: 0.5, agi: 1.0, vit: 1.3, int: 2.2, wil: 1.8 },
+    caster: true,
     unitClass: 'mage',
     keywords: [{ kind: 'immune', damageType: 'physical' }],
   },

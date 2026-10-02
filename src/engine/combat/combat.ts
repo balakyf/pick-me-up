@@ -8,6 +8,14 @@
  * module. All randomness flows through the seeded Rng built here; the RNG draw
  * order is pinned (crit roll, then variance, per target in stable order) so a
  * replay is bit-identical.
+ *
+ * THE COMBAT BRAIN (lane D): a unit picks the castable skill with the most expected
+ * damage — estimated per target in integer math (element, resistances, immunity, the
+ * target's guards and its current HP, so overkill and immunity count) — and never draws
+ * RNG to decide. Sweeps spread their force (AoE falloff), single-target picks pass over
+ * foes immune to the blow, an HP-cost ultimate keeps its caster above a floor, and the
+ * mission's beats (waves cleared, countdowns, escape steps, objectives, the escort's
+ * wounds, shields breaking, a looming thing waking) are logged as 'mission' events.
  */
 
 import type {
@@ -22,6 +30,10 @@ import type {
   Objective,
   Element,
   HeroId,
+  HitEffect,
+  LogObjective,
+  MissionCode,
+  MissionParams,
 } from '../types'
 import { TUNING, ELEMENT_ADVANTAGE } from '../tuning'
 import { createRng, makeSeed, nextFloat, chance, type Rng } from '../rng'
@@ -103,6 +115,42 @@ function elementMult(attackEl: Element, defEl: Element): number {
   return 1
 }
 
+/** A multiplier in per-mille (the AI's estimates are integer math). */
+function permille(x: number): number {
+  return Math.round(x * 1000)
+}
+
+/** v × pm / 1000, floored (integer scaling for the estimates). */
+function scale(v: number, pm: number): number {
+  return Math.floor((v * pm) / 1000)
+}
+
+/** The share of its force an all-enemies skill lands on each of `n` foes, as a per-mille
+ *  (×100 / (100 + k(n − 1)); 1000 for a single foe). */
+export function aoeSpreadPermille(n: number): number {
+  if (n <= 1) return 1000
+  return Math.floor(100_000 / (100 + C.aoeFalloffK * (n - 1)))
+}
+
+/** Can `actor` pay for `s` now? Enough SP, and an HP cost leaves at least
+ *  hpCostFloorPct of max HP (so an ultimate never leaves its caster at death's door). */
+export function canCast(currentSP: number, currentHP: number, maxHP: number, s: SkillEffect): boolean {
+  if (s.spCost > currentSP) return false
+  if (s.hpCost === undefined || s.hpCost <= 0) return true
+  const after = currentHP - s.hpCost
+  return after > 0 && after * 100 >= C.hpCostFloorPct * maxHP
+}
+
+/** Does `target` shrug off this kind of damage entirely? */
+function immuneTo(target: CombatUnit, skill: SkillEffect): boolean {
+  return target.keywords.some((k) => k.kind === 'immune' && k.damageType === skill.damageType)
+}
+
+/** Milestones (% of a timer or a distance) the mission announces. */
+const MILESTONES = [25, 50, 75] as const
+/** Escort HP thresholds (%) the mission announces, most severe last. */
+const ESCORT_MARKS = [50, 25] as const
+
 /**
  * Run a single deterministic battle.
  *
@@ -121,6 +169,18 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
   const emit = (e: CombatEventBody): void => {
     events.push({ seq: seq++, tick, ...e } as CombatEvent)
   }
+  /** A structured mission beat (no RNG, no state: only the log learns of it). */
+  const missionBeat = (code: MissionCode, params: MissionParams, note: string): void => {
+    emit({ kind: 'mission', note, code, params })
+  }
+
+  // ── The mission, as data the replay can show ──────────────────────────────
+  const objectives = encounter.mission.objectives
+  /** Tags a Defeat / Capture / Protect objective names (objective units carry them). */
+  const objectiveTags = new Set<string>()
+  for (const o of objectives) if (o.kind === 'defeat' || o.kind === 'acquire' || o.kind === 'protect') objectiveTags.add(o.targetTag)
+  const objectiveKind = (tag: string): Objective['kind'] | undefined =>
+    objectives.find((o) => (o.kind === 'defeat' || o.kind === 'acquire' || o.kind === 'protect') && o.targetTag === tag)?.kind
 
   // ── unitsInit snapshot: every hero + every enemy across all waves ─────────
   const unitsInit: CombatUnitInit[] = []
@@ -136,9 +196,11 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
       maxHP: u.stats.maxHP,
       maxSP: u.maxSP,
       cp: u.cp,
+      spd: u.stats.spd,
       ...(u.isNpc ? { isNpc: true } : {}),
       ...(u.templateId !== undefined ? { templateId: u.templateId } : {}),
       ...(u.currentHP < u.stats.maxHP ? { startHP: u.currentHP } : {}),
+      ...(u.targetTag !== undefined && objectiveTags.has(u.targetTag) ? { targetTag: u.targetTag } : {}),
     })
   }
   const allyUnits = encounter.allies ?? []
@@ -176,7 +238,8 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
   let wavesCleared = 0
   const defeatedTargetTags: string[] = []
   // Reach(distance): steps the party has covered (every hero action is one step).
-  const hasReach = encounter.mission.objectives.some((o) => o.kind === 'reach')
+  const reachObjective = objectives.find((o): o is Extract<Objective, { kind: 'reach' }> => o.kind === 'reach')
+  const hasReach = reachObjective !== undefined
   let reachProgress = 0
   let outcome: CombatOutcome | null = null
   // Focus / overlook start from the pre-battle directive; mid-battle orders may change them.
@@ -193,16 +256,18 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
   const livingEnemiesInWave = (w: number): MutUnit[] => enemies.filter((e) => e.alive && e.wave === w)
   const livingEnemies = (): MutUnit[] => enemies.filter((e) => e.alive)
   const isLooming = (e: MutUnit): boolean => e.ref.keywords.some((k) => k.kind === 'looming')
+  const isPhased = (e: MutUnit): boolean => e.ref.keywords.some((k) => k.kind === 'phased')
   const moreWavesToSpawn = (): boolean => currentWave < encounter.waves.length - 1
+  /** Survival: nothing is left to fight and nothing more is coming. */
+  const hordeSpent = (): boolean => livingEnemies().length === 0 && !moreWavesToSpawn()
 
   /** A unit with a 'phased' keyword is untargetable while any non-phased unit in
    *  its wave is still alive. (Heroes have no phased keyword, so this is a no-op
    *  for hero targets.) */
   const isTargetable = (e: MutUnit): boolean => {
-    const phased = e.ref.keywords.some((k) => k.kind === 'phased')
-    if (!phased) return true
+    if (!isPhased(e)) return true
     const wavemates = enemies.filter((o) => o.alive && o.wave === e.wave && o.id !== e.id)
-    const anyNonPhasedAlive = wavemates.some((o) => !isLooming(o) && !o.ref.keywords.some((k) => k.kind === 'phased'))
+    const anyNonPhasedAlive = wavemates.some((o) => !isLooming(o) && !isPhased(o))
     return !anyNonPhasedAlive
   }
 
@@ -212,8 +277,136 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
     return foes.filter(isTargetable)
   }
 
+  // ── Mission beats that watch the field ────────────────────────────────────
+  /** Phased units seen shielded (their shield breaking is announced once). */
+  const shielded = new Set<string>()
+  /** Looming units already announced awake. */
+  const awake = new Set<string>()
+  /** The lowest escort threshold already announced, per NPC. */
+  const escortMark = new Map<string, number>()
+  const surviveObjective = objectives.find((o): o is Extract<Objective, { kind: 'survive' }> => o.kind === 'survive')
+  const timer = encounter.mission.timer
+  /** The countdown the beats follow: the survival's own ticks, else the mission timer. */
+  const countdown = surviveObjective?.ticks ?? timer
+  let countdownMark = 0
+  let reachMark = 0
+
+  const watchShields = (): void => {
+    for (const e of enemies) {
+      if (!e.alive || !isPhased(e)) continue
+      if (!isTargetable(e)) shielded.add(e.id)
+      else if (shielded.delete(e.id)) {
+        missionBeat('shield-down', { unitId: e.id }, `${e.ref.name}'s shield breaks!`)
+      }
+    }
+  }
+  watchShields()
+
+  const watchCountdown = (): void => {
+    if (countdown === null || countdown <= 0) return
+    while (countdownMark < MILESTONES.length) {
+      const pct = MILESTONES[countdownMark]!
+      const at = Math.floor((countdown * pct) / 100)
+      if (tick < at || tick >= countdown) return
+      countdownMark++
+      const left = countdown - tick
+      if (surviveObjective !== undefined) missionBeat('hold', { pct, left }, `Hold on: ${pct}% of the way there.`)
+      else missionBeat('deadline', { pct, left }, `${100 - pct}% of the time is left.`)
+    }
+  }
+
+  const watchLooming = (): void => {
+    for (const e of enemies) {
+      if (!e.alive || awake.has(e.id) || !isLooming(e)) continue
+      const wake = e.ref.keywords.find((k) => k.kind === 'enrage')
+      if (wake === undefined || wake.kind !== 'enrage' || tick < modEnrageTick(depth.mods, wake.afterTick)) continue
+      awake.add(e.id)
+      missionBeat('wakes', { unitId: e.id }, `${e.ref.name} wakes…`)
+    }
+  }
+
+  const watchReach = (): void => {
+    if (reachObjective === undefined || reachObjective.distance <= 0) return
+    const distance = reachObjective.distance
+    while (reachMark < MILESTONES.length) {
+      const pct = MILESTONES[reachMark]!
+      if (reachProgress < Math.floor((distance * pct) / 100) || reachProgress >= distance) return
+      reachMark++
+      missionBeat('escape', { pct, steps: reachProgress, distance }, `${pct}% of the way to the exit.`)
+    }
+  }
+
+  /** The escort took a blow: announce the first time it drops below each threshold. */
+  const watchEscort = (u: MutUnit): void => {
+    const tag = u.ref.targetTag
+    if (!u.ref.isNpc || !u.alive || tag === undefined || objectiveKind(tag) !== 'protect') return
+    const pctNow = Math.floor((Math.max(0, u.currentHP) * 100) / u.ref.stats.maxHP)
+    const last = escortMark.get(u.id) ?? 100
+    let crossed: number | null = null
+    for (const m of ESCORT_MARKS) if (pctNow < m && m < last) crossed = m
+    if (crossed === null) return
+    escortMark.set(u.id, crossed)
+    missionBeat('escort-low', { unitId: u.id, pct: crossed, tag }, `${u.ref.name} is below ${crossed}% HP!`)
+  }
+
+  // ── Damage estimate (the AI's integer-math preview; draws no RNG) ─────────
+  /**
+   * The damage `actor`'s `skill` can be expected to deal to `target` (uncapped — chooseSkill
+   * caps each blow at the target's current HP, so overkill is wasted): attack × skill
+   * × element × mitigation × the expected crit, the actor's keyword multipliers, the
+   * target's immunity / resistances / vulnerabilities / guards, the line and floor
+   * multipliers, and a sweep's falloff over `spread` foes. An aegis charge negates the next
+   * blow, so it scores 0.
+   */
+  const estimateBlow = (actor: MutUnit, skill: SkillEffect, target: MutUnit, spread: number, all: readonly MutUnit[]): number => {
+    if (target.aegis > 0 || immuneTo(target.ref, skill)) return 0
+    const aStats = actor.ref.stats
+    const tStats = target.ref.stats
+    const physical = skill.damageType === 'physical'
+    const atk = Math.max(0, Math.floor(physical ? aStats.pAtk : aStats.mAtk))
+    const def = Math.max(0, Math.floor(physical ? tStats.pDef : tStats.mDef))
+    const el: Element = skill.element ?? actor.ref.element
+
+    let est = scale(atk, permille(skill.skillMult * C.damageScale))
+    est = scale(est, permille(elementMult(el, target.ref.element)))
+    const k = C.defenseKFlat + C.defenseKPerLevel * actor.ref.level
+    est = Math.floor((est * k) / (k + def))
+    // The expected crit: chance × (critMult − 1) on top of the plain blow.
+    const critChancePm = Math.max(0, Math.min(1000, Math.round(aStats.critPct * 10)))
+    est = scale(est, 1000 + scale(critChancePm, permille(C.critMult) - 1000))
+    if (actor.side === 'hero' && encounter.focusBonus !== undefined && focusEnemyId === target.id) {
+      est = scale(est, permille(1 + encounter.focusBonus))
+    }
+    for (const kw of actor.ref.keywords) {
+      if (kw.kind === 'enrage' && tick >= modEnrageTick(depth.mods, kw.afterTick)) est = scale(est, permille(kw.multiplier))
+      else if (kw.kind === 'frenzy' && actor.currentHP * 100 < actor.ref.stats.maxHP * kw.belowHpPct) est = scale(est, permille(kw.multiplier))
+      else if (kw.kind === 'opener' && actor.actions === 0) est = scale(est, permille(kw.multiplier))
+      else if (kw.kind === 'bane' && target.ref.family === kw.family) est = scale(est, permille(kw.multiplier))
+    }
+    let guardPm = 1000
+    const ranged = actor.ref.unitClass === 'archer' || actor.ref.unitClass === 'mage'
+    for (const kw of target.ref.keywords) {
+      if (kw.kind === 'resist' && kw.damageType === skill.damageType && tick >= (kw.fromTick ?? 0)) {
+        guardPm = scale(guardPm, 1000 - permille(kw.reduction))
+      } else if (kw.kind === 'vulnerable' && kw.element === el) {
+        est = scale(est, permille(C.vulnerableMult))
+      } else if (kw.kind === 'guard' && (kw.vs === undefined || (kw.vs === 'ranged' ? ranged : kw.vs === el))) {
+        guardPm = scale(guardPm, 1000 - permille(kw.reduction))
+      }
+    }
+    est = scale(est, Math.max(permille(MIN_GUARD_MULT), guardPm))
+    est = scale(est, permille(depthDamageMult(depth, actor, target, el, all)))
+    est = scale(est, aoeSpreadPermille(spread))
+    return Math.max(0, est)
+  }
+
   // ── Damage resolution against ONE target (pins crit→variance draw order) ──
-  const resolveHit = (actor: MutUnit, skill: SkillEffect, target: MutUnit): void => {
+  /**
+   * `spread`: how many foes a sweep strikes at once (its falloff); 1 for a single blow.
+   * `followUp`: a friend pressing an ally's attack — not the striker's own action, so it
+   * neither uses nor spends their `opener`.
+   */
+  const resolveHit = (actor: MutUnit, skill: SkillEffect, target: MutUnit, spread = 1, followUp = false): void => {
     const aStats = actor.ref.stats
     const tStats = target.ref.stats
     const physical: boolean = skill.damageType === 'physical'
@@ -251,7 +444,7 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
     const k = C.defenseKFlat + C.defenseKPerLevel * actor.ref.level
     const mitig = k / (k + def)
 
-    let damage = atk * skill.skillMult * eMult * critMult * mitig * variance
+    let damage = atk * skill.skillMult * eMult * critMult * mitig * variance * C.damageScale
 
     // TACTICAL CENTER focus: a hero concentrating fire on the marked enemy deals
     // a level-scaled damage bonus (the strength rides on the Encounter; no RNG).
@@ -270,7 +463,7 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
         damage *= kw.multiplier
       } else if (kw.kind === 'frenzy' && actor.currentHP * 100 < actor.ref.stats.maxHP * kw.belowHpPct) {
         damage *= kw.multiplier
-      } else if (kw.kind === 'opener' && actor.actions === 0) {
+      } else if (kw.kind === 'opener' && actor.actions === 0 && !followUp) {
         damage *= kw.multiplier
       } else if (kw.kind === 'bane' && target.ref.family === kw.family) {
         damage *= kw.multiplier
@@ -279,15 +472,22 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
 
     // Target keywords: IMMUNE to a damage type, VULNERABLE to an element, GUARD
     // reductions (floored so stacked guards never reach immunity).
+    // How the blow meets the target's defences (WEAK! / RESIST / IMMUNE on screen):
+    // the element wheel, vulnerabilities and resistances — guards are armour, not this.
+    let affinity = eMult
+    let immune = false
     let guardMult = 1
     const ranged = actor.ref.unitClass === 'archer' || actor.ref.unitClass === 'mage'
     for (const kw of target.ref.keywords) {
       if (kw.kind === 'immune' && kw.damageType === skill.damageType) {
         damage = 0
+        immune = true
       } else if (kw.kind === 'resist' && kw.damageType === skill.damageType && tick >= (kw.fromTick ?? 0)) {
         guardMult *= 1 - kw.reduction
+        affinity *= 1 - kw.reduction
       } else if (kw.kind === 'vulnerable' && kw.element === el) {
         damage *= C.vulnerableMult
+        affinity *= C.vulnerableMult
       } else if (kw.kind === 'guard' && (kw.vs === undefined || (kw.vs === 'ranged' ? ranged : kw.vs === el))) {
         guardMult *= 1 - kw.reduction
       }
@@ -295,6 +495,9 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
     damage *= Math.max(MIN_GUARD_MULT, guardMult)
     // Formation, rivalry and the floor's conditions (all 1 in a plain battle).
     damage *= depthDamageMult(depth, actor, target, el, everyone())
+    // AoE FALLOFF: a sweep spreads its force over every foe it strikes.
+    if (spread > 1) damage = (damage * 100) / (100 + C.aoeFalloffK * (spread - 1))
+    const eff: HitEffect | undefined = immune ? 'immune' : affinity > 1 ? 'weak' : affinity < 1 ? 'resist' : undefined
 
     // AEGIS: a charge negates the whole hit (the draws above are already spent, so the
     // stream stays identical to an un-guarded replay).
@@ -307,6 +510,7 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
     const amount = Math.round(damage)
     // COVER: a close friend on a neighbouring line may take a killing blow in their
     // friend's place (once per pair a battle; rolled only when the chance exists).
+    let covered = false
     const cover = coverFor(depth, target, amount, everyone(), coversUsed)
     if (cover !== null) {
       const c = chance(rng, cover.chance)
@@ -316,6 +520,7 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
         coversUsed.add(pairKey(cover.unit.id, target.id))
         emit({ kind: 'cover', unitId: cover.unit.id, allyId: target.id, actorId: actor.id })
         target = cover.unit as MutUnit
+        covered = true
       }
     }
     target.currentHP -= amount
@@ -324,8 +529,12 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
       actorId: actor.id,
       targetId: target.id,
       amount,
-      crit,
+      // A blow the target is immune to is no critical one (the roll is still spent, so
+      // the stream is unchanged): no hit-stop, no CRITICAL! over an IMMUNE.
+      crit: crit && !immune,
       hpAfter: target.currentHP,
+      // (A friend who stepped in front took a blow meant for someone else.)
+      ...(eff !== undefined && !covered ? { eff } : {}),
     })
 
     // LIFESTEAL: the actor recovers a share of what it dealt (capped at max HP).
@@ -347,7 +556,12 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
       const tag = target.ref.targetTag
       if (tag !== undefined && !defeatedTargetTags.includes(tag)) {
         defeatedTargetTags.push(tag)
+        const kind = target.side === 'enemy' ? objectiveKind(tag) : undefined
+        if (kind === 'acquire') missionBeat('taken', { unitId: target.id, tag }, `${target.ref.name} falls — the prize is taken!`)
+        else if (kind === 'defeat') missionBeat('defeated', { unitId: target.id, tag }, `${target.ref.name} is defeated!`)
       }
+    } else {
+      watchEscort(target)
     }
   }
 
@@ -355,33 +569,9 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
   const frontMost = (cands: MutUnit[]): MutUnit =>
     cands.reduce((best, c) => (c.spawnIndex < best.spawnIndex ? c : best))
 
-  /** Set when the last target pick was a rival chasing their own kill (the rival's id). */
-  let chasing: string | null = null
-  const pickSingleTarget = (actor: MutUnit): MutUnit | null => {
-    chasing = null
-    let cands = targetableFoes(actor)
-    if (cands.length === 0) return null
-
-    // FOCUS: hero attackers force-prioritize a living, targetable focus enemy (a Wary,
-    // defiant hero ignores the Master and picks its own target).
-    if (actor.side === 'hero' && actor.ref.defiant !== true) {
-      const focusId = focusEnemyId
-      if (focusId !== undefined) {
-        const focused = cands.find((e) => e.id === focusId)
-        // RIVALRY: a hero whose rival fights beside them may chase a kill of their own.
-        const rival = focused && cands.length > 1 ? rivalOf(depth, actor, everyone()) : null
-        if (focused && rival !== null) {
-          const d = chance(rng, DEPTH_RIVAL_IGNORE)
-          rng = d.rng
-          rngDraws++
-          if (d.value) {
-            chasing = rival.id
-            cands = cands.filter((c) => c.id !== focusId)
-          } else return focused
-        } else if (focused) return focused
-      }
-    }
-
+  /** The class rule (and the screens around it) over a candidate pool; no RNG. */
+  const classPick = (actor: MutUnit, pool: MutUnit[]): MutUnit => {
+    let cands = pool
     // Heroes don't chase a looming unit while anything else can be hit.
     if (actor.side === 'hero') {
       const lesser = cands.filter((c) => !isLooming(c))
@@ -417,24 +607,100 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
     return frontMost(cands)
   }
 
-  // ── Skill selection (Layer 1 §2): the strongest castable skill ─────────────
-  // Castable = enough SP AND strictly more HP than the skill's HP cost (an HP-cost
-  // ultimate never kills its own caster — it gates itself off instead). "Strongest"
-  // = leveled skillMult, times the number of foes it would hit for an all-enemies
-  // skill (so an AoE isn't dominated by a single-target basic attack). Ties keep
-  // array order. The basic attack (mult 1, free) is the floor.
-  const castable = (actor: MutUnit, s: SkillEffect): boolean =>
-    s.spCost <= actor.currentSP && (s.hpCost === undefined || actor.currentHP > s.hpCost)
+  /** Foes `skill` can actually hurt — or every foe, when none can (nothing to choose). */
+  const hurtable = (cands: MutUnit[], skill: SkillEffect): MutUnit[] => {
+    const open = cands.filter((c) => !immuneTo(c.ref, skill))
+    return open.length > 0 ? open : cands
+  }
+
+  /** Does this hero obey the Master's focus (a Wary, defiant hero picks their own)? */
+  const focusFor = (actor: MutUnit, cands: MutUnit[]): MutUnit | undefined =>
+    actor.side === 'hero' && actor.ref.defiant !== true && focusEnemyId !== undefined
+      ? cands.find((e) => e.id === focusEnemyId)
+      : undefined
+
+  /** Where `skill` would land as a single blow, as the AI previews it (no rivalry roll). */
+  const previewTarget = (actor: MutUnit, skill: SkillEffect, foes: MutUnit[]): MutUnit | null => {
+    if (foes.length === 0) return null
+    const cands = hurtable(foes, skill)
+    return focusFor(actor, cands) ?? classPick(actor, cands)
+  }
+
+  /** Set when the last target pick was a rival chasing their own kill (the rival's id). */
+  let chasing: string | null = null
+  const pickSingleTarget = (actor: MutUnit, skill: SkillEffect): MutUnit | null => {
+    chasing = null
+    const foes = targetableFoes(actor)
+    if (foes.length === 0) return null
+    // IMMUNITY: nobody swings at a foe the blow cannot hurt while another can be hurt
+    // (at the Wall, a mage stops casting into a magic-immune Fragment Knight).
+    let cands = hurtable(foes, skill)
+
+    // FOCUS: hero attackers force-prioritize a living, targetable focus enemy (a Wary,
+    // defiant hero ignores the Master and picks its own target).
+    const focused = focusFor(actor, cands)
+    if (focused !== undefined) {
+      // RIVALRY: a hero whose rival fights beside them may chase a kill of their own.
+      const rival = cands.length > 1 ? rivalOf(depth, actor, everyone()) : null
+      if (rival === null) return focused
+      const d = chance(rng, DEPTH_RIVAL_IGNORE)
+      rng = d.rng
+      rngDraws++
+      if (!d.value) return focused
+      chasing = rival.id
+      cands = cands.filter((c) => c.id !== focused.id)
+    }
+    return classPick(actor, cands)
+  }
+
+  // ── Skill selection: the most expected damage (the "Quantum AI") ──────────
+  // Castable = enough SP, and an HP cost leaves at least hpCostFloorPct of max HP.
+  // Each castable skill is scored by the damage it can be expected to deal, summed over
+  // the foes it would strike and capped at each foe's HP (overkill and immunity count;
+  // a sweep's falloff counts), so a single-target skill wins on a lone boss and a sweep
+  // wins on a crowd. Ties (both kill, or both do nothing) never pay HP for nothing, then go
+  // to the bigger uncapped blow (a hero practises its skills), then to the cheaper SP, then
+  // to list order. No RNG is drawn.
+  const castable = (actor: MutUnit, s: SkillEffect): boolean => canCast(actor.currentSP, actor.currentHP, actor.ref.stats.maxHP, s)
+  /** Equal expected damage (both kill, both do nothing): never pay HP for nothing; else
+   *  the bigger blow — a hero practises the skill it knows (skills level by use) — else
+   *  the cheaper one. */
+  const tieGoesTo = (s: SkillEffect, raw: number, best: SkillEffect, bestRaw: number): boolean => {
+    const hp = s.hpCost ?? 0
+    const bestHp = best.hpCost ?? 0
+    if (hp !== bestHp) return hp < bestHp
+    if (raw !== bestRaw) return raw > bestRaw
+    return s.spCost < best.spCost
+  }
   const chooseSkill = (actor: MutUnit): SkillEffect => {
+    const own = actor.ref.skills
+    // One skill (every enemy's lone Strike or Spell): nothing to weigh.
+    if (own.length <= 1) return own[0] !== undefined && castable(actor, own[0]) ? own[0] : BASIC_ATTACK
+    const foes = targetableFoes(actor)
+    const all = everyone()
+    const spread = foes.length
     let best: SkillEffect | null = null
-    let bestScore = -Infinity
+    let bestScore = -1
+    let bestRaw = -1
     for (const s of actor.ref.skills) {
       if (!castable(actor, s)) continue
-      const reach = s.target === 'all-enemies' ? Math.max(1, targetableFoes(actor).length) : 1
-      const score = s.skillMult * reach
-      if (score > bestScore) {
+      let score = 0
+      let raw = 0
+      const hit = (t: MutUnit, n: number) => {
+        const blow = estimateBlow(actor, s, t, n, all)
+        raw += blow
+        score += Math.min(blow, Math.max(0, t.currentHP))
+      }
+      if (s.target === 'all-enemies') {
+        for (const f of foes) hit(f, spread)
+      } else {
+        const t = previewTarget(actor, s, foes)
+        if (t !== null) hit(t, 1)
+      }
+      if (score > bestScore || (score === bestScore && best !== null && tieGoesTo(s, raw, best, bestRaw))) {
         best = s
         bestScore = score
+        bestRaw = raw
       }
     }
     // Synthesized basic attack (spCost 0) so skills may be empty.
@@ -465,7 +731,9 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
       case 'defend':
         return wavesCleared >= obj.waves
       case 'survive':
-        return tick >= obj.ticks && livingHeroes().length > 0
+        // Outlast the timer — or the horde itself: with every wave spent and no foe
+        // standing, the floor is held at once (no idling to the bell).
+        return (tick >= obj.ticks || hordeSpent()) && livingHeroes().length > 0
       case 'defeat':
         return defeatedTargetTags.includes(obj.targetTag)
       case 'protect':
@@ -478,9 +746,39 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
   }
   /** A protect objective whose NPC has fallen loses the mission outright. */
   const protectFailed = (): boolean =>
-    encounter.mission.objectives.some((o) => o.kind === 'protect' && !allyAlive(o.targetTag))
+    objectives.some((o) => o.kind === 'protect' && !allyAlive(o.targetTag))
   const missionWon = (): boolean =>
-    encounter.mission.objectives.length > 0 && encounter.mission.objectives.every(objectiveMet)
+    objectives.length > 0 && objectives.every(objectiveMet)
+
+  /** Waiting or walking can win this mission (a survival, an escape): never futile. */
+  const winsWithoutBlows = objectives.some((o) => o.kind === 'survive' || o.kind === 'reach')
+  /** Everything `u` could still strike with: its castable skills (SP never refills), the
+   *  basic attack it falls back on, and the strike it presses a friend's attack with. */
+  const strikesOf = (u: MutUnit): SkillEffect[] => {
+    const open = u.ref.skills.filter((s) => castable(u, s))
+    return [...(open.length > 0 ? open : [BASIC_ATTACK]), followUpSkill(u.ref, BASIC_ATTACK)]
+  }
+  /**
+   * FUTILITY: nothing the party still holds can hurt any foe it has to beat — a squad of
+   * blades against a lone, physical-immune Fragment Warden. It can only get worse (SP
+   * never refills, a foe falls only to a blow), so the party falls back at once instead of
+   * swinging IMMUNE until it dies or the clock runs out. Only the party's own heroes count
+   * (a mission NPC never strikes), and a phased foe the party could hurt is out of reach
+   * while a wavemate it cannot hurt still shields it. The foe the beat names is the
+   * front-most one standing.
+   */
+  const futileFoe = (): MutUnit | null => {
+    if (winsWithoutBlows) return null
+    const foes = livingEnemies().filter((e) => !isLooming(e))
+    if (foes.length === 0) return null
+    const strikes = heroes.filter((h) => h.alive && !h.ref.isNpc).flatMap(strikesOf)
+    const hurtableFoe = (f: MutUnit): boolean => strikes.some((s) => !immuneTo(f.ref, s))
+    /** The living, non-phased wavemates whose presence keeps a phased foe untargetable. */
+    const shieldsOf = (f: MutUnit): MutUnit[] => foes.filter((o) => o.wave === f.wave && o.id !== f.id && !isPhased(o))
+    const reachable = (f: MutUnit): boolean => hurtableFoe(f) && (isTargetable(f) || shieldsOf(f).every(hurtableFoe))
+    if (foes.some(reachable)) return null
+    return frontMost(foes)
+  }
 
   const evaluateState = (): void => {
     if (outcome !== null) return
@@ -493,16 +791,30 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
       return
     }
     if (missionWon()) {
+      if (surviveObjective !== undefined && tick < surviveObjective.ticks) {
+        missionBeat('horde-spent', { left: surviveObjective.ticks - tick }, 'The horde is spent — the floor is held!')
+      }
       outcome = 'win'
+      return
+    }
+    const untouchable = futileFoe()
+    if (untouchable !== null) {
+      missionBeat('futile', { unitId: untouchable.id }, `Nothing can touch ${untouchable.ref.name} — fall back!`)
+      outcome = 'retreat'
     }
   }
 
   /** After the current wave is fully dead, advance/spawn the next wave. */
   const maybeAdvanceWave = (): void => {
     if (outcome !== null) return
+    // A wave is cleared once: a looming unit left standing in the last wave must not
+    // count it again on every later action.
+    if (wavesCleared > currentWave) return
     // A looming unit is outlasted, not killed: the wave counts as cleared without it.
     if (livingEnemiesInWave(currentWave).filter((e) => !isLooming(e)).length === 0) {
       wavesCleared++
+      const waves = encounter.waves.length
+      if (waves > 1) missionBeat('wave-cleared', { wave: wavesCleared, waves }, `Wave ${wavesCleared} of ${waves} cleared!`)
       if (moreWavesToSpawn()) {
         currentWave++
         const spawned = spawnWave(currentWave)
@@ -512,16 +824,20 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
   }
 
   /** FOLLOW-UP: after `actor` strikes, one friend may press the attack on `target`
-   *  (never chains; rolled only for a hero with friends in the party). */
+   *  (never chains; rolled only for a hero with friends in the party, and only by a
+   *  friend whose strike can hurt the target). */
   const followUp = (actor: MutUnit, target: MutUnit): void => {
     if (!target.alive || !actor.alive) return
     for (const f of followUpCandidates(depth, actor, everyone())) {
+      const strike = followUpSkill(f.unit.ref, BASIC_ATTACK)
+      if (immuneTo(target.ref, strike)) continue
       const d = chance(rng, f.chance)
       rng = d.rng
       rngDraws++
       if (!d.value) continue
       emit({ kind: 'followup', unitId: f.unit.id, allyId: actor.id, targetId: target.id })
-      resolveHit(f.unit as MutUnit, followUpSkill(f.unit.ref, BASIC_ATTACK), target)
+      // The friend's strike is not their own action: it neither uses nor spends their opener.
+      resolveHit(f.unit as MutUnit, strike, target, 1, true)
       return
     }
   }
@@ -561,6 +877,7 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
     // nothing left to strike). Only reach missions count, so other replays are untouched.
     if (hasReach && actor.side === 'hero') {
       reachProgress++
+      watchReach()
       evaluateState()
       if (outcome !== null) return
     }
@@ -575,13 +892,13 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
       payAndTally(actor, skill)
       for (const t of targets) {
         if (!t.alive) continue
-        resolveHit(actor, skill, t)
+        resolveHit(actor, skill, t, targets.length)
       }
       // A sweep is pressed on the front-most foe still standing.
       const standing = targets.find((t) => t.alive)
       if (standing !== undefined) followUp(actor, standing)
     } else {
-      const target = pickSingleTarget(actor)
+      const target = pickSingleTarget(actor, skill)
       if (target === null) return // no valid target → action fizzles, SP retained
       if (chasing !== null) emit({ kind: 'rivalry', unitId: actor.id, rivalId: chasing, targetId: target.id })
       emit({ kind: 'act', actorId: actor.id, skillId: skill.id, targetId: target.id })
@@ -592,13 +909,13 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
 
     actor.actions++
 
-    // Deaths from this action may clear the wave / satisfy the mission.
+    // Deaths from this action may clear the wave / break a shield / satisfy the mission.
     maybeAdvanceWave()
+    watchShields()
     evaluateState()
   }
 
   // ── ATB main loop ─────────────────────────────────────────────────────────
-  const timer = encounter.mission.timer
   const orders = [...(encounter.orders ?? [])].sort((a, b) => a.tick - b.tick)
   let nextOrder = 0
   for (tick = 1; tick <= C.maxTicks; tick++) {
@@ -611,6 +928,10 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
       else if (o.kind === 'protect' && !overlooked.includes(o.allyId)) overlooked = [...overlooked, o.allyId]
     }
     if (outcome !== null) break
+
+    // The mission's clock: countdown milestones, and whatever wakes on this tick.
+    watchCountdown()
+    watchLooming()
 
     // Fill action gauges for every living unit (stable order by id).
     const all = [...heroes, ...enemies].filter((u) => u.alive).sort(byId)
@@ -672,6 +993,13 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
     }
   }
 
+  // The mission as the replay shows it: each objective with the units that carry its tag.
+  const logObjectives: LogObjective[] = objectives.map((o) => {
+    if (o.kind !== 'defeat' && o.kind !== 'acquire' && o.kind !== 'protect') return { ...o }
+    const unitIds = unitsInit.filter((u) => u.targetTag === o.targetTag).map((u) => u.id)
+    return unitIds.length > 0 ? { ...o, unitIds } : { ...o }
+  })
+
   const log: CombatLog = {
     seed,
     floor: encounter.floor,
@@ -680,6 +1008,12 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
     events,
     outcome,
     rngDraws,
+    mission: {
+      type: encounter.mission.type,
+      objectives: logObjectives,
+      ...(timer !== null ? { timerTicks: timer } : {}),
+      waves: encounter.waves.length,
+    },
   }
 
   return {

@@ -169,3 +169,85 @@ Casual: 20 Advanced pulls, 19 upgrades, 18 decorations, 47 bounties, 1 statue.
   to the witnesses is paid once a day at most, but a Master's graveyard fills fast.
 - The bots still don't use focus/protect orders, formation lines for bonds, gem timer
   skips, the forge job or captive synthesis.
+
+---
+
+## Combat brain retune (2026-10-02, lane D)
+
+> **Status:** Done · **Base:** 0e7a09b (wave 1 merged) · **Branch:** lane D worktree.
+> Lane notes: `docs/superpowers/specs/2026-10-02-lane-d.md`.
+
+### Why the budgets moved
+
+Lane D changed how a fight plays, so a floor's CP now buys a different amount of danger:
+
+- **Skill choice by expected damage** and an **AoE falloff** (a sweep over n foes lands
+  ×100 / (100 + 60(n − 1)) on each): from F41 sweeps dealt 87 % of the party's damage, now 46 %.
+- **`combat.damageScale` 0.58**: every blow lands at 58 % of the formula, so a late fight lasts
+  ~3 rounds a side instead of one alpha strike. HP, CP and budgets are untouched by it.
+- **Enemy casters** (an explicit `caster` flag on 11 INT-built templates) hit with mAtk vs mDef.
+- Raid boss pools follow the pace: `CHALLENGE.raids.hpMult` 4 → 2.4, so each party still
+  carves the same share in its `partyTicks`.
+
+Longer fights in which the enemy acts are deadlier per CP, so the budgets were trimmed:
+
+| Knob | Before | After | Why |
+|---|---|---|---|
+| `tower.base` | 60 | **38** | Every filler budget ×0.63; with the boost below, ×0.73 at F10 easing to ×0.66 by F70. |
+| `tower.earlyBudgetBoost` | 4 | **4.8** | The trim is gentlest early, where fights were already long, deepest late, where the AoE monopoly ended. |
+| `tower.latePowerBase` | 1.04 | **1.045** | Past F70 the lower base made Act VI too soft. (1.05 was tried: no gain for whales, engaged Act VI 6 days slower.) |
+| `tower.anchorBudgetMult` | 1.1 | **1.4** | The set pieces keep their weight over the fillers. |
+| `tower.wallPowerMult` | 1.8 | **2.3** | The Wall stands at about its old CP and holds: 0/6 whales through in 30 days (2.2: 2/6 to F84; 2.4: 0/6; before: 1/6 to F89). |
+
+### Before → after
+
+Same bots, seeds 1000 + 7919·i, 30 days.
+
+**Combat feel from F41** (`npx vite-node src/sim/combatMetrics.ts 30 6`, every floor attempt):
+
+| | AoE share | Median rounds | Enemies act | Deaths / attempt | Median replay 1× (p10–p90) | Win | Overkill |
+|---|---|---|---|---|---|---|---|
+| before, 6 seeds | 87.1 % | 1.2 | 76.4 % | 0.604 | 25.8 s (9–54) | 74.2 % | 15.6 % |
+| after, 6 seeds | **46.0 %** | **3.2** | **99.4 %** | **0.569** | **53.7 s** (14–95) | 76.1 % | 8.3 % |
+| before, 3 seeds | 86.7 % | 1.2 | 77.1 % | 0.569 | 25.4 s (9–55) | 74.5 % | 15.6 % |
+| after, 3 seeds | 48.1 % | 3.3 | 100 % | 0.649 | 54.6 s (13–101) | 73.1 % | 8.1 % |
+
+Deaths per attempt by profile (6 seeds): casual 0.691 → 0.775, engaged 0.607 → 0.598, whale
+0.547 → 0.384. The 3-seed sample reads worse (0.569 → 0.649) because engaged seeds 0 and 2
+lose more heroes in Act V–VI (23 → 58 and 29 → 58 dead); seeds 3–5 go the other way (76 → 17,
+40 → 27, 16 → 19).
+
+**Progression** (`npm run sim -- 30 6`, medians; highest floor cleared by the end of day *d*):
+
+| Profile | d0 | d1 | d2 | d3 | d5 | d7 | d10 | d14 | d20 | d29 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| casual before | 6 | 12 | 18 | 24 | 36 | 40 | 40 | 52 | 69 | 79 |
+| casual after | 6 | 12 | 18 | 24 | 36 | 40 | 40 | 52 | 75 | 79 |
+| engaged before | 16 | 32 | 39 | 41 | 49 | 51 | 70 | 76 | 79 | 79 |
+| engaged after | 16 | 32 | 39 | 40 | 45 | 48 | 72 | 79 | 79 | 79 |
+| whale before | 25 | 50 | 59 | 67 | 69 | 79 | 79 | 79 | 79 | 79 |
+| whale after | 25 | 49 | 67 | 69 | 79 | 79 | 79 | 79 | 79 | 79 |
+
+| Profile | Finals (6 seeds) | Battle deaths (median) | Act V cleared | Act VI cleared |
+|---|---|---|---|---|
+| casual before | 69, 79, 79, 79, 59, 77 | 26.5 | day 17 (5/6) | day 19 (3/6) |
+| casual after | 79, 76, 79, 77, 69, 79 | 30.5 | day 20 (6/6) | day 20 (3/6) |
+| engaged before | 79 × 6 | 34.5 | day 11 | day 19 |
+| engaged after | 79 × 6 | 39.5 | day 10 | day 16 |
+| whale before | 89, 79 × 5 | 24.5 | day 4 | day 12 |
+| whale after | 79 × 6 | 25.5 | day 4 | day 8 |
+
+`npm run sim -- 30 3` (the lane's reference run): casual 69/79/79 → 79/76/79, engaged 79 × 3 →
+79 × 3, whale 89/79/79 → 79 × 3; dead casual 28/22/20 → 17/44/33, engaged 23/49/29 → 58/52/58,
+whale 18/66/26 → 7/38/26.
+
+### Still open
+
+- **Casual dies more** (deaths per attempt 0.69 → 0.78): it never retreats, and fights in
+  which the enemy now acts punish a party that stays in to the end. No budget knob separates
+  it from the others; a gentler "pull back" rule for casual players belongs to the safety rails
+  (war room), not the budgets.
+- **Whales clear Act VI sooner** (day 12 → 8) while engaged is close (19 → 16): a single-target
+  3★ party gains the most from the brain. The Wall still holds them.
+- **Late replays are long at 1×**: F61–79 median 67 s (p90 108 s). Inside the gate, but the
+  readability lane should make 2× the comfortable default for long fights, or trim beat timings.

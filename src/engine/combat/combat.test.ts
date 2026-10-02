@@ -763,13 +763,23 @@ describe('skill selection (strongest castable)', () => {
     expect(acts(r)[0]).toBe('strike')
   })
 
-  it('scores an all-enemies skill by the foes it reaches (0.9 × 3 beats a 1.6 single hit)', () => {
+  it('scores an all-enemies skill by the damage it lands on every foe (AoE falloff counted)', () => {
+    // Three fresh tanks: a 0.9 sweep lands 0.9 × 100/(100 + 2k) on each — 3 × 0.41 = 1.23,
+    // short of a 1.6 single blow. Against three foes a swing would kill anyway, the sweep
+    // takes all three and wins (overkill is wasted, so the strike scores one kill).
     const r = runBattle(
       [hero({ id: 'h', skills: [basic, strike, volley], sp: 100, stats: { spd: 1000, critPct: 0 } })],
       encounter([[tank('a'), tank('b'), tank('c')]], survive(5)),
       2,
     )
-    expect(acts(r)[0]).toBe('volley')
+    expect(acts(r)[0]).toBe('strike')
+    const frail = (id: string) => enemy({ id, stats: { maxHP: 1, pDef: 0, spd: 1, pAtk: 0 } })
+    const swept = runBattle(
+      [hero({ id: 'h', skills: [basic, strike, volley], sp: 100, stats: { spd: 1000, critPct: 0 } })],
+      encounter([[frail('a'), frail('b'), frail('c')]], survive(5)),
+      2,
+    )
+    expect(acts(swept)[0]).toBe('volley')
   })
 
   it('an HP-cost ultimate fires when affordable and drains its caster', () => {
@@ -790,10 +800,10 @@ describe('skill selection (strongest castable)', () => {
       4,
     )
     const costs = r.log.events.filter((e) => e.kind === 'hp-cost') as { hpAfter: number }[]
-    // 100 → 70 → 40 → 10; at 10 HP (≤ 30) it can no longer be paid.
-    expect(costs.map((c) => c.hpAfter)).toEqual([70, 40, 10])
-    expect(costs.every((c) => c.hpAfter > 0)).toBe(true)
-    expect(acts(r).slice(3).every((id) => id === 'basic')).toBe(true)
+    // 100 → 70 → 40; a third cast would leave 10 HP, under the hpCostFloorPct (30%) floor.
+    expect(costs.map((c) => c.hpAfter)).toEqual([70, 40])
+    expect(costs.every((c) => c.hpAfter * 100 >= TUNING.combat.hpCostFloorPct * 100)).toBe(true)
+    expect(acts(r).slice(2).every((id) => id === 'basic')).toBe(true)
     expect(r.survivorHeroIds).toContain('h')
   })
 
@@ -939,11 +949,13 @@ describe('golden snapshot', () => {
 // loop order, damage formula, or RNG draw order moves one of these numbers.
 // Battle: Han (Warrior, fire, Lv5, pAtk 90, crit 20%, spd 70) one party member
 // vs a single wind Goblin (Lv3, 220 HP, pDef 15, spd 45), seed 20260615.
+// Lane D (combat brain): blows land at TUNING.combat.damageScale (0.58), so Han needs four
+// swings instead of three and the Goblin lives to answer twice (two 'act'+'hit' of its own).
 const GOLDEN = {
   outcome: 'win' as const,
-  eventCount: 9, // battle-start + 3×(act+hit) + death + end
-  rngDraws: 6, // 3 hits × (crit roll + variance draw)
-  ticksElapsed: 29,
+  eventCount: 15, // battle-start + 4 Han (act+hit) + 2 Goblin (act+hit) + death + end
+  rngDraws: 12, // 6 hits × (crit roll + variance draw)
+  ticksElapsed: 58, // the fight lasts twice as long: the point of damageScale
   wavesCleared: 1,
 }
 
@@ -965,7 +977,8 @@ describe('conditional keywords', () => {
   it('immune zeroes damage of its type; vulnerable multiplies its element', () => {
     expect((firstHit([], [{ kind: 'immune', damageType: 'physical' }]).ev as { amount: number }).amount).toBe(0)
     const vuln = firstHit([], [{ kind: 'vulnerable', element: 'physical' }]).ev as { amount: number }
-    expect(vuln.amount).toBe(Math.round(baseline() * TUNING.combat.vulnerableMult))
+    // (Both blows are rounded once, so the scaled baseline may differ by a point.)
+    expect(Math.abs(vuln.amount - baseline() * TUNING.combat.vulnerableMult)).toBeLessThanOrEqual(1)
   })
 
   it('opener boosts only the first action', () => {

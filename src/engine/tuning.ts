@@ -69,6 +69,20 @@ export const TUNING = {
     maxTicks: 5000,
     /** Damage multiplier a `vulnerable` keyword applies to hits of its element. */
     vulnerableMult: 1.5,
+    /** An HP-cost skill is cast only if the caster keeps at least this % of max HP after
+     *  paying (an ultimate is a gamble, not a suicide). */
+    hpCostFloorPct: 30,
+    /** AoE falloff: an all-enemies skill that strikes n foes hits each for
+     *  ×100 / (100 + aoeFalloffK × (n − 1)) — a sweep spreads its force (2 foes ×0.63
+     *  each, 4 ×0.36, 8 ×0.19). It ended the AoE monopoly: from F41 sweeps dealt 87% of
+     *  the party's damage; now ~46%, and single-target skills finish what a sweep softens
+     *  (lane D, combat brain). */
+    aoeFalloffK: 60,
+    /** Every blow lands at this share of the damage formula: the pace of a fight — how many
+     *  exchanges it lasts — without touching HP, CP or the floor budgets. At 1 a late fight
+     *  was ~1 round and enemies often never acted; at 0.58 it lasts ~3 rounds a side
+     *  (lane D; see docs/superpowers/specs/2026-09-29-balance-pass.md). */
+    damageScale: 0.58,
   },
 
   cp: {
@@ -141,12 +155,17 @@ export const TUNING = {
   },
 
   tower: {
-    /** floorPower(f) = base * powerBase^f * (1 + stepBonus*floor(f/5)) * worldMult. */
-    base: 60,
+    /** floorPower(f) = base * powerBase^f * (1 + stepBonus*floor(f/5)) * worldMult.
+     *  60 → 38 with the combat brain (lane D): a floor's CP now buys more danger — fights
+     *  last, sweeps spread, casters cast — so each budget is trimmed (~×0.73 early to ~×0.66
+     *  at F70) to keep the climb's pace and deaths per attempt where they were. */
+    base: 38,
     powerBase: 1.06,
     stepBonus: 0.15,
-    /** Early-climb budget boost: ×(1 + this × (inflectionFloor − f) / inflectionFloor) below F70. */
-    earlyBudgetBoost: 4,
+    /** Early-climb budget boost: ×(1 + this × (inflectionFloor − f) / inflectionFloor) below F70.
+     *  4 → 4.8 with the lower base (lane D), so the trim is gentlest where fights were already
+     *  long and deepest late, where the AoE monopoly ended. */
+    earlyBudgetBoost: 4.8,
     /** Filler power-budget tolerance: fill enemies until ΣCP within ±this of budget. */
     budgetTolerance: 0.1,
     /** mobLevel(f) = round(f * mobLevelPerFloor * worldMult). At 1.0 the star caps line up with
@@ -170,17 +189,22 @@ export const TUNING = {
     /** …and the Wall itself (F80's anchor) is raised to this × its floor's anchor budget.
      *  Encounters fill to the CP budget, so the level bonus alone mostly trades enemy count
      *  for level; once the bots learned to retreat (keeping their best alive) they walked
-     *  through at +20 levels (balance pass 2). Only the gate: F81+ keep their curve. */
-    wallPowerMult: 1.8,
+     *  through at +20 levels (balance pass 2). Only the gate: F81+ keep their curve.
+     *  1.8 → 2.3 (lane D): with the lower base and anchorBudgetMult 1.4 the gate stands at
+     *  about its old CP, and it holds for 6 whales in 6 over 30 days (at 2.2 two broke
+     *  through to F84; before the combat brain one reached F89). */
+    wallPowerMult: 2.3,
     /** Past the inflection the budget exponent eases to this (the LEVEL curve steepens
-     *  instead), so a maxed party can reach the summit. */
-    latePowerBase: 1.04,
+     *  instead), so a maxed party can reach the summit. 1.04 → 1.045 (lane D): Act VI had
+     *  gone soft under the lower base (whales cleared it on day 4 instead of day 12). */
+    latePowerBase: 1.045,
     /** A filler wave holds at most this many enemies; past it, enemies grow elite instead. */
     fillerMaxUnits: 8,
     /** Elite stat multiplier step when a capped filler wave (or an anchor) is short of budget. */
     elitePowerStep: 1.08,
-    /** Anchors above F20 are raised until their ΣCP reaches budget × this. */
-    anchorBudgetMult: 1.1,
+    /** Anchors above F20 are raised until their ΣCP reaches budget × this. 1.1 → 1.4 (lane
+     *  D): with the lower base, the set pieces keep their weight over the filler floors. */
+    anchorBudgetMult: 1.4,
     /** The Wailing Wall (F80–89) is built from this seed for every account (canon). */
     wallSeed: 80_808_080,
     /** Swamp/Order/Void filler: chance of a Survival / Escape mission instead of Subjugation. */
