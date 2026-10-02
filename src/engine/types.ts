@@ -511,6 +511,9 @@ export interface FallenRecord {
   bestFloor: number
   /** Ids of the friends left behind (affinity ≥ friend threshold at death). */
   mourners: HeroId[]
+  /** What they carried at the end (the gear went back to the armory, so their blade can
+   *  be passed on). Absent on older graves and for heroes who carried nothing. */
+  carried?: { slot: EquipmentSlot; itemId: EquipmentId; name: string; grade: EquipmentGrade }[]
 }
 
 /** Running totals since the Master last read Isel's letter. */

@@ -27,6 +27,7 @@ import { runBattle } from '../combat'
 import { buildEncounter, floorPower, floorXp, sanityDrain } from '../tower'
 import { applyXp } from '../stats'
 import { clampSanity } from '../kitchen'
+import { releaseGear } from '../equipment'
 import { clampPerformance, practice } from '../minigames'
 import { worldDayIndex } from '../daily'
 import { rngFor, hash, chance } from '../rng/rng'
@@ -207,7 +208,7 @@ export function runRaid(
     const drain = sanityDrain(floorPower(floor, worldMult), partyCp, cleared, r.fallen.length > 0)
     for (const id of r.heroIds) {
       const h = heroes[id]!
-      if (fallen.has(id)) heroes[id] = { ...h, alive: false, blessed: false }
+      if (fallen.has(id)) heroes[id] = releaseGear({ ...h, alive: false, blessed: false })
       else heroes[id] = { ...h, sanity: clampSanity(h.sanity - drain), xp: xp > 0 ? applyXp(h.xp, xp, h.star) : h.xp }
     }
   }

@@ -41,6 +41,7 @@ import { runBattle } from '../combat'
 import { ENEMY_TEMPLATES, ALLY_TEMPLATES, ANCHORS, SKILLS, HIDDEN_OBJECTIVES, actForFloor } from '../content'
 import { applyXp, xpToNext } from '../stats'
 import { clampSanity } from '../kitchen'
+import { releaseGear } from '../equipment'
 import { attrStoneId } from '../promotion'
 import { tacticalFocusBonus } from '../tactical'
 import { addMasterXp } from '../master'
@@ -576,7 +577,7 @@ export function playFloor(
     const hero = state.heroes[key]!
     if (fallenSet.has(key as string)) {
       // PERMADEATH: a hero that fell this battle is gone.
-      nextHeroes[key] = { ...hero, alive: false, blessed: false }
+      nextHeroes[key] = releaseGear({ ...hero, alive: false, blessed: false })
     } else if (survivorSet.has(key as string)) {
       // Deployed survivor: drain Sanity, grant XP on a clear, and auto-learn skills
       // from this battle's casts (level-ups, then merges — Layer 1 §2.4).

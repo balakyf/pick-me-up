@@ -38,7 +38,7 @@ import { floorXp, mobLevel } from '../tower'
 import { applyXp } from '../stats'
 import { clampSanity } from '../kitchen'
 import { attrStoneId } from '../promotion'
-import { itemName, nextEquipmentId, statBlockFor } from '../equipment'
+import { itemName, nextEquipmentId, releaseGear, statBlockFor } from '../equipment'
 import { rngFor, hash, chance, weightedPick, pick } from '../rng/rng'
 import { CHALLENGE } from './tuning'
 import { challengeOf, fitToFight } from './challenge'
@@ -266,7 +266,7 @@ export function resolveBonusRoom(state: GameState, choice: string): { state: Gam
     next = { ...next, codex: recordBattle(next.codex, res.log) }
     outcome.fallen = [...res.fallenHeroIds]
     const heroes = { ...next.heroes }
-    for (const id of res.fallenHeroIds) heroes[id] = { ...heroes[id]!, alive: false, blessed: false }
+    for (const id of res.fallenHeroIds) heroes[id] = releaseGear({ ...heroes[id]!, alive: false, blessed: false })
     next = { ...next, heroes }
     if (outcome.won) {
       outcome.gold = R.mimicGoldPerFloor * floor

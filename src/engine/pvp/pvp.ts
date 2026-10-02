@@ -24,6 +24,7 @@ import { deployParty, fitToDeploy } from '../tower/deploy'
 import { worldDayIndex } from '../daily'
 import { tacticalFocusBonus } from '../tactical'
 import { clampSanity } from '../kitchen'
+import { releaseGear } from '../equipment'
 import { withFavor } from '../favor'
 import { rngFor, hash, chance, nextFloat, pick } from '../rng'
 import { findRival, raidTargets, sectorRivals, guildById, type RivalMaster } from './rivals'
@@ -296,7 +297,7 @@ export function resolveInvasions(state: GameState, nowWorld: number): GameState 
   let log = s.pvp.log
   for (const h of Object.values(s.heroes) as OwnedHero[]) {
     if (h.alive && h.captiveOf && h.captiveOf.deadlineWorld <= nowWorld) {
-      heroes = { ...heroes, [h.id]: { ...h, alive: false, captiveOf: null } }
+      heroes = { ...heroes, [h.id]: releaseGear({ ...h, alive: false, captiveOf: null }) }
       log = [
         { worldDay: today, direction: 'in' as const, rival: h.captiveOf.master, won: false, goldDelta: 0, note: `synthesized ${h.name}` },
         ...log,

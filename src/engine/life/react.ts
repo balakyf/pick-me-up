@@ -15,6 +15,7 @@ import type { Command, DeathCause, FallenRecord, FloorResult, GameState, HeroId,
 import { addMemory, dayOfSlot, lifeOf, relationKey, slotOf, newHeroLife } from './life'
 import { personalityOf } from './personality'
 import { bondGriefMult } from '../challenge/bonds'
+import { carriedGear } from '../equipment'
 
 const R = TUNING.life.relation
 const G = TUNING.life.grief
@@ -82,8 +83,12 @@ export function lifeReact(before: GameState | null, after: GameState, cmd: Comma
     const now = after.heroes[id]
     if (!was.alive || !now || now.alive) continue
     const life = lifeOf(was)
-    const cause = causeFor(cmd)
+    // A hero held captive when the command began was synthesized by their captor (their
+    // deadline ran out during the catch-up) — whatever command the Master happened to give.
+    const cause: DeathCause = was.captiveOf ? 'captor' : causeFor(cmd)
     const mourners = living.filter((o) => affinity(id, o) >= R.friend)
+    const battleFloor = cmd.type === 'TOWER_RAID' ? cmd.floor : cmd.type === 'BONUS_ROOM' ? (before.challenge?.room?.floor ?? before.tower.currentFloor) : before.tower.currentFloor
+    const carried = carriedGear(was, before.inventory)
     const rec: FallenRecord = {
       heroId: id,
       name: was.name,
@@ -93,11 +98,12 @@ export function lifeReact(before: GameState | null, after: GameState, cmd: Comma
       element: was.element,
       portraitToken: was.portraitToken,
       cause,
-      floor: cmd.type === 'TOWER_RAID' ? cmd.floor : cause === 'battle' ? before.tower.currentFloor : life.bestFloor,
+      floor: cause === 'battle' ? battleFloor : life.bestFloor,
       day,
       daysServed: Math.max(0, day - life.arrivedDay),
-      bestFloor: Math.max(life.bestFloor, cause === 'battle' ? before.tower.currentFloor : 0),
+      bestFloor: Math.max(life.bestFloor, cause === 'battle' ? battleFloor : 0),
       mourners,
+      ...(carried.length > 0 ? { carried } : {}),
     }
     memorial = [...memorial, rec]
     push({ at, kind: 'death', heroIds: [id], floor: rec.floor, detail: cause })

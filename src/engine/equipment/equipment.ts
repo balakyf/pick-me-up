@@ -23,6 +23,7 @@ import type {
   DerivedStats,
   Element,
   KeywordTag,
+  FallenRecord,
 } from '../types'
 
 const E = TUNING.lobby.equipment
@@ -152,10 +153,15 @@ export function craftEquipment(state: GameState, slot: EquipmentSlot): GameState
   }
 }
 
-/** Every item id currently referenced by any hero's equipment slots. */
+/**
+ * Every item id currently worn by a LIVING hero. The fallen carry nothing: whatever a
+ * dead hero's record still points at (saves from before gear was released at death) is
+ * free inventory, so no item is ever stranded.
+ */
 export function equippedItemIds(state: GameState): Set<EquipmentId> {
   const ids = new Set<EquipmentId>()
   for (const hero of Object.values(state.heroes) as OwnedHero[]) {
+    if (!hero.alive) continue
     for (const id of [hero.equipment.weapon, hero.equipment.armor, hero.equipment.accessory]) {
       if (id !== null) ids.add(id)
     }
@@ -163,11 +169,71 @@ export function equippedItemIds(state: GameState): Set<EquipmentId> {
   return ids
 }
 
+/** The living hero wearing an item, if any. */
+export function wearerOf(state: GameState, itemId: EquipmentId): OwnedHero | null {
+  for (const h of Object.values(state.heroes) as OwnedHero[]) {
+    if (h.alive && (h.equipment.weapon === itemId || h.equipment.armor === itemId || h.equipment.accessory === itemId)) return h
+  }
+  return null
+}
+
+/**
+ * Is an item still bound to someone else? An Oath-Blade is bound to its hero for life —
+ * and when that hero falls, the binding passes with them and the blade can be handed on.
+ */
+export function boundElsewhere(state: GameState, item: EquipmentItem, heroId: HeroId): boolean {
+  if (item.exclusiveTo === undefined || item.exclusiveTo === heroId) return false
+  return state.heroes[item.exclusiveTo]?.alive === true
+}
+
+/** Could this hero take up this item right now (not bound elsewhere, not worn by another
+ *  living hero)? The pickers' filter. */
+export function wieldable(state: GameState, item: EquipmentItem, heroId: HeroId): boolean {
+  if (boundElsewhere(state, item, heroId)) return false
+  const w = wearerOf(state, item.id)
+  return w === null || w.id === heroId
+}
+
+/** A hero with empty hands: what the death sites apply (the gear goes back to the armory). */
+export function releaseGear<H extends OwnedHero>(hero: H): H {
+  const e = hero.equipment
+  if (e.weapon === null && e.armor === null && e.accessory === null) return hero
+  return { ...hero, equipment: { weapon: null, armor: null, accessory: null } }
+}
+
+/** What a hero carried (slot order), for the Memorial's record. */
+export function carriedGear(hero: OwnedHero, inventory: readonly EquipmentItem[]): { slot: EquipmentSlot; itemId: EquipmentId; name: string; grade: EquipmentGrade }[] {
+  const out: { slot: EquipmentSlot; itemId: EquipmentId; name: string; grade: EquipmentGrade }[] = []
+  for (const slot of ['weapon', 'armor', 'accessory'] as const) {
+    const id = hero.equipment[slot]
+    if (id === null) continue
+    const item = inventory.find((i) => i.id === id)
+    if (item) out.push({ slot, itemId: id, name: item.name, grade: item.grade })
+  }
+  return out
+}
+
+/**
+ * A fallen hero's gear and who carries it now (null = waiting in the armory) — for the
+ * Memorial: "their blade was passed on to …". Items since lost are left out.
+ */
+export function heirlooms(
+  state: GameState,
+  rec: Pick<FallenRecord, 'carried'>,
+): { slot: EquipmentSlot; itemId: EquipmentId; name: string; grade: EquipmentGrade; wielder: OwnedHero | null }[] {
+  return (rec.carried ?? [])
+    .filter((c) => state.inventory.some((i) => i.id === c.itemId))
+    .map((c) => {
+      const item = state.inventory.find((i) => i.id === c.itemId)!
+      return { ...c, name: item.name, grade: item.grade, wielder: wearerOf(state, c.itemId) }
+    })
+}
+
 /**
  * Equip an owned item onto its hero. The item routes by its OWN slot, replacing
  * whatever sat there (the replaced item returns to free inventory). Validates the
- * hero is alive, the item exists, and the item is not already worn by ANOTHER hero.
- * PURE — returns a fresh GameState.
+ * hero is alive, the item exists, it is not bound to another LIVING hero, and it is
+ * not already worn by another LIVING hero (the fallen hold nothing). PURE.
  */
 export function equipItem(state: GameState, heroId: HeroId, itemId: EquipmentId): GameState {
   const hero = state.heroes[heroId]
@@ -175,19 +241,13 @@ export function equipItem(state: GameState, heroId: HeroId, itemId: EquipmentId)
   if (!hero.alive) throw new Error(`equipItem: hero ${heroId} is not alive`)
   const item = state.inventory.find((i) => i.id === itemId)
   if (item === undefined) throw new Error(`equipItem: unknown item ${itemId}`)
-  if (item.exclusiveTo !== undefined && item.exclusiveTo !== heroId) {
+  if (boundElsewhere(state, item, heroId)) {
     throw new Error(`equipItem: ${itemId} is bound to another hero`)
   }
 
-  for (const [hid, h] of Object.entries(state.heroes) as [HeroId, OwnedHero][]) {
-    if (hid === heroId) continue
-    if (
-      h.equipment.weapon === itemId ||
-      h.equipment.armor === itemId ||
-      h.equipment.accessory === itemId
-    ) {
-      throw new Error(`equipItem: ${itemId} is already equipped by ${hid}`)
-    }
+  const wearer = wearerOf(state, itemId)
+  if (wearer !== null && wearer.id !== heroId) {
+    throw new Error(`equipItem: ${itemId} is already equipped by ${wearer.id}`)
   }
 
   return {
@@ -227,6 +287,26 @@ const STAT_KEYS = [
 ] as const
 
 /**
+ * An item's stat block as combat reads it (B42). Combat never reads evasion or accuracy,
+ * so no item source rolls EVA/ACC; an older item that still carries them has them folded
+ * into SPD and CRIT (TUNING.lobby.equipment.legacySubstats) instead of wasting the roll.
+ * Returns the same object when there is nothing to fold.
+ */
+export function combatSubstats(block: Partial<DerivedStats>): Partial<DerivedStats> {
+  const eva = block.evaPct ?? 0
+  const acc = block.accPct ?? 0
+  if (eva === 0 && acc === 0 && block.evaPct === undefined && block.accPct === undefined) return block
+  const L = E.legacySubstats
+  const { evaPct: _e, accPct: _a, ...rest } = block
+  void _e
+  void _a
+  const out: Partial<DerivedStats> = { ...rest }
+  if (eva !== 0) out.spd = (out.spd ?? 0) + Math.round(eva * L.evaToSpd)
+  if (acc !== 0) out.critPct = (out.critPct ?? 0) + Math.round(acc * L.accToCrit)
+  return out
+}
+
+/**
  * The combined flat bonus from a hero's equipped items: summed stat block, the
  * weapon's element override (if any), and all keyword tags concatenated. PURE.
  * Items absent from `inventory` are silently skipped (defensive).
@@ -246,8 +326,9 @@ export function equipmentBonus(
     if (id === null) continue
     const item = byId.get(id)
     if (item === undefined) continue
+    const bonus = combatSubstats(item.statBonus)
     for (const k of STAT_KEYS) {
-      const v = item.statBonus[k]
+      const v = bonus[k]
       if (v !== undefined) stats[k] = (stats[k] ?? 0) + v
     }
     if (item.element !== undefined && element === undefined) element = item.element

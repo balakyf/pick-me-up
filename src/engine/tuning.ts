@@ -647,6 +647,9 @@ export const TUNING = {
         A: { gold: 7200, promotionStone: 16 },
         S: { gold: 14000, promotionStone: 32 },
       } as Record<string, { gold: number; promotionStone: number }>,
+      /** Combat never reads evasion or accuracy (B42), so gear never rolls EVA/ACC: an older
+       *  item that still carries them gives SPD and CRIT at these rates instead. */
+      legacySubstats: { evaToSpd: 1, accToCrit: 0.5 },
     },
     /** Tower material faucet (thin trickle; Daily Dungeons are the primary source, Phase 5). */
     materialDrops: {

@@ -29,6 +29,7 @@ import { rngFor, chance, pick } from '../rng'
 import { attrStoneId } from '../promotion'
 import { SKILLS } from '../content'
 import { withFavor } from '../favor'
+import { releaseGear } from '../equipment'
 import type { GameState, OwnedHero, HeroId, MaterialId, GrowthGrades, RescueChoice } from '../types'
 
 const S = TUNING.lobby.synthesis
@@ -245,7 +246,7 @@ export function synthesize(state: GameState, input: SynthesisInput, _nowWorld = 
   }
 
   if (surv) heroes[surv.id] = surv
-  for (const sac of sacrifices) heroes[sac.id] = { ...heroes[sac.id]!, alive: false }
+  for (const sac of sacrifices) heroes[sac.id] = releaseGear({ ...heroes[sac.id]!, alive: false })
 
   // Witness Sanity hit: every other living hero (not the survivor, not the dead).
   const sacSet = new Set(input.sacrificeIds)

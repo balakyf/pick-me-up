@@ -10,7 +10,7 @@ import { JOBS, aptitude, jobFeeling, jobHolders, jobOpen, jobSeats, bondOf, rela
 import { canPromote, canAfford } from '../promotion'
 import { banquetWouldHelp } from '../kitchen'
 import { dailyUnlocked, dailyAttemptsLeft } from '../daily'
-import { equippedItemIds } from '../equipment'
+import { boundElsewhere, equippedItemIds } from '../equipment'
 import { GIFTS, favorTier, giftDelta } from '../favor'
 import { trainingOptions } from '../training'
 import { canFight, heroCp } from '../scout'
@@ -186,7 +186,7 @@ export function advise(state: GameState): Advice[] {
     for (const slot of ['weapon', 'armor', 'accessory'] as EquipmentSlot[]) {
       if (h.equipment[slot]) continue
       const item = state.inventory.find(
-        (i) => i.slot === slot && !worn.has(i.id) && !taken.has(i.id) && (i.exclusiveTo === undefined || i.exclusiveTo === h.id),
+        (i) => i.slot === slot && !worn.has(i.id) && !taken.has(i.id) && !boundElsewhere(state, i, h.id),
       )
       if (!item) continue
       taken.add(item.id)
