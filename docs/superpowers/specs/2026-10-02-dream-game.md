@@ -66,3 +66,10 @@ Two lanes run at a time (in separate worktrees) and merge before the next wave. 
 | 9 | **R · Balance pass 3** (sim-driven retune of everything) | `tuning.ts`, `sim/` |
 
 Each lane's detailed brief lives in its workflow prompt; its notes file records what shipped.
+
+## Progress
+
+| Wave | Status | Merge |
+|---|---|---|
+| 1 · A, B | merged, reviewed | `0e7a09b` |
+| 2 · C, D | merged, reviewed (1,300 tests; `npm run sim -- 30 3` in 32 s) | `1256083` |
