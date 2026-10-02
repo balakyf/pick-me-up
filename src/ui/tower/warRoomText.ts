@@ -135,6 +135,10 @@ export function altTitle(state: GameState, a: ForecastAlternative): string {
     }
     case 'focus':
       return t('Open with Focus on {name}', { name: t(a.focus?.name ?? '') })
+    case 'mark':
+      return t('Mark {name} before the fight', { name: t(a.focus?.name ?? '') })
+    case 'guard':
+      return t('Brace for its big moves')
   }
 }
 
@@ -147,6 +151,8 @@ export function altDetail(state: GameState, a: ForecastAlternative): string | nu
     return [ins.length > 0 ? t('in: {names}', { names: ins.join(', ') }) : '', outs.length > 0 ? t('out: {names}', { names: outs.join(', ') }) : ''].filter(Boolean).join(' · ')
   }
   if (a.kind === 'focus') return t('Your first order: every hero strikes it while it lives (one of this battle’s orders).')
+  if (a.kind === 'mark') return t('Free: every hero strikes it from the first blow, and sweeps hit it harder.')
+  if (a.kind === 'guard') return t('A standing order: the party braces the moment a foe winds up (one of this battle’s orders).')
   return null
 }
 
@@ -154,6 +160,10 @@ export function altDetail(state: GameState, a: ForecastAlternative): string | nu
 export function openingText(o: BattleOrder, names: Record<string, string>): string {
   if (o.kind === 'focus') return t('Opening order: Focus {name}', { name: names[o.enemyId] ?? o.enemyId })
   if (o.kind === 'protect') return t('Opening order: Protect {name}', { name: names[o.allyId] ?? o.allyId })
+  if (o.kind === 'guard') return o.onTelegraph ? t('Standing order: brace when a foe winds up') : t('Opening order: Guard')
+  if (o.kind === 'hold') return t('Opening order: Hold SP for the big one')
+  if (o.kind === 'unleash') return t('Opening order: Unleash {name}', { name: names[o.allyId] ?? o.allyId })
+  if (o.kind === 'swap') return t('Opening order: swap {a} and {b}', { a: names[o.a] ?? o.a, b: names[o.b] ?? o.b })
   return t('Opening order: Retreat')
 }
 

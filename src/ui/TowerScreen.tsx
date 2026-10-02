@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { GameState, FloorResult, CombatLog, BattleOrder } from '../engine/types'
+import type { GameState, FloorResult, CombatLog, BattleOrder, FocusDirective } from '../engine/types'
 import { scoutFloor, suggestParty, enterConcerns, type EnterConcern, type Forecast, type ForecastAlternative } from '../engine/scout'
 import { fitCount, ordersAllowed } from '../engine/tower'
 import type { Store } from '../engine/store'
@@ -83,6 +83,10 @@ export function TowerScreen({ state: live, store }: { state: GameState; store: S
   // An opening order (the forecast's "Open with Focus") belongs to this floor and attempt.
   const [opening, setOpening] = useState<{ at: string; orders: BattleOrder[] }>({ at: '', orders: [] })
   const openingOrders = opening.at === atKey ? opening.orders : []
+  // The free pre-battle mark and Protects (lane G) belong to this floor and attempt too.
+  const [directiveAt, setDirectiveAt] = useState<{ at: string; d: FocusDirective | undefined }>({ at: '', d: undefined })
+  const directive = directiveAt.at === atKey ? directiveAt.d : undefined
+  const setDirective = (d: FocusDirective | undefined) => setDirectiveAt({ at: atKey, d })
   const [openActs, setOpenActs] = useState<Set<string>>(() => new Set([actForFloor(current).id]))
 
   const currentRef = useRef<HTMLDivElement>(null)
@@ -123,7 +127,7 @@ export function TowerScreen({ state: live, store }: { state: GameState; store: S
   const report = useMemo(() => (current <= MAX_FLOOR && !hasEvent ? scoutFloor(state) : null), [state, current, hasEvent])
 
   // The crystal: the real fight, run many times (off the main thread), for the plan on the board.
-  const plan = useMemo(() => ({ opening: openingOrders }), [openingOrders])
+  const plan = useMemo(() => ({ opening: openingOrders, ...(directive !== undefined ? { focus: directive } : {}) }), [openingOrders, directive])
   // (Behind a battle the room keeps the forecast it showed when the party went in.)
   const view = useForecast(state, plan, report !== null)
 
@@ -160,9 +164,11 @@ export function TowerScreen({ state: live, store }: { state: GameState; store: S
     // An opening Focus is one of the battle's orders; only aim it at someone on this floor.
     const initial = openingOrders.filter((o) => o.kind !== 'focus' || names[o.enemyId] !== undefined)
     const first = initial.length > 0 ? initial : undefined
+    // The pre-battle mark only on a foe of this floor (the Protects are the party's own).
+    const focus = directive && (directive.focusEnemyId === undefined || names[directive.focusEnemyId] !== undefined) ? directive : directive ? { ...directive, focusEnemyId: undefined } : undefined
     let attempt: { state: GameState; result: FloorResult }
     try {
-      attempt = attemptFloorWithResult(pre, undefined, ballista, subvert || undefined, first) // capture the log for playback
+      attempt = attemptFloorWithResult(pre, focus, ballista, subvert || undefined, first) // capture the log for playback
     } catch (e) {
       setErr(t(e instanceof Error ? e.message.replace(/^\w+: /, '') : 'That failed'))
       return
@@ -171,10 +177,11 @@ export function TowerScreen({ state: live, store }: { state: GameState; store: S
     // reload shows the fight instead of applying it in silence.
     savePendingReplay(attempt.state, attempt.result)
     setFrozen(pre)
-    store.dispatch({ type: 'ATTEMPT_FLOOR', ballista, subvert: subvert || undefined, orders: first }) // advance the store identically (deterministic)
+    store.dispatch({ type: 'ATTEMPT_FLOOR', focus, ballista, subvert: subvert || undefined, orders: first }) // advance the store identically (deterministic)
     setPending(attempt.result)
     setCombat(attempt.result.result.log)
     setOpening({ at: '', orders: [] })
+    setDirectiveAt({ at: '', d: undefined })
     // Mid-battle orders re-resolve the same fight from the same state (deterministic up to
     // the order's tick) and revise the attempt the store just recorded.
     const given: BattleOrder[] = [...initial]
@@ -184,8 +191,8 @@ export function TowerScreen({ state: live, store }: { state: GameState; store: S
       give: (order) => {
         try {
           const next = [...given, order]
-          const r = attemptFloorWithResult(pre, undefined, ballista, subvert || undefined, next)
-          store.revise({ type: 'ATTEMPT_FLOOR', ballista, subvert: subvert || undefined, orders: next })
+          const r = attemptFloorWithResult(pre, focus, ballista, subvert || undefined, next)
+          store.revise({ type: 'ATTEMPT_FLOOR', focus, ballista, subvert: subvert || undefined, orders: next })
           given.push(order)
           setPending(r.result)
           savePendingReplay(r.state, r.result)
@@ -207,6 +214,7 @@ export function TowerScreen({ state: live, store }: { state: GameState; store: S
     const same = a.slots.every((s, i) => (s ?? null) === (live.party.slots[i] ?? null) && a.lines[i] === live.party.lines[i])
     if (!same) store.dispatch({ type: 'SET_PARTY', slots: a.slots, lines: a.lines })
     setOpening({ at: atKey, orders: [...a.opening] })
+    if (a.directive !== undefined) setDirective(a.directive)
   }
 
   function resolve(option: string) {
@@ -266,6 +274,9 @@ export function TowerScreen({ state: live, store }: { state: GameState; store: S
           onUse={adopt}
           onClearOpening={() => setOpening({ at: '', orders: [] })}
           onToEvent={toEvent}
+          directive={directive}
+          onDirective={setDirective}
+          encounter={preview}
         >
           <p className="sub">
             {t('100 floors of permadeath. Falling heroes are gone for good.')}

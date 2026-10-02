@@ -258,6 +258,25 @@ describe('what would change the odds', () => {
     }
   })
 
+  it('lane G: a free mark rides on the directive (no order spent); a standing Guard only where foes wind up', () => {
+    const s = party(16, 20)
+    const base = forecastFloor(s)!
+    const alts = forecastAlternatives(s, base)
+    for (const a of alts) {
+      if (a.kind === 'mark') {
+        expect(a.directive?.focusEnemyId).toBe(base.deadliest?.unitId)
+        expect(a.opening).toEqual([])
+        expect(a.forecast).toEqual(forecastFloor(s, { slots: a.slots, lines: a.lines, opening: a.opening, focus: a.directive }))
+        expect(a.forecast.directive?.focusEnemyId).toBe(a.directive?.focusEnemyId)
+      }
+      if (a.kind === 'guard') expect(a.opening).toEqual([{ tick: 1, kind: 'guard', onTelegraph: true }])
+    }
+    // F20's dragon winds up its breath: the guard plan is weighed there (it may not improve the odds),
+    // and never on a floor where nothing winds up (F1's goblins).
+    const quiet = party(16, 1)
+    expect(forecastAlternatives(quiet, forecastFloor(quiet)!).some((a) => a.kind === 'guard')).toBe(false)
+  })
+
   it('threat bands: the names stay, the meaning is the forecast', () => {
     expect(threatFor(100, 0)).toBe('safe')
     expect(threatFor(30, 0)).toBe('deadly')

@@ -5,7 +5,7 @@
  * challenges, the bonds, and Enter.
  */
 import type { ReactNode, Ref } from 'react'
-import type { BattleOrder, GameState } from '../../engine/types'
+import type { BattleOrder, Encounter, FocusDirective, GameState } from '../../engine/types'
 import type { ForecastAlternative } from '../../engine/scout/forecast'
 import type { ScoutReport } from '../../engine/scout'
 import type { Store } from '../../engine/store'
@@ -15,6 +15,7 @@ import { TowerChallenges } from '../challenge/TowerChallenges'
 import { EventPanel } from './EventPanel'
 import { ForecastPanel } from './ForecastPanel'
 import { PartyStrip } from './PartyStrip'
+import { PreBattleOrders } from './PreBattleOrders'
 import { SynergyPanel } from './SynergyPanel'
 import { enterBlockText, type EnterBlock } from './towerText'
 import { truthStanding } from './warRoomText'
@@ -39,6 +40,9 @@ export function CommandPanel({
   onUse,
   onClearOpening,
   onToEvent,
+  directive,
+  onDirective,
+  encounter = null,
   children,
 }: {
   state: GameState
@@ -57,6 +61,10 @@ export function CommandPanel({
   onUse: (a: ForecastAlternative) => void
   onClearOpening: () => void
   onToEvent: () => void
+  /** The free pre-battle mark and Protects (lane G), and the floor they are given on. */
+  directive?: FocusDirective
+  onDirective?: (d: FocusDirective | undefined) => void
+  encounter?: Encounter | null
   /** The room's banners (the tower's line, the summit, the loop), shown first. */
   children?: ReactNode
 }) {
@@ -85,12 +93,15 @@ export function CommandPanel({
           onClearOpening={onClearOpening}
           onUse={onUse}
           onSuggest={onSuggest}
+          mark={directive?.focusEnemyId}
+          onMark={onDirective ? (id) => onDirective({ ...directive, focusEnemyId: id }) : undefined}
         />
       )}
 
       {climbing && (
         <div className="pframe war-enter">
           <PartyStrip state={state} />
+          {onDirective && <PreBattleOrders state={state} encounter={encounter} directive={directive} onChange={onDirective} />}
           <div className="war-enter-row">
             <span className="enter-wrap" title={block ? enterBlockText(block) : undefined}>
               <button className="btn primary big" onClick={onEnter} disabled={block !== null}>
