@@ -1,0 +1,5 @@
+/* ── The Tower screen (TowerScreen.tsx, tower/*) ─────────────────────────────── */
+/* A disabled Enter explains itself, under the current floor's description. */
+.enter-wrap { display: inline-flex; flex: none; }
+.enter-why { margin-top: 4px; font-size: 13px; color: var(--warn); }
+.enter-why .linkish { font-size: 13px; }
