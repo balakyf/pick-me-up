@@ -7,12 +7,15 @@ import { toWorldTime } from '../../engine/time'
 import { t } from '../i18n/i18n'
 import { matLabel, timeLeft } from './shared'
 import { HeroTag, pickerName } from '../hero/heroLabel'
+import { PromotionPlanner } from '../promotion/PromotionPlanner'
 
 const SKIP_GEMS = TUNING.lobby.promotion.skipGemCost
 
 /** The Promotion Chamber's actions: promote at-cap heroes, or skip a running timer. */
 export function PromotionAction({ state, store }: { state: GameState; store: Store }) {
   const [err, setErr] = useState<string | null>(null)
+  // The hero whose ceremony is being prepared (the planner shows the preview and choices).
+  const [open, setOpen] = useState<string | null>(null)
   const nowWorld = toWorldTime(Date.now())
   const living = (Object.values(state.heroes) as OwnedHero[]).filter((h) => h.alive)
   const promoting = living.filter((h) => h.promotion !== null)
@@ -54,7 +57,7 @@ export function PromotionAction({ state, store }: { state: GameState; store: Sto
         const affordable = canAfford(state, h)
         const rankCover = promotionPayment(state, h)?.rankMaterial ?? 0
         return (
-          <div key={h.id} className="promo-row">
+          <div key={h.id} className="promo-row" style={{ flexWrap: 'wrap' }}>
             <span className="promo-name">
               {pickerName(state, h)} <HeroTag hero={h} /> → {promotionTargetStar(h)}★
             </span>
@@ -65,13 +68,26 @@ export function PromotionAction({ state, store }: { state: GameState; store: Sto
               {rankCover > 0 && ` · ${t('{n} Rank Mat cover the missing stones', { n: rankCover })}`}
             </span>
             <button
-              className="btn sm"
-              onClick={() => dispatch({ type: 'PROMOTE_HERO', heroId: h.id })}
-              disabled={!affordable}
-              title={affordable ? t('Begin promotion') : t('Not enough materials')}
+              className={`btn sm ${open === h.id ? 'open' : ''}`}
+              onClick={() => setOpen(open === h.id ? null : h.id)}
+              aria-expanded={open === h.id}
+              title={t('See what the promotion will do, and choose')}
             >
-              {t('⬆ Promote')}
+              {open === h.id ? t('▾ Close') : t('⬆ Promote…')}
             </button>
+            {open === h.id && (
+              <div style={{ flexBasis: '100%' }}>
+                <PromotionPlanner
+                  state={state}
+                  hero={h}
+                  affordable={affordable}
+                  onPromote={(choice) => {
+                    dispatch({ type: 'PROMOTE_HERO', heroId: h.id, ...choice })
+                    setOpen(null)
+                  }}
+                />
+              </div>
+            )}
           </div>
         )
       })}

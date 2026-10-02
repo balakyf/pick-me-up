@@ -1,0 +1,78 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   The promotion ceremony (lane J): the overlay that plays a completed promotion,
+   and the Promotion Chamber's planner (preview + choices before paying).
+   ═══════════════════════════════════════════════════════════════════════════ */
+.overlay.pr { z-index: 190; align-items: center; justify-content: center; padding: 16px; cursor: pointer; background: radial-gradient(ellipse at 50% 40%, #2a1a48ee 0%, #06030ef2 70%); }
+.pr-card {
+  position: relative; width: min(440px, 100%); max-height: calc(100dvh - 32px); overflow: auto; cursor: default;
+  padding: 16px 16px 14px; text-align: center;
+  background: linear-gradient(180deg, var(--win-top), var(--win-bot));
+  border: 3px solid var(--rar, var(--gold)); box-shadow: 0 0 0 2px var(--rim-dark), inset 0 0 0 2px #4a3e8e, 0 0 40px var(--rar, var(--gold));
+  animation: pr-in 0.4s steps(5) both;
+}
+@keyframes pr-in { from { transform: scale(0.85); opacity: 0; } to { transform: none; opacity: 1; } }
+.pr-title { font-size: 14px; letter-spacing: 2px; text-transform: uppercase; color: var(--ink-faint); }
+.pr-hero { position: relative; display: flex; justify-content: center; align-items: flex-end; gap: 8px; margin: 8px 0 4px; }
+.pr-bust { width: 112px; height: 112px; border: 2px solid var(--rim-dark); box-shadow: 0 0 0 2px #3e3478; background: linear-gradient(180deg, #4a3e8e66, #120e2c); }
+.pr-bust img { display: block; width: 100%; height: 100%; }
+.pr-body { width: 60px; height: 80px; animation: pr-step 0.6s steps(5) both; }
+@keyframes pr-step { from { transform: translateX(-30px); opacity: 0; filter: brightness(3); } to { transform: none; opacity: 1; filter: none; } }
+.pr-name { font-size: 22px; font-weight: 600; }
+
+.pr-stars { position: relative; display: flex; justify-content: center; align-items: center; gap: 10px; margin-top: 6px; min-height: 30px; }
+.pr-stars .stars { font-size: 22px; letter-spacing: 2px; }
+.pr-old { opacity: 0.55; }
+.pr-stars.on .pr-old { opacity: 0.35; }
+.pr-arrow { color: var(--ink-dim); }
+.pr-new { animation: pr-pop 0.5s steps(5) both; }
+.pr-new .stars { font-size: 28px; text-shadow: 0 0 10px currentColor; }
+@keyframes pr-pop { 0% { transform: scale(2.6); opacity: 0; filter: brightness(3); } 100% { transform: none; opacity: 1; filter: none; } }
+.pr-burst { position: absolute; left: 50%; top: 50%; width: 40px; height: 40px; margin: -20px 0 0 -20px; border: 4px solid var(--rar, var(--gold)); border-radius: 50%; pointer-events: none; animation: pr-ring 0.7s steps(7) forwards; }
+@keyframes pr-ring { from { transform: scale(0.4); opacity: 1; } to { transform: scale(6); opacity: 0; } }
+.pr-cap { font-size: 13px; margin-top: 2px; }
+
+.pr-grades { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; margin: 12px 0 4px; }
+.pr-grade { display: flex; flex-direction: column; align-items: center; padding: 4px 2px; background: #1a1438; border: 1px solid #3e3478; }
+.pr-grade.up { border-color: #6a5ab0; }
+.pr-grade.big { border-color: var(--gold-deep); background: #2c2012; }
+.pr-grade-k { font-size: 11px; color: var(--ink-faint); }
+.pr-grade-v { font-size: 22px; font-weight: 700; line-height: 1.1; }
+.pr-grade.up .pr-grade-v { color: #c9b8ff; }
+.pr-grade.big .pr-grade-v { color: var(--gold); }
+.pr-grade-d { font-size: 12px; color: var(--good); min-height: 15px; }
+
+.pr-line { margin-top: 8px; font-size: 15px; animation: pr-pop 0.4s steps(4) both; }
+.pr-classline { color: #d6ecff; }
+.pr-engr { color: #ffd6ea; }
+.pr-trait { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; justify-content: center; color: var(--gold); }
+.pr-skill { margin-top: 8px; padding: 6px 8px; text-align: left; background: #1e2a3a; border: 1px solid #5a86b0; animation: pr-pop 0.4s steps(4) both; }
+.pr-skill.grade-A, .pr-skill.grade-S { border-color: var(--gold-deep); }
+.pr-skill-head { font-size: 15px; font-weight: 600; }
+.pr-skill-grade { display: inline-block; min-width: 18px; text-align: center; background: #5a86b0; color: #fff; margin-right: 4px; }
+.pr-skill-blurb { font-size: 13px; color: var(--ink-dim); margin-top: 2px; }
+.pr-actions { display: flex; gap: 8px; justify-content: center; margin-top: 14px; min-height: 36px; align-items: center; }
+.pr-hint { font-size: 13px; }
+.pr-calm .pr-card, .pr-calm .pr-new, .pr-calm .pr-line, .pr-calm .pr-skill, .pr-calm .pr-body { animation: none; }
+.pr-calm .pr-burst { display: none; }
+
+/* ── The Promotion Chamber's planner ─────────────────────────────────────── */
+.promo-plan { margin: 4px 0 8px; padding: 8px 10px; background: #1a1438; border: 2px solid #4a3e8e; display: flex; flex-direction: column; gap: 8px; font-size: 14px; }
+.promo-plan h5 { margin: 0; font-size: 13px; color: var(--ink-faint); text-transform: uppercase; letter-spacing: 1px; font-weight: 400; }
+.promo-plan-top { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; }
+.promo-grades { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; }
+.promo-grade { text-align: center; padding: 2px; background: #120e2c; border: 1px solid #3e3478; font-size: 13px; }
+.promo-grade b { display: block; font-size: 16px; }
+.promo-grade.bonus { border-color: var(--gold-deep); }
+.promo-grade.bonus b { color: var(--gold); }
+.promo-choices { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 6px; }
+.promo-choice {
+  font: inherit; text-align: left; color: var(--ink); cursor: pointer; padding: 6px 8px; min-height: 44px;
+  background: #120e2c; border: 2px solid #3e3478; display: flex; flex-direction: column; gap: 2px;
+}
+.promo-choice:hover { border-color: #6a5ab0; }
+.promo-choice.sel { border-color: var(--gold); background: #2c2012; box-shadow: 0 0 10px #f2c75c55; }
+.promo-choice .pc-name { font-weight: 600; font-size: 14px; }
+.promo-choice .pc-note { font-size: 12px; color: var(--ink-dim); }
+.promo-choice .pc-tag { font-size: 11px; color: var(--ink-faint); }
+.promo-plan-foot { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; }
+.promo-row .btn.sm.open { border-color: var(--gold); }

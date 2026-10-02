@@ -35,6 +35,7 @@ import { KeyboardHelp } from './qol/KeyboardHelp'
 import { SaveTransfer, lastExportText } from './qol/SaveTransfer'
 import { BackupReminder } from './qol/BackupReminder'
 import { ToastHost } from './qol/Toast'
+import { PromotionCeremonyHost } from './promotion/PromotionReveal'
 import { useTimeToasts } from './qol/toastStore'
 import { clearToasts } from './qol/toastBus'
 import { devToolsEnabled } from './qol/devTools'
@@ -368,6 +369,8 @@ export function App() {
       {demoLog && <BattleScene log={demoLog} state={state} onDone={() => setDemoLog(null)} />}
       {/* A floor attempt the Master never saw the end of (a reload mid-battle) plays first (B14). */}
       <PendingReplayHost key={`${state.accountId}|${epoch}`} state={state} />
+      {/* A promotion that completed plays its ceremony (lane J) — never over a climb. */}
+      <PromotionCeremonyHost key={`pc|${state.accountId}|${epoch}`} state={state} hold={view === 'tower' || demoLog !== null} />
       <ToastHost />
     </div>
   )
