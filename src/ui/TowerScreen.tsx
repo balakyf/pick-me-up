@@ -122,7 +122,8 @@ export function TowerScreen({ state: live, store }: { state: GameState; store: S
 
   // The crystal: the real fight, run many times (off the main thread), for the plan on the board.
   const plan = useMemo(() => ({ opening: openingOrders }), [openingOrders])
-  const view = useForecast(live, plan, frozen === null && report !== null)
+  // (Behind a battle the room keeps the forecast it showed when the party went in.)
+  const view = useForecast(state, plan, report !== null)
 
   const worldEnd = current === TUNING.tower.worldEndFloor && !state.tower.worldEnded && !state.tower.worldSaved
 

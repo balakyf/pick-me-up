@@ -107,7 +107,7 @@ function Roster({ report }: { report: ScoutReport }) {
 /** "What would change the odds": each plan re-forecast, one click to adopt it. */
 function OddsChangers({ state, view, onUse }: { state: GameState; view: ForecastView; onUse: (a: ForecastAlternative) => void }) {
   const base = view.forecast
-  if (!base || base.fielded === 0 && (view.alternatives ?? []).length === 0) return null
+  if (!base || (base.fielded === 0 && (view.alternatives ?? []).length === 0)) return null
   return (
     <div className="fc-alts">
       <div className="fc-alts-title">{t('What would change the odds')}</div>
