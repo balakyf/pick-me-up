@@ -188,12 +188,9 @@ describe('attemptDaily', () => {
   it('survivors auto-learn skills from their casts (reported on the result)', () => {
     const xpToLv2 = TUNING.skills.xpToNext[1]!
     const hero = { ...strongHero(), skills: [{ id: 'power_strike', level: 1, xp: xpToLv2 - 1 }] }
-    // A dungeon deep enough that its foes outlast a basic swing (the AI keeps its SP when
-    // a plain blow would kill just as well).
-    const { state: after, result } = attemptDaily(dailyState({ hero, highestCleared: 70 }), inDay(0))
-    const level = after.heroes['h_str' as HeroId]!.skills[0]!.level
-    expect(level).toBeGreaterThanOrEqual(2)
-    expect(result.skillProgress).toContainEqual({ kind: 'level-up', heroId: 'h_str', skillId: 'power_strike', level })
+    const { state: after, result } = attemptDaily(dailyState({ hero }), inDay(0))
+    expect(after.heroes['h_str' as HeroId]!.skills[0]!.level).toBe(2)
+    expect(result.skillProgress).toContainEqual({ kind: 'level-up', heroId: 'h_str', skillId: 'power_strike', level: 2 })
   })
 
   it('is deterministic in (state, nowWorld)', () => {

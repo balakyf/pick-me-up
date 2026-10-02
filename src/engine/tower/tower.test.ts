@@ -836,14 +836,10 @@ describe('playFloor — skills auto-learn + merge (Layer 1 §2.4)', () => {
   it("a survivor's cast skill gains use-XP and levels up at the threshold", () => {
     const xpToLv2 = TUNING.skills.xpToNext[1]!
     const crusher = { ...makeCrusher('h_crush'), skills: [{ id: 'power_strike', level: 1, xp: xpToLv2 - 1 }] }
-    // F30's Ancient Stone Statue outlasts a basic swing (the AI keeps its SP when a plain
-    // blow would kill just as well, so a floor of one-hit goblins would teach nothing).
-    const { state: next, result } = playFloor(makeState({ heroes: [crusher], currentFloor: 30 }))
+    const { state: next, result } = playFloor(makeState({ heroes: [crusher] }))
     expect(result.result.skillCasts['h_crush']?.power_strike ?? 0).toBeGreaterThanOrEqual(1)
-    // At least one level (a long fight may teach more than one).
-    const level = next.heroes['h_crush' as HeroId]!.skills[0]!.level
-    expect(level).toBeGreaterThanOrEqual(2)
-    expect(result.skillProgress).toContainEqual({ kind: 'level-up', heroId: 'h_crush', skillId: 'power_strike', level })
+    expect(next.heroes['h_crush' as HeroId]!.skills[0]!.level).toBe(2)
+    expect(result.skillProgress).toContainEqual({ kind: 'level-up', heroId: 'h_crush', skillId: 'power_strike', level: 2 })
   })
 
   it('a hero holding both recipe inputs at minLevel merges them after the floor', () => {

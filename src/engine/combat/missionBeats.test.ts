@@ -224,6 +224,24 @@ describe('mission beats', () => {
       expect(dry.outcome).toBe('retreat')
     })
 
+    it('a phased foe the blades could hurt is out of reach while an immune wavemate shields it', () => {
+      const priest = enemy('priest', { maxHP: 50, spd: 1, pAtk: 0 }, { keywords: [{ kind: 'phased' }] })
+      const r = runBattle([hero('a', { spd: 100 })], enc([[warden(), priest]], [{ kind: 'annihilate' }]), 16)
+      expect(r.outcome).toBe('retreat')
+      expect(beats(r, 'futile')[0]!.params).toEqual({ unitId: 'warden' })
+      // …but a hurtable shield is only in the way: the fight goes on.
+      const goblin = enemy('goblin', { maxHP: 1e6, spd: 1, pAtk: 0 })
+      const held = runBattle([hero('a', { spd: 100 })], enc([[goblin, priest]], [{ kind: 'annihilate' }], 200), 16)
+      expect(beats(held, 'futile')).toEqual([])
+    })
+
+    it('a mission NPC never strikes, so its spells do not keep a futile fight going', () => {
+      const vip = hero('vip', { maxHP: 1e6, mAtk: 500 }, { isNpc: true, targetTag: 'vip', skills: [bolt], maxSP: 100, currentSP: 100 })
+      const r = runBattle([hero('a', { spd: 100 })], enc([[warden()]], [{ kind: 'protect', targetTag: 'vip' }, { kind: 'annihilate' }], null, { allies: [vip] }), 17)
+      expect(r.outcome).toBe('retreat')
+      expect(beats(r, 'futile')).toHaveLength(1)
+    })
+
     it('never on a mission waiting or walking can win (a Survival holds to the bell)', () => {
       const r = runBattle([hero('a', { maxHP: 1e6, spd: 100 })], enc([[warden()]], [{ kind: 'survive', ticks: 120 }], 120), 15)
       expect(r.outcome).toBe('win')

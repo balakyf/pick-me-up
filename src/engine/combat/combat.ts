@@ -351,15 +351,13 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
 
   // ── Damage estimate (the AI's integer-math preview; draws no RNG) ─────────
   /**
-   * The damage `actor`'s `skill` can be expected to deal to `target`: attack × skill
+   * The damage `actor`'s `skill` can be expected to deal to `target` (uncapped — chooseSkill
+   * caps each blow at the target's current HP, so overkill is wasted): attack × skill
    * × element × mitigation × the expected crit, the actor's keyword multipliers, the
    * target's immunity / resistances / vulnerabilities / guards, the line and floor
-   * multipliers, and a sweep's falloff over `spread` foes — capped at the target's HP
-   * (overkill is wasted). An aegis charge negates the next blow, so it scores 0.
+   * multipliers, and a sweep's falloff over `spread` foes. An aegis charge negates the next
+   * blow, so it scores 0.
    */
-  const estimateHit = (actor: MutUnit, skill: SkillEffect, target: MutUnit, spread: number, all: readonly MutUnit[]): number =>
-    Math.min(estimateBlow(actor, skill, target, spread, all), Math.max(0, target.currentHP))
-  /** The uncapped expected blow (estimateHit before the target's HP caps it). */
   const estimateBlow = (actor: MutUnit, skill: SkillEffect, target: MutUnit, spread: number, all: readonly MutUnit[]): number => {
     if (target.aegis > 0 || immuneTo(target.ref, skill)) return 0
     const aStats = actor.ref.stats
@@ -660,8 +658,9 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
   // Each castable skill is scored by the damage it can be expected to deal, summed over
   // the foes it would strike and capped at each foe's HP (overkill and immunity count;
   // a sweep's falloff counts), so a single-target skill wins on a lone boss and a sweep
-  // wins on a crowd. Ties go to the cheaper skill (SP, then HP), then to list order, so
-  // the free basic attack is kept when nothing beats it. No RNG is drawn.
+  // wins on a crowd. Ties (both kill, or both do nothing) never pay HP for nothing, then go
+  // to the bigger uncapped blow (a hero practises its skills), then to the cheaper SP, then
+  // to list order. No RNG is drawn.
   const castable = (actor: MutUnit, s: SkillEffect): boolean => canCast(actor.currentSP, actor.currentHP, actor.ref.stats.maxHP, s)
   /** Equal expected damage (both kill, both do nothing): never pay HP for nothing; else
    *  the bigger blow — a hero practises the skill it knows (skills level by use) — else
@@ -763,15 +762,21 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
    * FUTILITY: nothing the party still holds can hurt any foe it has to beat — a squad of
    * blades against a lone, physical-immune Fragment Warden. It can only get worse (SP
    * never refills, a foe falls only to a blow), so the party falls back at once instead of
-   * swinging IMMUNE until it dies or the clock runs out. The foe the beat names is the
+   * swinging IMMUNE until it dies or the clock runs out. Only the party's own heroes count
+   * (a mission NPC never strikes), and a phased foe the party could hurt is out of reach
+   * while a wavemate it cannot hurt still shields it. The foe the beat names is the
    * front-most one standing.
    */
   const futileFoe = (): MutUnit | null => {
     if (winsWithoutBlows) return null
     const foes = livingEnemies().filter((e) => !isLooming(e))
     if (foes.length === 0) return null
-    const strikes = heroes.filter((h) => h.alive).flatMap(strikesOf)
-    if (foes.some((f) => strikes.some((s) => !immuneTo(f.ref, s)))) return null
+    const strikes = heroes.filter((h) => h.alive && !h.ref.isNpc).flatMap(strikesOf)
+    const hurtableFoe = (f: MutUnit): boolean => strikes.some((s) => !immuneTo(f.ref, s))
+    /** The living, non-phased wavemates whose presence keeps a phased foe untargetable. */
+    const shieldsOf = (f: MutUnit): MutUnit[] => foes.filter((o) => o.wave === f.wave && o.id !== f.id && !isPhased(o))
+    const reachable = (f: MutUnit): boolean => hurtableFoe(f) && (isTargetable(f) || shieldsOf(f).every(hurtableFoe))
+    if (foes.some(reachable)) return null
     return frontMost(foes)
   }
 
