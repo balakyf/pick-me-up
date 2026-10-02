@@ -10,7 +10,7 @@
  *   1. roll star            (Normal rate table §1.2, raised by the Rising Quality Floor §1.3)
  *   2. roll class           (Mage = gacha-only and rare; 1★/2★ → classless)
  *   3. per attribute        roll base + growth grade within the star envelope (Layer 0 §4.2)
- *   4. attach skills/portrait/element
+ *   4. attach skills/portrait/element (a classed 3★+ arrives with its class skill — no draw)
  *   5. 4★+: class skill + extra skills, a bound exclusive weapon, an engraving (§5.4)
  *   6. mark hero ID consumed → "infinite, all unique" (§1.4)
  *
@@ -391,6 +391,11 @@ export function rollHeroOfStar(
   }
 }
 
+/** The skills a procedural hero is summoned with: its class's signature skill, if classed. */
+export function startingSkillIds(heroClass: HeroClass | null): string[] {
+  return heroClass !== null ? [CLASS_SKILL[heroClass]] : []
+}
+
 function rollBaseHero(
   rng: Rng,
   star: Star,
@@ -451,7 +456,9 @@ function rollBaseHero(
     element: elemDraw.value,
     baseAttrs: attrDraw.baseAttrs,
     growthGrades: attrDraw.grades,
-    skillIds: [],
+    // A classed hero (3★+) arrives knowing its class's signature skill (lane J). No draw:
+    // every Normal pull's stream is unchanged; 4★+ kits already start with it.
+    skillIds: startingSkillIds(classDraw.value),
     portraitToken: portraitDraw.value,
     origin: 'procedural',
   }

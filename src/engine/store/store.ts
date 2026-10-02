@@ -161,7 +161,7 @@ function reduceCore(state: GameState | null, cmd: Command, nowWorld: number): Ga
       return banquet(current)
 
     case 'PROMOTE_HERO':
-      return startPromotion(current, cmd.heroId, nowWorld)
+      return startPromotion(current, cmd.heroId, nowWorld, { heroClass: cmd.heroClass, skillId: cmd.skillId })
 
     case 'UPGRADE_FACILITY':
       return startUpgrade(current, cmd.facility, nowWorld)

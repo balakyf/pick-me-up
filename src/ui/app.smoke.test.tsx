@@ -232,15 +232,26 @@ describe('App smoke — the summon reveal', () => {
       })
       openPlace('Mobius Summon')
       clickButton('Summon ×10')
-      // The pull is already saved; the reveal is cosmetic and starts at hero 1 of 10.
+      // The pull is already saved; the reveal is cosmetic. A ten-pull opens on its ten orbs
+      // (lane J), then starts at hero 1 of 10.
       expect(Object.keys(getStore().getState()!.heroes).length).toBe(11)
       expect(container.querySelector('.sr')).not.toBeNull()
+      expect(container.textContent).toContain('10 lights answer the call')
+      expect(container.querySelectorAll('.sr-orbs.big .sr-orb').length).toBe(10)
+      act(() => {
+        vi.advanceTimersByTime(2500)
+      })
       expect(container.textContent).toContain('1 / 10')
-      // The beam resolves into a card on its own…
+      // The beam resolves into a card on its own, and its second beat stamps what they brought…
       act(() => {
         vi.advanceTimersByTime(5000)
       })
       expect(container.querySelector('.sr-card')).not.toBeNull()
+      act(() => {
+        vi.advanceTimersByTime(1000)
+      })
+      expect(container.querySelector('.sr-stamps .trait-chip')).not.toBeNull()
+      expect(container.querySelector('.sr-greet')?.textContent?.length).toBeGreaterThan(4)
       // …and Space moves on to the next hero.
       act(() => {
         window.dispatchEvent(new KeyboardEvent('keydown', { key: ' ' }))
@@ -251,8 +262,11 @@ describe('App smoke — the summon reveal', () => {
       const minis = Array.from(container.querySelectorAll('.sr-mini'))
       expect(minis.length).toBe(10)
       const starsOf = (el: Element) => (el.querySelector('.stars')?.textContent ?? '').length
-      const stars = minis.map(starsOf)
-      expect(stars).toEqual([...stars].sort((a, b) => b - a)) // best first
+      // Best first within each group (a bond group the pull formed is gathered on its own).
+      for (const g of Array.from(container.querySelectorAll('.sr-group'))) {
+        const stars = Array.from(g.querySelectorAll('.sr-mini')).map(starsOf)
+        expect(stars).toEqual([...stars].sort((a, b) => b - a))
+      }
       expect(container.querySelectorAll('.sr-mini.best').length).toBe(1)
       clickButton('Done')
       expect(container.querySelector('.sr')).toBeNull()

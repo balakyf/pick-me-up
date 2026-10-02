@@ -41,6 +41,7 @@ import type {
 import { personalityOf, chemistry, type Personality } from './personality'
 import { JOB_PLACE, jobOpen, jobTier, workPower, aptitude, jobFeeling } from './jobs'
 import { practiceFocus, practise } from '../training/training'
+import { traitLife } from '../content/traits'
 import { activityNudge, estateLifeMods, estateLive, instructorMult, type EstateLifeMods } from '../estate/lifeHooks'
 import { weatherAt, type Weather } from '../estate/weather'
 
@@ -647,7 +648,8 @@ export function stepLife(state: GameState, nowWorld: number): GameState {
       const n = w.life.needs
       const sleeping = kind === 'sleep'
       if (!sleeping) n.energy -= L.decay.energy
-      n.hunger -= L.decay.hunger
+      // An Iron Stomach gets hungry more slowly (an innate trait, lane J).
+      n.hunger -= L.decay.hunger * (1 - (traitLife(w.hero).hungerSlower ?? 0))
       n.social -= L.decay.social * (0.5 + w.p.sociability)
       n.fun -= L.decay.fun
       switch (kind) {
@@ -673,7 +675,8 @@ export function stepLife(state: GameState, nowWorld: number): GameState {
           w.xp = applyXp(w.xp, gain, w.hero.star)
           n.fun += 2
           // Free time in the yard also works on a skill of the hero's own choosing.
-          const pr = practise(w.hero, w.life.practice, centreLevel, trainMult)
+          // A Quick Study picks a skill up faster (an innate trait, lane J).
+          const pr = practise(w.hero, w.life.practice, centreLevel, trainMult * (1 + (traitLife(w.hero).practiceMore ?? 0)))
           w.hero = pr.hero
           w.life.practice = pr.practice
           if (pr.gained) {

@@ -662,6 +662,37 @@ const LAST_WORDS: ByVoice = {
   grim: ['So this is the floor. Figures.', 'Do not waste this, Master.'],
 }
 
+/** The first thing a hero says to the Master, out of the crystal (the summon reveal, lane J). */
+const GREETING: ByVoice = {
+  any: ['Pick me up, and I will not let you down.', 'Where am I? …Oh. The tower.', 'You called? I came.'],
+  cheerful: ['Pick me up! …You already did? Ha!', 'Hello, Master! I promise I am worth it!', 'Pick me up! I knew you would!'],
+  formal: ['At your service, Master. I will not disappoint.', 'Summoned and sworn. Command me.', 'An honour, Master. Where do we begin?'],
+  rough: ['Right. Who do I hit?', 'You picked me. Hope you know what you are doing.', 'Bit bright in here. Where is the fight?'],
+  quiet: ['…Hello. I am here.', '…You chose me? Thank you.', '…I will do my best.'],
+  grim: ['Another tower. Another master. Let us see how long this one lasts.', 'I will climb. I make no promises past that.', 'So it begins again.'],
+}
+
+/** Canon cameos greet the Master in their own words. */
+const CAMEO_GREETING: Record<string, string> = {
+  'Islat Han': 'Not the first floor. Not this time. I am ready, Master.',
+  'Jenna Cirai': 'Field medic, reporting! Who needs patching up?',
+  'Aaron Delcut': 'Aaron Delcut. I will hold the line, whatever it costs.',
+  Dika: '…Fascinating. A summoning circle this size? Show me everything.',
+  Ridigeon: 'Ha! Finally, someone with taste. Point me at something big.',
+  'Muden Nighdelk': 'The stars said you would call. They are rarely wrong.',
+  'Nihaku Gastfeel': 'Nihaku Gastfeel. My spear is yours, Master.',
+  Anasis: 'Hello, hello! Is this the tower? It is so tall!',
+  Kishasha: '…Do not stand so close. I bite.',
+}
+
+/** What a hero says as they step out of the crystal: in their voice, the same every time. */
+export function greeting(hero: Pick<OwnedHero, 'id' | 'name' | 'star' | 'heroClass' | 'portraitToken'>): string {
+  const authored = CAMEO_GREETING[hero.name]
+  if (authored) return t(authored)
+  const p = personalityOf(hero)
+  return render(GREETING, p.voice, `greet|${hero.id}`, {})
+}
+
 /**
  * A fallen hero's last words — the same every time they are remembered. With `taken`
  * (the words already spoken by others who fell beside them), the pick moves on through

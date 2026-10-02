@@ -382,3 +382,88 @@ in about 1 % of fights (they re-resolve only fights that went badly).
   foes spend turns on taunts, bracing and wind-ups the party can kill through. Act V filler
   could take a small budget step if lane R wants the old pace back.
 - Casual deaths per attempt are level (0.506 → 0.522 over 6 seeds): casual never orders.
+
+## Heroes are people: traits, starting skills, the ceremony (2026-10-02, lane J)
+
+Base f282864 (waves 1–4 merged). Lane J adds power in four places and retunes only its own
+numbers (`TUNING.traits`, `TUNING.ceremony`, the trait magnitudes in `content/traits.ts`); no
+shared budget moved, and the golden combat values did not move (Han's unit is hand-built).
+
+### What moved (and why)
+
+- **Innate traits** on every hero: small keywords and stat bonuses (a frenzy, a guard, a
+  lifesteal, an opener, crit or status-resistance points, ±2–9 % stats) and a CP term (6 / 14).
+- **Starting skills**: a procedural 3★ arrives with its class skill (no draw; gacha pins
+  changed on purpose, see `gacha.test.ts`).
+- **The ceremony's choices**: the bots now pick the calling their top eight lacks and the
+  offered skill worth the most skill CP (a heal or a guard first) — PROMOTE_CLASS 4–14 and
+  PROMOTE_SKILL 12–22 a run.
+- **The 'potential' growth model** replaces the upward-only re-roll on promotion: every grade
+  +1, one seeded grade +1 more, within the new ceiling. Grade outcomes (400 Normal heroes per
+  row, raised to 5★):
+
+  | | mean grade | best grade | carries an S |
+  |---|---|---|---|
+  | summoned 5★ (uniform 0–9) | 4.50 | ≈ 7.6 | 41 % |
+  | 1★ → 5★, re-roll | 6.19 | 8.15 | 41 % |
+  | 1★ → 5★, **potential +1/+1** | 6.30 | 7.79 | **14 %** |
+  | 3★ → 5★, re-roll | 6.16 | 8.18 | 41 % |
+  | 3★ → 5★, **potential +1/+1** | 5.44 | 7.84 | 27 % |
+  | 1★ → 5★, potential +1/+2 | 6.91 | 8.68 | 71 % |
+
+  The raise keeps its average worth, but a summoned S-grade stays special (a raised 1★ reaches
+  S a third as often), and the hero keeps the shape they were born with. +1/+2 was tried and
+  turns most raised heroes into S-graders. Casual over 16 seeds: potential F76.1 mean final
+  floor and 29.9 dead vs re-roll F72.9 and 30.8 — the model costs the free player nothing.
+- **Trait trim**: with everything in, engaged ran F83.6 mean over 14 seeds (base F80.9); the
+  trait numbers came down about a fifth (Brave ×1.06, Glass Cannon +9 %, Steadfast 3 %, Lucky
+  +3 crit, Spearhead ×1.15, lifesteal 3 / 6 %…).
+
+### Before → after
+
+`npm run sim -- 30 3` (finals · dead):
+
+| Profile | before | after |
+|---|---|---|
+| casual | 79/79/79 · 22/30/11 | 79/79/78 · 37/19/41 |
+| engaged | 80/84/79 · 10/12/5 | 84/79/79 · 12/11/10 |
+| whale | 89/89/89 · 11/17/7 | 89/89/89 · 4/15/21 |
+
+Floor by day (medians, 3 seeds): casual d14 F44 → F49, d20 F76 → F59, d29 F79 → F79; engaged
+d5 F67 → F49, d7 F79 → F57, d10 F79 → F79; whale d2 F64 → F73, d3 F78 → F79, d20 F79 → F81.
+
+Three seeds swing hard here (one casual seed loses 41 heroes, one 11), so the call was made on
+more seeds (`simulate` over the sim's own seed series):
+
+| Profile, seeds | final floor mean before → after | dead mean before → after |
+|---|---|---|
+| casual × 16 | 72.8 → 76.2 | 37.8 → 30.6 |
+| engaged × 14 | 80.9 → 82.5 | 10.9 → 8.4 |
+| whale × 6 (pre-trim) | 88.3 → 87.3 | 12.8 → 10.5 |
+
+Casual deaths per attempt from F41, 16 seeds: 0.887 → 0.723.
+
+`npx vite-node src/sim/combatMetrics.ts 30 6`, from F41 — the gate passes before and after:
+
+| | AoE share | median rounds | enemies act | deaths / attempt | median replay 1× |
+|---|---|---|---|---|---|
+| before | 19.5 % | 3.40 | 99.1 % | 0.167 | 48.0 s |
+| after | 19.2 % | 3.60 | 99.7 % | 0.212 | 51.4 s |
+
+By profile (6 seeds), deaths per attempt: casual 0.522 → 0.889, engaged 0.074 → 0.074, whale
+0.110 → 0.082. The casual figure is the six-seed sample's two worst runs (finals 65 and 69,
+one seed losing 73 heroes); over 16 seeds the same measure falls (0.887 → 0.723, above). At the
+Wall fights run longer (F80+ median rounds 4.4 → 6.4, replay 66 → 94 s): sturdier parties
+(guards, lifesteal, aegis) hold on longer before the retreat. Over 3 seeds: AoE 20.4 → 21.9 %,
+rounds 3.40 → 3.20, deaths/attempt 0.161 → 0.227 (casual 0.476 → 0.742 on the same three
+seeds), replay 50.3 → 49.3 s.
+
+### Still open (for lane R)
+
+- **The Wall falls a little more often for engaged bots** (8/14 clear F80 by day 29, was 6/14),
+  and the engaged bot of seed 1000 now stands at F80 by day 14 (the forecast test moved to
+  day 18). Pryos keeps holding most runs.
+- **Casual variance** is large in both directions; the deaths-per-attempt measure needs 16+
+  seeds to read.
+- **Wall fights are longer** (p90 replay at F80+ 215 → 255 s): sustain on sustain, as lane F
+  noted; traits add to it.

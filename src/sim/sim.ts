@@ -11,11 +11,11 @@
  * who uses every system, and a whale. Everything is seeded, so a run is repeatable.
  */
 import { TUNING } from '../engine/tuning'
-import type { GameState, HeroId, Line, OwnedHero, EquipmentSlot, Command, FloorResult, BonusRoomKind, FacilityId, JobId, CombatLog, BattleOrder } from '../engine/types'
+import type { GameState, HeroId, Line, OwnedHero, EquipmentSlot, Command, FloorResult, BonusRoomKind, FacilityId, JobId, CombatLog, BattleOrder, HeroClass } from '../engine/types'
 import { reduce, attemptFloorWithResult } from '../engine/store'
 import { toWorldTime } from '../engine/time'
 import { skillCp } from '../engine/skills'
-import { canPromote, canAfford } from '../engine/promotion'
+import { canPromote, canAfford, promotionPreview } from '../engine/promotion'
 import { canUpgrade } from '../engine/facilities'
 import { dailyUnlocked, dailyAttemptsLeft, worldDayIndex } from '../engine/daily'
 import { banquetReady, banquetWouldHelp } from '../engine/kitchen'
@@ -223,7 +223,8 @@ export interface SimResult {
   /** How often each lever was pulled (see LEVERS; plus RETREAT, RAID_CLEAR, RAID_DEATHS,
    *  RETREAT_SAVED — heroes a retreat brought home — SACRIFICED to synthesis, ADV_PULLS,
    *  TRIAL_BEST, the best weekly score, and TRAIN_ROLE — a drill that gave the top five its
-   *  first healer or tank, lane F). */
+   *  first healer or tank, lane F; PROMOTE_CLASS / PROMOTE_SKILL — a ceremony choice that
+   *  overruled the chamber, lane J). */
   levers: Record<string, number>
 }
 
@@ -426,10 +427,43 @@ class Bot {
     }
   }
 
+  /** The Promotion Chamber, and its ceremony (lane J): a classless hero reaching 3★ takes up
+   *  the class the top eight has fewest of, and a hero picks the offered skill worth the most
+   *  skill CP — a heal or a guard first when the top five has none (counted as PROMOTE_CLASS /
+   *  PROMOTE_SKILL when the bot overrules the chamber). */
   private promote(): void {
     for (const h of living(this.s)) {
-      if (available(h) && canPromote(h) && canAfford(this.s, h)) this.try({ type: 'PROMOTE_HERO', heroId: h.id })
+      if (!(available(h) && canPromote(h) && canAfford(this.s, h))) continue
+      const choice = this.ceremonyChoice(h)
+      if (this.try({ type: 'PROMOTE_HERO', heroId: h.id, ...choice })) {
+        if (choice.heroClass !== undefined) this.lever('PROMOTE_CLASS')
+        if (choice.skillId !== undefined) this.lever('PROMOTE_SKILL')
+      }
     }
+  }
+
+  private ceremonyChoice(h: OwnedHero): { heroClass?: HeroClass; skillId?: string } {
+    const plain = promotionPreview(h, this.s.seed)
+    const out: { heroClass?: HeroClass; skillId?: string } = {}
+    if (plain.classOffers.length > 1) {
+      const top = this.ranked().slice(0, 8)
+      const count = (c: HeroClass) => top.filter((x) => x.heroClass === c).length
+      const pick = [...plain.classOffers].sort((a, b) => count(a) - count(b))[0]!
+      if (pick !== plain.heroClass) out.heroClass = pick
+    }
+    const pv = out.heroClass ? promotionPreview(h, this.s.seed, out) : plain
+    if (pv.skillOffers.length > 1) {
+      const top = this.ranked().slice(0, 5)
+      const knows = (ids: readonly string[]) => top.some((x) => x.skills.some((sk) => ids.includes(sk.id)))
+      const needHeal = !knows(HEAL_SKILLS)
+      const needTank = !knows(TANK_SKILLS)
+      const frontLiner = pv.heroClass === 'warrior' || pv.heroClass === 'spearman'
+      const worth = (id: string) =>
+        skillCp([{ id, level: 1, xp: 0 }]) + (needHeal && HEAL_SKILLS.includes(id) ? ROLE_DRILL_BONUS : 0) + (needTank && frontLiner && TANK_SKILLS.includes(id) ? ROLE_DRILL_BONUS : 0)
+      const best = [...pv.skillOffers].sort((a, b) => worth(b) - worth(a))[0]!
+      if (best !== pv.defaultSkill) out.skillId = best
+    }
+    return out
   }
 
   private summon(): void {

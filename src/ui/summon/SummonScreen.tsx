@@ -11,6 +11,7 @@ import { drawProp } from '../pixel/props'
 import { scale } from '../pixel/bitmap'
 import { t } from '../i18n/i18n'
 import { useMusic } from '../audio/useSound'
+import { challengeOf } from '../../engine/challenge'
 
 const SUMMON_COST = TUNING.gacha.normalCostGold
 const PITY_AT = TUNING.gacha.normalPityFloor3At
@@ -30,7 +31,15 @@ export function SummonScreen({
 }) {
   const [pool, setPool] = useState<SummonPool>('normal')
   const [revealed, setRevealed] = useState<OwnedHero[]>([])
-  const [ritual, setRitual] = useState<{ heroes: OwnedHero[]; count: 1 | 10; pool: SummonPool; nonce: number } | null>(null)
+  const [ritual, setRitual] = useState<{
+    heroes: OwnedHero[]
+    count: 1 | 10
+    pool: SummonPool
+    nonce: number
+    /** The pity counters either side of the pull (the reveal's floor stamp and meter). */
+    before: GameState['gacha']
+    after: GameState['gacha']
+  } | null>(null)
   const [err, setErr] = useState<string | null>(null)
   // The chamber's own music (the reveal raises its layers).
   useMusic({ scene: 'summon' })
@@ -45,7 +54,7 @@ export function SummonScreen({
         .filter((id) => !prev.has(id))
         .map((id) => next.heroes[id as HeroId]!)
       setRevealed([])
-      setRitual({ heroes: pulled, count, pool, nonce: (ritual?.nonce ?? 0) + 1 })
+      setRitual({ heroes: pulled, count, pool, nonce: (ritual?.nonce ?? 0) + 1, before: state.gacha, after: next.gacha })
     } catch (e) {
       setErr(t(e instanceof Error ? e.message.replace(/^\w+: /, '') : 'Summon failed'))
     }
@@ -160,6 +169,10 @@ export function SummonScreen({
           }}
           onNavigate={onNavigate}
           again={againFor(ritual.count)}
+          pityBefore={ritual.before}
+          pityAfter={ritual.after}
+          bondGroups={challengeOf(state).bondGroups}
+          items={state.inventory}
         />
       )}
     </div>

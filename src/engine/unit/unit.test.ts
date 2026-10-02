@@ -20,7 +20,7 @@ import {
   leveledAttrs,
   combatPower,
 } from '../stats'
-import { CAMEO_HEROES, ENEMY_TEMPLATES, SKILLS } from '../content'
+import { CAMEO_HEROES, ENEMY_TEMPLATES, SKILLS, traitOf } from '../content'
 import { resolveSkillEffect, skillCp } from '../skills'
 
 const lv1 = (id: string) => resolveSkillEffect({ id, level: 1, xp: 0 })!
@@ -82,7 +82,9 @@ function makeWarrior(overrides: Partial<OwnedHero> = {}): OwnedHero {
     baseAttrs: { str: 20, agi: 15, vit: 18, int: 8, wil: 12 },
     growthGrades: { str: 5, agi: 4, vit: 5, int: 2, wil: 3 },
     skills: [{ id: 'power_strike', level: 1, xp: 0 }],
-    portraitToken: '#ffffff',
+    // An identity whose innate trait (lane J) is Steadfast: a guard keyword and its CP, no
+    // stat change — so the stat assertions below read the bare derivation.
+    portraitToken: '#000010',
     origin: 'procedural',
     xp: { level: 7, xpIntoLevel: 0, heldXp: 0, atCap: false },
     alive: true,
@@ -198,8 +200,8 @@ describe('buildCombatUnit', () => {
     expect(unit.currentSP).toBe(expectedMaxSP)
     expect(unit.actionGauge).toBe(0)
     expect(unit.alive).toBe(true)
-    // CP = stat CP + the skills' CP term (Layer 1 §2.5).
-    expect(unit.cp).toBe(combatPower(stats, skillCp(hero.skills)))
+    // CP = stat CP + the skills' CP term (Layer 1 §2.5) + the innate trait's (lane J).
+    expect(unit.cp).toBe(combatPower(stats, skillCp(hero.skills) + TUNING.traits.cp[traitOf(hero).rarity]))
     expect(unit.side).toBe('hero')
     expect(unit.unitClass).toBe('warrior')
     expect(unit.line).toBe('front')
@@ -207,7 +209,7 @@ describe('buildCombatUnit', () => {
     expect(unit.id).toBe('h_test_001')
     expect(unit.name).toBe('Tester')
     expect(unit.sourceHeroId).toBe(hero.id)
-    expect(unit.keywords).toEqual([])
+    expect(unit.keywords).toEqual(traitOf(hero).keywords) // the innate trait only (Steadfast)
     expect(unit.targetTag).toBeUndefined()
   })
 
@@ -321,7 +323,7 @@ describe('buildCombatUnit — equipment', () => {
     const item = weapon({ statBonus: { pAtk: 100, mAtk: 100 } })
     const bare = buildCombatUnit(makeWarrior(), 'front', SKILLS)
     const geared = buildCombatUnit(gearedWarrior(item), 'front', SKILLS, [item])
-    expect(geared.cp).toBe(combatPower(geared.stats, skillCp(gearedWarrior(item).skills)))
+    expect(geared.cp).toBe(combatPower(geared.stats, skillCp(gearedWarrior(item).skills) + TUNING.traits.cp[traitOf(gearedWarrior(item)).rarity]))
     expect(geared.cp).toBeGreaterThan(bare.cp)
   })
 
@@ -331,7 +333,8 @@ describe('buildCombatUnit — equipment', () => {
     const withEmpty = buildCombatUnit(hero, 'front', SKILLS, [])
     expect(withEmpty).toEqual(bare)
     expect(bare.element).toBe('fire')
-    expect(bare.keywords).toEqual([])
+    // Only the innate trait's keyword (Steadfast) — no gear, no engraving.
+    expect(bare.keywords).toEqual(traitOf(hero).keywords)
   })
 })
 

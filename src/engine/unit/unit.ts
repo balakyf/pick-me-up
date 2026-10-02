@@ -43,6 +43,7 @@ import { engravingCp, engravingEffect } from '../engravings'
 import { favorStatMult, isDefiant } from '../favor'
 import { TUNING } from '../tuning'
 import { SKILLS } from '../content'
+import { traitOf, traitStatPct } from '../content/traits'
 
 /** Apply relative % bonuses to a stat block (rounded; CRIT re-capped). */
 function applyStatPct(stats: DerivedStats, pct: Partial<Record<keyof DerivedStats, number>>): DerivedStats {
@@ -129,6 +130,11 @@ export function buildCombatUnit(
   for (const [k, v] of Object.entries(engraving?.statPct ?? {}) as [keyof DerivedStats, number][]) {
     pct[k] = (pct[k] ?? 0) + v
   }
+  // The innate trait (lane J, content/traits.ts): derived from who the hero is, never stored.
+  const trait = traitOf(hero)
+  for (const [k, v] of Object.entries(traitStatPct(trait, hero.bondGroup != null)) as [keyof DerivedStats, number][]) {
+    pct[k] = (pct[k] ?? 0) + v
+  }
   // Favor (Layer 3 §C1): a warm bond lifts every stat a little; a Wary hero is sluggish.
   const favorMult = favorStatMult(hero.favor ?? TUNING.favor.start)
   if (favorMult !== 1) {
@@ -143,6 +149,10 @@ export function buildCombatUnit(
   for (const key of Object.keys(gear.stats) as (keyof DerivedStats)[]) {
     const v = gear.stats[key]
     if (v !== undefined) stats[key] = stats[key] + v
+  }
+  // A trait's flat points (crit and status resistance are percent points; crit stays capped).
+  for (const [k, v] of Object.entries(trait.flat ?? {}) as [keyof DerivedStats, number][]) {
+    stats[k] = k === 'critPct' ? Math.max(stats[k], Math.min(stats[k] + v, TUNING.stats.derived.critCap)) : stats[k] + v
   }
   const element = gear.element ?? hero.element
 
@@ -168,11 +178,13 @@ export function buildCombatUnit(
       ...gear.keywords,
       ...(engraving?.keywords ?? []),
       ...passives.keywords,
+      ...(trait.keywords ?? []),
       // Guarantee an action (Layer 3 §D2): a blessed hero's first strike lands hard.
       ...(hero.blessed ? [{ kind: 'opener' as const, multiplier: TUNING.intervention.guaranteeMult }] : []),
     ],
-    // Skills add a CP term (Layer 1 §2.5): Σ gradeValue × level, weighted; an engraving adds its own.
-    cp: combatPower(stats, skillCp(hero.skills, registry) + engravingCp(hero.engraving)),
+    // Skills add a CP term (Layer 1 §2.5): Σ gradeValue × level, weighted; an engraving and a
+    // trait add their own (a trait's keywords are worth something the stats do not show).
+    cp: combatPower(stats, skillCp(hero.skills, registry) + engravingCp(hero.engraving) + TUNING.traits.cp[trait.rarity]),
     sourceHeroId: hero.id,
     // Carried for the combat panic check; enemies have no Sanity (field absent).
     sanity: hero.sanity,

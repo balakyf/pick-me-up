@@ -8,6 +8,7 @@ import { TUNING } from '../tuning'
 import { smithyUnlocked } from '../equipment'
 import type { FacilityId, GameState, HeroId, JobId, LifePlace, OwnedHero } from '../types'
 import { BACKGROUNDS, personalityOf } from './personality'
+import { traitLife } from '../content/traits'
 
 const J = TUNING.life.jobs
 
@@ -52,7 +53,8 @@ export function tierMult(xp: number): number {
 /** How naturally suited a hero is to a job: ~0.5 (hopeless) … ~2 (born to it). */
 export function aptitude(hero: OwnedHero, job: JobId): number {
   const p = personalityOf(hero)
-  const bg = BACKGROUNDS[p.background]?.aptitude[job] ?? 0
+  // A born trade, and a trait that leans the same way (a Healer's Hands is a born healer).
+  const bg = (BACKGROUNDS[p.background]?.aptitude[job] ?? 0) + (traitLife(hero).aptitude?.[job] ?? 0)
   const a = hero.baseAttrs
   const attr = (v: number) => Math.min(0.3, v / 200)
   let fit = 0

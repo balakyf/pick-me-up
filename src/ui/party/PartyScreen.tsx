@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react'
+import { TraitChip } from '../people/TraitBadge'
+import { traitOf } from '../../engine/content/traits'
 import type { Element, GameState, HeroClass, HeroId, Line, OwnedHero } from '../../engine/types'
 import type { Store } from '../../engine/store'
 import { suggestParty, heroCp } from '../../engine/scout'
@@ -487,6 +489,7 @@ export function PartyScreen({ state, store }: { state: GameState; store: Store }
                   <Bust hero={h} size={32} />
                   <span className="c-name">
                     <span className="pb-name">{h.name}</span>
+                    <TraitChip def={traitOf(h)} compact />
                     {st !== 'ready' && <StatusChip hero={h} state={state} />}
                   </span>
                   <span className="c-star" style={{ color: STAR_COLOR[star] }}>

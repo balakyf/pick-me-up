@@ -1,11 +1,22 @@
 /**
- * Layer 1 §3 — Promotion: the "raise, don't roll" engine.
+ * Layer 1 §3 — Promotion: the "raise, don't roll" engine, and (lane J) its ceremony.
  *
  * The Normal gacha pool only yields 1–3★, so promotion is the main path upward.
  * A hero sitting at its star's level cap can be promoted: pay materials, wait out
  * a world-time timer, and on completion the hero's star rises one band — its level
- * cap lifts, its base attributes/grades re-roll UPWARD-ONLY (a promotion never
- * weakens a hero), and it gains a skill it didn't have.
+ * cap lifts, its growth grades rise (never fall), its base attributes re-roll
+ * UPWARD-ONLY, and it gains a skill it didn't have.
+ *
+ * The ceremony: before a stone is paid, `promotionPreview` shows exactly what will happen
+ * (the grades after, the bases, the engraving, the trait that may awaken) and what the Master
+ * may choose — the class a classless hero takes up at 3★ (one of two) and the skill it
+ * learns (one of three). The choices ride on the promotion timer; with none, the chamber
+ * chooses as it always did.
+ *
+ * Growth (TUNING.ceremony.growth): 'potential' — every grade rises by one and one seeded
+ * grade by one more, so a summoned S-grade stays special and a raised 1★ keeps the shape it
+ * was born with — or 'reroll', the old upward-only re-roll in the new envelope (which washed
+ * the summon roll out: a 1★ raised to 5★ out-graded a summoned 5★).
  *
  * Everything here is PURE and DETERMINISTIC. The on-complete re-roll is seeded by
  * (accountSeed, heroId, oldStar) so an "offline" promotion that finishes inside
@@ -23,6 +34,7 @@ import { applyUnlocks, promotionSkillPool } from '../skills'
 import { evolveEngraving } from '../engravings'
 import { rngFor, pick, chance, weightedPick } from '../rng'
 import { ENGRAVINGS } from '../content'
+import { traitAtStar, traitOf, type TraitId } from '../content/traits'
 import type {
   GameState,
   OwnedHero,
@@ -34,9 +46,12 @@ import type {
   GrowthGrades,
   Seed,
   HeroClass,
+  HeroEngraving,
+  AttrKey,
 } from '../types'
 
 const P = TUNING.lobby.promotion
+const C = TUNING.ceremony
 
 /** The star a hero would reach by promoting (one above its current). */
 export function promotionTargetStar(hero: OwnedHero): Star {
@@ -118,12 +133,182 @@ export function promotionDuration(targetStar: number, chamberLevel: number): num
   return Math.round(base * factor)
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// The ceremony: what a promotion will do, and what the Master may choose
+// ─────────────────────────────────────────────────────────────────────────────
+
+const ATTR_KEYS = ['str', 'agi', 'vit', 'int', 'wil'] as const
+
+/** Per-attribute max(old, new) — the upward-only rule for both bases and grades. */
+function mergeUpward<T extends PrimaryAttrs | GrowthGrades>(old: T, rolled: T): T {
+  const out = {} as T
+  for (const k of ATTR_KEYS) out[k] = Math.max(old[k], rolled[k]) as T[typeof k]
+  return out
+}
+
+/** The classes a classless hero can grow into (mage is gacha-only, canon). */
+const CLASS_CHANGE_OPTIONS: readonly HeroClass[] = ['warrior', 'spearman', 'thief', 'archer']
+
+/** The Master's choices at the ceremony (both optional: the chamber chooses otherwise). */
+export interface PromotionChoice {
+  heroClass?: HeroClass
+  skillId?: string
+}
+
+/** What the chamber knows about a promotion before a single stone is paid. */
+export interface PromotionPreview {
+  heroId: HeroId
+  fromStar: Star
+  toStar: Star
+  levelCap: { from: number; to: number }
+  /** Growth grades before and after; `bonusAttr` is the grade that rose one more (potential
+   *  model), null under the re-roll model or when every grade is at the new ceiling. */
+  grades: { before: GrowthGrades; after: GrowthGrades; bonusAttr: AttrKey | null }
+  /** Base attributes before and after the upward-only re-roll in the new envelope. */
+  bases: { before: PrimaryAttrs; after: PrimaryAttrs }
+  /** A classless hero reaching the class-change star picks one of these ([] otherwise). */
+  classOffers: HeroClass[]
+  /** The class the hero holds after the promotion (the chosen one, or the chamber's). */
+  heroClass: HeroClass | null
+  /** The skills on offer for that class; one is learned ([] when none is left). A lone offer
+   *  is the class's signature skill, which a classed hero always learns first. */
+  skillOffers: string[]
+  /** The skill learned when the Master does not choose. */
+  defaultSkill: string | null
+  /** Skills the levels the promotion releases unlock on their own (a class's Mark, a floor's
+   *  lesson) — learned alongside the chosen one, whatever the Master picks. */
+  unlocks: string[]
+  /** The engraving: evolves one grade, may awaken (a chance — the outcome stays a secret), or
+   *  nothing happens. */
+  engraving: { kind: 'evolve'; from: HeroEngraving; to: HeroEngraving } | { kind: 'awaken'; chancePct: number } | { kind: 'none' }
+  /** The innate trait before and after (a rare form may awaken with the star). */
+  trait: { from: TraitId; to: TraitId }
+}
+
+/** The seeded draws a promotion makes, in stream order (shared by preview and completion). */
+function promotionDraws(hero: OwnedHero, accountSeed: Seed, heroClass: HeroClass | null) {
+  const newStar = promotionTargetStar(hero)
+  let rng = rngFor(accountSeed, 'promotion', hero.id, hero.star)
+  const rolled = rollAttributes(rng, envelopeForStar(newStar))
+  rng = rolled.rng
+  const known = new Set(hero.skills.map((s) => s.id))
+  const missing = promotionSkillPool(heroClass, known)
+  let defaultSkill: string | null = null
+  if (missing.length > 0) {
+    const drew = pick(rng, missing)
+    rng = drew.rng
+    defaultSkill = drew.value
+  }
+  // The other offers come from a stream of their own (the chamber's own draw stays first,
+  // so the main stream — and an engraving's awakening after it — never moves).
+  const offers: string[] = defaultSkill === null ? [] : [defaultSkill]
+  let r2 = rngFor(accountSeed, 'promotion-offer', hero.id, hero.star)
+  while (offers.length < C.skillOffers) {
+    const left = missing.filter((id) => !offers.includes(id))
+    if (left.length === 0) break
+    const d = pick(r2, left)
+    r2 = d.rng
+    offers.push(d.value)
+  }
+  return { newStar, rolled, rng, defaultSkill, offers }
+}
+
+/** The chamber's own class for a classless hero (what it takes when the Master does not choose). */
+function chamberClass(hero: OwnedHero, accountSeed: Seed): HeroClass {
+  return pick(rngFor(accountSeed, 'class-change', hero.id), CLASS_CHANGE_OPTIONS).value
+}
+
+/** The classes offered to a classless hero reaching the class-change star: the chamber's own
+ *  pick and one more, in the usual class order ([] for everyone else). */
+export function classOffers(hero: OwnedHero, accountSeed: Seed): HeroClass[] {
+  if (hero.heroClass !== null || promotionTargetStar(hero) < P.classChangeStar) return []
+  const chamber = chamberClass(hero, accountSeed)
+  if (C.classOffers < 2) return [chamber]
+  const other = pick(rngFor(accountSeed, 'class-offer', hero.id), CLASS_CHANGE_OPTIONS.filter((c) => c !== chamber)).value
+  return CLASS_CHANGE_OPTIONS.filter((c) => c === chamber || c === other)
+}
+
+/** The class a promotion leaves the hero with, given an optional choice. */
+function classAfter(hero: OwnedHero, accountSeed: Seed, choice?: HeroClass): HeroClass | null {
+  const offers = classOffers(hero, accountSeed)
+  if (offers.length === 0) return hero.heroClass
+  if (choice !== undefined && offers.includes(choice)) return choice
+  return chamberClass(hero, accountSeed)
+}
+
+/** Growth after a promotion: 'potential' (+1 a grade, one seeded grade +1 more) or the old
+ *  upward-only re-roll. Never lower than before, never above the new ceiling. */
+function grownGrades(hero: OwnedHero, accountSeed: Seed, rolledGrades: GrowthGrades): { grades: GrowthGrades; bonusAttr: AttrKey | null } {
+  if (C.growth === 'reroll') return { grades: mergeUpward(hero.growthGrades, rolledGrades), bonusAttr: null }
+  const ceiling = envelopeForStar(promotionTargetStar(hero)).gradeCeiling
+  const open = ATTR_KEYS.filter((k) => hero.growthGrades[k] + C.gradePerPromotion < ceiling)
+  const bonusAttr = open.length > 0 ? pick(rngFor(accountSeed, 'promotion-potential', hero.id, hero.star), open).value : null
+  const grades = { ...hero.growthGrades }
+  for (const k of ATTR_KEYS) {
+    const gain = C.gradePerPromotion + (k === bonusAttr ? C.bonusGrade : 0)
+    grades[k] = Math.max(hero.growthGrades[k], Math.min(ceiling, hero.growthGrades[k] + gain))
+  }
+  return { grades, bonusAttr }
+}
+
 /**
- * Begin a promotion: validate the gate + affordability, deduct materials, and set
- * the hero's `promotion.completesAtWorld`. PURE — returns a fresh GameState.
- * Throws on a closed gate or insufficient materials (the same contract gacha uses).
+ * Everything a promotion will do, before it is paid for: the new star and cap, the grades
+ * and bases after, the classes and skills on offer (for the chosen class), the engraving and
+ * the trait. PURE and seeded exactly as `completePromotion` is, so what the chamber shows is
+ * what happens — only an engraving's awakening stays a secret, shown as its chance.
  */
-export function startPromotion(state: GameState, heroId: HeroId, nowWorld: number): GameState {
+export function promotionPreview(hero: OwnedHero, accountSeed: Seed, choice: PromotionChoice = {}, highestCleared = 0): PromotionPreview {
+  const heroClass = classAfter(hero, accountSeed, choice.heroClass)
+  const d = promotionDraws(hero, accountSeed, heroClass)
+  const { grades, bonusAttr } = grownGrades(hero, accountSeed, d.rolled.grades)
+  const known = new Set(hero.skills.map((s) => s.id))
+  const unlocks = applyUnlocks(hero.skills, releasedXp(hero, d.newStar).level, highestCleared, heroClass)
+    .map((s) => s.id)
+    .filter((id) => !known.has(id))
+  const engraving: PromotionPreview['engraving'] =
+    hero.engraving !== null
+      ? { kind: 'evolve', from: hero.engraving, to: evolveEngraving(hero.engraving) }
+      : d.newStar >= 4
+        ? { kind: 'awaken', chancePct: Math.round(TUNING.engravings.promotionAwakenChance * 100) }
+        : { kind: 'none' }
+  return {
+    heroId: hero.id,
+    fromStar: hero.star,
+    toStar: d.newStar,
+    levelCap: { from: levelCapForStar(hero.star), to: levelCapForStar(d.newStar) },
+    grades: { before: hero.growthGrades, after: grades, bonusAttr },
+    bases: { before: hero.baseAttrs, after: mergeUpward(hero.baseAttrs, d.rolled.baseAttrs) },
+    classOffers: classOffers(hero, accountSeed),
+    heroClass,
+    skillOffers: d.offers,
+    defaultSkill: d.defaultSkill,
+    unlocks,
+    engraving,
+    trait: { from: traitOf(hero).id, to: traitAtStar({ ...hero, heroClass }, d.newStar).id },
+  }
+}
+
+/** Why a ceremony choice cannot stand (without the function prefix), or null when it can. */
+export function promotionChoiceRefusal(hero: OwnedHero, accountSeed: Seed, choice: PromotionChoice): string | null {
+  if (choice.heroClass !== undefined) {
+    const offers = classOffers(hero, accountSeed)
+    if (offers.length === 0) return `hero ${hero.id} does not choose a class at this promotion`
+    if (!offers.includes(choice.heroClass)) return `the ${choice.heroClass} class is not on offer for hero ${hero.id}`
+  }
+  if (choice.skillId !== undefined) {
+    const pv = promotionPreview(hero, accountSeed, choice)
+    if (!pv.skillOffers.includes(choice.skillId)) return `skill ${choice.skillId} is not on offer for hero ${hero.id}`
+  }
+  return null
+}
+
+/**
+ * Begin a promotion: validate the gate + affordability (and the ceremony's choices against
+ * `promotionPreview`'s offers), deduct materials, and set the hero's `promotion` timer with the
+ * choices riding on it. PURE — returns a fresh GameState. Throws on a closed gate, a choice
+ * that is not on offer, or insufficient materials (the same contract gacha uses).
+ */
+export function startPromotion(state: GameState, heroId: HeroId, nowWorld: number, choice: PromotionChoice = {}): GameState {
   const hero = state.heroes[heroId]
   if (hero === undefined) throw new Error(`startPromotion: unknown hero ${heroId}`)
   if (!canPromote(hero)) {
@@ -135,6 +320,8 @@ export function startPromotion(state: GameState, heroId: HeroId, nowWorld: numbe
   if (estateBusy(state, heroId) === 'is out on a bounty') {
     throw new Error(`startPromotion: hero ${heroId} is out on a bounty`)
   }
+  const refusal = promotionChoiceRefusal(hero, state.seed, choice)
+  if (refusal !== null) throw new Error(`startPromotion: ${refusal}`)
 
   const pay = promotionPayment(state, hero)!
   const materials: Record<MaterialId, number> = { ...state.materials }
@@ -146,56 +333,45 @@ export function startPromotion(state: GameState, heroId: HeroId, nowWorld: numbe
   return {
     ...state,
     materials,
-    heroes: { ...state.heroes, [heroId]: { ...hero, promotion: { completesAtWorld } } },
+    heroes: {
+      ...state.heroes,
+      [heroId]: {
+        ...hero,
+        promotion: {
+          completesAtWorld,
+          ...(choice.heroClass !== undefined ? { heroClass: choice.heroClass } : {}),
+          ...(choice.skillId !== undefined ? { skillId: choice.skillId } : {}),
+        },
+      },
+    },
   }
-}
-
-const ATTR_KEYS = ['str', 'agi', 'vit', 'int', 'wil'] as const
-
-/** Per-attribute max(old, new) — the upward-only rule for both bases and grades. */
-function mergeUpward<T extends PrimaryAttrs | GrowthGrades>(old: T, rolled: T): T {
-  const out = {} as T
-  for (const k of ATTR_KEYS) out[k] = Math.max(old[k], rolled[k]) as T[typeof k]
-  return out
 }
 
 /**
- * Resolve a completed promotion (deterministic, seeded). Raises the star one band,
- * lifts the level cap (releasing any held XP into new levels), merges a fresh roll
- * in the new envelope UPWARD-ONLY into the hero's bases/grades, and grants one skill
- * the hero lacked. Clears the in-flight timer. PURE — returns a fresh OwnedHero.
+ * Resolve a completed promotion (deterministic, seeded). Raises the star one band, lifts the
+ * level cap (releasing any held XP into new levels), grows the grades, re-rolls the bases
+ * UPWARD-ONLY in the new envelope, and grants one skill the hero lacked — the Master's pick
+ * when one rides on the timer. Clears the in-flight timer. PURE — returns a fresh OwnedHero.
  */
-/** The classes a classless hero can grow into (mage is gacha-only, canon). */
-const CLASS_CHANGE_OPTIONS: readonly HeroClass[] = ['warrior', 'spearman', 'thief', 'archer']
-
 export function completePromotion(hero: OwnedHero, accountSeed: Seed, highestCleared = 0): OwnedHero {
-  const newStar = promotionTargetStar(hero)
-  let rng = rngFor(accountSeed, 'promotion', hero.id, hero.star)
-
-  const rolled = rollAttributes(rng, envelopeForStar(newStar))
-  rng = rolled.rng
-  const baseAttrs = mergeUpward(hero.baseAttrs, rolled.baseAttrs)
-  const growthGrades = mergeUpward(hero.growthGrades, rolled.grades)
-
+  const choice: PromotionChoice = { heroClass: hero.promotion?.heroClass, skillId: hero.promotion?.skillId }
   // Class change (canon: Islat Han, "Warrior class (formerly Novice)"): a classless hero
-  // reaching 3★ takes up a common class. Never mage — mages come only from the gacha.
-  // Its own rng stream, so every other promotion draw is unchanged.
-  let heroClass = hero.heroClass
-  if (heroClass === null && newStar >= TUNING.lobby.promotion.classChangeStar) {
-    heroClass = pick(rngFor(accountSeed, 'class-change', hero.id), CLASS_CHANGE_OPTIONS).value
-  }
+  // reaching 3★ takes up a common class — the Master's pick of two, else the chamber's. Never
+  // mage — mages come only from the gacha. Its own rng stream.
+  const heroClass = classAfter(hero, accountSeed, choice.heroClass)
+  const d = promotionDraws(hero, accountSeed, heroClass)
+  let rng = d.rng
+  const newStar = d.newStar
+  const baseAttrs = mergeUpward(hero.baseAttrs, d.rolled.baseAttrs)
+  const growthGrades = grownGrades(hero, accountSeed, d.rolled.grades).grades
 
   // Grant one skill the hero does not already know, at Lv1: its class's signature skill
-  // first, else a learnable skill (no-op if it knows them all). Merge-only skills are
-  // never handed out by promotion.
+  // first, else a learnable skill (no-op if it knows them all) — the Master's pick of the
+  // offers when they made one (a pick it has since learned some other way falls back to the
+  // chamber's). Merge-only skills are never handed out by promotion.
   let skills = hero.skills
-  const known = new Set(hero.skills.map((s) => s.id))
-  const missing = promotionSkillPool(heroClass, known)
-  if (missing.length > 0) {
-    const drew = pick(rng, missing)
-    rng = drew.rng
-    skills = [...hero.skills, { id: drew.value, level: 1, xp: 0 }]
-  }
+  const learn = choice.skillId !== undefined && d.offers.includes(choice.skillId) ? choice.skillId : d.defaultSkill
+  if (learn !== null) skills = [...hero.skills, { id: learn, level: 1, xp: 0 }]
 
   // Engraving evolution (각인 진화): one grade up; a hero reaching 4★+ without one may
   // awaken a grade-C engraving. The awaken draws come last, so earlier rolls are stable.
@@ -208,7 +384,7 @@ export function completePromotion(hero: OwnedHero, accountSeed: Seed, highestCle
     if (awaken.value) {
       const which = weightedPick(
         rng,
-        Object.values(ENGRAVINGS).map((d) => ({ item: d.id, weight: d.weight })),
+        Object.values(ENGRAVINGS).map((e) => ({ item: e.id, weight: e.weight })),
       )
       rng = which.rng
       engraving = { id: which.value, grade: 'C' }
@@ -216,11 +392,7 @@ export function completePromotion(hero: OwnedHero, accountSeed: Seed, highestCle
   }
 
   // Lift the cap and release held XP into the newly available levels.
-  const xp = applyXp(
-    { level: hero.xp.level, xpIntoLevel: hero.xp.xpIntoLevel, heldXp: 0, atCap: false },
-    hero.xp.heldXp,
-    newStar,
-  )
+  const xp = releasedXp(hero, newStar)
   skills = applyUnlocks(skills, xp.level, highestCleared, heroClass)
 
   // Rank deepens the hero's connection with the Master: Intervention Points (Layer 3 §D2).
@@ -230,6 +402,11 @@ export function completePromotion(hero: OwnedHero, accountSeed: Seed, highestCle
   const { displayStar: _shown, ...rest } = hero
   void _shown
   return { ...rest, heroClass, star: newStar, baseAttrs, growthGrades, skills, xp, engraving, ip, promotion: null }
+}
+
+/** The hero's XP once the cap lifts: held XP released into the newly available levels. */
+function releasedXp(hero: OwnedHero, newStar: Star): OwnedHero['xp'] {
+  return applyXp({ level: hero.xp.level, xpIntoLevel: hero.xp.xpIntoLevel, heldXp: 0, atCap: false }, hero.xp.heldXp, newStar)
 }
 
 /**
