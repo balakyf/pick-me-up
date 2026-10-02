@@ -6,6 +6,7 @@
  * live in bonds.ts, rooms.ts, raid.ts and weekly.ts.
  */
 import type { ChallengeState, GameState, HeroClass, HeroId, Line, OwnedHero } from '../types'
+import { fitToDeploy, heroUnfitReason } from '../tower/deploy'
 
 export function defaultChallenge(): ChallengeState {
   return {
@@ -31,9 +32,14 @@ export function challengeOf(state: GameState): ChallengeState {
   }
 }
 
-/** Is a hero fit to fight a tower battle right now (as the tower deploys them)? */
-export function fitToFight(h: OwnedHero | undefined): h is OwnedHero {
-  return !!h && h.alive && h.sanity > 0 && h.training === null && h.expedition === null && !h.captiveOf && h.promotion === null
+/**
+ * Is a hero fit to fight a tower battle right now (as the tower deploys them)? With the
+ * account `state` this is the full deploy rail (bounty and burnout too — tower/deploy.ts);
+ * without it, only what the hero carries (alive, home, free, Sanity above 0). No
+ * rebellion draw: that belongs to the tower attempt itself.
+ */
+export function fitToFight(h: OwnedHero | undefined, state?: GameState): h is OwnedHero {
+  return state ? fitToDeploy(state, h, { rebellion: false }).ok : heroUnfitReason(h) === null
 }
 
 const CLASS_LINE: Record<HeroClass, Line> = {

@@ -6,7 +6,7 @@
 import type { Element, GameState, HeroClass, HeroId, Line, OwnedHero, Star } from '../../engine/types'
 import { canFight, heroCp } from '../../engine/scout'
 import { shownStar } from '../../engine/shop'
-import { estateBusy, refusesDeploy } from '../../engine/estate/deploy'
+import { estateBusy } from '../../engine/estate/deploy'
 
 /** Below this Sanity the scout won't suggest a hero (mirrors suggestParty's default). */
 export const WEARY_BELOW = 40
@@ -27,9 +27,9 @@ export function heroStatus(h: OwnedHero, state?: GameState): HeroStatus {
   return 'ready'
 }
 
-/** Can this hero actually take the field right now? (The scout's rule.) */
+/** Can this hero actually take the field right now? (The deploy rails — the tower's rule.) */
 export function deployable(h: OwnedHero, state?: GameState): boolean {
-  return canFight(h) && (!state || !refusesDeploy(state, h.id))
+  return canFight(h, state)
 }
 
 export type SortKey = 'cp' | 'level' | 'stars' | 'name' | 'element' | 'class'
@@ -77,7 +77,7 @@ export function boardHeroes(
     if (filter.hideUnavailable && !deployable(h, state)) return false
     return true
   })
-  const cp = new Map(list.map((h) => [h.id, heroCp(h)]))
+  const cp = new Map(list.map((h) => [h.id, heroCp(h, state)]))
   const key = (h: OwnedHero): number | string => {
     switch (sort) {
       case 'cp':
@@ -165,7 +165,7 @@ export function lineSummary(state: GameState, draft: Draft, lines: Line[]): Line
         const h = draft[i] ? state.heroes[draft[i]!] : undefined
         if (h && h.alive) {
           count++
-          cp += heroCp(h)
+          cp += heroCp(h, state)
         }
       }
       return { line, slots, count, cp }

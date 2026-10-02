@@ -45,8 +45,9 @@ import { attrStoneId } from '../promotion'
 import { tacticalFocusBonus } from '../tactical'
 import { addMasterXp } from '../master'
 import { foldBattleSkills } from '../skills'
-import { rebellionChance, withFavor } from '../favor'
-import { moraleAdjust, refusesDeploy } from '../estate/deploy'
+import { withFavor } from '../favor'
+import { moraleAdjust } from '../estate/deploy'
+import { deployParty, REFUSAL_REASONS } from './deploy'
 import { addPi } from '../interference'
 import { practice, woundBoss } from '../minigames'
 import { floorModifiersFor, withBonds } from '../depth'
@@ -505,34 +506,17 @@ export function playFloor(
     throw new Error(`playFloor: only a Master who knows ${TUNING.lifecycle.subvertTruths} truths can subvert the ninetieth floor`)
   }
 
-  // ── 1. Build deployed hero units (skip empty slots, dead, and Sanity-0). ────
-  const heroUnits: CombatUnit[] = []
-  const deployedIds: HeroId[] = []
-  const refusedHeroIds: HeroId[] = []
-  const { slots, lines } = state.party
-  for (let s = 0; s < slots.length; s++) {
-    const heroId = slots[s]
-    if (heroId === null || heroId === undefined) continue
-    const hero = state.heroes[heroId]
-    // Skip empty slots, the dead, and the broken-down (Sanity 0 = cannot deploy).
-    // A hero in a Training Center drill is in the yard, one in the Ruins is away.
-    if (hero === undefined || !hero.alive || hero.sanity <= 0 || hero.training !== null || hero.expedition !== null || hero.captiveOf) continue
-    // REBELLION (Layer 3 §C1): a Wary, broken hero may refuse the order. The draw is
-    // gated on a positive chance, so everyone else's replays are untouched.
-    const rebel = rebellionChance(hero)
-    if (rebel > 0 && chance(rngFor(state.seed, 'rebel', floor, state.tower.attemptIndex, heroId), rebel).value) {
-      refusedHeroIds.push(heroId)
-      continue
-    }
-    // The estate: a burnt-out hero (or one out on a bounty) refuses; the withdrawn fight dulled.
-    if (refusesDeploy(state, heroId)) {
-      refusedHeroIds.push(heroId)
-      continue
-    }
-    const line: Line = lines[s] ?? 'front'
-    heroUnits.push(moraleAdjust(state, buildCombatUnit(hero, line, SKILLS, state.inventory)))
-    deployedIds.push(heroId)
-  }
+  // ── 1. Build deployed hero units through the deploy rails (deploy.ts): the dead, the
+  //       away (captive, Ruins, chamber, yard, bounty), the burnt out, the broken (Sanity 0)
+  //       and the Wary rebels stay behind — each with the true reason. The rebellion draw
+  //       is gated on a positive chance, so everyone else's replays are untouched. ────
+  const deployed = deployParty(state, (hero, line) => moraleAdjust(state, buildCombatUnit(hero, line, SKILLS, state.inventory)))
+  const heroUnits: CombatUnit[] = deployed.units
+  const deployedIds: HeroId[] = deployed.ids
+  const refusals = deployed.refusals
+  const refusedHeroIds: HeroId[] = refusals.filter((r) => REFUSAL_REASONS.includes(r.reason)).map((r) => r.heroId)
+  // Nobody fit to fight: refuse the attempt outright (no loop attempt burned, no wipe of nobody).
+  if (heroUnits.length === 0) throw new Error('playFloor: no one is fit to fight')
 
   // ── 2. Combat seed (folds the retry counter). ───────────────────────────────
   const combatSeed = hash(state.seed, 'combat', floor, state.tower.attemptIndex)
@@ -712,6 +696,7 @@ export function playFloor(
     worldEnded,
     worldSaved,
     refusedHeroIds,
+    refusals,
     result: res,
   }
 

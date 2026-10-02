@@ -1,10 +1,11 @@
-import type { Element, HeroClass, Star, OwnedHero } from '../engine/types'
-import { combatPowerForHero, gradeValueToLetter } from '../engine/stats'
+import type { DerivedStats, Element, HeroClass, Star, OwnedHero } from '../engine/types'
+import { gradeValueToLetter } from '../engine/stats'
 import { heroBustUrl } from './pixel/sprites'
 import { ENGRAVINGS, SKILLS } from '../engine/content'
-import { maxLevelFor, skillCp } from '../engine/skills'
-import { engravingCp } from '../engine/engravings'
+import { maxLevelFor } from '../engine/skills'
 import { t } from './i18n/i18n'
+import { heroCpFull, heroStatsFull, type CpContext } from '../engine/unit/trueCp'
+import { peekState } from './useGame'
 
 /** Visual tokens for elements. */
 export const ELEMENT_VIS: Record<Element, { glyph: string; color: string; label: string }> = {
@@ -42,9 +43,24 @@ export function classGlyph(c: HeroClass | null): string {
   return c === null ? '—' : CLASS_VIS[c].glyph
 }
 
-/** Display CP — the same number the combat unit carries (stats + skills term). */
-export function cpOf(hero: OwnedHero): number {
-  return combatPowerForHero(hero, hero.xp.level, skillCp(hero.skills) + engravingCp(hero.engraving))
+/**
+ * Display CP — the TRUE number the combat unit carries (gear, passives, engraving %,
+ * favor, the Sanity penalty: engine/unit/trueCp). Pass the account for gear to count;
+ * without it, the live store's account is used when this very hero belongs to it.
+ */
+export function cpOf(hero: OwnedHero, state?: CpContext | null): number {
+  return heroCpFull(cpContextFor(hero, state), hero)
+}
+
+/** The combat stats the hero would fight with (gear and every modifier), as `cpOf` reads. */
+export function statsOf(hero: OwnedHero, state?: CpContext | null): DerivedStats {
+  return heroStatsFull(cpContextFor(hero, state), hero)
+}
+
+function cpContextFor(hero: OwnedHero, state?: CpContext | null): CpContext {
+  if (state) return state
+  const live = peekState()
+  return live && live.heroes[hero.id] === hero ? live : { inventory: [] }
 }
 
 /** A hero's engraving/imprint (4★+ identity layer) as a small graded badge. */

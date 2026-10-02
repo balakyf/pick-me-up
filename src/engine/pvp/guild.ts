@@ -26,7 +26,7 @@ function party(state: GameState): CombatUnit[] {
   const out: CombatUnit[] = []
   state.party.slots.forEach((id, i) => {
     const h = id ? state.heroes[id] : undefined
-    if (pvpReady(h)) out.push(buildCombatUnit(h, state.party.lines[i] ?? 'front', SKILLS, state.inventory))
+    if (pvpReady(state, h)) out.push(buildCombatUnit(h, state.party.lines[i] ?? 'front', SKILLS, state.inventory))
   })
   return out
 }

@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from 'react'
 import { createStore, type Store } from '../engine/store'
-import type { StoragePort } from '../engine/types'
+import type { GameState, StoragePort } from '../engine/types'
 
 /**
  * The UI's single connection to the engine. One module-level store, wired to
@@ -26,6 +26,12 @@ export function getStore(): Store {
     singleton.load() // restore an existing save if present (no-op if none)
   }
   return singleton
+}
+
+/** The live account, if the store exists yet (never creates it). For helpers such as
+ *  `cpOf` that need the account's inventory but are called with a hero alone. */
+export function peekState(): GameState | null {
+  return singleton?.getState() ?? null
 }
 
 export function useGame() {

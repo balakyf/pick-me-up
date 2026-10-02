@@ -81,7 +81,7 @@ export function advise(state: GameState): Advice[] {
   const out: Advice[] = []
   const party = inParty(state)
   const heroes = living(state)
-  const ready = (h: OwnedHero) => canFight(h) && !refusesDeploy(state, h.id)
+  const ready = (h: OwnedHero) => canFight(h, state)
 
   // ── The party ────────────────────────────────────────────────────────────
   const bench = heroes.filter((h) => !party.has(h.id) && ready(h) && h.sanity >= A.benchMinSanity)
@@ -95,8 +95,8 @@ export function advise(state: GameState): Advice[] {
     const h = state.heroes[id]
     if (!h?.alive || h.sanity >= A.tiredBelow) continue
     const swap = bench
-      .filter((b) => b.sanity >= A.restedAt && !usedSwaps.has(b.id) && heroCp(b) >= heroCp(h) * A.swapCpRatio)
-      .sort((a, b) => heroCp(b) - heroCp(a))[0]
+      .filter((b) => b.sanity >= A.restedAt && !usedSwaps.has(b.id) && heroCp(b, state) >= heroCp(h, state) * A.swapCpRatio)
+      .sort((a, b) => heroCp(b, state) - heroCp(a, state))[0]
     if (!swap) continue
     usedSwaps.add(swap.id)
     const slots = state.party.slots.map((s) => (s === h.id ? swap.id : s))
@@ -222,7 +222,7 @@ export function advise(state: GameState): Advice[] {
   // ── Bench heroes could drill a skill ──
   if (state.facilities.trainingCenter.level > 0) {
     let n = 0
-    const benchByCp = heroes.filter((h) => !party.has(h.id) && ready(h)).sort((a, b) => heroCp(b) - heroCp(a))
+    const benchByCp = heroes.filter((h) => !party.has(h.id) && ready(h)).sort((a, b) => heroCp(b, state) - heroCp(a, state))
     for (const h of benchByCp) {
       if (n >= 2) break
       const opt = trainingOptions(state, h.id).find((o) => o.ok && o.cost <= state.gold / 4)

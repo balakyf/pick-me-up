@@ -1192,12 +1192,27 @@ export interface FloorResult {
   loopRollback: boolean
   /** This attempt cleared F90: the world ends. */
   worldEnded: boolean
-  /** Heroes who refused to deploy (Wary and broken — Layer 3 rebellion). */
+  /** Heroes who refused the order (rebellion, burnout or a bounty — the old meaning; kept
+   *  for compatibility). `refusals` has every slotted hero who stayed behind, with why. */
   refusedHeroIds: HeroId[]
+  /** Every slotted hero who did not fight this attempt, and the true reason (deploy rails). */
+  refusals: { heroId: HeroId; reason: DeployReason }[]
   /** F90 was cleared by subversion: the world was saved. */
   worldSaved: boolean
   result: BattleResult
 }
+
+/** Why a slotted hero stays behind (see engine/tower/deploy.ts). */
+export type DeployReason =
+  | 'dead'
+  | 'captive'
+  | 'expedition'
+  | 'promotion'
+  | 'training'
+  | 'bounty'
+  | 'burnout'
+  | 'exhausted'
+  | 'rebellion'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Content templates (authored data → built into Heroes / CombatUnits)

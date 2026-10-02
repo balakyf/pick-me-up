@@ -28,11 +28,11 @@ const ROMAN = ['I', 'II', 'III']
 
 /** Strongest fit heroes into the three parties; the best spotters (archers, light, mages) on the ballista. */
 function autoFill(state: GameState): HeroId[][] {
-  const fit = (Object.values(state.heroes) as OwnedHero[]).filter((h) => fitToFight(h)).sort((a, b) => cpOf(b) - cpOf(a))
+  const fit = (Object.values(state.heroes) as OwnedHero[]).filter((h) => fitToFight(h, state)).sort((a, b) => cpOf(b, state) - cpOf(a, state))
   const spotter = (h: OwnedHero) => (h.heroClass === 'archer' ? 2 : 0) + (h.element === 'light' || h.heroClass === 'mage' ? 1 : 0)
   const crew: HeroId[] = []
   // Keep the crew from the bench below the top fifteen when the roster allows.
-  const bench = fit.slice(RD.maxParties * SIZE).sort((a, b) => spotter(b) - spotter(a) || cpOf(b) - cpOf(a))
+  const bench = fit.slice(RD.maxParties * SIZE).sort((a, b) => spotter(b) - spotter(a) || cpOf(b, state) - cpOf(a, state))
   for (const h of bench) if (crew.length < RD.maxCrew) crew.push(h.id)
   const fighters = fit.filter((h) => !crew.includes(h.id)).slice(0, RD.maxParties * SIZE)
   // Bond siblings travel together so their set bonus lands (strongest cluster first).
@@ -74,7 +74,7 @@ export function RaidPlanner({ state, store, onClose }: { state: GameState; store
   const brk = ballistaBreak(crew, state.meta.skill.ballista)
   const parties = rows.slice(0, 3).filter((r) => r.length > 0)
   const why = raidRefusal(state, floor, parties, rows[3]!)
-  const fit = (Object.values(state.heroes) as OwnedHero[]).filter((h) => fitToFight(h)).sort((a, b) => cpOf(b) - cpOf(a))
+  const fit = (Object.values(state.heroes) as OwnedHero[]).filter((h) => fitToFight(h, state)).sort((a, b) => cpOf(b, state) - cpOf(a, state))
 
   function toggle(id: HeroId) {
     setRows((cur) => {

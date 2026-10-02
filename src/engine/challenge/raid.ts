@@ -104,7 +104,7 @@ export function raidRefusal(state: GameState, floor: number, parties: readonly H
   if (crew.length > RD.maxCrew) return `The ballista takes at most ${RD.maxCrew} crew.`
   const all = [...fighting.flat(), ...crew]
   if (distinct(all).length !== all.length) return 'A hero can only be in one place.'
-  if (all.some((id) => !fitToFight(state.heroes[id]) || refusesDeploy(state, id))) return 'Everyone sent must be fit to fight.'
+  if (all.some((id) => !fitToFight(state.heroes[id], state))) return 'Everyone sent must be fit to fight.'
   return null
 }
 

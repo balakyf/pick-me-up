@@ -160,7 +160,7 @@ function partyFit(state: GameState): { hero: OwnedHero; line: CombatUnit['line']
   const out: { hero: OwnedHero; line: CombatUnit['line'] }[] = []
   state.party.slots.forEach((id, i) => {
     const h = id ? state.heroes[id] : undefined
-    if (fitToFight(h) && !refusesDeploy(state, h.id)) out.push({ hero: h, line: state.party.lines[i] ?? 'front' })
+    if (fitToFight(h, state)) out.push({ hero: h, line: state.party.lines[i] ?? 'front' })
   })
   return out
 }

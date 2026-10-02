@@ -269,13 +269,22 @@ describe('trauma: burnout', () => {
     expect(later.estate.trauma[h.id]!.veteran).toBe(true)
   })
 
-  it('a burnt-out hero in the party is refused at the tower', () => {
+  it('a burnt-out hero in the party is refused at the tower (with the true reason)', () => {
+    const s0 = roster(10, 1)
+    const [h, other] = living(s0)
+    const party = { slots: [h!.id, other!.id, null, null, null], lines: s0.party.lines }
+    const s = setTrauma({ ...s0, party }, h!.id, { burnoutUntil: 1e15 })
+    const { result } = attemptFloorWithResult(s)
+    expect(result.refusedHeroIds).toContain(h!.id)
+    expect(result.refusals).toContainEqual({ heroId: h!.id, reason: 'burnout' })
+    expect(result.result.log.unitsInit.some((u) => u.id === h!.id)).toBe(false)
+  })
+
+  it('a party of nobody but the burnt out cannot enter at all', () => {
     const s0 = roster(10, 0)
     const h = living(s0)[0]!
     const s = setTrauma(s0, h.id, { burnoutUntil: 1e15 })
-    const { result } = attemptFloorWithResult(s)
-    expect(result.refusedHeroIds).toContain(h.id)
-    expect(result.cleared).toBe(false)
+    expect(() => attemptFloorWithResult(s)).toThrow(/no one is fit to fight/)
   })
 })
 

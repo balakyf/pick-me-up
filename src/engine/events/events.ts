@@ -22,6 +22,7 @@ import { clampSanity } from '../kitchen'
 import { summon } from '../gacha'
 import { rngFor, hash, chance, pick, type Rng } from '../rng'
 import { TOURNAMENT_FORMATS } from '../tower'
+import { deployParty } from '../tower/deploy'
 import { recordBattle } from '../codex'
 
 const E = TUNING.events
@@ -79,14 +80,10 @@ export function merchantPrice(): number {
   return E.merchantStones * E.merchantGoldPerStone
 }
 
-/** The party's deployable heroes (as the tower deploys them), in slot order. */
+/** The party's deployable heroes (as the tower deploys them — the deploy rails), in slot
+ *  order. No rebellion draw: event floors are not a tower attempt. */
 function deployable(state: GameState): { hero: OwnedHero; line: CombatUnit['line'] }[] {
-  const out: { hero: OwnedHero; line: CombatUnit['line'] }[] = []
-  state.party.slots.forEach((id, i) => {
-    const h = id ? state.heroes[id] : undefined
-    if (h && h.alive && h.sanity > 0 && h.training === null && !h.expedition && !h.captiveOf) out.push({ hero: h, line: state.party.lines[i] ?? 'front' })
-  })
-  return out
+  return deployParty(state, (hero, line) => ({ hero, line }), { rebellion: false }).units
 }
 
 function addSanity(state: GameState, ids: HeroId[] | 'all', delta: number): GameState {

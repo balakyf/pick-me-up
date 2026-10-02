@@ -20,6 +20,7 @@ import { SKILLS } from '../content'
 import { buildCombatUnit } from '../unit'
 import { runBattle } from '../combat'
 import { rivalSquad } from '../events'
+import { deployParty, fitToDeploy } from '../tower/deploy'
 import { worldDayIndex } from '../daily'
 import { tacticalFocusBonus } from '../tactical'
 import { clampSanity } from '../kitchen'
@@ -35,21 +36,15 @@ export function worldWeek(nowWorld: number): number {
   return Math.floor(worldDayIndex(nowWorld) / 7)
 }
 
-/** Can this hero fight in PvP right now (home, alive, not held, not busy)? */
-export function pvpReady(h: OwnedHero | undefined): h is OwnedHero {
-  return !!h && h.alive && h.sanity > 0 && h.training === null && !h.expedition && !h.captiveOf && h.promotion === null
+/** Can this hero fight in PvP right now (home, alive, not held, not busy — the deploy rails:
+ *  no bounty, no burnout, Sanity above 0)? No rebellion draw: that is the tower's. */
+export function pvpReady(state: GameState, h: OwnedHero | undefined): h is OwnedHero {
+  return fitToDeploy(state, h, { rebellion: false }).ok
 }
 
 /** The heroes that would fight for `slots` (in order), as combat units. */
 function unitsFor(state: GameState, slots: readonly (HeroId | null)[], lines = state.party.lines): { units: CombatUnit[]; ids: HeroId[] } {
-  const units: CombatUnit[] = []
-  const ids: HeroId[] = []
-  slots.forEach((id, i) => {
-    const h = id ? state.heroes[id] : undefined
-    if (!pvpReady(h)) return
-    units.push(buildCombatUnit(h, lines[i] ?? 'front', SKILLS, state.inventory))
-    ids.push(h.id)
-  })
+  const { units, ids } = deployParty(state, (h, line) => buildCombatUnit(h, line, SKILLS, state.inventory), { rebellion: false }, slots, lines)
   return { units, ids }
 }
 
