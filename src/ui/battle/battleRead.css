@@ -74,6 +74,10 @@
 }
 .turn-label { font-size: 10px; letter-spacing: 1px; color: var(--ink-dim); text-transform: uppercase; }
 .turn-strip ol { display: flex; align-items: center; gap: 3px; margin: 0; padding: 0; list-style: none; }
+/* Room for the current actor's bigger cell whether or not one is up, so the strip (and, on a
+   phone, everything docked under it) never jumps a few pixels from beat to beat. */
+.turn-strip ol { min-height: 32px; }
+.battle.beside .turn-strip ol { min-height: 26px; }
 .turn-cell {
   width: 26px; height: 26px; box-sizing: border-box; display: flex; align-items: center; justify-content: center;
   overflow: hidden; background: #0a0714; border: 2px solid #4a8ad8;

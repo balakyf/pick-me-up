@@ -28,6 +28,9 @@ export function useStageFit(log: CombatLog, byId: Record<string, CombatUnitInit>
   const [fit, setFit] = useState(() => fitStage(BG_W * 2, BG_H * 2))
   const spanW = useRef(span.width)
   spanW.current = span.width
+  /** The tallest the windows and docked strips have stood on this screen size: the stage
+   *  fits under that, so it does not grow and shrink as foes fall and waves arrive. */
+  const chrome = useRef({ screen: '', h: 0 })
   useLayoutEffect(() => {
     const measure = () => {
       const vw = window.innerWidth
@@ -36,12 +39,16 @@ export function useStageFit(log: CombatLog, byId: Record<string, CombatUnitInit>
       setMode((old) => (old === m ? old : m))
       // Whatever docks around the stage (the mission strip, the turn order) takes its room.
       const extras = Math.max(0, (mainRef.current?.offsetHeight ?? 0) - (wrapRef.current?.offsetHeight ?? 0))
+      const screen = `${vw}x${vh}`
+      if (chrome.current.screen !== screen) chrome.current = { screen, h: 0 }
+      chrome.current.h = Math.max(chrome.current.h, (hudRef.current?.offsetHeight ?? 0) + extras)
+      const taken = chrome.current.h
       const next =
         m === 'beside'
           ? fitStage(vw - (hudRef.current?.offsetWidth ?? 280) - 28, vh - 16, spanW.current)
           : m === 'narrow'
-            ? fitStage(vw - 12, vh - (hudRef.current?.offsetHeight ?? 0) - extras - 22, spanW.current)
-            : fitStage(vw - 16, vh - (hudRef.current?.offsetHeight ?? 0) - extras - 26)
+            ? fitStage(vw - 12, vh - taken - 22, spanW.current)
+            : fitStage(vw - 16, vh - taken - 26)
       setFit((f) => (f.zoom === next.zoom && f.width === next.width ? f : next))
     }
     measure()
