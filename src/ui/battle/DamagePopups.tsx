@@ -1,5 +1,6 @@
 import { HITSTOP_MS } from './battleFrames'
 import { planPopups, type PopupInput } from './popupStyle'
+import type { PopupBox } from './choreo'
 import './hitEffect.css'
 
 export { isPopupEvent, popupLook, type PopupEvent } from './popupStyle'
@@ -16,6 +17,7 @@ export function DamagePopups({
   zoom,
   speed,
   bounds,
+  reserved,
 }: {
   items: readonly PopupInput[]
   pos: Record<string, { x: number; y: number }>
@@ -26,8 +28,10 @@ export function DamagePopups({
   speed: number
   /** The visible stretch of the canon (numbers stay on it). */
   bounds?: { left: number; right: number }
+  /** Boxes the numbers keep clear of (a skill name over its caster). */
+  reserved?: readonly PopupBox[]
 }) {
-  const plan = planPopups(items, pos, headOf, zoom, bounds)
+  const plan = planPopups(items, pos, headOf, zoom, bounds, reserved)
   return (
     <>
       {plan.map((p) => (

@@ -118,8 +118,15 @@ export function popupLanes(boxes: readonly PopupBox[], step = 3, maxLift = 90): 
  * further — a sweep's crowded column of numbers fans out instead of towering. Newest first,
  * as `popupLanes`.
  */
-export function popupPlaces(boxes: readonly PopupBox[], step = 3, maxLift = 90, slide = 0.9): { dx: number; lift: number }[] {
-  const placed: { l: number; r: number; t: number; b: number }[] = []
+export function popupPlaces(
+  boxes: readonly PopupBox[],
+  step = 3,
+  maxLift = 90,
+  slide = 0.9,
+  /** Boxes already on screen that popups must keep clear of (a skill's name banner). */
+  fixed: readonly PopupBox[] = [],
+): { dx: number; lift: number }[] {
+  const placed: { l: number; r: number; t: number; b: number }[] = fixed.map((p) => ({ l: p.x - p.w / 2, r: p.x + p.w / 2, t: p.y, b: p.y + p.h }))
   const out: { dx: number; lift: number }[] = boxes.map(() => ({ dx: 0, lift: 0 }))
   const at = (p: PopupBox, dx: number, lift: number) => ({ l: p.x + dx - p.w / 2, r: p.x + dx + p.w / 2, t: p.y - lift, b: p.y - lift + p.h })
   const clash = (r: { l: number; r: number; t: number; b: number }) =>

@@ -91,6 +91,16 @@ describe('popup plan', () => {
     for (const p of planPopups(items, pos, head, zoom)) expect(p.fs * zoom).toBeGreaterThanOrEqual(MIN_SCREEN_PX - 0.1)
   })
 
+  it("keeps clear of the skill name over its caster (an HP cost never sits on 'Pathology')", () => {
+    const cost: PopupInput = { e: { seq: 9, tick: 1, kind: 'hp-cost', unitId: 'h', amount: 70, hpAfter: 30 }, element: 'physical', maxHP: 100, delayMs: 0 }
+    const banner = { x: 260, y: 170 - 32 - 20, w: 50, h: 13 }
+    const [free] = planPopups([cost], pos, head, 2)
+    const [clear] = planPopups([cost], pos, head, 2, undefined, [banner])
+    const fs = clear!.fs
+    expect(free!.y + fs > banner.y && free!.y < banner.y + banner.h).toBe(true) // it would have sat on it
+    expect(clear!.y + fs + 2 <= banner.y || Math.abs(clear!.x - banner.x) * 2 >= banner.w).toBe(true)
+  })
+
   it('keeps a number on the visible stretch of a cropped stage', () => {
     const [p] = planPopups([{ e: hit({ targetId: 'a', amount: 40 }), element: 'fire', maxHP: 100, delayMs: 0 }], { a: { x: 4, y: 170 } }, head, 1, { left: 0, right: 300 })
     expect(p!.x).toBeGreaterThan(4)

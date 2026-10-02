@@ -142,8 +142,9 @@ export function BattleScene({
   const beside = mode === 'beside'
   const docked = mode === 'narrow'
   /** A skill name over a unit near the edge of the stage hangs inward instead of off screen. */
+  const bannerW = (name: string) => name.length * Math.max(9, 11 / zoom) * 0.62 + 10
   const bannerEdge = (x: number, name: string): 'left' | 'right' | null => {
-    const half = (name.length * Math.max(9, 11 / zoom) * 0.62 + 10) / 2
+    const half = bannerW(name) / 2
     return x + half > visible.right ? 'right' : x - half < visible.left ? 'left' : null
   }
 
@@ -162,6 +163,18 @@ export function BattleScene({
   // each struck unit flinches.
   const popups = useMemo(() => (atEnd ? [] : beatPopups(log.events, [frames[cursor - 1], snap], byId)), [cursor, log, atEnd, frames, snap, byId])
   const hurtDelay = useMemo(() => flinchDelays(beat), [beat])
+  /** Where the skill name hangs over its caster (the numbers keep clear of it). */
+  const bannerBox = (() => {
+    const s = snap.skill
+    const u = s ? byId[s.caster] : undefined
+    const p = s ? pos[s.caster] : undefined
+    if (!s || !u || !p || atEnd) return null
+    const w = bannerW(s.name)
+    const size = sizeOf(u)
+    const edge = bannerEdge(p.x, s.name)
+    const x = edge === 'left' ? p.x - size.w / 2 + w / 2 : edge === 'right' ? p.x + size.w / 2 - w / 2 : p.x
+    return { x, y: p.y - size.h - 20, w, h: Math.max(9, 11 / zoom) * 1.2 + 2 }
+  })()
 
   // Choreography: who runs where, who fires what (see choreo.ts).
   const style = useMemo<AttackStyle | null>(() => {
@@ -361,7 +374,8 @@ export function BattleScene({
 
   const objective = view ? <ObjectiveHud view={view} snap={snap} byId={byId} nameOf={nameOf} bustOf={bustOf} docked={docked || beside} /> : null
   const turns = <TurnStrip now={turnNow} next={upcoming} byId={byId} iconOf={iconOf} nameOf={nameOf} docked={docked || beside} />
-  const hintCard = hint === 'on' ? <ElementsHint onClose={closeHint} docked={docked || beside} /> : null
+  // The hint steps aside for a death moment and the fallen hero's last words.
+  const hintCard = hint === 'on' && !card && !fallen ? <ElementsHint onClose={closeHint} docked={docked || beside} /> : null
 
   return (
     <div
@@ -454,6 +468,7 @@ export function BattleScene({
                   zoom={zoom}
                   speed={speed}
                   bounds={visible}
+                  reserved={bannerBox ? [bannerBox] : []}
                 />
               </div>
 

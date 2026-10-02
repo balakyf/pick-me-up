@@ -144,6 +144,8 @@ export function planPopups(
   headOf: (id: string) => number,
   zoom = 1,
   bounds: { left: number; right: number } = { left: -Infinity, right: Infinity },
+  /** Boxes on screen the numbers keep clear of (the skill name over its caster). */
+  reserved: readonly PopupBox[] = [],
 ): PopupPlan[] {
   const minFs = MIN_SCREEN_PX / zoom
   const minTag = MIN_TAG_SCREEN_PX / zoom
@@ -167,6 +169,7 @@ export function planPopups(
     3,
     140,
     0.9,
+    reserved,
   )
   return rows.map((r, i) => ({
     key: r.it.e.seq,
