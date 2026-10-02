@@ -210,6 +210,33 @@ export const TUNING = {
     },
   },
 
+  /** Innate traits (lane J, content/traits.ts): derived from identity, never stored. */
+  traits: {
+    /** Per-mille chance a hero's trait is its family's RARE form, by CURRENT star. Rising
+     *  with the star and read against one fixed roll per hero, so a promotion can only ever
+     *  awaken a trait (Brave → Lionheart), never take it back. */
+    rarePerMille: { 1: 60, 2: 120, 3: 220, 4: 380, 5: 540, 6: 700, 7: 850 } as Record<number, number>,
+    /** A family's pull is `base + s²` with s the hero's leaning toward it on 0..10 (courage
+     *  for the Brave, temper for the Hot-Blooded…), so temperament decides most traits. */
+    familyBase: 4,
+    /** CP a trait adds for what its keywords do that the stat line cannot show. */
+    cp: { common: 6, rare: 14 } as Record<'common' | 'rare', number>,
+  },
+
+  /** The promotion ceremony (lane J): growth and the choices a promotion offers. */
+  ceremony: {
+    /** 'potential': every growth grade rises by `gradePerPromotion` (to the new ceiling) and
+     *  one seeded grade by `bonusGrade` more — a summoned S-grade stays special. 'reroll':
+     *  the old upward-only re-roll in the new envelope. */
+    growth: 'potential' as 'potential' | 'reroll',
+    gradePerPromotion: 1,
+    bonusGrade: 1,
+    /** Skills a promotion offers to choose from (when the hero already has its class skill). */
+    skillOffers: 3,
+    /** Classes a classless hero reaching the class-change star chooses between. */
+    classOffers: 2,
+  },
+
   /** Engravings / Imprints (Layer 1 §5.4). */
   engravings: {
     /** Grade weights for a summoned engraving (a 5★ is lifted one grade). */
