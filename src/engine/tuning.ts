@@ -259,6 +259,9 @@ export const TUNING = {
     repeatDecay: 0.5,
     repeatSour: 3,
     sourLoss: 2,
+    /** Repeats are counted over the hero's last this-many gifts (not just an unbroken
+     *  streak), so alternating two gifts no longer resets the decay. */
+    repeatWindow: 5,
   },
 
   /** Probability Interference — passive, account-wide (Layer 3 §D1). */
@@ -822,6 +825,9 @@ export const TUNING = {
       pairsPerPlace: 6,
     },
     grief: { base: 30, perAffinity: 0.6, sanityBase: 10, sanityPerAffinity: 0.15, decay: 0.4, mourn: 6, healer: 3 },
+    /** Memorial upgrades (B47): each level above the first lets a mourner's visit ease more
+     *  grief and steady them a little more (a kept garden of graves, benches, lanterns). */
+    memorial: { griefPerLevel: 1.5, sanityPerLevel: 0.5 },
     memories: { max: 12 },
     chronicleMax: 120,
     /** Jobs: skill tiers (work slots banked), the per-tier multiplier, and outputs per work slot. */

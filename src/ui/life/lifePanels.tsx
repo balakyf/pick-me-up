@@ -20,7 +20,7 @@ import {
   lifeOf,
   personalityOf,
 } from '../../engine/life'
-import { forgeCost, forgeGrade, smithyUnlocked } from '../../engine/equipment'
+import { forgeCost, forgeGrade, heirlooms, smithyUnlocked } from '../../engine/equipment'
 import { heroBustUrl } from '../pixel/sprites'
 import { JOB_NAME, accountDay, lastWords, shortName, statusLine, tradeName } from './speech'
 import { JOB_BLURB, JOB_ICON } from './lifeWindows'
@@ -188,9 +188,11 @@ export function MemorialPanel({ state }: { state: GameState }) {
   if (graves.length === 0) return <div className="lr-empty">{t('The lawn is empty. Keep it that way, Master.')}</div>
   const cause = (c: string, floor: number) =>
     c === 'synthesis' ? t('lost to the Synthesis Chamber') : c === 'captor' ? t('never ransomed') : t('fell on floor {n}', { n: floor })
+  const level = state.facilities.memorial?.level ?? 1
   return (
     <div className="memorial">
       <p className="muted">{t('{n} names on the obelisk.', { n: graves.length })}</p>
+      {level > 1 && <p className="muted small">{t('A well-kept Memorial (Lv {n}): each visit eases a mourner’s grief faster.', { n: level })}</p>}
       {graves.map((g) => (
         <div key={g.heroId} className="grave-row">
           <div className="grave-name">
@@ -201,10 +203,26 @@ export function MemorialPanel({ state }: { state: GameState }) {
             {g.mourners.length > 0 && ` · ${t('mourned by {names}', { names: g.mourners.map((m) => shortName(state, m)).join(', ') })}`}
           </div>
           <div className="last-words">“{lastWords(state, g)}”</div>
+          {heirlooms(state, g).map((h) => (
+            <div key={h.itemId} className="muted small heirloom">
+              {h.wielder
+                ? t('Their {item} was passed on to {name}.', { item: gearLabel(h.name), name: shortName(state, h.wielder.id) })
+                : t('Their {item} waits in the armory.', { item: gearLabel(h.name) })}
+            </div>
+          ))}
         </div>
       ))}
     </div>
   )
+}
+
+/** Gear names come from the engine in English ("S Blade", "Aria's Oath-Blade"). */
+function gearLabel(name: string): string {
+  const oath = /^(.+)'s Oath-(\w+)$/.exec(name)
+  if (oath) return t("{who}'s Oath-{noun}", { who: oath[1]!, noun: t(oath[2]!) })
+  const plain = /^(\S+) (Blade|Plate|Charm)$/.exec(name)
+  if (plain) return t('{grade} {noun}', { grade: plain[1]!, noun: t(plain[2]!) })
+  return t(name)
 }
 
 export function DormitoryInfo({ state }: { state: GameState }) {
