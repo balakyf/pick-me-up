@@ -137,6 +137,7 @@ export default {
   '{name} unleashes {move}!': '{name} déchaîne {move} !',
   '{name} unleashes {move} — the party has braced for it!': '{name} déchaîne {move} — le groupe s’y était préparé !',
   '{name} unleashes {move} — the party covers {target}!': '{name} déchaîne {move} — le groupe couvre {target} !',
+  '{name} unleashes {move} — the protected take it softened!': '{name} déchaîne {move} — les protégés l’encaissent amorti !',
   '{name} is staggered — the {move} dies in its throat!': '{name} chancelle — {move} lui meurt dans la gorge !',
   '{name} falls — the {move} never comes.': '{name} tombe — {move} ne viendra jamais.',
   '{name} calls {other} to its side!': '{name} appelle {other} à ses côtés !',

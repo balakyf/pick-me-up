@@ -108,7 +108,12 @@ export function orderCaption(o: BattleOrder, nameOf: (id: string) => string): st
 export function chargedCaption(e: Extract<CombatEvent, { kind: 'act' }>, nameOf: (id: string) => string): string {
   const move = moveName(e.skillId)
   if (e.answered === 'guard') return t('{name} unleashes {move} — the party has braced for it!', { name: nameOf(e.actorId), move })
-  if (e.answered === 'protect') return t('{name} unleashes {move} — the party covers {target}!', { name: nameOf(e.actorId), move, target: nameOf(e.targetId) })
+  // (A sweep's 'act' names its first target, not the one the Master protected: name the
+  // covered hero only when the move struck them alone.)
+  if (e.answered === 'protect')
+    return SKILLS[e.skillId]?.target === 'single'
+      ? t('{name} unleashes {move} — the party covers {target}!', { name: nameOf(e.actorId), move, target: nameOf(e.targetId) })
+      : t('{name} unleashes {move} — the protected take it softened!', { name: nameOf(e.actorId), move })
   return t('{name} unleashes {move}!', { name: nameOf(e.actorId), move })
 }
 

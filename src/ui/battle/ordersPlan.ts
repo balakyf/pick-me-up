@@ -64,16 +64,43 @@ export function holdGiven(events: readonly CombatEvent[], applied: number): bool
   return false
 }
 
-/** Is the party bracing (a Guard's statuses still up on anyone) as of `applied` events? */
+/**
+ * Is the party bracing under the Master's Guard as of `applied` events? Read from the Guard
+ * itself — the order (or, for a standing Guard, the first wind-up after it) and the run of
+ * 'guard-up' statuses it raises at once, which say how long it holds — never from any
+ * 'guard-up' (a knight's own Shield Wall is not the Master's Guard, and one hero's guard
+ * wearing off does not end the party's).
+ */
 export function guardUp(events: readonly CombatEvent[], applied: number): boolean {
-  let up = false
-  for (let i = 0; i < Math.min(applied, events.length); i++) {
+  const n = Math.min(applied, events.length)
+  let until = -1
+  let armed = false
+  /** Inside the run of statuses a Guard raises. */
+  let raising = false
+  for (let i = 0; i < n; i++) {
     const e = events[i]!
-    if (e.kind === 'order' && e.order.kind === 'guard' && !e.order.onTelegraph) up = true
-    else if (e.kind === 'status' && e.status === 'guard-up' && e.sourceId === e.unitId) up = true
-    else if (e.kind === 'status-end' && e.status === 'guard-up') up = false
+    if (e.kind === 'order' && e.order.kind === 'guard') {
+      if (e.order.onTelegraph) armed = true
+      else {
+        raising = true
+        until = Math.max(until, e.tick + 1)
+      }
+      continue
+    }
+    if (e.kind === 'telegraph' && armed) {
+      armed = false
+      raising = true
+      until = Math.max(until, e.tick + 1)
+      continue
+    }
+    if (raising && e.kind === 'status' && e.status === 'guard-up') {
+      until = Math.max(until, e.tick + e.ticks)
+      continue
+    }
+    raising = false
   }
-  return up
+  const now = n > 0 ? events[n - 1]!.tick : 0
+  return now < until
 }
 
 /** Where everyone stands after the swaps played so far (two heroes trade places). */

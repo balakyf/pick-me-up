@@ -50,7 +50,9 @@ describe('boss captions and timings', () => {
     expect(afterCharged(f.boss, 'dragon').charges).toEqual([])
     const fire = ev<Extract<CombatEvent, { kind: 'act' }>>({ tick: 14, kind: 'act', actorId: 'dragon', skillId: 'e_dragon_breath', targetId: 'a', charged: true, answered: 'guard' })
     expect(chargedCaption(fire, nameOf)).toBe('Halgiraf unleashes Dragon Breath — the party has braced for it!')
-    expect(chargedCaption({ ...fire, answered: 'protect' }, nameOf)).toBe('Halgiraf unleashes Dragon Breath — the party covers Bram!')
+    // A sweep names no one (its 'act' names its first target, not the protected one); a single blow does.
+    expect(chargedCaption({ ...fire, answered: 'protect' }, nameOf)).toBe('Halgiraf unleashes Dragon Breath — the protected take it softened!')
+    expect(chargedCaption({ ...fire, skillId: 'e_sky_dive', answered: 'protect' }, nameOf)).toBe('Halgiraf unleashes Sky Dive — the party covers Bram!')
     expect(chargedCaption({ ...fire, answered: undefined }, nameOf)).toBe('Halgiraf unleashes Dragon Breath!')
   })
 

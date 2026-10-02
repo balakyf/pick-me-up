@@ -49,6 +49,31 @@ describe('the orders on the battle screen', () => {
     expect(guardUp(e, 1)).toBe(false)
     expect(guardUp(e, 3)).toBe(true)
     expect(guardUp(e, 4)).toBe(false)
+    expect(guardUp(e, 2)).toBe(true)
+  })
+
+  it('the Guard is the Master’s: a knight’s own guard is not it, and one hero’s wearing off does not end it', () => {
+    const e = evs([
+      { tick: 2, kind: 'status', unitId: 'h1', status: 'guard-up', sourceId: 'h1', ticks: 20, value: 25 },
+      { tick: 5, kind: 'order', order: { tick: 5, kind: 'guard' } },
+      { tick: 5, kind: 'status', unitId: 'h1', status: 'guard-up', sourceId: 'h1', ticks: 8, value: 30 },
+      { tick: 5, kind: 'status', unitId: 'h2', status: 'guard-up', sourceId: 'h2', ticks: 8, value: 30 },
+      { tick: 7, kind: 'status-end', unitId: 'h2', status: 'guard-up', reason: 'broken' },
+      { tick: 13, kind: 'act', actorId: 'h1', skillId: 'basic', targetId: 'e1' },
+    ])
+    expect(guardUp(e, 1)).toBe(false)
+    expect(guardUp(e, 5)).toBe(true)
+    expect(guardUp(e, 6)).toBe(false)
+    // A standing Guard comes up with the first wind-up.
+    const s = evs([
+      { tick: 1, kind: 'order', order: { tick: 1, kind: 'guard', onTelegraph: true } },
+      { tick: 6, kind: 'telegraph', unitId: 'e1', skillId: 'e_dragon_breath', firesAtTick: 12, targets: ['h1'] },
+      { tick: 6, kind: 'status', unitId: 'h1', status: 'guard-up', sourceId: 'h1', ticks: 7, value: 30 },
+      { tick: 13, kind: 'act', actorId: 'h1', skillId: 'basic', targetId: 'e1' },
+    ])
+    expect(guardUp(s, 1)).toBe(false)
+    expect(guardUp(s, 3)).toBe(true)
+    expect(guardUp(s, 4)).toBe(false)
   })
 
   it('swapped heroes stand in each other’s places', () => {
