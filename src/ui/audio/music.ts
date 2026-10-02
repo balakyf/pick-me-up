@@ -7,7 +7,7 @@
 import { ANCHORS } from '../../engine/content'
 import { ACTS, actForFloor } from '../../engine/content/acts'
 import { getGraph, onAudioResume } from './mixer'
-import { Sequencer, TrackVoice, compileChannel, midiToHz, stepsPerBar, switchTime, nextBeatTime, type NotePlayer } from './sequencer'
+import { Sequencer, TrackVoice, compileChannel, midiToHz, stepsPerBar, switchTime, nextBeatTime, trackSeconds, type NotePlayer } from './sequencer'
 import { getSettings } from '../qol/settings'
 import { TRACKS, type TrackId } from './tracks'
 import { playInstrument } from './voices'
@@ -166,8 +166,14 @@ function fadeOut(v: TrackVoice, at: number, over: number): void {
   if (!g) return
   v.stopAt = at
   const p = v.gain.gain
-  p.cancelScheduledValues(at)
-  p.setValueAtTime(p.value || 1, at)
+  // Hold whatever level the automation reaches at the switch (a track still fading in keeps
+  // its ramp up to there); plain cancelScheduledValues would drop an unfinished fade-in and
+  // silence the old track at once.
+  if (typeof p.cancelAndHoldAtTime === 'function') p.cancelAndHoldAtTime(at)
+  else {
+    p.cancelScheduledValues(at)
+    p.setValueAtTime(Math.max(0.0001, p.value), at)
+  }
   p.exponentialRampToValueAtTime(0.0001, at + over)
   const gain = v.gain
   setTimeout(() => {
@@ -187,16 +193,24 @@ export function stopTrack(): void {
   currentId = null
 }
 
+/** The stingers still sounding, by track (a second death fades the first motif out). */
+const stingers = new Map<TrackId, TrackVoice>()
+
 /** Play a one-shot over the current music (the death motif), on the music level but past the duck. */
 export function playStinger(id: TrackId): void {
   const g = getGraph()
   const s = sequencer()
   if (!g || !s || getSettings().muted) return
+  // Two heroes falling close together: the motif starts again for the second, it never
+  // plays twice over itself out of step.
+  const prev = stingers.get(id)
+  if (prev && !prev.ended) fadeOut(prev, g.ctx.currentTime, 0.3)
   const track = TRACKS[id]
   const gain = g.ctx.createGain()
   gain.gain.value = track.gain ?? 1
   gain.connect(g.musicVol)
   const v = new TrackVoice(track, g.ctx.currentTime + 0.04, gain, 0)
+  stingers.set(id, v)
   s.add(v)
   setTimeout(() => {
     try {
@@ -204,7 +218,7 @@ export function playStinger(id: TrackId): void {
     } catch {
       /* gone */
     }
-  }, 9000)
+  }, (trackSeconds(track) + 2.5) * 1000)
 }
 
 /** For the dev hook and tests: what the player holds. */

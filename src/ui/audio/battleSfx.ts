@@ -8,7 +8,7 @@
  * blows the rest are dropped and the kept ones taper, so an AoE over eight foes is a
  * rolling crunch, not a machine gun. CueLimiter caps any family across beats too (4×).
  */
-import type { CombatEvent, CombatUnitInit, Element } from '../../engine/types'
+import type { CombatEvent, CombatUnitInit, Element, MissionCode } from '../../engine/types'
 import { SKILLS } from '../../engine/content'
 import { popupDelay } from '../battle/battleFrames'
 import type { CueName, CueOpts } from './cues'
@@ -32,6 +32,8 @@ export interface BeatSfxContext {
 export const MAX_BLOWS = 4
 /** Most misses, heals, statuses per beat. */
 const MAX_SMALL = 2
+/** Most foes' deaths one beat sounds (an AoE that clears a wave falls as a short roll). */
+export const MAX_FOE_DEATHS = 3
 
 /** ±30 cents, stable per event (a flurry never sounds copy-pasted, a replay sounds the same). */
 export function detuneFor(seq: number, salt = 0): number {
@@ -53,6 +55,8 @@ export function cuesForBeat(beat: readonly CombatEvent[], ctx: BeatSfxContext): 
   let heals = 0
   let statuses = 0
   let dots = 0
+  let absorbs = 0
+  let foeDeaths = 0
   const add = (cue: CueName, delayMs: number, opts: CueOpts = {}) => out.push({ cue, delayMs, opts })
   const side = (id: string) => ctx.byId[id]?.side
 
@@ -120,12 +124,21 @@ export function cuesForBeat(beat: readonly CombatEvent[], ctx: BeatSfxContext): 
         add('dot', 0, { status: e.status, gain: 0.7 })
         break
       case 'shield':
+        // A sweep into a shielded line rings once, not once per ward.
+        if (absorbs++ >= 1) break
         add('shield', 0, { gain: 0.45 })
         break
       case 'death': {
         const u = ctx.byId[e.unitId]
         const hero = u?.side === 'hero' && !(ctx.nonLethal && !u.isNpc)
-        add(hero ? 'hero-death' : 'death', hero ? 0 : 80, { detune: detuneFor(e.seq) })
+        if (hero) {
+          add('hero-death', 0, { detune: detuneFor(e.seq) })
+          break
+        }
+        // Foes fall one after another, like the blows that felled them, and only a few sound.
+        const k = foeDeaths++
+        if (k >= MAX_FOE_DEATHS) break
+        add('death', 80 + popupDelay(k), { detune: detuneFor(e.seq), gain: 1 / (1 + 0.2 * k) })
         break
       }
       case 'mission': {
@@ -169,7 +182,7 @@ export function cuesForBeat(beat: readonly CombatEvent[], ctx: BeatSfxContext): 
   return out
 }
 
-function missionCue(code: string | undefined): CueName | null {
+function missionCue(code: MissionCode | undefined): CueName | null {
   switch (code) {
     case 'wave-cleared':
       return 'wave-clear'

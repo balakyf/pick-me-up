@@ -10,9 +10,19 @@ export const FOCUSABLE =
 
 /** The elements Tab can reach inside `root`, in order. */
 export function focusables(root: HTMLElement): HTMLElement[] {
-  return Array.from(root.querySelectorAll<HTMLElement>(FOCUSABLE)).filter(
+  const all = Array.from(root.querySelectorAll<HTMLElement>(FOCUSABLE)).filter(
     (el) => !el.closest('[hidden], [inert], [aria-hidden="true"]') && el.getAttribute('tabindex') !== '-1',
   )
+  // A radio group is one tab stop: its checked radio, or its first when none is checked
+  // (the arrow keys move inside it). Otherwise a window ending on a row of choices would
+  // count an unchecked radio as "last", and Tab would slip out of the window behind it.
+  const groupStop = new Map<string, HTMLElement>()
+  for (const el of all) {
+    if (!(el instanceof HTMLInputElement) || el.type !== 'radio' || !el.name) continue
+    const cur = groupStop.get(el.name)
+    if (!cur || (el.checked && !(cur as HTMLInputElement).checked)) groupStop.set(el.name, el)
+  }
+  return all.filter((el) => !(el instanceof HTMLInputElement && el.type === 'radio' && el.name) || groupStop.get(el.name) === el)
 }
 
 /**

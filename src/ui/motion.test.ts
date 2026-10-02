@@ -55,6 +55,13 @@ describe('reduced motion', () => {
     expect(reducedMotion()).toBe(true)
   })
 
+  it('asks the OS once, not every frame (the lobby reads it per draw)', () => {
+    fakeOs(true)
+    const spy = window.matchMedia as unknown as ReturnType<typeof vi.fn>
+    for (let i = 0; i < 50; i++) reducedMotion()
+    expect(spy).toHaveBeenCalledTimes(1)
+  })
+
   it('notifies on a change of setting and mirrors data-motion on <html>', () => {
     const off = installMotionMirror()
     let calls = 0

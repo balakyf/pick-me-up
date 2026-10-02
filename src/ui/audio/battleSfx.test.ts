@@ -82,6 +82,20 @@ describe('battle sounds: event → cue', () => {
     expect(cues([ev({ kind: 'death', unitId: 'h1' })], { ...ctx, nonLethal: true })).toEqual(['death'])
   })
 
+  it('a wave wiped by one sweep falls as a short roll, not a pile-up; a ward sweep rings once', () => {
+    const wipe = cuesForBeat(
+      Array.from({ length: 6 }, (_, i) => ev({ kind: 'death', unitId: i % 2 ? 'e1' : 'e2' })),
+      ctx,
+    )
+    expect(wipe.map((c) => c.cue)).toEqual(['death', 'death', 'death'])
+    expect(wipe.map((c) => c.delayMs)).toEqual([80, 80 + popupDelay(1), 80 + popupDelay(2)])
+    // A hero's fall always sounds, whatever else fell with them.
+    const both = cues([...Array.from({ length: 4 }, () => ev({ kind: 'death', unitId: 'e1' })), ev({ kind: 'death', unitId: 'h1' })])
+    expect(both.filter((c) => c === 'hero-death')).toHaveLength(1)
+    const wards = Array.from({ length: 4 }, () => ev({ kind: 'shield', unitId: 'e1', actorId: 'h1', absorbed: 5, left: 1 }))
+    expect(cues(wards)).toEqual(['shield'])
+  })
+
   it('stingers and the field: cover, follow-up, rivalry, orders, waves, missions, floor mods', () => {
     expect(cues([ev({ kind: 'cover', unitId: 'h1', allyId: 'h2', actorId: 'e1' })])).toEqual(['cover'])
     expect(cues([ev({ kind: 'followup', unitId: 'h2', allyId: 'h1', targetId: 'e1' })])).toEqual(['followup'])

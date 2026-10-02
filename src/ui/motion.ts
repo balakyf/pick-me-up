@@ -12,12 +12,23 @@ import { getSettings, onSettingsChange, type MotionPref } from './qol/settings'
 
 const QUERY = '(prefers-reduced-motion: reduce)'
 
+/**
+ * The OS query, made once (per matchMedia implementation): the lobby asks every frame, and
+ * matchMedia builds a new MediaQueryList on each call. The list itself updates `matches`
+ * live, so caching it loses nothing.
+ */
+let mql: { fn: unknown; list: MediaQueryList | null } | null = null
 function media(): MediaQueryList | null {
+  const fn = typeof window !== 'undefined' ? window.matchMedia : undefined
+  if (mql && mql.fn === fn) return mql.list
+  let list: MediaQueryList | null = null
   try {
-    return typeof window !== 'undefined' && typeof window.matchMedia === 'function' ? window.matchMedia(QUERY) : null
+    list = typeof fn === 'function' ? window.matchMedia(QUERY) : null
   } catch {
-    return null
+    list = null
   }
+  mql = { fn, list }
+  return list
 }
 
 /** The OS preference (false where matchMedia is missing, e.g. jsdom). */

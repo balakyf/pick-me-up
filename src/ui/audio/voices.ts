@@ -294,6 +294,9 @@ export function playNoise(
 ): void {
   const src = ctx.createBufferSource()
   src.buffer = noiseBuffer(ctx, opts.kind ?? 'white')
+  // Loop the 2 s buffer: a long burst (a crash, the thunder) started late in it would
+  // otherwise run off its end and stop dead mid-envelope (a click).
+  src.loop = true
   if (opts.rate) src.playbackRate.value = opts.rate
   const g = ctx.createGain()
   const floor = 0.0001

@@ -42,6 +42,13 @@ describe('focus trap helpers', () => {
     expect(focusables(document.getElementById('w')!).map((e) => e.id)).toEqual(['a', 'b', 'c'])
   })
 
+  it('a radio group is one tab stop: its checked radio, or its first', () => {
+    document.body.innerHTML = `<div id="w"><button id="a">a</button>
+      <input type="radio" name="g" id="r1"><input type="radio" name="g" id="r2" checked><input type="radio" name="g" id="r3">
+      <input type="radio" name="h" id="s1"><input type="radio" name="h" id="s2"></div>`
+    expect(focusables(document.getElementById('w')!).map((e) => e.id)).toEqual(['a', 'r2', 's1'])
+  })
+
   it('wraps forward and backward, and pulls stray focus back in', () => {
     document.body.innerHTML = `<button id="out">out</button><div id="w" tabindex="-1"><button id="a">a</button><button id="b">b</button></div>`
     const w = document.getElementById('w')!
