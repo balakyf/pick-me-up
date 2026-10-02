@@ -1,6 +1,7 @@
 import type { CombatUnitInit } from '../../engine/types'
-import { hpColor } from '../bits'
 import type { Pose } from './choreo'
+import { HpBar } from './HpBar'
+import { ObjectiveMark } from './ObjectiveMark'
 
 /** How one unit looks on this frame (BattleScene works it out; this only draws it). */
 export interface UnitLook {
@@ -22,11 +23,15 @@ export interface UnitLook {
   /** The skill's colour when this unit takes a skill hit. */
   skillFlash: string | null
   /** The skill name banner over a caster. */
-  banner: { name: string; color: string } | null
+  banner: { name: string; color: string; edge?: 'left' | 'right' | null } | null
   turnMark: boolean
   panic: boolean
   /** Staggers the march-in. */
   enterDelayMs: number
+  /** The mission's mark over this unit: a crown for its target, a shield for its escort. */
+  mark?: 'target' | 'escort' | null
+  /** When a sweep strikes it: its place in the stagger (ms, already speed-scaled). */
+  hurtDelayMs?: number
 }
 
 /** One fighter on the stage: sprite, shadow, HP sliver, and the marks of the moment. */
@@ -58,23 +63,21 @@ export function UnitSprite({ u, look, onClick }: { u: CombatUnitInit; look: Unit
         zIndex: pose?.z ?? y,
         transform: pose ? `translate(${pose.dx}px, ${pose.dy}px)` : undefined,
         ['--enter-delay' as string]: `${look.enterDelayMs}ms`,
+        ['--hurt-delay' as string]: `${look.hurtDelayMs ?? 0}ms`,
         ...(look.skillFlash ? { ['--skill-color' as string]: look.skillFlash } : {}),
       }}
     >
       {look.skillFlash && <div className="skill-flash" />}
       {look.banner && (
-        <div className="skill-banner" style={{ borderColor: look.banner.color }}>
+        <div className={`skill-banner ${look.banner.edge ? `edge-${look.banner.edge}` : ''}`} style={{ borderColor: look.banner.color }}>
           {look.banner.name}
         </div>
       )}
       <div className="bshadow" style={{ width: size.w * 0.7 }} />
       {look.src && <img className="px bsprite" src={look.src} width={size.w} height={size.h} alt={u.name} />}
       {look.turnMark && <div className="turn-mark" aria-hidden="true" />}
-      {!look.dead && (
-        <div className={`bhp ${isHero && !u.isNpc ? 'hero-hp' : ''}`}>
-          <span style={{ width: `${look.hpPct}%`, background: hpColor(look.hpPct) }} />
-        </div>
-      )}
+      {!look.dead && <HpBar kind="bhp" pct={look.hpPct} className={isHero && !u.isNpc ? 'hero-hp' : ''} />}
+      {look.mark && !look.dead && <ObjectiveMark kind={look.mark} className="on-stage" />}
       {look.panic && <span className="bsweat">💧</span>}
     </div>
   )

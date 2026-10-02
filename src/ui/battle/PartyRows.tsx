@@ -1,9 +1,9 @@
 import type { CombatUnitInit } from '../../engine/types'
-import { hpColor } from '../bits'
 import { t } from '../i18n/i18n'
 import type { Snap } from './battleFrames'
+import { HpBar, SpBar } from './HpBar'
 
-/** The party window under the stage: bust, name, level and HP of every ally. */
+/** The party window under the stage: bust, name, level, HP (with its ghost) and SP of every ally. */
 export function PartyRows({
   heroes,
   snap,
@@ -40,8 +40,9 @@ export function PartyRows({
             </span>
             <span className="party-lv">{u.isNpc ? t('escort') : `Lv${u.level}`}</span>
             <span className="party-hp">
-              <span className="gauge">
-                <span style={{ width: `${pct}%`, background: hpColor(pct) }} />
+              <span className="party-bars">
+                <HpBar pct={pct} />
+                {!u.isNpc && u.maxSP > 0 && <SpBar sp={snap.sp[u.id] ?? u.maxSP} max={u.maxSP} />}
               </span>
               <span className="party-hpnum">
                 {hp}/{u.maxHP}
