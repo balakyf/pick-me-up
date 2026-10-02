@@ -92,12 +92,16 @@ export function floorPower(f: number, worldMult: number): number {
   // The early climb is budgeted up (tapering to nothing at the inflection), so the first
   // acts ask for a real party instead of falling in an afternoon.
   const boost = 1 + (T.earlyBudgetBoost * Math.max(0, T.inflectionFloor - f)) / T.inflectionFloor
+  // Behind the Wall the budget steps up once (lane F: a party with a healer and a tank).
+  // The anchors from the Herald up keep their authored weight (see buildScaledAnchor).
+  const pastWall = f > T.wallFloor ? T.postWallPowerMult : 1
   return (
     T.base *
     powLoop(T.powerBase, early) *
     powLoop(T.latePowerBase, late) *
     (1 + T.stepBonus * Math.floor(f / 5)) *
     boost *
+    pastWall *
     worldMult
   )
 }
@@ -285,7 +289,9 @@ function buildScaledAnchor(
   if (floor <= 20) return built
   // The Wailing Wall itself (F80's anchor) stands far above its floor's budget: the gate holds.
   const wall = floor === T.wallFloor ? T.wallPowerMult : 1
-  const target = floorPower(floor, worldMult) * T.anchorBudgetMult * wall
+  // The Herald, the collapse and the summit take a smaller step than the floors around them.
+  const set = floor >= T.worldEndFloor ? T.heraldPowerMult / T.postWallPowerMult : 1
+  const target = floorPower(floor, worldMult) * T.anchorBudgetMult * wall * set
   const cpOf = (b: { waves: EnemyWave[] }) => b.waves.reduce((n, w) => n + w.units.reduce((m, u) => m + u.cp, 0), 0)
   let mult = 1
   for (let i = 0; i < 400 && cpOf(built) < target; i++) {

@@ -258,8 +258,18 @@ export const TUNING = {
      *  through at +20 levels (balance pass 2). Only the gate: F81+ keep their curve.
      *  1.8 → 2.3 (lane D): with the lower base and anchorBudgetMult 1.4 the gate stands at
      *  about its old CP, and it holds for 6 whales in 6 over 30 days (at 2.2 two broke
-     *  through to F84; before the combat brain one reached F89). */
-    wallPowerMult: 2.3,
+     *  through to F84; before the combat brain one reached F89). 2.3 → 2.6 (lane F): heals,
+     *  shields and taunts make a party last; at 2.3 engaged bots broke through too. */
+    wallPowerMult: 2.6,
+    /** Every floor behind the Wall (F81+) has its budget × this (lane F). With heals,
+     *  shields and taunts a party that broke the gate walked every floor after it on the
+     *  first try (F81–99 in a day); before roles a whale that broke through stalled in
+     *  F84–89. */
+    postWallPowerMult: 1.5,
+    /** …and the anchors from the Herald up (F90, F95, F100) take this smaller step instead
+     *  (lane F): at 1.0 whales who broke the Wall walked through the Herald to F93–97; at
+     *  1.5 not even a party of five Lv150 gods could reach the summit. */
+    heraldPowerMult: 1.25,
     /** Past the inflection the budget exponent eases to this (the LEVEL curve steepens
      *  instead), so a maxed party can reach the summit. 1.04 → 1.045 (lane D): Act VI had
      *  gone soft under the lower base (whales cleared it on day 4 instead of day 12). */
