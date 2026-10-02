@@ -41,6 +41,15 @@ describe('floorClearMasterXp', () => {
     expect(floorClearMasterXp(34, true)).toBeGreaterThan(floorClearMasterXp(33, true))
     expect(floorClearMasterXp(35, true)).toBe(floorClearMasterXp(35, false) + M.xpPerFirstClear + 35 * (M.xpFirstClearPerFloor + M.xpAnchorFirstClearPerFloor))
   })
+
+  it('the first unlocks keep their early pace: ML2 after a floor or two, ML3 within the first act', () => {
+    // First Steps promises the Tavern and the Garden (ML2) after "a floor or two".
+    const firstClears = (n: number) => Array.from({ length: n }, (_, i) => floorClearMasterXp(i + 1, true)).reduce((a, b) => a + b, 0)
+    expect(addMasterXp(meta(1, 0), firstClears(2)).masterLevel).toBeGreaterThanOrEqual(2)
+    expect(addMasterXp(meta(1, 0), firstClears(1)).masterLevel).toBe(1)
+    // The Promotion Chamber and Synthesis (ML3) open within the first ten floors.
+    expect(addMasterXp(meta(1, 0), firstClears(10)).masterLevel).toBeGreaterThanOrEqual(TUNING.lobby.facilities.chamberUnlockMasterLevel)
+  })
 })
 
 describe('addMasterXp', () => {

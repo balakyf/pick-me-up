@@ -1,22 +1,28 @@
 /**
- * Baked Master-Level XP table (B21). Generated offline from
- *   need(L) = round(500 + 70·L + 0·L²), L = 1..99
- * and frozen as integer literals, so the engine never computes a fractional power at
- * runtime (the old round(60·L^1.8) was the very determinism hazard the guard missed).
- * Regenerate with the lane-B generator (see docs/superpowers/specs/2026-10-02-lane-b.md).
+ * Baked Master-Level XP table (B21), frozen as integer literals so the engine never
+ * computes a fractional power at runtime (the old round(60·L^1.8) was the very
+ * determinism hazard the guard missed). Three pieces:
+ *
+ *   L = 1..4   the old curve's opening (60, 209, 434, 728) — the first unlocks (the
+ *              Smithy, the Tavern and the Garden at ML2, the Promotion Chamber and
+ *              Synthesis at ML3) still come after "a floor or two", as First Steps says;
+ *   L = 5..9   1150 + 25·(L−5) — a short ramp up to the linear part;
+ *   L ≥ 10     560 + 70·L — so the late gates (ML10 truth hints, ML15 A forge, ML20 the
+ *              Crack and the S forge, ML25 the bait reveal) arrive inside the climb.
  *
  * MASTER_XP_TO_NEXT[L-1] = Master XP to advance from level L to L+1.
- * Cumulative: ML10 7650, ML15 14350, ML20 22800, ML25 33000, ML50 110250.
+ * Cumulative: ML2 60, ML3 269, ML5 1431, ML10 7431, ML15 14431, ML20 23181, ML25 33681,
+ * ML50 112431. Measured against the bots in docs/superpowers/specs/2026-10-02-lane-b.md.
  */
 export const MASTER_XP_TO_NEXT: readonly number[] = [
-  570, 640, 710, 780, 850, 920, 990, 1060, 1130, 1200,
-  1270, 1340, 1410, 1480, 1550, 1620, 1690, 1760, 1830, 1900,
-  1970, 2040, 2110, 2180, 2250, 2320, 2390, 2460, 2530, 2600,
-  2670, 2740, 2810, 2880, 2950, 3020, 3090, 3160, 3230, 3300,
-  3370, 3440, 3510, 3580, 3650, 3720, 3790, 3860, 3930, 4000,
-  4070, 4140, 4210, 4280, 4350, 4420, 4490, 4560, 4630, 4700,
-  4770, 4840, 4910, 4980, 5050, 5120, 5190, 5260, 5330, 5400,
-  5470, 5540, 5610, 5680, 5750, 5820, 5890, 5960, 6030, 6100,
-  6170, 6240, 6310, 6380, 6450, 6520, 6590, 6660, 6730, 6800,
-  6870, 6940, 7010, 7080, 7150, 7220, 7290, 7360, 7430,
+  60, 209, 434, 728, 1150, 1175, 1200, 1225, 1250, 1260,
+  1330, 1400, 1470, 1540, 1610, 1680, 1750, 1820, 1890, 1960,
+  2030, 2100, 2170, 2240, 2310, 2380, 2450, 2520, 2590, 2660,
+  2730, 2800, 2870, 2940, 3010, 3080, 3150, 3220, 3290, 3360,
+  3430, 3500, 3570, 3640, 3710, 3780, 3850, 3920, 3990, 4060,
+  4130, 4200, 4270, 4340, 4410, 4480, 4550, 4620, 4690, 4760,
+  4830, 4900, 4970, 5040, 5110, 5180, 5250, 5320, 5390, 5460,
+  5530, 5600, 5670, 5740, 5810, 5880, 5950, 6020, 6090, 6160,
+  6230, 6300, 6370, 6440, 6510, 6580, 6650, 6720, 6790, 6860,
+  6930, 7000, 7070, 7140, 7210, 7280, 7350, 7420, 7490,
 ]
