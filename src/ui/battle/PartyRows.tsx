@@ -13,7 +13,7 @@ export function PartyRows({
 }: {
   heroes: CombatUnitInit[]
   snap: Snap
-  /** A Protect order is waiting for its hero. */
+  /** A Protect order is waiting for its hero (or escort). */
   aiming: boolean
   bustOf: (u: CombatUnitInit) => string
   onAim: (u: CombatUnitInit) => void
@@ -27,7 +27,7 @@ export function PartyRows({
         return (
           <div
             key={u.id}
-            className={`party-row ${snap.actor === u.id ? 'active' : ''} ${dead ? 'dead' : ''} ${aiming && !u.isNpc && !dead ? 'aimable' : ''}`}
+            className={`party-row ${snap.actor === u.id ? 'active' : ''} ${dead ? 'dead' : ''} ${aiming && !dead ? 'aimable' : ''}`}
             onClick={() => onAim(u)}
           >
             <img className="px party-bust" src={bustOf(u)} width={24} height={24} alt="" />

@@ -30,6 +30,10 @@ export function BattleControls({
     retreatArmed: boolean
     onAim: (which: 'focus' | 'protect') => void
     onRetreat: () => void
+    /** The Tactical Center's bonus a Focus carries (0 = none). */
+    focusBonus?: number
+    /** A mission NPC (an escort) stands on the party's side and can be protected. */
+    escort?: boolean
   } | null
   kbd: (k: string) => ReactNode
 }) {
@@ -59,12 +63,14 @@ export function BattleControls({
               retreatArmed={orders.retreatArmed}
               onAim={orders.onAim}
               onRetreat={orders.onRetreat}
+              focusBonus={orders.focusBonus ?? 0}
+              escort={!!orders.escort}
               kbd={kbd}
             />
           )}
           {orders?.aim && (
             <span className="aim-hint">
-              {orders.aim === 'focus' ? t('Click an enemy…') : t('Click a hero…')}
+              {orders.aim === 'focus' ? t('Click an enemy…') : orders.escort ? t('Click a hero or the escort…') : t('Click a hero…')}
               {kbd(BATTLE_KEYS.close)}
             </span>
           )}
