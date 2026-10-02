@@ -305,15 +305,29 @@ export const STAGE_MAX_W = 576
  * nearly as well, else a crisp quarter step) and the logical width, which widens
  * past 384 on wide screens so the backdrop fills the screen instead of bars.
  */
-export function fitStage(availW: number, availH: number): { zoom: number; width: number } {
-  const raw = Math.min(availW / STAGE_MIN_W, availH / STAGE_H)
+export function fitStage(availW: number, availH: number, minW: number = STAGE_MIN_W): { zoom: number; width: number } {
+  // A phone may crop the canon to the stretch the units stand on (`minW` < 384) and zoom in.
+  const need = Math.max(160, Math.min(STAGE_MIN_W, minW))
+  const raw = Math.min(availW / need, availH / STAGE_H)
   let zoom: number
   if (raw < 1) zoom = Math.max(0.5, Math.floor(raw * 100) / 100)
   else if (Math.floor(raw) >= raw * 0.9) zoom = Math.floor(raw)
-  else zoom = Math.floor(raw * 4) / 4
-  const width = Math.max(STAGE_MIN_W, Math.min(STAGE_MAX_W, Math.floor(availW / zoom)))
+  // Under 2× an eighth step keeps a phone's units as big as the room allows.
+  else zoom = raw < 2 ? Math.floor(raw * 8) / 8 : Math.floor(raw * 4) / 4
+  const width = Math.max(need, Math.min(STAGE_MAX_W, Math.floor(availW / zoom)))
   return { zoom, width }
 }
+
+/** How the battle lays itself out: windows under the stage, a phone held upright, or one on its side. */
+export type BattleLayout = 'wide' | 'narrow' | 'beside'
+
+export function battleLayout(vw: number, vh: number): BattleLayout {
+  if (hudBeside(vw, vh)) return 'beside'
+  return vw < 700 && vh > vw ? 'narrow' : 'wide'
+}
+
+/** A phone held upright draws the two sides in toward the middle so it can zoom in. */
+export const NARROW_SQUEEZE = 0.82
 
 /** Whether the windows go beside the stage rather than under it (short landscape screens). */
 export function hudBeside(vw: number, vh: number): boolean {

@@ -156,9 +156,9 @@
 /* ── Battle FX (WS1): full-screen stage, parallax, weather, impact juice, keys ── */
 .battle { justify-content: safe center; overflow-y: auto; gap: 8px; padding: 8px; }
 .battle-stage-wrap { max-width: 100%; }
-.battle-stage-wrap > .battle-caption {
-  position: absolute; top: 6px; left: 50%; transform: translateX(-50%); z-index: 1100;
-  min-width: min(520px, 86%); max-width: 94%; font-size: 17px; min-height: 0; padding: 4px 14px;
+/* The caption sits in the stage's top bar (battleRead.css), between the mission and the turn order. */
+.stage-top .battle-caption {
+  min-width: 0; max-width: 100%; font-size: 17px; min-height: 0; padding: 4px 14px;
   opacity: 0.94; pointer-events: none;
 }
 .battle-cam { position: absolute; inset: 0; transform-origin: 50% 60%; }
@@ -255,7 +255,7 @@ kbd.bkey {
 }
 @media (max-width: 640px) {
   .battle-hud { grid-template-columns: 1fr; }
-  .battle-stage-wrap > .battle-caption { font-size: 13px; top: 3px; padding: 2px 8px; }
+  .stage-top .battle-caption { font-size: 13px; padding: 2px 8px; }
 }
 @media (hover: none), (max-width: 640px) { kbd.bkey { display: none; } }
 
@@ -270,10 +270,12 @@ kbd.bkey {
 .battle.beside .party-bust { width: 18px; height: 18px; }
 .battle.beside .pbtn { padding: 3px 8px; font-size: 13px; }
 .battle.beside .pbtn.big { padding: 6px 14px; font-size: 16px; }
-.battle.beside .battle-stage-wrap > .battle-caption { font-size: 13px; top: 3px; padding: 2px 8px; }
+.battle.beside .stage-top .battle-caption { font-size: 13px; padding: 2px 8px; }
 
 /* Reduced motion: no drift, sway, shake or punch; weather is thinned in code. */
-.battle.calm .bg-layer, .battle.calm .bunit.hero.ko.falling .bsprite, .battle.calm .dmg.crit { animation: none !important; }
+/* (A crit's number is not here: it fades in place like every number, battleRead.css dmgCalm,
+   so it keeps its place in a sweep's stagger and leaves with the others.) */
+.battle.calm .bg-layer, .battle.calm .bunit.hero.ko.falling .bsprite { animation: none !important; }
 @media (prefers-reduced-motion: reduce) {
   .bg-layer { animation: none !important; }
 }
