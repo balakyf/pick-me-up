@@ -273,7 +273,9 @@ kbd.bkey {
 .battle.beside .stage-top .battle-caption { font-size: 13px; padding: 2px 8px; }
 
 /* Reduced motion: no drift, sway, shake or punch; weather is thinned in code. */
-.battle.calm .bg-layer, .battle.calm .bunit.hero.ko.falling .bsprite, .battle.calm .dmg.crit { animation: none !important; }
+/* (A crit's number is not here: it fades in place like every number, battleRead.css dmgCalm,
+   so it keeps its place in a sweep's stagger and leaves with the others.) */
+.battle.calm .bg-layer, .battle.calm .bunit.hero.ko.falling .bsprite { animation: none !important; }
 @media (prefers-reduced-motion: reduce) {
   .bg-layer { animation: none !important; }
 }
