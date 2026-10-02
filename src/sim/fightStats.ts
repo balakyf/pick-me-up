@@ -49,6 +49,17 @@ export interface FightStats {
   foeStatuses: number
   /** HP the party lost to blows and DoTs (after shields). */
   damageTaken: number
+  // ── Boss beats and orders (lane G) ──
+  /** Foes' wind-ups (telegraphed big moves). */
+  telegraphs?: number
+  /** …of which answered: cancelled (a stun, a kill), braced for (Guard) or covered (Protect). */
+  telegraphsAnswered?: number
+  /** Boss phases reached. */
+  phases?: number
+  /** Units summoned onto the field. */
+  summoned?: number
+  /** The Master's orders given, by kind. */
+  orders?: Record<string, number>
 }
 
 /** Estimated 1× replay length of a log, as BattleScene times it (each frame waits for the
@@ -87,12 +98,33 @@ export function fightStats(log: CombatLog): FightStats {
   let taunts = 0
   let foeStatuses = 0
   let damageTaken = 0
+  let telegraphs = 0
+  let telegraphsAnswered = 0
+  let phases = 0
+  let summoned = 0
+  const orders: Record<string, number> = {}
   // The action in flight: whose it is and whether it sweeps (a follow-up is a basic strike).
   let actor: string | null = null
   let sweeping = false
   for (const e of log.events) {
     switch (e.kind) {
+      case 'telegraph':
+        if (side.get(e.unitId) !== 'hero') telegraphs++
+        break
+      case 'telegraph-end':
+        if (side.get(e.unitId) !== 'hero') telegraphsAnswered++
+        break
+      case 'phase':
+        phases++
+        break
+      case 'summon':
+        summoned += e.enemyIds.length
+        break
+      case 'order':
+        orders[e.order.kind] = (orders[e.order.kind] ?? 0) + 1
+        break
       case 'act':
+        if (e.charged && e.answered !== undefined && side.get(e.actorId) !== 'hero') telegraphsAnswered++
         actor = e.actorId
         sweeping = SKILLS[e.skillId]?.target === 'all-enemies'
         if (side.get(e.actorId) === 'hero') heroActs++
@@ -175,6 +207,11 @@ export function fightStats(log: CombatLog): FightStats {
     taunts,
     foeStatuses,
     damageTaken,
+    telegraphs,
+    telegraphsAnswered,
+    phases,
+    summoned,
+    orders,
   }
 }
 
@@ -219,6 +256,14 @@ export interface FightSummary {
   healingShare: number
   /** Share of fights in which the party healed, shielded or taunted at least once, 0..1. */
   roleFightShare: number
+  // ── Boss beats and orders (lane G) ──
+  telegraphsPerFight: number
+  /** Of the foes' wind-ups, the share answered (cancelled, braced for or covered), 0..1. */
+  telegraphAnsweredShare: number
+  phasesPerFight: number
+  summonedPerFight: number
+  /** Orders given per fight, by kind. */
+  ordersPerFight: Record<string, number>
 }
 
 export function summarizeFights(fs: readonly FightStats[], deathsOf: (f: FightStats) => number = (f) => f.deaths): FightSummary {
@@ -247,5 +292,15 @@ export function summarizeFights(fs: readonly FightStats[], deathsOf: (f: FightSt
       return thrown > 0 ? sum((f) => (f.healed ?? 0) + (f.absorbed ?? 0)) / thrown : 0
     })(),
     roleFightShare: fs.filter((f) => (f.heals ?? 0) + (f.shields ?? 0) + (f.taunts ?? 0) > 0).length / n,
+    telegraphsPerFight: sum((f) => f.telegraphs ?? 0) / n,
+    telegraphAnsweredShare: sum((f) => f.telegraphs ?? 0) > 0 ? sum((f) => f.telegraphsAnswered ?? 0) / sum((f) => f.telegraphs ?? 0) : 0,
+    phasesPerFight: sum((f) => f.phases ?? 0) / n,
+    summonedPerFight: sum((f) => f.summoned ?? 0) / n,
+    ordersPerFight: (() => {
+      const out: Record<string, number> = {}
+      for (const f of fs) for (const [k, v] of Object.entries(f.orders ?? {})) out[k] = (out[k] ?? 0) + v
+      for (const k of Object.keys(out)) out[k] = out[k]! / n
+      return out
+    })(),
   }
 }

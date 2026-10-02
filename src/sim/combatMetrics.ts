@@ -79,5 +79,12 @@ const roleRow = (label: string, r: FightSummary) =>
 lines.push('roles (per fight)')
 lines.push(roleRow(`all F${fromFloor}+`, s))
 for (const [a, b] of bands) lines.push(roleRow(`F${a}–${b}`, summarize(fights.filter((f) => f.floor >= a && f.floor <= b))))
+// Boss beats and orders (lane G): wind-ups and how many were answered, phases, summons, orders.
+const bossRow = (label: string, r: FightSummary) =>
+  `${label.padEnd(16)} | telegraphs ${r.telegraphsPerFight.toFixed(2).padStart(5)} | answered ${pct(r.telegraphAnsweredShare).padStart(6)} | phases ${r.phasesPerFight.toFixed(2).padStart(5)} | summoned ${r.summonedPerFight.toFixed(2).padStart(5)} | orders ${Object.entries(r.ordersPerFight).map(([k, v]) => `${k} ${v.toFixed(2)}`).join(' ') || '—'}`
+lines.push('boss beats & orders (per fight)')
+lines.push(bossRow(`all F${fromFloor}+`, s))
+for (const [a, b] of bands) lines.push(bossRow(`F${a}–${b}`, summarize(fights.filter((f) => f.floor >= a && f.floor <= b))))
+lines.push(bossRow('every fight', summarize(fights)))
 console.log(lines.join('\n'))
 if (out) writeFileSync(out, JSON.stringify({ days, seeds, fromFloor, finals, fights }))
