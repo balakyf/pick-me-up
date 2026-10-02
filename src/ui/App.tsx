@@ -17,14 +17,18 @@ import { PixelWindow } from './kit'
 import { attemptFloorWithResult } from '../engine/store'
 import type { CombatLog, GameState } from '../engine/types'
 import type { Store } from '../engine/store'
-import { playMusic, sfx, unlockAudio } from './audio/sound'
-import { useMuted } from './audio/useSound'
+import { sfx, unlockAudio } from './audio/sound'
+import { useMusic, useMuted } from './audio/useSound'
 import { useLocale } from './i18n/useLocale'
 import { t } from './i18n/i18n'
 import { useHotkeys } from './useHotkeys'
 import { KeyboardHelp } from './qol/KeyboardHelp'
 import { SaveTransfer, lastExportText } from './qol/SaveTransfer'
 import { BackupReminder } from './qol/BackupReminder'
+import { ToastHost } from './qol/Toast'
+import { useTimeToasts } from './qol/toastStore'
+import { clearToasts } from './qol/toastBus'
+import { devToolsEnabled } from './qol/devTools'
 
 type View = 'lobby' | WorldView
 
@@ -125,19 +129,22 @@ function GameMenu({
         </button>
       </div>
       <div className="menu-foot">
-        <button className="pbtn ghost" onClick={() => setMuted(!muted)} title="Chiptune sound effects and music">
+        <button className="pbtn ghost" onClick={() => setMuted(!muted)} title={t('Chiptune sound effects and music')}>
           {muted ? `🔇 ${t('Sound off')}` : `🔊 ${t('Sound on')}`}
         </button>
-        <button className="pbtn ghost" onClick={() => setLocale(locale === 'fr' ? 'en' : 'fr')} title="Language / Langue">
+        <button className="pbtn ghost" onClick={() => setLocale(locale === 'fr' ? 'en' : 'fr')} title={t('Language / Langue')}>
           {locale === 'fr' ? '🇬🇧 English' : '🇫🇷 Français'}
         </button>
-        <button
-          className="pbtn ghost"
-          onClick={() => store.dispatch({ type: 'ADD_GOLD', amount: 10000 })}
-          title={t('Testing only: add 10,000 free gold')}
-        >
-          {t('Debug · +10k ◆')}
-        </button>
+        {/* A developer's convenience: only in a dev build or with ?dev=1. */}
+        {devToolsEnabled() && (
+          <button
+            className="pbtn ghost"
+            onClick={() => store.dispatch({ type: 'ADD_GOLD', amount: 10000 })}
+            title={t('Testing only: add 10,000 free gold')}
+          >
+            {t('Debug · +10k ◆')}
+          </button>
+        )}
         {confirmReset ? (
           <span className="menu-confirm">
             <span className="muted">{t('Erase this Master’s save?')}</span>
@@ -170,11 +177,12 @@ export function App() {
   const { state, store } = useGame()
   // Re-render the whole tree when the language changes (every t() re-reads it).
   const [locale] = useLocale()
-  // Every pixel button clicks; the first gesture wakes the audio context and the lobby theme.
+  // The scene picks the music (the lobby theme here; a battle pushes its own on top).
+  useMusic('lobby')
+  // Every pixel button clicks; the first gesture wakes the audio context (and the scene's track).
   useEffect(() => {
     const onClick = (e: MouseEvent) => {
       unlockAudio()
-      playMusic('lobby')
       const b = (e.target as HTMLElement | null)?.closest?.('button')
       if (b && !(b as HTMLButtonElement).disabled) sfx('click')
     }
@@ -189,6 +197,11 @@ export function App() {
   // world after an import so nothing holds on to the replaced save.
   const [panel, setPanel] = useState<'save' | 'keys' | null>(null)
   const [epoch, setEpoch] = useState(0)
+  // Rewards that arrive with time (a building finished, a promotion done) are announced.
+  useTimeToasts(state, epoch)
+  // A new game or an erased save starts with a clean slate of toasts.
+  const accountId = state?.accountId ?? null
+  useEffect(() => clearToasts(), [accountId, epoch])
 
   useEffect(() => {
     if (params.seed !== null && getStore().getState() === null) {
@@ -228,6 +241,7 @@ export function App() {
     return (
       <div className="app">
         <TitleScreen store={store} hasSave={hasSave} />
+        <ToastHost />
       </div>
     )
   }
@@ -298,6 +312,7 @@ export function App() {
       {panel === 'keys' && <KeyboardHelp onClose={() => setPanel(null)} />}
       {view === 'lobby' && !menuOpen && panel === null && <BackupReminder state={state} onExport={() => setPanel('save')} />}
       {demoLog && <BattleScene log={demoLog} state={state} onDone={() => setDemoLog(null)} />}
+      <ToastHost />
     </div>
   )
 }

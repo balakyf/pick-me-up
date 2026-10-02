@@ -4,6 +4,7 @@ import type { Store } from '../../engine/store'
 import { TUNING } from '../../engine/tuning'
 import { banquetWouldHelp } from '../../engine/kitchen'
 import { t } from '../i18n/i18n'
+import { withToasts } from '../qol/toastStore'
 
 const BANQUET = TUNING.lobby.banquet
 
@@ -17,7 +18,7 @@ export function BanquetAction({ state, store }: { state: GameState; store: Store
   function hold() {
     setErr(null)
     try {
-      store.dispatch({ type: 'BANQUET' }, Date.now())
+      withToasts(store).dispatch({ type: 'BANQUET' }, Date.now())
     } catch (e) {
       setErr(t(e instanceof Error ? e.message : 'Banquet failed'))
     }

@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { t } from './i18n/i18n'
+import { useRegisterWindow } from './qol/windowRegistry'
 
 /**
  * The pixel UI kit: RPG windows, the dialog box and small HUD pieces. Styling
@@ -19,6 +21,7 @@ export function PixelWindow({
   wide?: boolean
 }) {
   const backdrop = useRef<HTMLDivElement>(null)
+  useRegisterWindow()
   useEffect(() => {
     if (!onClose) return
     const onKey = (e: KeyboardEvent) => {
@@ -39,7 +42,7 @@ export function PixelWindow({
           {icon && <span className="pwin-icon">{icon}</span>}
           <span>{title}</span>
           {onClose && (
-            <button className="pwin-close" onClick={onClose} aria-label="Close">
+            <button className="pwin-close" onClick={onClose} aria-label={t('Close')}>
               ✕
             </button>
           )}
@@ -65,6 +68,7 @@ export interface DialogScript {
 export function DialogBox({ script, onDone }: { script: DialogScript; onDone: () => void }) {
   const [idx, setIdx] = useState(0)
   const [shown, setShown] = useState(0)
+  useRegisterWindow()
   const line = script.lines[idx] ?? ''
   const done = shown >= line.length
 

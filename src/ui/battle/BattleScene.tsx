@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { playMusic, sfx } from '../audio/sound'
+import { sfx } from '../audio/sound'
+import { useMusic } from '../audio/useSound'
 import type { BattleOrder, CombatLog, CombatUnitInit, GameState, HeroId } from '../../engine/types'
 import { lastWords } from '../life/speech'
 import { bgTheme, BG_H, BG_W, HORIZON, LAYER_ORDER } from '../pixel/battleBg'
@@ -64,11 +65,8 @@ export function BattleScene({
   const frames = useMemo<Snap[]>(() => buildFrames(log, byId, nameOf), [log])
 
   const [cursor, setCursor] = useState(0)
-  // Battle music while the scene is up; the lobby theme returns after.
-  useEffect(() => {
-    playMusic('battle')
-    return () => playMusic('lobby')
-  }, [])
+  // Battle music while the scene is up; the scene underneath gets its theme back after.
+  useMusic('battle')
   // A sound for each event as it plays (cosmetic).
   useEffect(() => {
     const e = cursor > 0 ? log.events[cursor - 1] : undefined

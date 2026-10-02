@@ -19,6 +19,7 @@ import { crackRefusal, dispatchRefusal } from '../engine/rift'
 import { Portrait } from './bits'
 import { PvpPanel } from './pvpPanels'
 import { t } from './i18n/i18n'
+import { withToasts } from './qol/toastStore'
 
 const SHOP = TUNING.shop
 const PI = TUNING.interference
@@ -32,7 +33,8 @@ function useRunner(store: Store): { run: (cmd: Command) => boolean; err: string 
     run(cmd: Command) {
       setErr(null)
       try {
-        store.dispatch(cmd, Date.now())
+        // Gifts, the login and monthly claims, packages: each says what it gave.
+        withToasts(store).dispatch(cmd, Date.now())
         return true
       } catch (e) {
         setErr(t(e instanceof Error ? e.message.replace(/^\w+: /, '') : 'That failed'))

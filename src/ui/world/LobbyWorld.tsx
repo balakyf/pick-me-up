@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { GameState, OwnedHero } from '../../engine/types'
 import type { Store } from '../../engine/store'
 import { synthesisUnlocked } from '../../engine/synthesis'
@@ -58,6 +58,7 @@ import type { Dir, WalkFrame } from '../pixel/heroSprite'
 import { hashString } from '../pixel/rand'
 import { t, t as tr } from '../i18n/i18n'
 import { breakLigatures, canvasFont, plainText } from '../canvasText'
+import { withToasts } from '../qol/toastStore'
 
 /**
  * The waiting room as a walkable campus (Living Lobby spec §3). The Master walks with
@@ -458,6 +459,8 @@ export function LobbyWorld({
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const miniRef = useRef<HTMLCanvasElement>(null)
   const stageRef = useRef<HTMLDivElement>(null)
+  /** The store for the Master's one-click rewards and actions: each says what it did. */
+  const told = useMemo(() => withToasts(store), [store])
   const [vp, setVp] = useState<Viewport>({ w: VIEW_W, h: VIEW_H, zoom: 3 })
   const vpRef = useRef(vp)
   vpRef.current = vp
@@ -1234,7 +1237,7 @@ export function LobbyWorld({
           </button>
         )}
         {!loginClaimed(state, toWorldTime(Date.now())) && (
-          <button className="pbtn gem" onClick={() => store.dispatch({ type: 'CLAIM_LOGIN' }, Date.now())} title="Daily login reward">
+          <button className="pbtn gem" onClick={() => told.dispatch({ type: 'CLAIM_LOGIN' }, Date.now())} title={t('Daily login reward')}>
             🎁 {t('Daily')}
           </button>
         )}
@@ -1314,7 +1317,7 @@ export function LobbyWorld({
       {adviceOpen && (
         <AdviceWindow
           state={state}
-          store={store}
+          store={told}
           tips={advice.tips}
           onDismiss={advice.dismiss}
           onProfile={(id) => setProfile(id)}
