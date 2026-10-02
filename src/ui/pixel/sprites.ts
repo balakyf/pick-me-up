@@ -5,9 +5,9 @@
 import { iselLook, keyBearerLook, lookForHero, lookForMaster, priasisLook, type HeroLook, type LookSource } from './look'
 import { drawReliquary } from './enemySprite'
 import type { Bitmap } from './bitmap'
-import { drawHeroBust, drawHeroFrame, type Dir, type WalkFrame } from './heroSprite'
+import { drawHeroBust, drawHeroFrame, drawHeroPose, KO_H, KO_W, FRAME_H, FRAME_W, type Dir, type HeroPose, type WalkFrame } from './heroSprite'
 import { cachedCanvas, cachedDataUrl } from './render'
-import { drawEnemy } from './enemySprite'
+import { drawEnemy, type IdleFrame } from './enemySprite'
 import { ENEMY_TEMPLATES } from '../../engine/content'
 import type { Element } from '../../engine/types'
 
@@ -33,6 +33,19 @@ export function heroFrameCanvas(src: LookSource, dir: Dir, frame: WalkFrame) {
 
 export function heroFrameUrl(src: LookSource, dir: Dir, frame: WalkFrame): string {
   return cachedDataUrl(`hf|${lookKey(src)}|${dir}|${frame}`, () => drawHeroFrame(heroLook(src), dir, frame))
+}
+
+/**
+ * A hero's battle pose (lane I): a fixed bitmap per look and pose — the keys are bounded
+ * (seven poses), so the never-evicting cache stays small.
+ */
+export function heroPoseUrl(src: LookSource, pose: HeroPose): string {
+  return cachedDataUrl(`hp|${lookKey(src)}|${pose}`, () => drawHeroPose(heroLook(src), pose))
+}
+
+/** The size a pose's bitmap draws at (the fallen lie wider than they stand). */
+export function poseSize(pose: HeroPose): { w: number; h: number } {
+  return pose === 'ko' ? { w: KO_W, h: KO_H } : { w: FRAME_W, h: FRAME_H }
 }
 
 export function heroBustUrl(src: LookSource): string {
@@ -66,6 +79,19 @@ export function allyFrameUrl(name: string, frame: WalkFrame = 0): string {
   return cachedDataUrl(`ally|${name}|${frame}`, () => drawHeroFrame(make(), 'left', frame))
 }
 
+/** A mission NPC's battle pose; an object (the Sealed Object) has none and keeps its one frame. */
+export function allyPoseUrl(name: string, pose: HeroPose): string {
+  const obj = ALLY_OBJECTS[name]
+  if (obj) return cachedDataUrl(`allyo|${name}`, obj)
+  const make = ALLY_LOOKS[name] ?? priasisLook
+  return cachedDataUrl(`allyp|${name}|${pose}`, () => drawHeroPose(make(), pose))
+}
+
+/** Whether a mission NPC is a person (it can be posed) rather than an object. */
+export function allyPosable(name: string): boolean {
+  return ALLY_OBJECTS[name] === undefined
+}
+
 export function allyBustUrl(name: string): string {
   const obj = ALLY_OBJECTS[name]
   if (obj) return cachedDataUrl(`allyo|${name}`, obj)
@@ -84,9 +110,10 @@ export function enemyTemplateIdForName(name: string): string {
   return templateByName.get(name) ?? 'unknown'
 }
 
-export function enemyUrl(name: string, element: Element): string {
+/** A foe's sprite; `frame` 1 is the other half of its idle (a breath, a bob, a wingbeat). */
+export function enemyUrl(name: string, element: Element, frame: IdleFrame = 0): string {
   const id = enemyTemplateIdForName(name)
-  return cachedDataUrl(`en|${id}|${element}`, () => drawEnemy(id, element))
+  return cachedDataUrl(frame === 0 ? `en|${id}|${element}` : `en|${id}|${element}|${frame}`, () => drawEnemy(id, element, frame))
 }
 
 export function enemySize(name: string, element: Element): { w: number; h: number } {

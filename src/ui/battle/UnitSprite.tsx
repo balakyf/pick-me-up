@@ -12,6 +12,12 @@ export interface UnitLook {
   y: number
   size: { w: number; h: number }
   src: string
+  /** The other half of its idle (lane I): the two frames alternate while it stands. */
+  idleSrc?: string
+  /** The pose's bitmap size when it differs from the unit's box (the fallen lie wider). */
+  imgSize?: { w: number; h: number }
+  /** It is drawn in a pose bitmap (a fallen hero lies in it, no CSS rotation). */
+  posed?: boolean
   pose: Pose | undefined
   acting: boolean
   hurt: boolean
@@ -36,12 +42,15 @@ export interface UnitLook {
   mark?: 'target' | 'escort' | null
   /** When a sweep strikes it: its place in the stagger (ms, already speed-scaled). */
   hurtDelayMs?: number
+  /** A boss's finisher (lane I): its body shatters this many ms into the beat (shards take its place). */
+  shatterAtMs?: number
 }
 
 /** One fighter on the stage: sprite, shadow, HP sliver, and the marks of the moment. */
 export function UnitSprite({ u, look, onClick }: { u: CombatUnitInit; look: UnitLook; onClick: () => void }) {
   const isHero = u.side === 'hero'
   const { x, y, size, pose } = look
+  const img = look.imgSize ?? size
   const cls = [
     'bunit',
     isHero ? 'hero' : 'enemy',
@@ -52,6 +61,9 @@ export function UnitSprite({ u, look, onClick }: { u: CombatUnitInit; look: Unit
     look.entering ? 'entering' : '',
     look.cheering ? 'cheer' : '',
     look.aimable ? 'aimable' : '',
+    look.posed ? 'posed' : '',
+    look.idleSrc ? 'framed' : '',
+    look.shatterAtMs !== undefined ? 'shattered' : '',
   ]
     .filter(Boolean)
     .join(' ')
@@ -68,6 +80,7 @@ export function UnitSprite({ u, look, onClick }: { u: CombatUnitInit; look: Unit
         transform: pose ? `translate(${pose.dx}px, ${pose.dy}px)` : undefined,
         ['--enter-delay' as string]: `${look.enterDelayMs}ms`,
         ['--hurt-delay' as string]: `${look.hurtDelayMs ?? 0}ms`,
+        ...(look.shatterAtMs !== undefined ? { ['--shatter-at' as string]: `${look.shatterAtMs}ms` } : {}),
         ...(look.skillFlash ? { ['--skill-color' as string]: look.skillFlash } : {}),
       }}
     >
@@ -78,7 +91,17 @@ export function UnitSprite({ u, look, onClick }: { u: CombatUnitInit; look: Unit
         </div>
       )}
       <div className="bshadow" style={{ width: size.w * 0.7 }} />
-      {look.src && <img className="px bsprite" src={look.src} width={size.w} height={size.h} alt={u.name} />}
+      {look.src && (
+        <img
+          className={`px bsprite ${look.idleSrc ? 'idle-a' : ''}`}
+          src={look.src}
+          width={img.w}
+          height={img.h}
+          alt={u.name}
+          style={img === size ? undefined : { marginLeft: (size.w - img.w) / 2, marginTop: size.h - img.h }}
+        />
+      )}
+      {look.src && look.idleSrc && <img className="px bsprite idle-b" src={look.idleSrc} width={size.w} height={size.h} alt="" aria-hidden="true" />}
       {look.turnMark && <div className="turn-mark" aria-hidden="true" />}
       {!look.dead && <HpBar kind="bhp" pct={look.hpPct} className={isHero && !u.isNpc ? 'hero-hp' : ''} />}
       {look.mark && !look.dead && <ObjectiveMark kind={look.mark} className="on-stage" />}

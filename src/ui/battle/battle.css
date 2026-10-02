@@ -217,9 +217,10 @@
 .bunit.hero.ko.falling .bsprite { animation: heroFall 1.8s steps(9) both; }
 @keyframes heroFall {
   0% { transform: none; filter: brightness(1.8); }
-  15% { transform: translateY(-3px) rotate(6deg); filter: none; }
-  45% { transform: translateY(0) rotate(-20deg); }
-  100% { transform: rotate(-90deg) translate(-10px, 6px); filter: grayscale(0.5) brightness(0.85); }
+  15% { transform: translateY(-3px) rotate(-6deg); filter: none; }
+  45% { transform: translateY(0) rotate(20deg); }
+  /* Knocked back off their feet: the head goes away from the foes, as the KO pose lies. */
+  100% { transform: translateY(6px) rotate(90deg); filter: grayscale(0.5) brightness(0.85); }
 }
 .death-vignette {
   position: absolute; inset: 0; z-index: 950; pointer-events: none;

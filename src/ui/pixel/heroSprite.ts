@@ -664,7 +664,7 @@ function drawBack(b: Bitmap, L: HeroLook, frame: WalkFrame) {
 
 // ── side view (facing left) ──────────────────────────────────────────────────
 
-function drawSide(b: Bitmap, L: HeroLook, frame: WalkFrame) {
+function drawSide(b: Bitmap, L: HeroLook, frame: WalkFrame, opt: SideOpts = {}) {
   const s = L.skin
   const h = L.hair
   const c = L.cloth
@@ -673,7 +673,7 @@ function drawSide(b: Bitmap, L: HeroLook, frame: WalkFrame) {
     vline(b, 16, 17, 11, L.cape.d)
     if (frame !== 0) set(b, 17, 27, L.cape.d)
   }
-  if (L.shield) {
+  if (L.shield && !opt.shieldFront) {
     rect(b, 14, 17, 3, 8, L.metal.d)
     vline(b, 15, 18, 6, L.accent.d)
   }
@@ -793,6 +793,12 @@ function drawSide(b: Bitmap, L: HeroLook, frame: WalkFrame) {
   set(b, 8, 11, L.eyes)
   set(b, 7, 11, INK)
   set(b, 9, 12, blush(s))
+  if (opt.face === 'pain' || opt.face === 'closed') {
+    // eyes screwed shut (a blow) or closed (fallen)
+    set(b, 8, 11, opt.face === 'pain' ? INK : s.d)
+    set(b, 7, 11, opt.face === 'pain' ? INK : s.d)
+    if (opt.face === 'pain') set(b, 6, 13, INK) // a gasp
+  }
   if (L.mask) {
     rect(b, 5, 12, 7, 4, L.accent.d)
     hline(b, 5, 12, 7, L.accent.m)
@@ -871,7 +877,12 @@ function drawSide(b: Bitmap, L: HeroLook, frame: WalkFrame) {
       set(b, 7, 7, L.accent.m)
       break
   }
-  // near arm + weapon
+  // near arm + weapon (a battle pose holds them its own way)
+  if (opt.arm && opt.arm !== 'walk') {
+    poseArm(b, L, opt.arm)
+    if (opt.shieldFront && L.shield) shieldBlock(b, L)
+    return
+  }
   const swing = frame === 1 ? -1 : frame === 2 ? 1 : 0
   const ax = 11 + swing
   const sleeve = L.outfit === 'warrior' || L.outfit === 'spearman' ? L.metal : L.cloth
@@ -920,6 +931,232 @@ function drawSide(b: Bitmap, L: HeroLook, frame: WalkFrame) {
     case 'none':
       break
   }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Battle poses (lane I): the side view, facing left, with the near arm and the body moved
+// for the moment — a strike, a cast, a flinch, a block, a cheer — and the fallen hero lying
+// on the floor. Each is a fixed bitmap per look (no animation state), so caches stay bounded.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** The poses a hero strikes in battle. */
+export type HeroPose = 'idle' | 'attack' | 'cast' | 'hurt' | 'ko' | 'victory' | 'guard'
+export const HERO_POSES: readonly HeroPose[] = ['idle', 'attack', 'cast', 'hurt', 'ko', 'victory', 'guard']
+
+/** How the near arm is held in a pose. */
+type ArmPose = 'walk' | 'thrust' | 'raise' | 'up' | 'block' | 'back' | 'limp'
+
+interface SideOpts {
+  arm?: ArmPose
+  face?: 'pain' | 'closed'
+  /** The shield comes off the back and is raised in front (a block). */
+  shieldFront?: boolean
+}
+
+/** The KO pose is drawn lying down: wider than tall, on the floor of a 32×32 box. */
+export const KO_W = 32
+export const KO_H = 32
+
+/** Where the near hand goes for each arm pose (the shoulder is at 12,17). */
+const HAND: Record<Exclude<ArmPose, 'walk'>, [number, number]> = {
+  thrust: [6, 18],
+  raise: [5, 15],
+  up: [5, 12],
+  block: [8, 19],
+  back: [16, 21],
+  limp: [12, 23],
+}
+
+function poseArm(b: Bitmap, L: HeroLook, arm: Exclude<ArmPose, 'walk'>) {
+  const s = L.skin
+  const sleeve = L.outfit === 'warrior' || L.outfit === 'spearman' ? L.metal : L.cloth
+  const [hx, hy] = HAND[arm]
+  // The weapon goes behind the hand, the sleeve over the body.
+  weaponPose(b, L, arm, hx, hy)
+  line(b, 12, 17, hx, hy, sleeve.m)
+  line(b, 13, 17, hx + 1, hy, sleeve.d)
+  line(b, 12, 16, hx, hy - 1, sleeve.m)
+  if (L.outfit === 'warrior') {
+    roundRect(b, 10, 15, 4, 4, L.metal.m) // pauldron
+    hline(b, 11, 15, 2, L.metal.l)
+  }
+  rect(b, hx, hy, 2, 2, L.outfit === 'warrior' ? L.metal.m : s.m)
+}
+
+function weaponPose(b: Bitmap, L: HeroLook, arm: Exclude<ArmPose, 'walk'>, hx: number, hy: number) {
+  const M = L.metal
+  const glow = L.accent
+  switch (L.weapon) {
+    case 'sword':
+      if (arm === 'thrust') {
+        line(b, hx - 1, hy, hx - 7, hy - 5, M.l)
+        line(b, hx - 1, hy + 1, hx - 7, hy - 4, M.m)
+        line(b, hx + 1, hy - 2, hx + 1, hy + 2, GOLD.m)
+      } else if (arm === 'raise' || arm === 'up') {
+        // held up before the face, the blade to the sky
+        vline(b, hx - 1, hy - 10, 10, M.l)
+        vline(b, hx - 2, hy - 9, 9, M.m)
+        hline(b, hx - 3, hy - 1, 4, GOLD.m)
+        set(b, hx - 1, hy - 11, arm === 'raise' ? glow.l : WHITE)
+      } else if (arm === 'block') {
+        vline(b, hx - 1, hy - 9, 10, M.l)
+        vline(b, hx - 2, hy - 8, 9, M.m)
+        hline(b, hx - 3, hy - 1, 4, GOLD.m)
+      } else if (arm === 'back') line(b, hx + 1, hy + 1, hx + 6, hy + 6, M.m)
+      break
+    case 'spear':
+      if (arm === 'thrust') {
+        hline(b, 1, hy, 18, WOOD.m)
+        hline(b, 0, hy - 1, 3, M.l)
+        hline(b, 0, hy + 1, 3, M.d)
+        set(b, 0, hy, M.l)
+      } else if (arm === 'block') {
+        vline(b, hx - 1, 2, 27, WOOD.m)
+        hline(b, hx - 2, 1, 3, M.m)
+        set(b, hx - 1, 0, M.l)
+      } else if (arm === 'raise' || arm === 'up') {
+        vline(b, hx - 1, 2, hy + 8, WOOD.m)
+        set(b, hx - 1, 0, M.l)
+        hline(b, hx - 2, 1, 3, M.m)
+      } else if (arm === 'back') line(b, hx - 6, hy - 4, hx + 6, hy + 6, WOOD.m)
+      break
+    case 'staff':
+      if (arm === 'thrust') {
+        line(b, hx + 6, hy + 5, hx - 3, hy - 5, WOOD.m)
+        ellipse(b, hx - 6, hy - 9, 5, 5, glow.m)
+        set(b, hx - 5, hy - 8, glow.l)
+      } else if (arm === 'raise' || arm === 'up') {
+        vline(b, hx - 1, 4, hy + 8, WOOD.m)
+        ellipse(b, hx - 3, 0, 5, 5, glow.m)
+        set(b, hx - 2, 1, arm === 'raise' ? WHITE : glow.l)
+      } else if (arm === 'block') {
+        vline(b, hx - 1, 4, 26, WOOD.m)
+        ellipse(b, hx - 3, 0, 5, 5, glow.m)
+      } else if (arm === 'back') line(b, hx - 4, hy - 10, hx + 4, hy + 6, WOOD.m)
+      break
+    case 'bow':
+      if (arm === 'thrust' || arm === 'raise') {
+        // the bow held out, the string drawn back to the cheek, an arrow on it
+        const bx = hx - 1
+        line(b, bx + 2, hy - 9, bx, hy - 5, WOOD.m)
+        vline(b, bx, hy - 5, 10, WOOD.m)
+        line(b, bx, hy + 5, bx + 2, hy + 9, WOOD.m)
+        line(b, bx + 2, hy - 9, 11, hy - 1, LINEN.l)
+        line(b, 11, hy - 1, bx + 2, hy + 9, LINEN.l)
+        hline(b, bx - 3, hy - 1, 14 - bx, WOOD.l)
+        set(b, bx - 4, hy - 1, M.l)
+        if (arm === 'raise') set(b, bx - 5, hy - 1, glow.l)
+      } else if (arm === 'up') {
+        line(b, hx - 1, hy - 1, hx - 3, hy - 4, WOOD.m)
+        vline(b, hx - 3, hy - 9, 6, WOOD.m)
+        line(b, hx - 3, hy - 9, hx - 1, hy - 12, WOOD.m)
+      } else if (arm === 'block') vline(b, hx - 2, hy - 9, 13, WOOD.m)
+      else if (arm === 'back') line(b, hx + 1, hy - 3, hx + 4, hy + 6, WOOD.m)
+      break
+    case 'daggers':
+      if (arm === 'thrust') line(b, hx - 1, hy, hx - 5, hy - 2, M.l)
+      else if (arm === 'raise' || arm === 'up') vline(b, hx - 1, hy - 5, 5, M.l)
+      else if (arm === 'block') line(b, hx - 1, hy + 1, hx - 1, hy - 4, M.l)
+      else if (arm === 'back') line(b, hx + 2, hy + 1, hx + 5, hy + 3, M.l)
+      break
+    case 'club':
+      if (arm === 'thrust') {
+        line(b, hx, hy, hx - 4, hy - 6, WOOD.m)
+        rect(b, hx - 7, hy - 10, 4, 4, WOOD.l)
+      } else if (arm === 'raise' || arm === 'up') {
+        vline(b, hx - 1, hy - 6, 6, WOOD.m)
+        rect(b, hx - 3, hy - 10, 4, 4, WOOD.l)
+      } else if (arm === 'block') {
+        vline(b, hx - 1, hy - 7, 8, WOOD.m)
+        rect(b, hx - 2, hy - 10, 3, 4, WOOD.l)
+      } else if (arm === 'back') line(b, hx + 1, hy + 1, hx + 5, hy + 5, WOOD.m)
+      break
+    case 'none':
+      break
+  }
+}
+
+/** A shield raised in front of the body (the guard pose). */
+function shieldBlock(b: Bitmap, L: HeroLook) {
+  roundRect(b, 3, 14, 5, 11, L.metal.m)
+  vline(b, 3, 15, 9, L.metal.l)
+  vline(b, 7, 15, 9, L.metal.d)
+  vline(b, 5, 16, 7, L.accent.m)
+  set(b, 5, 19, L.accent.l)
+}
+
+/** Move the upper body (everything above the legs) by (dx, dy): a lean, a crouch. */
+function shiftUpper(b: Bitmap, dx: number, dy: number) {
+  const src = clone(b)
+  const cut = 24
+  for (let y = 0; y < cut; y++) for (let x = 0; x < b.w; x++) set(b, x, y, CLEAR)
+  for (let y = 0; y < cut; y++) {
+    for (let x = 0; x < b.w; x++) {
+      const c = src.px[y * b.w + x]!
+      if (c !== CLEAR) set(b, x + dx, y + dy, c)
+    }
+  }
+}
+
+/**
+ * A hero's battle pose (24×32, facing left; the KO pose is KO_W×KO_H, lying down). `idle`
+ * is the other half of the standing breath (the body a pixel lower).
+ */
+export function drawHeroPose(L: HeroLook, pose: HeroPose): Bitmap {
+  if (pose === 'ko') return drawKo(L)
+  const b = createBitmap(FRAME_W, FRAME_H)
+  switch (pose) {
+    case 'idle':
+      drawSide(b, L, 0)
+      shiftUpper(b, 0, 1)
+      break
+    case 'attack':
+      // the lunge: a stride, the body leaning into the blow, the weapon out front
+      drawSide(b, L, 2, { arm: 'thrust' })
+      shiftUpper(b, -1, 0)
+      break
+    case 'cast':
+      drawSide(b, L, 0, { arm: 'raise' })
+      break
+    case 'hurt':
+      // knocked back: the body rocks away, eyes screwed shut, the arm flung back
+      drawSide(b, L, 0, { arm: 'back', face: 'pain' })
+      shiftUpper(b, 1, 0)
+      break
+    case 'guard':
+      drawSide(b, L, 0, { arm: 'block', shieldFront: true })
+      shiftUpper(b, 0, 1)
+      break
+    case 'victory':
+      drawSide(b, L, 1, { arm: 'up' })
+      break
+  }
+  const out = applyAura(outline(b, INK), L, HERO_POSES.indexOf(pose))
+  if (pose === 'cast') {
+    // the spell gathering at the hand: a few motes in the element's light, outside the ink
+    for (const [x, y] of [[4, 1], [9, 0], [2, 5], [11, 3]] as const) if (get(out, x, y) === CLEAR) set(out, x, y, withAlpha(L.accent.l, 0xd0))
+  }
+  return out
+}
+
+/** The fallen hero: the side view on its back, eyes closed, weapon gone, along the floor. */
+function drawKo(L: HeroLook): Bitmap {
+  const side = createBitmap(FRAME_W, FRAME_H)
+  drawSide(side, L, 0, { arm: 'limp', face: 'closed' })
+  // Rotate a quarter turn clockwise: the head goes to the right (knocked back, away from
+  // the foes), the face to the sky.
+  const rot = createBitmap(FRAME_H, FRAME_W)
+  for (let y = 0; y < FRAME_H; y++) for (let x = 0; x < FRAME_W; x++) rot.px[x * FRAME_H + (FRAME_H - 1 - y)] = side.px[y * FRAME_W + x]!
+  // Lay it on the floor of the box.
+  let bottom = 0
+  for (let y = 0; y < rot.h; y++) for (let x = 0; x < rot.w; x++) if (rot.px[y * rot.w + x] !== CLEAR) bottom = y
+  const out = createBitmap(KO_W, KO_H)
+  const dy = KO_H - 2 - bottom
+  for (let y = 0; y < rot.h; y++) for (let x = 0; x < rot.w; x++) {
+    const c = rot.px[y * rot.w + x]!
+    if (c !== CLEAR) set(out, x, y + dy, c)
+  }
+  return outline(out, INK)
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

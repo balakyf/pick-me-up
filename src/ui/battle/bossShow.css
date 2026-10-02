@@ -1,0 +1,171 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   Boss presentation and battle bodies (lane I): two-frame idles and poses, the boss
+   intro, the boss bar, the finisher. Loaded after battle.css and battleRead.css.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Bodies ─────────────────────────────────────────────────────────────── */
+/* A standing unit alternates its two idle frames (stacked; one shows at a time) instead of
+   bobbing a pixel: heroes breathe, foes breathe, bob or beat their wings. */
+.bunit.framed .bsprite { animation: none; }
+.bunit.framed .bsprite.idle-b { position: absolute; left: 0; top: 0; }
+.bunit.framed .bsprite.idle-a { animation: idleA 1.1s steps(1) var(--enter-delay, 0ms) infinite; }
+.bunit.framed .bsprite.idle-b { animation: idleB 1.1s steps(1) var(--enter-delay, 0ms) infinite; }
+.bunit.enemy.framed .bsprite.idle-a, .bunit.enemy.framed .bsprite.idle-b { animation-duration: 1.4s; }
+@keyframes idleA { 0%, 49.99% { opacity: 1; } 50%, 100% { opacity: 0; } }
+@keyframes idleB { 0%, 49.99% { opacity: 0; } 50%, 100% { opacity: 1; } }
+.battle.calm .bunit.framed .bsprite.idle-a { animation: none; }
+.battle.calm .bunit.framed .bsprite.idle-b { display: none; }
+@media (prefers-reduced-motion: reduce) {
+  .bunit.framed .bsprite.idle-a { animation: none; }
+  .bunit.framed .bsprite.idle-b { display: none; }
+}
+
+/* A posed hero who has fallen lies in their own KO bitmap: no CSS rotation. */
+.bunit.hero.ko.posed:not(.falling) .bsprite { transform: none; transition: none; }
+/* The winners' cheer is the victory pose, jumping. */
+.bunit.hero.cheer.posed .bsprite { animation-duration: 0.8s; }
+
+/* ── The top bar's middle: the caption, and the boss bar under it ────────── */
+.stage-top-mid { display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 0; max-width: 100%; }
+.stage-top-mid > .battle-caption { align-self: center; }
+.battle.narrow .stage-top-mid, .battle.beside .stage-top-mid { align-items: stretch; }
+.battle.narrow .stage-top-mid > .battle-caption, .battle.beside .stage-top-mid > .battle-caption { align-self: center; }
+
+/* ── The boss bar ───────────────────────────────────────────────────────── */
+.boss-bar {
+  --boss-color: #f2c75c;
+  pointer-events: auto; box-sizing: border-box; width: min(440px, 46vw); min-width: min(300px, 100%);
+  padding: 3px 8px 5px; background: linear-gradient(180deg, #160a1cf0, #0c0614f0);
+  border-top: 2px solid var(--boss-color); display: flex; flex-direction: column; gap: 3px;
+  animation: bbIn 0.45s steps(5) both;
+}
+@keyframes bbIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
+.bb-head { display: flex; align-items: baseline; gap: 6px; min-width: 0; line-height: 1.1; }
+.bb-name {
+  color: #fff; font-size: 13px; letter-spacing: 2px; text-transform: uppercase; white-space: nowrap;
+  text-shadow: 1px 1px 0 #000, 0 0 6px var(--boss-color);
+}
+.bb-epithet { color: #cfc4e8; font-size: 11px; font-style: italic; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 1; }
+.bb-level { color: var(--gold); font-size: 11px; white-space: nowrap; margin-left: auto; }
+.bb-aegis { display: inline-flex; gap: 2px; align-items: center; }
+.bb-pip {
+  width: 6px; height: 6px; transform: rotate(45deg); background: #bfe6ff;
+  box-shadow: 0 0 0 1px #000, 0 0 4px #7ac8ff; animation: bbPip 1.6s steps(2) infinite;
+}
+@keyframes bbPip { 50% { background: #ffffff; } }
+.bb-more { color: #bfe6ff; font-size: 10px; }
+.bb-track { position: relative; display: block; height: 10px; background: #0a0714; border: 2px solid var(--rim-dark); box-shadow: 0 0 0 1px #4a3e8e; }
+.bb-track > .hp-fill { display: block; height: 100%; background-image: linear-gradient(180deg, rgba(255,255,255,0.35) 0 2px, transparent 2px); transition: width 0.2s steps(4); }
+.bb-phase {
+  position: absolute; top: -3px; bottom: -3px; width: 2px; margin-left: -1px; background: #fff;
+  box-shadow: 0 0 0 1px #000, 0 0 4px var(--boss-color); z-index: 2;
+}
+.bb-phase.passed { background: #5a4a6a; box-shadow: 0 0 0 1px #000; }
+.bb-pct {
+  position: absolute; right: 3px; top: 50%; transform: translateY(-50%); z-index: 3;
+  font-size: 9px; line-height: 1; color: #fff; text-shadow: 1px 0 0 #000, -1px 0 0 #000, 0 1px 0 #000, 0 -1px 0 #000;
+}
+.bb-foot { display: flex; align-items: center; gap: 8px; font-size: 10px; }
+.bb-timer { display: inline-flex; align-items: center; gap: 5px; flex: 1; min-width: 0; color: #ffb0a0; }
+.bb-timer.deadline { color: #9fd0ff; }
+.bb-timer-label { white-space: nowrap; letter-spacing: 1px; text-transform: uppercase; }
+.bb-timer-bar { flex: 1; height: 4px; background: #0a0714; border: 1px solid #3a2a4a; overflow: hidden; min-width: 40px; }
+.bb-timer-bar > span { display: block; height: 100%; background: linear-gradient(90deg, #ff3a2e, #ffb040); transition: width calc(0.4s / var(--spd, 1)) steps(4); }
+.bb-timer.deadline .bb-timer-bar > span { background: linear-gradient(90deg, #4a7ad8, #9fd0ff); }
+.bb-enraged {
+  color: #ff5a4a; font-weight: 600; letter-spacing: 1px; text-transform: uppercase; white-space: nowrap;
+  text-shadow: 1px 1px 0 #000; animation: blink 0.9s steps(2) infinite;
+}
+.boss-bar.enraged { border-top-color: #ff3a2e; box-shadow: 0 0 0 2px #000, 0 0 10px #ff3a2e66; }
+.boss-bar.down { opacity: 0.75; }
+.boss-bar.docked { width: 100%; min-width: 0; padding: 2px 6px 3px; gap: 2px; }
+.boss-bar.docked .bb-name { font-size: 11px; letter-spacing: 1px; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.boss-bar.docked .bb-track { height: 7px; }
+.boss-bar.docked .bb-pct { display: none; }
+.battle.calm .boss-bar, .battle.calm .bb-pip, .battle.calm .bb-enraged { animation: none; }
+
+/* ── The intro: the stage dims around the arrival, the card slams down ────── */
+.bi-dim {
+  position: absolute; inset: 0; z-index: 990; pointer-events: none;
+  background: radial-gradient(circle at var(--sx) var(--sy), transparent 0, transparent var(--sr), rgba(6, 3, 16, 0.74) calc(var(--sr) + 46px));
+  animation: biDim var(--intro-dur, 2s) linear both;
+}
+.bi-dim.wakes { background: radial-gradient(circle at var(--sx) var(--sy), rgba(255, 40, 30, 0.12) 0, transparent var(--sr), rgba(40, 0, 6, 0.78) calc(var(--sr) + 40px)); }
+@keyframes biDim { 0% { opacity: 0; } 12% { opacity: 1; } 82% { opacity: 1; } 100% { opacity: 0; } }
+
+.boss-intro {
+  --boss-color: #f2c75c;
+  position: absolute; inset: 0; z-index: 1050; cursor: pointer;
+  display: flex; align-items: flex-start; justify-content: center; padding-top: 22cqh; box-sizing: border-box;
+}
+.bi-card {
+  position: relative; text-align: center; max-width: 94%; padding: 6px 22px 8px;
+  background: linear-gradient(90deg, transparent, #0c0614f2 14%, #0c0614f2 86%, transparent);
+  border-top: 2px solid var(--boss-color); border-bottom: 2px solid var(--boss-color);
+  box-shadow: 0 8px 22px #000a;
+  animation: biSlam var(--intro-dur, 2s) steps(30) both;
+}
+.bi-kicker { font-size: clamp(9px, 3.6cqh, 13px); color: var(--boss-color); letter-spacing: 4px; text-transform: uppercase; text-shadow: 1px 1px 0 #000; }
+.bi-title { font-size: clamp(15px, 9cqh, 38px); line-height: 1.05; letter-spacing: 3px; text-transform: uppercase; white-space: nowrap; text-shadow: 2px 2px 0 #000, -1px -1px 0 #000; }
+.bi-name { color: #fff; text-shadow: 2px 2px 0 #000, -1px -1px 0 #000, 0 0 12px var(--boss-color); }
+.bi-dot { color: #ffffff77; }
+.bi-epithet { color: var(--boss-color); }
+.bi-sub { margin-top: 2px; font-size: clamp(9px, 3.8cqh, 14px); color: #e8dcff; letter-spacing: 2px; text-shadow: 1px 1px 0 #000; }
+.bi-phases { color: var(--gold); }
+.bi-with { margin-top: 2px; font-size: clamp(9px, 3.6cqh, 13px); color: #cfc4e8; font-style: italic; text-shadow: 1px 1px 0 #000; }
+.bi-skip {
+  position: absolute; right: 4px; bottom: -18px; padding: 1px 6px; font-size: 10px; line-height: 14px;
+  color: #cfc4e8; background: #0c0614cc; border: 1px solid #4a3e8e; cursor: pointer;
+}
+@keyframes biSlam {
+  0% { transform: translateY(-40%) scale(2.1); opacity: 0; }
+  9% { transform: none; opacity: 1; }
+  12% { transform: scale(1.05); }
+  15% { transform: none; }
+  84% { opacity: 1; transform: none; }
+  100% { opacity: 0; transform: translateY(-6%); }
+}
+.boss-intro.lieutenant .bi-title, .boss-intro.echo .bi-title { font-size: clamp(12px, 6.5cqh, 26px); }
+.boss-intro.lieutenant, .boss-intro.echo { padding-top: 30cqh; }
+.boss-intro.wakes .bi-name { color: #ffd0c0; }
+.boss-intro.wakes .bi-card { background: linear-gradient(90deg, transparent, #1a0306f2 14%, #1a0306f2 86%, transparent); }
+.boss-intro.calm .bi-card { animation: biCalm var(--intro-dur, 2s) linear both; }
+@keyframes biCalm { 0% { opacity: 0; } 10% { opacity: 1; } 86% { opacity: 1; } 100% { opacity: 0; } }
+.battle.calm .bi-dim { animation: biCalmDim var(--intro-dur, 2s) linear both; }
+@keyframes biCalmDim { 0%, 100% { opacity: 0; } 15%, 85% { opacity: 0.8; } }
+.battle.narrow .bi-title, .battle.beside .bi-title { white-space: normal; letter-spacing: 1px; }
+.battle.narrow .bi-card, .battle.beside .bi-card { padding: 4px 10px 6px; }
+/* A phone's stage is small: the card sits low, clear of the boss it names. */
+.battle.narrow .boss-intro, .battle.beside .boss-intro { align-items: flex-end; padding: 0 0 4cqh; }
+.battle.narrow .bi-title, .battle.beside .bi-title { font-size: clamp(13px, 7cqh, 24px); }
+
+/* ── The finisher: slow motion, a white-out, the body shattering ─────────── */
+.battle-stage.slowmo .battle-cam { filter: saturate(0.75) contrast(1.08); transition: filter 0.3s steps(3); }
+.bunit.enemy.shattered { transition: opacity 0s linear var(--shatter-at, 0ms); }
+.bunit.enemy.ko.shattered { animation: none; opacity: 0; }
+.boss-shatter { position: absolute; pointer-events: none; }
+.bs-shard {
+  position: absolute; inset: 0; background-repeat: no-repeat; image-rendering: pixelated;
+  animation: shardFly var(--shard-dur, 1.5s) cubic-bezier(0.2, 0.7, 0.35, 1) var(--shard-delay, 0ms) both;
+}
+@keyframes shardFly {
+  0% { transform: none; opacity: 1; filter: none; }
+  6% { filter: brightness(3) saturate(0); }
+  20% { filter: brightness(1.4); }
+  80% { opacity: 1; }
+  100% { transform: translate(var(--dx), var(--dy)) rotate(var(--rot)); opacity: 0; filter: brightness(0.8); }
+}
+.battle.calm .bs-shard { animation-name: shardFade; }
+@keyframes shardFade { 0% { opacity: 1; } 100% { opacity: 0; } }
+.bs-whiteout {
+  position: absolute; inset: 0; z-index: 1060; pointer-events: none; background: #fffaf0; opacity: 0;
+  animation: whiteOut 1s steps(10) var(--wo-delay, 0ms) both;
+}
+.bs-whiteout.calm { animation-name: whiteOutCalm; }
+@keyframes whiteOut { 0% { opacity: 0; } 6% { opacity: 0.95; } 30% { opacity: 0.55; } 100% { opacity: 0; } }
+@keyframes whiteOutCalm { 0% { opacity: 0; } 20% { opacity: 0.3; } 100% { opacity: 0; } }
+:root[data-flashes='off'] .bs-whiteout { display: none; }
+@media (prefers-reduced-motion: reduce) {
+  .bs-shard { animation-name: shardFade; }
+  .bi-card { animation-name: biCalm; }
+}

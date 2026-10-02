@@ -7,7 +7,14 @@ import { lastWordsTogether } from '../life/speech'
 import { bgTheme, BG_H, BG_W, HORIZON, LAYER_ORDER } from '../pixel/battleBg'
 import { BattleFxCanvas, type FxHandle } from './BattleFxCanvas'
 import { battleKeyAction, isTypingTarget, weatherForFloor } from './battleFx'
-import { allyBustUrl, allyFrameUrl, enemySize, enemyUrl, heroBustUrl, heroFrameUrl } from '../pixel/sprites'
+import { allyBustUrl, allyFrameUrl, allyPosable, allyPoseUrl, enemySize, enemyUrl, heroBustUrl, heroFrameUrl, heroPoseUrl, poseSize } from '../pixel/sprites'
+import type { HeroPose } from '../pixel/heroSprite'
+import { heroPoseFor, isGuarded } from './battlePose'
+import { useBossShow } from './useBossShow'
+import { bossBarView } from './bossBar'
+import { BossBar } from './BossBar'
+import { castTargets, skillFx } from './skillFx'
+import { flashesOn } from '../qol/settings'
 import type { LookSource } from '../pixel/look'
 import { ELEMENT_VIS } from '../bits'
 import { t } from '../i18n/i18n'
@@ -20,7 +27,9 @@ import {
   cutInActs,
   eventActor,
   frameAtEvents,
+  DURATION,
   frameHold,
+  showHoldsFor,
   type Snap,
 } from './battleFrames'
 import { useMourning } from './useMourning'
@@ -50,6 +59,7 @@ import { ElementsHint } from './ElementsHint'
 import { elementsHintSeen, markElementsHintSeen } from './elementsHint'
 import './battle.css'
 import './battleRead.css'
+import './bossShow.css'
 
 /**
  * The battle as a side-view JRPG scene. The engine resolved the fight already;
@@ -121,12 +131,14 @@ export function BattleScene({
   /** Events played through this frame. */
   const applied = snap.to + 1
 
+  // Lane I: a boss's title card, a finisher's slow motion, the creature waking hold longer.
+  const showHolds = useMemo(() => showHoldsFor(log, byId, { nonLethal }), [log, byId, nonLethal])
+  const beatMs = atEnd ? 0 : frameHold(snap, log.events, byId, { speed, nonLethal, cutIns, shows: showHolds })
   useEffect(() => {
     if (!playing || atEnd) return
-    const ms = frameHold(snap, log.events, byId, { speed, nonLethal, cutIns })
-    const tm = setTimeout(() => setCursor((c) => Math.min(frames.length - 1, c + 1)), ms)
+    const tm = setTimeout(() => setCursor((c) => Math.min(frames.length - 1, c + 1)), beatMs)
     return () => clearTimeout(tm)
-  }, [cursor, playing, atEnd, speed, frames.length, log.events, byId, snap, nonLethal, cutIns])
+  }, [cursor, playing, atEnd, beatMs, frames.length, log])
 
   // The layout (wide / a phone upright / on its side) and the stage's fit (useStageFit.ts).
   const sizeOf = (u: CombatUnitInit) => (u.side === 'hero' ? { w: 24, h: 32 } : enemySize(u.name, u.element))
@@ -258,6 +270,27 @@ export function BattleScene({
   // Sparks, hit-stop, punch and shake as each blow of the beat lands (useImpactJuice.ts).
   const fx = useRef<FxHandle | null>(null)
   const camRef = useRef<HTMLDivElement | null>(null)
+  // Lane I: boss intros, the waking, the finisher (useBossShow.tsx), and the boss bar.
+  const boss = useBossShow({
+    log,
+    byId,
+    snap,
+    atEnd,
+    speed,
+    reduced,
+    pos,
+    ox,
+    sizeOf,
+    beatMs,
+    cam: camRef,
+    wrap: wrapRef,
+    fx,
+    onSkip: () => setCursor((c) => Math.min(frames.length - 1, c + 1)),
+    wave: current?.kind === 'wave-spawn' ? { n: current.wave + 1, total: Math.max(log.mission?.waves ?? 1, current.wave + 1) } : null,
+  })
+  const pace = boss.pace
+  const bar = useMemo(() => (atEnd ? null : bossBarView(log, byId, snap, applied)), [log, byId, snap, applied, atEnd])
+
   useImpactJuice({
     beatKey: `${cursor}|${log.seed}|${log.events.length}`,
     beat,
@@ -270,12 +303,38 @@ export function BattleScene({
     },
     byId,
     element: snap.element,
-    speed,
+    speed: pace,
     reduced,
     fx,
     cam: camRef,
     wrap: wrapRef,
   })
+
+  // Lane I: a skill's own effect (skillFx.ts) plays as it is cast, over everyone it reaches.
+  useEffect(() => {
+    if (atEnd || current?.kind !== 'act') return
+    const actor = byId[current.actorId]
+    const profile = actor ? skillFx(current.skillId, actor.element) : null
+    if (!actor || !profile) return
+    const at = (id: string) => {
+      const p = pos[id]
+      const u = byId[id]
+      return p && u ? { x: ox + p.x, y: p.y, h: sizeOf(u).h } : null
+    }
+    const caster = at(actor.id)
+    if (!caster) return
+    const targets = castTargets(log.events, leadIndex)
+      .map(at)
+      .filter((p): p is NonNullable<typeof p> => p !== null)
+    // A striker who runs across the field lands the effect when it arrives.
+    const runs = style === 'melee' && profile.shape !== 'aura-up' && profile.shape !== 'dome' && profile.shape !== 'motes'
+    fx.current?.skill(
+      { profile, caster, targets, dir: actor.side === 'enemy' ? 1 : -1, seed: (log.seed ^ (current.seq * 2654435761)) >>> 0 },
+      profile.ms / pace,
+      runs ? DURATION.act / pace : 0,
+    )
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cursor, log])
 
   const tick = current?.tick ?? 0
   const [retreatArmed, setRetreatArmed] = useState(false)
@@ -342,8 +401,9 @@ export function BattleScene({
 
   // Keyboard: the battle is a modal overlay, so it listens first (capture phase) and
   // keeps every key from reaching the lobby or the windows underneath.
-  const live = useRef({ atEnd, hasOrders: !!orders, retreat, toggleAim, togglePlay, orderNow, onDone, last: frames.length - 1 })
-  live.current = { atEnd, hasOrders: !!orders, retreat, toggleAim, togglePlay, orderNow, onDone, last: frames.length - 1 }
+  const introOn = boss.show !== null && boss.show.kind !== 'finisher'
+  const live = useRef({ atEnd, hasOrders: !!orders, retreat, toggleAim, togglePlay, orderNow, onDone, last: frames.length - 1, introOn })
+  live.current = { atEnd, hasOrders: !!orders, retreat, toggleAim, togglePlay, orderNow, onDone, last: frames.length - 1, introOn }
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (isTypingTarget(e.target)) return
@@ -385,6 +445,8 @@ export function BattleScene({
           if (L.hasOrders) L.retreat()
           return
         case 'escape':
+          // Esc skips a boss's title card (lane I) as well as putting an aim away.
+          if (L.introOn) setCursor((c) => Math.min(L.last, c + 1))
           setAim(null)
           setSwapFirst(null)
           setRetreatArmed(false)
@@ -420,7 +482,10 @@ export function BattleScene({
           className={`battle-stage-wrap ${aim ? 'aiming' : ''} ${fallen ? 'death-moment' : ''}`}
           style={{ width: stagePxW, height: Math.round(BG_H * zoom) }}
         >
-          <div className="battle-stage" style={{ width: stageW, height: BG_H, transform: `scale(${zoom})`, ['--spd' as string]: speed }}>
+          <div
+            className={`battle-stage ${boss.shattered ? 'slowmo' : ''}`}
+            style={{ width: stageW, height: BG_H, transform: `scale(${zoom})`, ['--spd' as string]: pace, ['--pop-spd' as string]: Math.min(pace, 2) }}
+          >
             <div className="battle-cam" ref={camRef}>
               {LAYER_ORDER.map((name) =>
                 layers[name] ? (
@@ -446,6 +511,28 @@ export function BattleScene({
                   const dead = !!snap.dead[u.id]
                   // The skill's name stays over its caster through every blow of the act.
                   const casting = !atEnd && snap.skill !== null && snap.skill.caster === u.id
+                  const status = unitStatus(snap.status, u.id)
+                  // Lane I: the body for the moment (a pose for heroes, a two-frame idle for foes).
+                  const body = (() => {
+                    if (!isHero) {
+                      const still = !dead && !hurt && !acting
+                      return { src: enemyUrl(u.name, u.element), idleSrc: still ? enemyUrl(u.name, u.element, 1) : undefined }
+                    }
+                    if (u.isNpc && !allyPosable(u.name)) return { src: allyFrameUrl(u.name) }
+                    const p = heroPoseFor({
+                      dead,
+                      falling: fallen?.id === u.id,
+                      acting,
+                      skillId: acting ? actionSkillId(log.events, leadIndex, u.id) : null,
+                      unitClass: u.unitClass,
+                      hurt,
+                      guarded: !atEnd && isGuarded(status.marks, beat, u.id),
+                      won: atEnd && outcome === 'win',
+                    })
+                    const url = (q: HeroPose) => (u.isNpc ? allyPoseUrl(u.name, q) : heroPoseUrl(heroSrc(u), q))
+                    if (p === 'idle') return { src: u.isNpc ? allyFrameUrl(u.name) : heroFrameUrl(heroSrc(u), 'left', 0), idleSrc: url('idle'), posed: true }
+                    return { src: url(p), posed: true, imgSize: p === 'ko' ? poseSize(p) : undefined }
+                  })()
                   return (
                     <UnitSprite
                       key={u.id}
@@ -455,7 +542,7 @@ export function BattleScene({
                         x: p.x,
                         y: p.y,
                         size: sizeOf(u),
-                        src: u.isNpc ? allyFrameUrl(u.name) : isHero ? heroFrameUrl(heroSrc(u), 'left', acting ? 1 : 0) : enemyUrl(u.name, u.element),
+                        ...body,
                         pose: poses[u.id],
                         acting,
                         hurt,
@@ -469,10 +556,13 @@ export function BattleScene({
                         banner: casting ? { name: snap.skill!.name, color: snap.skill!.color, edge: bannerEdge(p.x, snap.skill!.name) } : null,
                         turnMark: snap.actor === u.id && !dead && !atEnd && !casting,
                         panic: snap.panic === u.id,
-                        enterDelayMs: (isHero ? heroes.indexOf(u) : enemies.indexOf(u) % 6) * 70,
-                        status: unitStatus(snap.status, u.id),
+                        // A boss under its title card steps in at once, into its own spotlight.
+                        enterDelayMs: boss.show?.kind === 'intro' && boss.show.units.includes(u.id) ? 0 : (isHero ? heroes.indexOf(u) : enemies.indexOf(u) % 6) * 70,
+                        status,
                         mark: markOf(u.id),
-                        hurtDelayMs: Math.round((hurtDelay[u.id] ?? 0) / speed),
+                        hurtDelayMs: Math.round((hurtDelay[u.id] ?? 0) / pace),
+                        // A shattered boss stays gone: without the class its KO dissolve would replay.
+                        shatterAtMs: boss.shattered === u.id ? boss.shatterAt : boss.gone.has(u.id) ? 0 : undefined,
                       }}
                     />
                   )
@@ -494,6 +584,8 @@ export function BattleScene({
                   />
                 )}
 
+                {boss.shatter}
+
                 <Telegraphs view={snap.boss} pos={pos} heightOf={(id) => (byId[id] ? sizeOf(byId[id]!).h : 32)} dead={snap.dead} tick={tick} atEnd={atEnd} />
 
                 <DamagePopups
@@ -501,13 +593,23 @@ export function BattleScene({
                   pos={pos}
                   headOf={(id) => (byId[id] ? sizeOf(byId[id]!).h : 32)}
                   zoom={zoom}
-                  speed={speed}
+                  speed={pace}
                   bounds={visible}
                   reserved={bannerBox ? [bannerBox] : []}
                 />
               </div>
 
-              <BattleFxCanvas ref={fx} width={stageW} height={BG_H} horizon={HORIZON} weather={weather} density={reduced ? 0.25 : 1} />
+              <BattleFxCanvas
+                ref={fx}
+                width={stageW}
+                height={BG_H}
+                horizon={HORIZON}
+                weather={weather}
+                density={reduced ? 0.25 : 1}
+                phone={mode !== 'wide'}
+                flashes={flashesOn() && !reduced}
+              />
+              {boss.spotlight}
             </div>
 
             {fallen && <DeathVeil />}
@@ -518,12 +620,17 @@ export function BattleScene({
 
           {/* Screen-space overlays: crisp at any zoom. */}
           {cutIn && <SkillCutIn key={cutIn.key} bust={cutIn.bust} name={cutIn.name} color={cutIn.color} side="right" />}
-          {!atEnd && waveBanner && <WaveBanner key={`w${current!.seq}`} n={waveBanner.n} total={waveBanner.total} />}
+          {/* A boss's title card carries the wave count itself (lane I). */}
+          {!atEnd && waveBanner && boss.show?.kind !== 'intro' && <WaveBanner key={`w${current!.seq}`} n={waveBanner.n} total={waveBanner.total} />}
           {!atEnd && waveCleared && <WaveCleared key={`c${current!.seq}`} n={waveCleared.n} total={waveCleared.total} calm={reduced} />}
           {!atEnd && current?.kind === 'phase' && <PhaseCinematic key={`p${current.seq}`} e={current} name={nameOf(current.unitId)} calm={reduced} />}
+          {boss.card}
           <div className="stage-top">
             <div className="stage-top-left">{!docked && !beside && objective}</div>
-            <div className="battle-caption pframe">{snap.caption}</div>
+            <div className="stage-top-mid">
+              <div className="battle-caption pframe">{snap.caption}</div>
+              {bar && <BossBar key={bar.unitId} view={bar} docked={docked || beside} />}
+            </div>
             <div className="stage-top-right">{!docked && !beside && turns}</div>
           </div>
           {!docked && !beside && hintCard}

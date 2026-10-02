@@ -27,6 +27,23 @@ import {
 import { drawHeroFrame } from './heroSprite'
 import type { HeroLook } from './look'
 import { BONE, ELEMENT_RAMP, GOLD, INK, LEATHER, STEEL, WOOD, ramp, type Ramp } from './palette'
+import {
+  drawBlackPriest,
+  drawChimeraMatriarch,
+  drawDarkan,
+  drawElCid,
+  drawHerald,
+  drawLazenca,
+  drawPryos,
+  drawRodvick,
+  drawTell,
+  drawValention,
+  drawVersace,
+  type IdleFrame,
+} from './bossSprite'
+import { idleFrame } from './shape'
+
+export type { IdleFrame } from './bossSprite'
 
 const WHITE_PX = hex('#fff6e0')
 
@@ -223,7 +240,7 @@ function mimic(): Bitmap {
   return outline(b, INK)
 }
 
-function lv999(): Bitmap {
+function lv999(f: IdleFrame = 0): Bitmap {
   const b = createBitmap(60, 60)
   const flesh = ramp('#1a0a24', '#3a1a4e', '#6a3a8e')
   // aura spikes
@@ -234,35 +251,43 @@ function lv999(): Bitmap {
   // tendrils
   for (let i = 0; i < 6; i++) {
     const x = 8 + i * 8
-    line(b, x, 46, x - 3 + (i % 2) * 6, 58, flesh.d)
-    line(b, x + 1, 46, x - 2 + (i % 2) * 6, 58, flesh.m)
+    const sway = f === 1 ? (i % 2 ? 1 : -1) : 0
+    line(b, x, 46, x - 3 + (i % 2) * 6 + sway, 58, flesh.d)
+    line(b, x + 1, 46, x - 2 + (i % 2) * 6 + sway, 58, flesh.m)
   }
   ellipse(b, 3, 10, 54, 42, flesh.m)
   ellipse(b, 10, 14, 30, 20, flesh.l)
   ellipse(b, 30, 30, 24, 20, flesh.d)
   // eyes
   const eyes: [number, number, number][] = [[18, 22, 6], [34, 18, 8], [44, 30, 5], [24, 34, 4], [12, 32, 3], [38, 40, 4]]
-  for (const [x, y, r] of eyes) {
+  eyes.forEach(([x, y, r], i) => {
+    // On the second frame some of its eyes are shut; the others roll toward the party.
+    if (f === 1 && i % 2 === 1) {
+      hline(b, x, y + Math.floor(r / 2), r + 2, flesh.d)
+      return
+    }
     ellipse(b, x, y, r + 2, r, hex('#ffe0a0'))
-    rect(b, x + Math.floor(r / 2), y + 1, 2, Math.max(1, r - 2), RED_EYE)
-  }
+    rect(b, x + Math.floor(r / 2) + f, y + 1, 2, Math.max(1, r - 2), RED_EYE)
+  })
   // maw
   hline(b, 16, 44, 26, INK)
   for (let x = 17; x < 42; x += 3) set(b, x, 43, BONE.l)
   return outline(b, INK)
 }
 
-function halgiraf(): Bitmap {
+function halgiraf(f: IdleFrame = 0): Bitmap {
   // The half black dragon (canon F20): hulking, scaled, wings spread, facing right.
-  return dragon(ramp('#140e1e', '#2e2240', '#4e3a6a'), ramp('#4a3a2a', '#7a6248', '#a88a64'), ramp('#1a1024', '#3a2450', '#5a3a7a'))
+  return dragon(ramp('#140e1e', '#2e2240', '#4e3a6a'), ramp('#4a3a2a', '#7a6248', '#a88a64'), ramp('#1a1024', '#3a2450', '#5a3a7a'), f)
 }
 
 /** A great winged dragon in the given scale/belly/wing ramps (Halgiraf, Kthat). */
-function dragon(scale: Ramp, belly: Ramp, wing: Ramp): Bitmap {
+function dragon(scale: Ramp, belly: Ramp, wing: Ramp, f: IdleFrame = 0): Bitmap {
   const b = createBitmap(76, 62)
+  // The wings beat between the idle frames: their tips sink a few pixels.
+  const beat = f === 1 ? 3 : 0
   // far wing (behind)
-  for (let i = 0; i < 7; i++) line(b, 30, 22, 8 + i * 4, 2 + (i % 2) * 3, wing.d)
-  line(b, 8, 2, 30, 22, wing.m)
+  for (let i = 0; i < 7; i++) line(b, 30, 22, 8 + i * 4, 2 + (i % 2) * 3 + beat, wing.d)
+  line(b, 8, 2 + beat, 30, 22, wing.m)
   // tail
   for (let i = 0; i < 16; i++) ellipse(b, 2 + i, 40 + Math.round(Math.sin(i / 3) * 3), 6, 6, scale.m)
   line(b, 1, 43, 0, 36, BONE.m)
@@ -293,8 +318,9 @@ function dragon(scale: Ramp, belly: Ramp, wing: Ramp): Bitmap {
   rect(b, 60, 8, 3, 2, hex('#ff3a2e'))
   set(b, 61, 8, hex('#ffd0a0'))
   // near wing (in front)
-  for (let i = 0; i < 6; i++) line(b, 34, 24, 18 + i * 5, 4 + (i % 2) * 4, i % 2 ? wing.m : wing.l)
-  line(b, 34, 24, 20, 2, wing.l)
+  for (let i = 0; i < 6; i++) line(b, 34, 24, 18 + i * 5, 4 + (i % 2) * 4 + beat, i % 2 ? wing.m : wing.l)
+  line(b, 34, 24, 20, 2 + beat, wing.l)
+  if (f === 1) set(b, 61, 8, hex('#ffd0a0')) // the eye flares
   return outline(b, INK)
 }
 
@@ -445,7 +471,8 @@ function lizard(over: Partial<HeroLook>): Bitmap {
 
 // ── registry ─────────────────────────────────────────────────────────────────
 
-const DRAWERS: Record<string, () => Bitmap> = {
+/** One drawer per template; the animated ones take the idle frame (the rest get `idleFrame`). */
+const DRAWERS: Record<string, (f: IdleFrame) => Bitmap> = {
   goblin: () =>
     humanoid(baseLook({}), (b) => {
       // pointy ears
@@ -497,19 +524,7 @@ const DRAWERS: Record<string, () => Bitmap> = {
         weapon: 'staff',
       }),
     ),
-  black_priest: () =>
-    humanoid(
-      baseLook({
-        skin: ramp('#7a6a6a', '#b0a0a0', '#d4c8c8'),
-        outfit: 'mage',
-        cloth: ramp('#0e0c14', '#1e1a28', '#34304a'),
-        accent: GOLD,
-        headgear: 'hood',
-        weapon: 'staff',
-        trim: true,
-        cape: ramp('#3a0a14', '#6a1424', '#9a2a3a'),
-      }),
-    ),
+  black_priest: drawBlackPriest,
   lv999_creature: lv999,
   assassin: () =>
     humanoid(
@@ -536,7 +551,6 @@ const DRAWERS: Record<string, () => Bitmap> = {
       }),
     ),
   halgiraf,
-
   // Act III — the Swamp
   lizardman: () => lizard({ outfit: 'warrior', cloth: ramp('#3a2e1e', '#5a4a2e', '#7a6644'), weapon: 'sword', shield: true }),
   lizard_shaman: () => lizard({ outfit: 'mage', cloth: ramp('#1e3a4a', '#2e5a6e', '#4a8aa0'), weapon: 'staff', headgear: 'hood' }),
@@ -558,8 +572,7 @@ const DRAWERS: Record<string, () => Bitmap> = {
   kraken: () => kraken(true),
   guardian_golem: () => golem(ramp('#2a3a4a', '#4a6a7a', '#7a9aaa'), hex('#4aa3ff'), 'big'),
   jewel_guardian: () => golem(ramp('#1e2a4a', '#34487a', '#5a74b0'), hex('#3a6aff'), 'big'),
-  kthat: () => dragon(ramp('#0e2a3a', '#1e5a6e', '#3a8aa0'), ramp('#6a8a8a', '#9ac0c0', '#cce8e8'), ramp('#0e1e2a', '#1e3a4a', '#3a6a7a')),
-
+  kthat: (f) => dragon(ramp('#0e2a3a', '#1e5a6e', '#3a8aa0'), ramp('#6a8a8a', '#9ac0c0', '#cce8e8'), ramp('#0e1e2a', '#1e3a4a', '#3a6a7a'), f),
   // Act V — the Order's War
   order_soldier: () =>
     humanoid(baseLook({ skin: FAIR, eyes: INK, outfit: 'spearman', cloth: ORDER_CLOTH, headgear: 'helm', weapon: 'spear', accent: GOLD })),
@@ -571,27 +584,23 @@ const DRAWERS: Record<string, () => Bitmap> = {
       set(b, 17, 2, BONE.l)
     }),
   order_mage: () => humanoid(baseLook({ skin: FAIR, eyes: INK, outfit: 'mage', cloth: ORDER_CLOTH, headgear: 'hat', weapon: 'staff', accent: GOLD, trim: true })),
-  rodvick: () => humanoid(baseLook({ skin: FAIR, eyes: INK, outfit: 'warrior', cloth: ramp('#4a2a14', '#7a4a24', '#a8703a'), weapon: 'club', mark: 'beard' })),
-  lazenca: () => humanoid(baseLook({ skin: FAIR, eyes: INK, outfit: 'thief', cloth: ramp('#1e3a2a', '#2e5a3e', '#4a8a5e'), headgear: 'bandana', weapon: 'daggers' })),
-  valention: () =>
-    humanoid(baseLook({ skin: FAIR, eyes: RED_EYE, outfit: 'warrior', cloth: ramp('#5a0e0e', '#8a1a1a', '#c02a2a'), headgear: 'plumedHelm', weapon: 'sword', shield: true, cape: ramp('#3a0a0a', '#6a1414', '#9a2424'), trim: true, accent: GOLD })),
-  versace: () =>
-    humanoid(baseLook({ skin: FAIR, hair: ramp('#8a8a9a', '#c0c0d0', '#f0f0ff'), eyes: hex('#7af0ff'), hairStyle: 'long', outfit: 'thief', cloth: ramp('#4a4a5a', '#8a8aa0', '#d0d0e0'), weapon: 'daggers', accent: ELEMENT_RAMP.wind })),
-  darkan: () =>
-    humanoid(baseLook({ skin: PALE, eyes: RED_EYE, outfit: 'warrior', cloth: ramp('#140a1a', '#2a1434', '#4a2a5a'), headgear: 'helm', weapon: 'club', cape: ramp('#1a0a1a', '#3a143a', '#5a2a5a') })),
+  rodvick: drawRodvick,
+  lazenca: drawLazenca,
+  valention: drawValention,
+  versace: drawVersace,
+  darkan: drawDarkan,
   egg_brood: brood,
   the_egg: egg,
   order_inquisitor: () =>
     humanoid(baseLook({ skin: FAIR, eyes: INK, outfit: 'mage', cloth: ramp('#5a4a14', '#a8903a', '#e0c870'), headgear: 'hood', weapon: 'staff', trim: true, accent: GOLD })),
-  el_cid: () =>
-    humanoid(baseLook({ skin: FAIR, eyes: hex('#2a6ab8'), outfit: 'warrior', cloth: ramp('#8a8aa0', '#d0d0e0', '#ffffff'), headgear: 'plumedHelm', weapon: 'sword', shield: true, cape: GOLD, trim: true, accent: GOLD })),
+  el_cid: drawElCid,
   order_saint: () =>
     humanoid(baseLook({ skin: FAIR, hair: GOLD, hairStyle: 'long', eyes: hex('#2a6ab8'), outfit: 'mage', cloth: ramp('#a8a0b8', '#ece6f4', '#ffffff'), headgear: 'circlet', weapon: 'staff', trim: true, accent: GOLD })),
 
   // Act VI — the Inflection
   chimera,
   wraith,
-  chimera_matriarch: () => bossScale(chimera),
+  chimera_matriarch: drawChimeraMatriarch,
 
   // Act VII — the Wailing Wall (the Fragment Series)
   fragment_shard: fragmentShard,
@@ -599,23 +608,21 @@ const DRAWERS: Record<string, () => Bitmap> = {
     humanoid(baseLook({ skin: ramp('#140e24', '#3a2a6a', '#8a7ae0'), hair: VOID_CLOTH, eyes: hex('#c8b8ff'), outfit: 'warrior', cloth: ramp('#140e24', '#2a1e4a', '#5a4a9a'), headgear: 'helm', weapon: 'sword', shield: true })),
   fragment_warden: () =>
     humanoid(baseLook({ skin: ramp('#140e24', '#3a2a6a', '#8a7ae0'), hair: VOID_CLOTH, eyes: hex('#c8b8ff'), outfit: 'mage', cloth: ramp('#140e24', '#2a1e4a', '#5a4a9a'), headgear: 'hood', weapon: 'staff' })),
-  pryos: () =>
-    humanoid(baseLook({ skin: PALE, hair: ramp('#0e0c14', '#1e1a28', '#34304a'), hairStyle: 'long', eyes: RED_EYE, outfit: 'master', cloth: ramp('#0e0c14', '#1e1a28', '#34304a'), headgear: 'circlet', weapon: 'sword', cape: ramp('#3a0a14', '#6a1424', '#9a2a3a'), trim: true, accent: GOLD })),
+  pryos: drawPryos,
   fragment_colossus: () => golem(ramp('#0e0a1a', '#2a1e4a', '#5a4a9a'), hex('#c8b8ff'), 'huge'),
 
   // Act VIII — the Unfinished Floors
   void_spawn: voidSpawn,
   abyss_knight: () =>
     humanoid(baseLook({ skin: VOID_CLOTH, hair: VOID_CLOTH, eyes: hex('#ff3aff'), outfit: 'warrior', cloth: VOID_CLOTH, headgear: 'helm', weapon: 'sword', shield: true, accent: ramp('#3a0a3a', '#7a1a7a', '#ff3aff') })),
-  herald_of_end: () => bossScale(voidSpawn),
+  herald_of_end: drawHerald,
   // Lane G — the echoes Tell calls back (F100).
-  echo_halgiraf: () => echoOf(halgiraf),
-  echo_el_cid: () => echoOf(DRAWERS.el_cid!),
-  echo_valention: () => echoOf(DRAWERS.valention!),
-  echo_pryos: () => echoOf(DRAWERS.pryos!),
-  echo_herald: () => echoOf(() => bossScale(voidSpawn)),
-  tell: () =>
-    humanoid(baseLook({ skin: FAIR, hair: ramp('#8a8a9a', '#d0d0e0', '#ffffff'), hairStyle: 'short', eyes: hex('#ffd24a'), outfit: 'master', cloth: ramp('#e0d8f0', '#fff6e0', '#ffffff'), headgear: 'circlet', weapon: 'staff', cape: GOLD, trim: true, accent: GOLD })),
+  echo_halgiraf: (f) => echoOf(halgiraf, f),
+  echo_el_cid: (f) => echoOf(drawElCid, f),
+  echo_valention: (f) => echoOf(drawValention, f),
+  echo_pryos: (f) => echoOf(drawPryos, f),
+  echo_herald: (f) => echoOf(drawHerald, f),
+  tell: drawTell,
 }
 
 /**
@@ -623,11 +630,26 @@ const DRAWERS: Record<string, () => Bitmap> = {
  * brightness kept, its colour washed to a pale blue-violet, the outline left dark. Tell calls
  * them back in his three drafts.
  */
-function echoOf(draw: () => Bitmap): Bitmap {
-  const src = draw()
+function echoOf(draw: (f: IdleFrame) => Bitmap, f: IdleFrame): Bitmap {
+  const src = draw(f)
   const b = createBitmap(src.w, src.h)
   const deep = hex('#2a2458')
   const pale = hex('#d8e4ff')
+  const lumOf = (c: number) => {
+    const [r, g, bl] = rgbaParts(c)
+    return (r * 3 + g * 6 + bl) / 2550
+  }
+  // Stretch the sprite's own range of light over the spectral ramp, so a dark dragon and a
+  // silver knight both keep their detail (a fixed curve washed El Cid out to a silhouette).
+  let lo = 1
+  let hi = 0
+  for (const c of src.px) {
+    if (c === 0 || c === INK) continue
+    const l = lumOf(c)
+    lo = Math.min(lo, l)
+    hi = Math.max(hi, l)
+  }
+  const span = Math.max(0.05, hi - lo)
   for (let i = 0; i < src.px.length; i++) {
     const c = src.px[i]!
     if (c === 0) continue
@@ -635,9 +657,8 @@ function echoOf(draw: () => Bitmap): Bitmap {
       b.px[i] = c
       continue
     }
-    const [r, g, bl, a] = rgbaParts(c)
-    const lum = (r * 3 + g * 6 + bl) / 2550
-    b.px[i] = withAlpha(mix(deep, pale, Math.min(1, 0.35 + lum * 1.3)), a)
+    const t = 0.3 + ((lumOf(c) - lo) / span) * 0.65
+    b.px[i] = withAlpha(mix(deep, pale, t), c & 255)
   }
   return b
 }
@@ -649,18 +670,6 @@ function fragmentShardTinted(c: Ramp): Bitmap {
   for (let i = 0; i < 12; i++) hline(b, 5 + Math.floor(i / 2), 14 + i, 12 - i, c.d)
   vline(b, 11, 4, 20, WHITE_PX)
   return outline(b, INK)
-}
-
-/** A boss-scale (×1.6) redraw of a smaller monster (nearest-neighbour). */
-function bossScale(draw: () => Bitmap): Bitmap {
-  const src = draw()
-  const W = Math.round(src.w * 1.6)
-  const H = Math.round(src.h * 1.6)
-  const b = createBitmap(W, H)
-  for (let y = 0; y < H; y++) {
-    for (let x = 0; x < W; x++) b.px[y * W + x] = src.px[Math.floor(y / 1.6) * src.w + Math.floor(x / 1.6)]!
-  }
-  return b
 }
 
 /** The F50 Sealed Object: a glowing reliquary on a plinth (a mission NPC, not a person). */
@@ -677,14 +686,38 @@ export function drawReliquary(): Bitmap {
   return outline(b, INK)
 }
 
+/** Drawers that author their own second idle frame (the bosses, the dragons, the echoes). */
+const ANIMATED = new Set([
+  'black_priest', 'lv999_creature', 'halgiraf', 'kthat', 'rodvick', 'lazenca', 'valention', 'versace', 'darkan', 'el_cid',
+  'chimera_matriarch', 'pryos', 'herald_of_end', 'tell', 'echo_halgiraf', 'echo_el_cid', 'echo_valention', 'echo_pryos', 'echo_herald',
+])
+/** Things that float bob on their second frame instead of breathing. */
+const HOVER = new Set(['harpy', 'wraith', 'fragment_shard', 'crystal_core', 'void_spawn'])
+
+/** The boss sprites drawn at native resolution (lane I): bigger than a hero, never upscaled. */
+export const BOSS_SPRITES: readonly string[] = [
+  'black_priest', 'halgiraf', 'kthat', 'rodvick', 'lazenca', 'valention', 'versace', 'darkan', 'el_cid', 'chimera_matriarch', 'pryos',
+  'herald_of_end', 'tell', 'lv999_creature',
+]
+
 const cache = new Map<string, Bitmap>()
 
-export function drawEnemy(templateId: string, element: Element = 'physical'): Bitmap {
-  const key = `${templateId}|${element}`
+/**
+ * A foe's battle sprite: frame 0 is its standing pose, frame 1 the other half of its idle
+ * (a breath, a bob, a wingbeat). Both frames are the same size.
+ */
+export function drawEnemy(templateId: string, element: Element = 'physical', frame: IdleFrame = 0): Bitmap {
+  const key = `${templateId}|${element}|${frame}`
   const hit = cache.get(key)
   if (hit) return hit
-  const drawer = DRAWERS[templateId]
-  const bmp = drawer ? drawer() : humanoid(baseLook({ accent: ELEMENT_RAMP[element], cloth: ELEMENT_RAMP[element] }))
+  const drawer = DRAWERS[templateId] as ((f: IdleFrame) => Bitmap) | undefined
+  let bmp: Bitmap
+  if (drawer === undefined) {
+    // An unknown template: an element-tinted figure, breathing like everyone else.
+    const base = humanoid(baseLook({ accent: ELEMENT_RAMP[element], cloth: ELEMENT_RAMP[element] }))
+    bmp = frame === 0 ? base : idleFrame(base, 'breathe')
+  } else if (frame === 0 || ANIMATED.has(templateId)) bmp = drawer(frame)
+  else bmp = idleFrame(drawEnemy(templateId, element, 0), HOVER.has(templateId) ? 'hover' : 'breathe')
   cache.set(key, bmp)
   return bmp
 }

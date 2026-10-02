@@ -1,8 +1,9 @@
 import type { Element, HeroClass, Star } from '../engine/types'
 import type { LookSource } from './pixel/look'
-import { heroBustUrl, heroFrameUrl, enemyUrl, enemySize } from './pixel/sprites'
+import { heroBustUrl, heroFrameUrl, heroPoseUrl, enemyUrl, enemySize, poseSize } from './pixel/sprites'
 import { ENEMY_TEMPLATES } from '../engine/content'
-import type { Dir, WalkFrame } from './pixel/heroSprite'
+import { HERO_POSES, type Dir, type WalkFrame } from './pixel/heroSprite'
+import { BOSS_SPRITES } from './pixel/enemySprite'
 import { hashString } from './pixel/rand'
 
 /**
@@ -52,6 +53,31 @@ export function DevGallery() {
           <span className="gallery-cap">{heroClass ?? 'classless'}</span>
         </div>
       ))}
+      {/* Lane I: the bosses at native size (both idle frames), then every hero's battle poses. */}
+      <div className="gallery-row">
+        {BOSS_SPRITES.map((id) => {
+          const t = ENEMY_TEMPLATES[id]!
+          const s = enemySize(t.name, t.element)
+          return (
+            <span key={id} style={{ display: 'inline-flex', alignItems: 'flex-end', marginRight: 10 }}>
+              <img className="px" src={enemyUrl(t.name, t.element, 0)} width={s.w * 2} height={s.h * 2} alt={t.name} />
+              <img className="px" src={enemyUrl(t.name, t.element, 1)} width={s.w * 2} height={s.h * 2} alt="" />
+            </span>
+          )
+        })}
+      </div>
+      {LADDER.slice(1).map(({ heroClass }, k) => {
+        const h: LookSource = { id: `pose_${k}`, name: `Pose ${k}`, star: 5, heroClass, element: ELEMENTS[k % ELEMENTS.length]!, portraitToken: token(k * 7 + 1) }
+        return (
+          <div key={`pose${k}`} className="gallery-row">
+            {HERO_POSES.map((p) => {
+              const s = poseSize(p)
+              return <img key={p} className="px" src={heroPoseUrl(h, p)} width={s.w * 3} height={s.h * 3} alt={p} title={p} />
+            })}
+            <span className="gallery-cap">{heroClass} poses</span>
+          </div>
+        )
+      })}
       <div className="gallery-row">
         {Object.values(ENEMY_TEMPLATES).map((t) => {
           const s = enemySize(t.name, t.element)
