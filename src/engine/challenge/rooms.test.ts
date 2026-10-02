@@ -115,6 +115,9 @@ describe('side rooms after anchors', () => {
     const mimic = a.outcome.log!.unitsInit.find((u) => u.side === 'enemy')!
     expect(mimic.templateId).toBe('mimic')
     expect(mimic.name).toBe('Mimic')
+    // …and the Codex logs the kill under the Mimic, not under the Ogre Brute it used to borrow.
+    expect(a.state.codex.entries.mimic?.defeated ?? 0).toBeGreaterThan(s.codex.entries.mimic?.defeated ?? 0)
+    expect(a.state.codex.entries.ogre_brute?.seen ?? 0).toBe(s.codex.entries.ogre_brute?.seen ?? 0)
 
     const weak = withRoom(withParty(veteranState(4, 1, 20), rosterIds(veteranState(4, 1, 20)).slice(-1)), 'mimic', 20)
     const lost = resolveBonusRoom({ ...weak, challenge: { ...challengeOf(weak), room: { kind: 'mimic', floor: 20, bought: [] } } }, 'fight')
