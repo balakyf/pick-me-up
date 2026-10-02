@@ -21,6 +21,7 @@ import { buildCombatUnit } from '../unit'
 import { runBattle } from '../combat'
 import { rivalSquad } from '../events'
 import { deployParty, fitToDeploy } from '../tower/deploy'
+import { addMasterXp } from '../master'
 import { worldDayIndex } from '../daily'
 import { tacticalFocusBonus } from '../tactical'
 import { clampSanity } from '../kitchen'
@@ -143,7 +144,9 @@ export function raidRival(state: GameState, rivalId: string, nowWorld: number): 
   for (const id of ids) heroes[id] = { ...heroes[id]!, sanity: clampSanity(heroes[id]!.sanity - P.raidSanity) }
   const materials = { ...state.materials, promotionStone: (state.materials.promotionStone ?? 0) + stones }
   const raided = state.pvp.raidWeek === week ? [...state.pvp.raided, rivalId] : [rivalId]
-  const next: GameState = { ...state, heroes, materials, gold: state.gold + gold }
+  // A won raid teaches the Master (B21).
+  const meta = won ? addMasterXp(state.meta, TUNING.lobby.master.xpPerPvpWin) : state.meta
+  const next: GameState = { ...state, heroes, materials, gold: state.gold + gold, meta }
   const rec: InvasionRecord = {
     worldDay: worldDayIndex(nowWorld),
     direction: 'out',
@@ -350,7 +353,7 @@ export function counterRaid(state: GameState, heroId: HeroId, nowWorld: number):
     goldDelta: 0,
     note: won ? `stormed their lobby and freed ${h.name}` : `failed to free ${h.name}`,
   }
-  const next: GameState = { ...state, heroes }
+  const next: GameState = { ...state, heroes, meta: won ? addMasterXp(state.meta, TUNING.lobby.master.xpPerPvpWin) : state.meta }
   return { won, state: { ...next, pvp: { ...pushLog(next, rec), rating: state.pvp.rating + (won ? P.ratingWin : -P.ratingLoss) } } }
 }
 

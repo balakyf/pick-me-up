@@ -484,16 +484,32 @@ export const TUNING = {
     },
     /** Master Level — the lobby progression spine (Layer 3 §3.1). */
     master: {
-      /** masterXpToNext(L) = round(coeff × L^exp); levels stop at `cap`. */
-      xpCoeff: 60,
-      xpExp: 1.8,
+      /** masterXpToNext(L) reads the baked integer table in master/masterXpTable.ts (B21:
+       *  no runtime powers); levels stop at `cap`. Retargeted so an engaged Master reaches
+       *  roughly ML10 near F40, ML15 near F60 and ML20 near F70 (lane-B notes). */
       cap: 100,
-      /** Master XP granted per source. */
+      /** Master XP granted per source. A floor clear: xpPerFloorClear; a first clear adds
+       *  xpPerFirstClear + xpFirstClearPerFloor × floor, and an anchor's first clear a further
+       *  xpAnchorFirstClearPerFloor × floor. */
       xpPerFloorClear: 12,
       xpPerFirstClear: 30,
+      xpFirstClearPerFloor: 3,
+      xpAnchorFirstClearPerFloor: 10,
+      /** A hidden objective found (a truth of the world). */
+      xpPerHiddenObjective: 60,
       xpPerPromotion: 40,
       xpPerFacilityUpgrade: 25,
       xpPerTrainingDrill: 5,
+      /** Playing the rest of the game teaches the Master too. */
+      xpPerDailyClear: 20,
+      xpPerRaidClear: 120,
+      xpPerTrialWave: 6,
+      xpPerDuel: 10,
+      xpPerBounty: 15,
+      xpPerJobTier: 20,
+      xpPerStatue: 40,
+      xpPerTournamentWin: 20,
+      xpPerPvpWin: 30,
     },
     /** Facility upgrades — gold cost × growth^level, world-time timer, gem-skippable. */
     facilities: {

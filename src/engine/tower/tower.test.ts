@@ -806,7 +806,8 @@ describe('playFloor — Master XP', () => {
     const state = makeState({ heroes: [crusher], currentFloor: 1, highestCleared: 0 })
     const { state: next, result } = playFloor(state)
     expect(result.firstClear).toBe(true)
-    const want = addMasterXp(state.meta, M.xpPerFloorClear + M.xpPerFirstClear)
+    // F1: the floor clear, the first-clear bonus, and the per-floor share of it.
+    const want = addMasterXp(state.meta, M.xpPerFloorClear + M.xpPerFirstClear + 1 * M.xpFirstClearPerFloor)
     expect([next.meta.masterLevel, next.meta.masterXp]).toEqual([want.masterLevel, want.masterXp])
     // …and the clear strengthens the world's Probability Interference (Layer 3 §D1).
     expect(next.meta.pi).toBe(state.meta.pi + TUNING.interference.perClear + TUNING.interference.perFirstClear)

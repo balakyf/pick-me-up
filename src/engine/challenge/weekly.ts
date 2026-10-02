@@ -15,6 +15,7 @@
  * PURE and DETERMINISTIC.
  */
 import { fitToDeploy, heroUnfitReason } from '../tower/deploy'
+import { addMasterXp } from '../master'
 import type { CombatLog, CombatUnit, Element, GameState, HeroId, MaterialId, OwnedHero } from '../types'
 import { TUNING } from '../tuning'
 import { SKILLS } from '../content'
@@ -201,6 +202,8 @@ export function runWeeklyTrial(state: GameState, heroIds: readonly HeroId[], now
       gems: state.gems + gems,
       materials: nextMaterials,
       challenge: { ...ch, weekly: { week: cur.week, attempts: cur.attempts + 1, best, claimed } },
+      // Every wave held in the Crack teaches the Master (B21).
+      meta: addMasterXp(state.meta, score * TUNING.lobby.master.xpPerTrialWave),
     },
     outcome: { week: cur.week, rule, score, best, newBest: score > cur.best, gems, materials, reached, log: res.log },
   }

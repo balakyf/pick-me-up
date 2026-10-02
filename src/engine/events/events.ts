@@ -23,6 +23,7 @@ import { summon } from '../gacha'
 import { rngFor, hash, chance, pick, type Rng } from '../rng'
 import { TOURNAMENT_FORMATS } from '../tower'
 import { deployParty } from '../tower/deploy'
+import { addMasterXp } from '../master'
 import { recordBattle } from '../codex'
 
 const E = TUNING.events
@@ -272,6 +273,8 @@ export function resolveEvent(state: GameState, option: string): { state: GameSta
       for (const log of new Set(rounds.map((x) => x.log))) next = { ...next, codex: recordBattle(next.codex, log) }
       outcome.rounds = rounds
       outcome.wins = wins
+      // Each round won teaches the Master (B21).
+      if (wins > 0) next = { ...next, meta: addMasterXp(next.meta, wins * TUNING.lobby.master.xpPerTournamentWin) }
       outcome.placing = tournamentPlacing(wins)
       outcome.gold = TT.goldByWins[wins]!
       outcome.gems = TT.gemsByWins[wins]!

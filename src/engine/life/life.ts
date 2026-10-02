@@ -17,6 +17,7 @@
 import { TUNING } from '../tuning'
 import { floatStream } from '../rng'
 import { applyXp, xpToNext } from '../stats'
+import { addMasterXp } from '../master'
 import { forgeCost, forgeGrade, statBlockFor, itemName, smithyUnlocked } from '../equipment'
 import type {
   ActivityKind,
@@ -480,6 +481,8 @@ export function stepLife(state: GameState, nowWorld: number): GameState {
   const pantryCap = Math.max(4, work.length * L.jobs.pantryPerHero)
   const seed = state.seed
   let lastStallDay = -1
+  /** Job tier-ups this catch-up (each teaches the Master — B21). */
+  let tierUps = 0
   const mods = estateLifeMods(state)
 
   for (let slot = from + 1; slot <= target; slot++) {
@@ -529,6 +532,7 @@ export function stepLife(state: GameState, nowWorld: number): GameState {
       w.life.jobXp[job] = (w.life.jobXp[job] ?? 0) + 1
       const after = jobTier(w.life.jobXp[job]!)
       if (after > before) {
+        tierUps++
         addMemory(w.life, { kind: 'jobTier', day, detail: `${job}:${after}`, weight: 45 })
         pushChronicle(chronicle, { at: atWorld, kind: 'jobTier', heroIds: [w.hero.id], detail: `${job}:${after}` })
       }
@@ -806,7 +810,7 @@ export function stepLife(state: GameState, nowWorld: number): GameState {
     materials,
     inventory,
     heroes,
-    meta: { ...state.meta, pi, peekedFloors: peeked },
+    meta: addMasterXp({ ...state.meta, pi, peekedFloors: peeked }, tierUps * TUNING.lobby.master.xpPerJobTier),
     life: { ...state.life, slot: target, relations, chronicle, pantry: Math.round(pantry * 100) / 100, forge, research, guardPower, tally },
   }
 }

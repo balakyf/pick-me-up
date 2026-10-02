@@ -28,6 +28,7 @@ import { buildEncounter, floorPower, floorXp, sanityDrain } from '../tower'
 import { applyXp } from '../stats'
 import { clampSanity } from '../kitchen'
 import { releaseGear } from '../equipment'
+import { addMasterXp } from '../master'
 import { clampPerformance, practice } from '../minigames'
 import { worldDayIndex } from '../daily'
 import { rngFor, hash, chance } from '../rng/rng'
@@ -240,7 +241,9 @@ export function runRaid(
     attempts: record.attempts + 1,
     lastClearWeek: cleared ? week : record.lastClearWeek,
   }
-  const meta = ballista !== undefined ? practice(state.meta, 'ballista') : state.meta
+  const practised = ballista !== undefined ? practice(state.meta, 'ballista') : state.meta
+  // A raid boss felled teaches the Master (B21).
+  const meta = cleared ? addMasterXp(practised, TUNING.lobby.master.xpPerRaidClear) : practised
   return {
     state: {
       ...state,

@@ -18,6 +18,7 @@
 import { TUNING } from '../tuning'
 import { buildFillerEncounter } from '../tower/tower'
 import { deployParty } from '../tower/deploy'
+import { addMasterXp } from '../master'
 import { buildCombatUnit } from '../unit'
 import { runBattle } from '../combat'
 import { SKILLS } from '../content'
@@ -235,6 +236,8 @@ export function attemptDaily(state: GameState, nowWorld: number): { state: GameS
     heroes,
     dailies: { ...state.dailies, attemptsUsed: state.dailies.attemptsUsed + 1 },
     codex: recordBattle(state.codex, res.log),
+    // The Master learns from every dungeon cleared (B21).
+    ...(cleared ? { meta: addMasterXp(state.meta, TUNING.lobby.master.xpPerDailyClear) } : {}),
   }
 
   return {

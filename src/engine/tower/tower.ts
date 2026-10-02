@@ -44,7 +44,7 @@ import { clampSanity } from '../kitchen'
 import { releaseGear } from '../equipment'
 import { attrStoneId } from '../promotion'
 import { tacticalFocusBonus } from '../tactical'
-import { addMasterXp } from '../master'
+import { addMasterXp, floorClearMasterXp } from '../master'
 import { foldBattleSkills } from '../skills'
 import { withFavor } from '../favor'
 import { moraleAdjust } from '../estate/deploy'
@@ -661,10 +661,11 @@ export function playFloor(
   if (worldEnded) nextTower.worldEnded = true
   if (worldSaved) nextTower.worldSaved = true
 
-  // ── 6e. Master XP: floor clears feed the Master-Level spine (+first-clear bonus);
-  //        they also strengthen the world's Probability Interference (Layer 3 §D1). ──
+  // ── 6e. Master XP: floor clears feed the Master-Level spine (a first clear more, the
+  //        higher the floor the more, anchors most), and so does each truth found; they
+  //        also strengthen the world's Probability Interference (Layer 3 §D1). ──
   const MASTER = TUNING.lobby.master
-  const masterXpGain = cleared ? MASTER.xpPerFloorClear + (firstClear ? MASTER.xpPerFirstClear : 0) : 0
+  const masterXpGain = cleared ? floorClearMasterXp(floor, firstClear) + found.length * MASTER.xpPerHiddenObjective : 0
   const PI = TUNING.interference
   let nextMeta = masterXpGain > 0 ? addMasterXp(meta, masterXpGain) : meta
   if (cleared) nextMeta = addPi(nextMeta, PI.perClear + (firstClear ? PI.perFirstClear : 0))

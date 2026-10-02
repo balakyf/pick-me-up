@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { masterXpToNext, addMasterXp } from './master'
+import { masterXpToNext, masterXpTotal, addMasterXp, floorClearMasterXp } from './master'
+import { MASTER_XP_TO_NEXT } from './masterXpTable'
 import { TUNING } from '../tuning'
 import { createAccount } from '../account'
 import type { MetaState } from '../types'
@@ -13,12 +14,32 @@ function meta(masterLevel: number, masterXp: number): MetaState {
 }
 
 describe('masterXpToNext', () => {
-  it('follows round(coeff × L^exp)', () => {
-    expect(masterXpToNext(1)).toBe(Math.round(M.xpCoeff * 1 ** M.xpExp))
-    expect(masterXpToNext(5)).toBe(Math.round(M.xpCoeff * 5 ** M.xpExp))
+  it('reads the baked integer table (no runtime powers — B21)', () => {
+    expect(MASTER_XP_TO_NEXT.length).toBeGreaterThanOrEqual(M.cap - 1)
+    for (let l = 1; l < M.cap; l++) {
+      expect(masterXpToNext(l)).toBe(MASTER_XP_TO_NEXT[l - 1])
+      expect(Number.isInteger(masterXpToNext(l))).toBe(true)
+    }
   })
   it('is strictly increasing in level', () => {
-    for (let l = 1; l < 20; l++) expect(masterXpToNext(l + 1)).toBeGreaterThan(masterXpToNext(l))
+    for (let l = 1; l < M.cap - 1; l++) expect(masterXpToNext(l + 1)).toBeGreaterThan(masterXpToNext(l))
+  })
+  it('masterXpTotal sums the table', () => {
+    expect(masterXpTotal(1)).toBe(0)
+    expect(masterXpTotal(3)).toBe(masterXpToNext(1) + masterXpToNext(2))
+    // Pouring exactly the total into a fresh Master lands on that level with nothing over.
+    const at = addMasterXp(meta(1, 0), masterXpTotal(20))
+    expect(at.masterLevel).toBe(20)
+    expect(at.masterXp).toBe(0)
+  })
+})
+
+describe('floorClearMasterXp', () => {
+  it('a repeat clear pays a little; a first clear more, rising with the floor; anchors most', () => {
+    expect(floorClearMasterXp(33, false)).toBe(M.xpPerFloorClear)
+    expect(floorClearMasterXp(33, true)).toBe(M.xpPerFloorClear + M.xpPerFirstClear + 33 * M.xpFirstClearPerFloor)
+    expect(floorClearMasterXp(34, true)).toBeGreaterThan(floorClearMasterXp(33, true))
+    expect(floorClearMasterXp(35, true)).toBe(floorClearMasterXp(35, false) + M.xpPerFirstClear + 35 * (M.xpFirstClearPerFloor + M.xpAnchorFirstClearPerFloor))
   })
 })
 

@@ -15,6 +15,7 @@ import { buildCombatUnit } from '../unit'
 import { floatStream, hash } from '../rng'
 import { applyXp, xpToNext } from '../stats'
 import { TUNING } from '../tuning'
+import { addMasterXp } from '../master'
 import type { BattleResult, CombatUnit, DuelRecord, Encounter, GameState, HeroId, OwnedHero } from '../types'
 import { addMemory, relationKey } from '../life/life'
 import { personalityOf } from '../life/personality'
@@ -136,6 +137,8 @@ export function hostDuel(state: GameState, a: HeroId, b: HeroId, nowWorld: numbe
       attention,
       duels: { day, today: e.duels?.day === day ? e.duels.today + 1 : 1, total: total + 1, last },
     },
+    // Judging a tryout teaches the Master a little (B21).
+    meta: addMasterXp(state.meta, TUNING.lobby.master.xpPerDuel),
   }
 }
 
