@@ -4,6 +4,8 @@ import { HIDDEN_OBJECTIVES } from '../../engine/content'
 import { t } from '../i18n/i18n'
 import { skillProgressLine } from './skillProgress'
 import { fmtInt } from '../text'
+import { deployReasonFix, deployReasonText } from '../deployReason'
+import { pickerName } from '../hero/heroLabel'
 
 // ── Results ──────────────────────────────────────────────────────────────────
 export function ResultsScreen({
@@ -19,6 +21,8 @@ export function ResultsScreen({
   const failed = result.result.outcome === 'failed'
   const retreated = result.result.outcome === 'retreat'
   const fallen = result.fallenHeroIds.map((id) => state.heroes[id]).filter(Boolean) as OwnedHero[]
+  // Older results (saved before the deploy rails) only carry the rebels.
+  const refusals = result.refusals ?? result.refusedHeroIds.map((heroId) => ({ heroId, reason: 'rebellion' as const }))
   return (
     <div className="overlay">
       <div className="result-card">
@@ -63,14 +67,19 @@ export function ResultsScreen({
           </div>
         )}
 
-        {result.refusedHeroIds.length > 0 && (
-          <div className="fallen">
-            <div className="ft">{t('✋ Refused to fight')}</div>
-            {result.refusedHeroIds.map((id) => (
-              <div key={id}>
-                {state.heroes[id]?.name ?? id} <span className="muted">{t('(Wary and broken — win back their trust)')}</span>
-              </div>
-            ))}
+        {/* B13: every slotted hero who stayed home, with the true reason and its fix. */}
+        {refusals.length > 0 && (
+          <div className="fallen stayed-home">
+            <div className="ft">{t('✋ Stayed behind')}</div>
+            {refusals.map((r) => {
+              const hero = state.heroes[r.heroId]
+              return (
+                <div key={r.heroId}>
+                  {hero ? pickerName(state, hero) : r.heroId} <span className="muted">{deployReasonText(r.reason)}</span>{' '}
+                  <span className="muted small">— {deployReasonFix(r.reason)}</span>
+                </div>
+              )
+            })}
           </div>
         )}
 

@@ -30,6 +30,8 @@ import { ToastHost } from './qol/Toast'
 import { useTimeToasts } from './qol/toastStore'
 import { clearToasts } from './qol/toastBus'
 import { devToolsEnabled } from './qol/devTools'
+import { PendingReplayHost } from './tower/PendingReplayHost'
+import { clearPendingReplay } from './tower/pendingReplay'
 
 type View = 'lobby' | WorldView
 
@@ -156,6 +158,7 @@ function GameMenu({
               className="pbtn danger"
               onClick={() => {
                 // Reset in place: a reload let the lobby's clock re-save the old game first.
+                clearPendingReplay()
                 store.reset()
                 setConfirmReset(false)
                 onClose()
@@ -309,10 +312,22 @@ export function App() {
           onKeys={() => (setMenuOpen(false), setPanel('keys'))}
         />
       )}
-      {panel === 'save' && <SaveTransfer state={state} store={store} onClose={() => setPanel(null)} onImported={() => setEpoch((e) => e + 1)} />}
+      {panel === 'save' && (
+        <SaveTransfer
+          state={state}
+          store={store}
+          onClose={() => setPanel(null)}
+          onImported={() => {
+            clearPendingReplay()
+            setEpoch((e) => e + 1)
+          }}
+        />
+      )}
       {panel === 'keys' && <KeyboardHelp onClose={() => setPanel(null)} />}
       {view === 'lobby' && !menuOpen && panel === null && <BackupReminder state={state} onExport={() => setPanel('save')} />}
       {demoLog && <BattleScene log={demoLog} state={state} onDone={() => setDemoLog(null)} />}
+      {/* A floor attempt the Master never saw the end of (a reload mid-battle) plays first (B14). */}
+      <PendingReplayHost key={`${state.accountId}|${epoch}`} state={state} />
       <ToastHost />
     </div>
   )

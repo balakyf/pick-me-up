@@ -22,6 +22,7 @@ import { PartyRows } from './PartyRows'
 import { BattleControls } from './BattleControls'
 import type { Aim } from './OrderBar'
 import { DeathCard, DeathVeil, ResultBanner } from './ResultBanner'
+import { resumeCursor } from './orderResume'
 import './battle.css'
 
 /**
@@ -41,6 +42,8 @@ export interface BattleOrders {
   left: number
   /** Re-resolve the fight with `order` (applied at its tick); returns the new log. */
   give: (order: BattleOrder) => CombatLog | null
+  /** The Tactical Center's concentrate-fire bonus a Focus carries (e.g. 0.06), for the tooltip. */
+  focusBonus?: number
 }
 
 export function BattleScene({
@@ -245,10 +248,10 @@ export function BattleScene({
     setAim(null)
     setRetreatArmed(false)
     if (!next) return
-    // The new log replays the old one exactly up to the order's tick: resume there.
-    const resume = next.events.findIndex((e) => e.tick >= order.tick)
+    // The new log replays the old one exactly up to the order's tick, so the replay goes on
+    // from the frame on screen: the rest of this tick still plays, then the order (B16).
+    setCursor(resumeCursor(log, next, cursor))
     setLog(next)
-    setCursor(resume < 0 ? 0 : resume)
     setPlaying(true)
     if (order.kind !== 'retreat') setGiven((n) => n + 1)
   }
@@ -256,8 +259,19 @@ export function BattleScene({
   const aimAt = (u: CombatUnitInit) => {
     if (!aim || atEnd || snap.dead[u.id]) return
     if (aim === 'focus' && u.side === 'enemy' && snap.visible[u.id]) give({ tick: tick + 1, kind: 'focus', enemyId: u.id })
-    if (aim === 'protect' && u.side === 'hero' && !u.isNpc) give({ tick: tick + 1, kind: 'protect', allyId: u.id })
+    // B3: Protect shields anyone on the party's side — the escort too (combat steers enemies
+    // off any overlooked ally, mission NPCs included).
+    if (aim === 'protect' && u.side === 'hero') give({ tick: tick + 1, kind: 'protect', allyId: u.id })
   }
+  /** Play / pause; resuming puts away an aim or an armed retreat (the prompt never lingers). */
+  const togglePlay = () => {
+    if (!playing) {
+      setAim(null)
+      setRetreatArmed(false)
+    }
+    setPlaying(!playing)
+  }
+  const hasEscort = heroes.some((u) => u.isNpc)
   const toggleAim = (which: 'focus' | 'protect') => {
     if (ordersLeft <= 0) return
     setAim(aim === which ? null : which)
@@ -276,8 +290,8 @@ export function BattleScene({
 
   // Keyboard: the battle is a modal overlay, so it listens first (capture phase) and
   // keeps every key from reaching the lobby or the windows underneath.
-  const live = useRef({ atEnd, hasOrders: !!orders, retreat, toggleAim, onDone, last: frames.length - 1 })
-  live.current = { atEnd, hasOrders: !!orders, retreat, toggleAim, onDone, last: frames.length - 1 }
+  const live = useRef({ atEnd, hasOrders: !!orders, retreat, toggleAim, togglePlay, onDone, last: frames.length - 1 })
+  live.current = { atEnd, hasOrders: !!orders, retreat, toggleAim, togglePlay, onDone, last: frames.length - 1 }
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (isTypingTarget(e.target)) return
@@ -294,7 +308,7 @@ export function BattleScene({
           L.onDone()
           return
         case 'pause':
-          setPlaying((p) => !p)
+          L.togglePlay()
           return
         case 'speed':
           setSpeed(act.speed)
@@ -372,7 +386,7 @@ export function BattleScene({
                       falling: fallen?.id === u.id,
                       entering: entering(u),
                       cheering: atEnd && outcome === 'win' && isHero && !dead,
-                      aimable: (aim === 'focus' && !isHero && !dead) || (aim === 'protect' && isHero && !u.isNpc && !dead),
+                      aimable: (aim === 'focus' && !isHero && !dead) || (aim === 'protect' && isHero && !dead),
                       hpPct: (Math.max(0, snap.hp[u.id] ?? u.maxHP) / u.maxHP) * 100,
                       skillFlash: skillHit ? snap.skill!.color : null,
                       banner: casting ? { name: snap.skill!.name, color: snap.skill!.color } : null,
@@ -431,13 +445,13 @@ export function BattleScene({
           atEnd={atEnd}
           playing={playing}
           speed={speed}
-          onTogglePlay={() => setPlaying((p) => !p)}
+          onTogglePlay={togglePlay}
           onSpeed={setSpeed}
           onSkip={() => setCursor(frames.length - 1)}
           onDone={onDone}
           orders={
             orders
-              ? { aim, left: ordersLeft, retreatArmed, onAim: toggleAim, onRetreat: retreat }
+              ? { aim, left: ordersLeft, retreatArmed, onAim: toggleAim, onRetreat: retreat, focusBonus: orders.focusBonus ?? 0, escort: hasEscort }
               : null
           }
           kbd={kbd}

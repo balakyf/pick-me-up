@@ -12,6 +12,8 @@ export function OrderBar({
   retreatArmed,
   onAim,
   onRetreat,
+  focusBonus = 0,
+  escort = false,
   kbd,
 }: {
   aim: Aim
@@ -19,15 +21,24 @@ export function OrderBar({
   retreatArmed: boolean
   onAim: (which: 'focus' | 'protect') => void
   onRetreat: () => void
+  /** The Tactical Center's concentrate-fire bonus a Focus carries (B18), e.g. 0.06. */
+  focusBonus?: number
+  /** An escort fights on the party's side (Protect can shield them too). */
+  escort?: boolean
   kbd: (k: string) => ReactNode
 }) {
+  const bonus = Math.round(focusBonus * 100)
   return (
     <div className="bctl-row order-bar">
       <button
         className={`pbtn sm ${aim === 'focus' ? 'on' : ''}`}
         disabled={left <= 0}
         onClick={() => onAim('focus')}
-        title={t('Every hero attacks the enemy you pick')}
+        title={
+          bonus > 0
+            ? t('Every hero attacks the enemy you pick — +{n}% damage to it from the Tactical Center', { n: bonus })
+            : t('Every hero attacks the enemy you pick')
+        }
       >
         🎯 {t('Focus')}
         {kbd(BATTLE_KEYS.focus)}
@@ -36,7 +47,7 @@ export function OrderBar({
         className={`pbtn sm ${aim === 'protect' ? 'on' : ''}`}
         disabled={left <= 0}
         onClick={() => onAim('protect')}
-        title={t('Enemies avoid the hero you pick while anyone else stands')}
+        title={escort ? t('Enemies avoid the hero or escort you pick while anyone else stands') : t('Enemies avoid the hero you pick while anyone else stands')}
       >
         🛡 {t('Protect')}
         {kbd(BATTLE_KEYS.protect)}

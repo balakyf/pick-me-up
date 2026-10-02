@@ -58,6 +58,54 @@ export interface TowerLook {
 }
 
 export function drawTowerExterior(opts: TowerLook): Bitmap {
+  const b = paintTower(opts, opts.highest)
+  // the party's marker (drawn at a fractional floor while it climbs)
+  const m = opts.marker ?? opts.current
+  if (m >= 1 && m <= 100) {
+    const y = Math.round(20 + (100 - m) * 2)
+    const half = floorHalf(Math.round(m))
+    for (let i = 0; i < 4; i++) vline(b, 32 + half + 2 + i, y - i + 1, 1 + i * 2, hex('#ffe07a'))
+  }
+  return b
+}
+
+/** What the static tower depends on: how cracked it is, and whether the world ended or was saved. */
+export interface TowerStaticLook {
+  /** The highest floor cleared — read ONLY for the cracks (clamped to the F50–80 band). */
+  crackHighest: number
+  worldEnded: boolean
+  worldSaved: boolean
+  /** Every floor's windows and anchor ledges lit (the "cleared" layer) or none. */
+  lit: boolean
+}
+
+/** The crack stage a highest floor maps to (the static tower's cache key; 31 stages). */
+export function crackStage(highest: number): number {
+  return Math.max(50, Math.min(80, highest))
+}
+
+/**
+ * The tower without its marker, either fully lit or fully dark: the UI stacks the lit one
+ * over the dark one and clips it at the highest cleared floor, and draws the party's
+ * marker as a CSS overlay — so the cached canvases are a handful per game, not three per
+ * climb (B26).
+ */
+export function drawTowerStatic(look: TowerStaticLook): Bitmap {
+  return paintTower(
+    { current: 0, highest: look.crackHighest, worldEnded: look.worldEnded, worldSaved: look.worldSaved },
+    look.lit ? 100 : 0,
+  )
+}
+
+/** The marker's position on the spire for floor `m` (fractional while it climbs): the row of
+ *  its tip and the column it hangs from, in tower pixels. */
+export function markerAt(m: number): { x: number; y: number } {
+  const y = Math.round(20 + (100 - m) * 2)
+  return { x: 32 + floorHalf(Math.round(Math.max(1, Math.min(100, m)))) + 2, y: y - 2 }
+}
+
+/** The stone, the sky, the world, cracks and crown; windows lit up to `litUpTo`. */
+function paintTower(opts: TowerLook, litUpTo: number): Bitmap {
   const b = createBitmap(TOWER_W, TOWER_H)
   const dead = opts.worldEnded
   // sky — once the world has ended, the sky above F90 is ash
@@ -83,7 +131,7 @@ export function drawTowerExterior(opts: TowerLook): Bitmap {
     rect(b, x0, y, half * 2, 2, stone)
     set(b, x0, y, mix(stone, hex('#000000'), 0.4))
     set(b, x0 + half * 2 - 1, y, mix(stone, hex('#fff6e0'), 0.2))
-    const anchorCleared = f % 5 === 0 && f <= opts.highest && !greyed
+    const anchorCleared = f % 5 === 0 && f <= litUpTo && !greyed
     if (f % 5 === 0) {
       // anchor ledge — a cleared anchor keeps a warm glow on its ledge and at its edges
       hline(b, x0 - 1, y + 1, half * 2 + 2, anchorCleared ? mix(stone, hex('#f2c75c'), 0.55) : mix(stone, hex('#fff6e0'), 0.25))
@@ -93,7 +141,7 @@ export function drawTowerExterior(opts: TowerLook): Bitmap {
       }
     }
     // windows: lit where cleared (a dead world's windows are dark)
-    const lit = f <= opts.highest && !greyed
+    const lit = f <= litUpTo && !greyed
     for (let x = x0 + 3; x < x0 + half * 2 - 3; x += 4) set(b, x, y, lit ? hex('#f2c75c') : greyed ? hex('#2a2830') : hex('#141020'))
   }
   drawCracks(b, towerDamage(opts.highest))
@@ -103,13 +151,6 @@ export function drawTowerExterior(opts: TowerLook): Bitmap {
   // the base / gate
   rect(b, 20, TOWER_H - 22, 24, 8, hex('#4a4452'))
   rect(b, 29, TOWER_H - 20, 6, 6, hex('#140c10'))
-  // the party's marker (drawn at a fractional floor while it climbs)
-  const m = opts.marker ?? opts.current
-  if (m >= 1 && m <= 100) {
-    const y = Math.round(20 + (100 - m) * 2)
-    const half = floorHalf(Math.round(m))
-    for (let i = 0; i < 4; i++) vline(b, 32 + half + 2 + i, y - i + 1, 1 + i * 2, hex('#ffe07a'))
-  }
   return b
 }
 

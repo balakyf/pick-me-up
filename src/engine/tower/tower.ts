@@ -35,6 +35,7 @@ import type {
   MaterialId,
   Seed,
   SkillProgress,
+  DeployReason,
 } from '../types'
 import { buildCombatUnit, buildEnemyUnit, buildAllyUnit } from '../unit'
 import { runBattle } from '../combat'
@@ -488,24 +489,44 @@ export function ordersAllowed(state: GameState): number {
   return 1 + Math.floor(state.facilities.tacticalCenter.level / 2)
 }
 
-export function playFloor(
-  state: GameState,
-  focus?: FocusDirective,
-  ballista?: number,
-  subvert?: boolean,
-  orders?: BattleOrder[],
-): { state: GameState; result: FloorResult } {
+/** The Master's choices that shape one attempt's battle (all optional, as ATTEMPT_FLOOR carries them). */
+export interface FloorBattleOpts {
+  focus?: FocusDirective
+  ballista?: number
+  subvert?: boolean
+  orders?: BattleOrder[]
+}
+
+/**
+ * EXACTLY the battle one attempt at `state.tower.currentFloor` would fight — the single
+ * source of truth for playFloor and the war-room forecast (scout/forecast.ts), so the two
+ * can never drift: the party through the deploy rails (morale, refusals, the rebellion
+ * draw), the real encounter (anchor and Wall scaling, loop scars, floor conditions), the
+ * ballista wound, the subversion, the orders (a focus order carries the Tactical Center's
+ * concentrate-fire bonus), the bonds, the bond set bonuses and the Shrine's blessing, and
+ * the attempt's combat seed. PURE; validates nothing (playFloor does).
+ */
+export interface PreparedFloorBattle {
+  floor: number
+  attemptIndex: number
+  /** The fielded units as built (before bond set bonuses / the blessing) — for CP and drops. */
+  heroUnits: CombatUnit[]
+  /** What `runBattle` receives: the fielded units with the party's set bonuses and blessing. */
+  battleUnits: CombatUnit[]
+  deployedIds: HeroId[]
+  refusals: { heroId: HeroId; reason: DeployReason }[]
+  /** Refusals in the old sense (rebellion, burnout, bounty). */
+  refusedHeroIds: HeroId[]
+  encounter: Encounter
+  /** hash(seed, 'combat', floor, attemptIndex): the attempt's own seed. */
+  combatSeed: number
+  /** The account meta after the attempt's practice (a played ballista shot is practice). */
+  meta: GameState['meta']
+}
+
+export function prepareFloorBattle(state: GameState, opts: FloorBattleOpts = {}): PreparedFloorBattle {
+  const { focus, ballista, subvert, orders } = opts
   const floor = state.tower.currentFloor
-  const commands = (orders ?? []).filter((o) => o.kind !== 'retreat').length
-  if (commands > ordersAllowed(state)) throw new Error(`playFloor: the Tactical Center can relay only ${ordersAllowed(state)} orders a battle`)
-  const worldMult = worldMultFor(state)
-  if (state.tower.event !== null) {
-    throw new Error(`playFloor: an event floor after F${state.tower.event.floor} is waiting to be resolved`)
-  }
-  if (floor > T.sliceTopFloor) throw new Error('playFloor: the summit has been reached')
-  if (subvert && (floor !== T.worldEndFloor || state.tower.hiddenFound.length < TUNING.lifecycle.subvertTruths)) {
-    throw new Error(`playFloor: only a Master who knows ${TUNING.lifecycle.subvertTruths} truths can subvert the ninetieth floor`)
-  }
 
   // ── 1. Build deployed hero units through the deploy rails (deploy.ts): the dead, the
   //       away (captive, Ruins, chamber, yard, bounty), the burnt out, the broken (Sanity 0)
@@ -516,13 +537,11 @@ export function playFloor(
   const deployedIds: HeroId[] = deployed.ids
   const refusals = deployed.refusals
   const refusedHeroIds: HeroId[] = refusals.filter((r) => REFUSAL_REASONS.includes(r.reason)).map((r) => r.heroId)
-  // Nobody fit to fight: refuse the attempt outright (no loop attempt burned, no wipe of nobody).
-  if (heroUnits.length === 0) throw new Error('playFloor: no one is fit to fight')
 
   // ── 2. Combat seed (folds the retry counter). ───────────────────────────────
   const combatSeed = hash(state.seed, 'combat', floor, state.tower.attemptIndex)
 
-  // ── 3. Encounter + battle. ──────────────────────────────────────────────────
+  // ── 3. Encounter. ───────────────────────────────────────────────────────────
   let enc = buildEncounter(state, floor, focus)
   // BALLISTA (Layer 3 §C2): on anchors that declare it, the boss opens the fight wounded —
   // by the Master's play, or by their tracked skill when the minigame is skipped.
@@ -548,11 +567,60 @@ export function playFloor(
       })),
     }
   }
-  if (orders && orders.length > 0) enc = { ...enc, orders }
+  if (orders && orders.length > 0) {
+    enc = { ...enc, orders }
+    // TACTICAL CENTER (B18): a mid-battle Focus is the Master's concentrate-fire order, so it
+    // carries the same bonus a pre-battle directive does (combat applies it to the focused id).
+    if (enc.focusBonus === undefined && orders.some((o) => o.kind === 'focus')) {
+      enc = { ...enc, focusBonus: tacticalFocusBonus(state.facilities.tacticalCenter.level) }
+    }
+  }
   // Combat depth: friends and rivals in the party fight as such.
   enc = withBonds(enc, state, deployedIds)
   // Tower challenges: bond set bonuses and the Cursed Shrine's blessing ride on the units.
-  const res = runBattle(applyPartyBonuses(heroUnits, state), enc, combatSeed)
+  const battleUnits = applyPartyBonuses(heroUnits, state)
+
+  return {
+    floor,
+    attemptIndex: state.tower.attemptIndex,
+    heroUnits,
+    battleUnits,
+    deployedIds,
+    refusals,
+    refusedHeroIds,
+    encounter: enc,
+    combatSeed,
+    meta,
+  }
+}
+
+export function playFloor(
+  state: GameState,
+  focus?: FocusDirective,
+  ballista?: number,
+  subvert?: boolean,
+  orders?: BattleOrder[],
+): { state: GameState; result: FloorResult } {
+  const floor = state.tower.currentFloor
+  const commands = (orders ?? []).filter((o) => o.kind !== 'retreat').length
+  if (commands > ordersAllowed(state)) throw new Error(`playFloor: the Tactical Center can relay only ${ordersAllowed(state)} orders a battle`)
+  const worldMult = worldMultFor(state)
+  if (state.tower.event !== null) {
+    throw new Error(`playFloor: an event floor after F${state.tower.event.floor} is waiting to be resolved`)
+  }
+  if (floor > T.sliceTopFloor) throw new Error('playFloor: the summit has been reached')
+  if (subvert && (floor !== T.worldEndFloor || state.tower.hiddenFound.length < TUNING.lifecycle.subvertTruths)) {
+    throw new Error(`playFloor: only a Master who knows ${TUNING.lifecycle.subvertTruths} truths can subvert the ninetieth floor`)
+  }
+
+  // ── 1–3. The party through the deploy rails, the combat seed and the encounter — built
+  //         by prepareFloorBattle, the one place the war-room forecast reads too. ────
+  const prepared = prepareFloorBattle(state, { focus, ballista, subvert, orders })
+  const { heroUnits, refusals, refusedHeroIds, combatSeed, meta } = prepared
+  // Nobody fit to fight: refuse the attempt outright (no loop attempt burned, no wipe of nobody).
+  if (heroUnits.length === 0) throw new Error('playFloor: no one is fit to fight')
+  const enc = prepared.encounter
+  const res = runBattle(prepared.battleUnits, enc, combatSeed)
 
   // ── 4. Interpret. ───────────────────────────────────────────────────────────
   const cleared = res.outcome === 'win'

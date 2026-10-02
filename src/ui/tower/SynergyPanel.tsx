@@ -6,6 +6,7 @@ import type { BondKind, CombatBond, GameState, HeroId, Line, OwnedHero } from '.
 import { DEPTH, adjacentLines, bestLine, coverChance, formationNotes, partyBonds } from '../../engine/depth'
 import { t } from '../i18n/i18n'
 import { classGlyph } from '../bits'
+import { pickerName } from '../hero/heroLabel'
 import '../codex/combatDepth.css'
 
 const BOND_LABEL: Record<BondKind, string> = {
@@ -20,7 +21,6 @@ const LINE_LABEL: Record<Line, string> = { front: 'front', mid: 'mid', back: 'ba
 const pct = (x: number) => Math.round(x * 100)
 /** Bond rows shown before "+N more". */
 const MAX_BONDS = 5
-const first = (n: string) => n.split(/\s+/)[0] ?? n
 
 function bondEffect(kind: BondKind, affinity: number, canCover: boolean): string {
   const B = DEPTH.bonds
@@ -62,7 +62,11 @@ export function SynergyPanel({ state }: { state: GameState }) {
   const bonds = allBonds.slice(0, MAX_BONDS)
   const notes = formationNotes(members.map((m) => ({ heroClass: m.hero.heroClass, line: m.line })))
   const F = DEPTH.formation
-  const name = (id: string) => first(state.heroes[id as HeroId]?.name ?? id)
+  // Two Marens in one party read as two people (lane A's disambiguated names).
+  const name = (id: string) => {
+    const h = state.heroes[id as HeroId]
+    return h ? pickerName(state, h) : id
+  }
 
   return (
     <div className="pframe synergy">
@@ -104,7 +108,7 @@ export function SynergyPanel({ state }: { state: GameState }) {
             <div key={m.hero.id} className="formation-row">
               <span className="formation-line">{t(LINE_LABEL[m.line])}</span>
               <span className="formation-name">
-                {classGlyph(m.hero.heroClass)} {first(m.hero.name)}
+                {classGlyph(m.hero.heroClass)} {pickerName(state, m.hero)}
               </span>
               <span className="formation-effects">
                 {parts.length === 0 && <span className="muted small">{t('no formation effect')}</span>}

@@ -1,212 +1,34 @@
-import { useEffect, useRef, useState, type Ref } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { GameState, FloorResult, CombatLog, BattleOrder } from '../engine/types'
-import { scoutFloor, suggestParty, type ScoutReport } from '../engine/scout'
+import { scoutFloor, suggestParty, enterConcerns, type EnterConcern, type Forecast, type ForecastAlternative } from '../engine/scout'
 import { fitCount, ordersAllowed } from '../engine/tower'
 import type { Store } from '../engine/store'
 import { attemptFloorWithResult, resolveEventWithResult } from '../engine/store'
 import { buildEncounter } from '../engine/tower'
-import { ACTS, ANCHORS, HIDDEN_OBJECTIVES, actForFloor } from '../engine/content'
+import { ANCHORS, actForFloor } from '../engine/content'
 import { TUNING } from '../engine/tuning'
-import { EVENT_OPTION_LABEL, merchantPrice, treasureGold, type EventOutcome } from '../engine/events'
+import { tacticalFocusBonus } from '../engine/tactical'
+import type { EventOutcome } from '../engine/events'
 import { BattleScene, type BattleOrders } from './battle/BattleScene'
 import { ResultsScreen } from './screens'
-import { HeroCard } from './HeroCard'
 import { TimingGame } from './metaPanels'
 import { TowerExterior } from './challenge/TowerExterior'
-import { TowerChallenges } from './challenge/TowerChallenges'
 import { t } from './i18n/i18n'
 import { ELEMENT_VIS } from './bits'
 import { CodexButton } from './codex/CodexWindow'
-import { ScoutCodexNote } from './codex/ScoutCodexNote'
-import { SynergyPanel } from './tower/SynergyPanel'
-import { FloorModBadge, FloorModsLine } from './tower/FloorMods'
-import { enterBlock, enterBlockText, eventWhere } from './tower/towerText'
-import { shownLevel } from './battle/battleFrames'
-import { tn } from './text'
+import { enterBlock } from './tower/towerText'
+import { CommandPanel } from './tower/CommandPanel'
+import { EventOutcomeCard } from './tower/EventPanel'
+import { FloorList } from './tower/FloorList'
+import { Chronicle } from './tower/Chronicle'
+import { EnterConfirm } from './tower/EnterConfirm'
+import { useForecast } from './tower/useForecast'
+import { forecastNow } from './tower/forecastClient'
+import { clearPendingReplay, savePendingReplay } from './tower/pendingReplay'
+import { truthStanding } from './tower/warRoomText'
 import './tower/tower.css'
 
 const MAX_FLOOR = TUNING.tower.sliceTopFloor
-const EV = TUNING.events
-
-/** One-line description of an event option (what the Master is choosing). */
-function optionBlurb(option: string, floor: number): string {
-  switch (option) {
-    case 'rest':
-      return t('Every living hero recovers {n} Sanity.', { n: EV.restSanity })
-    case 'treasure':
-      return t('A cache: {g} gold and {s} stones.', { g: treasureGold(floor).toLocaleString(), s: EV.treasureStones })
-    case 'merchant':
-      return t('Buy {n} Promotion Stones for {g} gold.', { n: EV.merchantStones, g: merchantPrice().toLocaleString() })
-    case 'gamble':
-      return t('A sealed door. {p}%: a vault worth ×{m} treasure. Otherwise the party loses {s} Sanity.', { p: Math.round(EV.gambleChance * 100), m: EV.gambleWinMult, s: EV.gambleSanity })
-    case 'reinforcement':
-      return t('A free Normal summon joins the roster.')
-    case 'battle_royale':
-      return t('Your party against three rival squads, back to back.')
-    case 'party_raid':
-      return t('Your party against a raid colossus, against the clock.')
-    case 'team':
-      return t('Three 5-on-5 rounds against rising rivals.')
-    case 'pair':
-      return t('Your two strongest heroes, three rounds.')
-    case 'deathmatch':
-      return t('Your single strongest hero, three duels.')
-    default:
-      return ''
-  }
-}
-
-const EVENT_TITLE = { bonus: 'Event Floor', recovery: 'Recovery', tournament: 'Tournament' } as const
-
-/** The open event floor: pick one option (the climb waits on it). */
-function EventPanel({
-  state,
-  onResolve,
-  panelRef,
-}: {
-  state: GameState
-  onResolve: (option: string) => void
-  panelRef?: Ref<HTMLDivElement>
-}) {
-  const ev = state.tower.event!
-  return (
-    <div className="pframe event-panel" ref={panelRef}>
-      <div className="event-head">
-        <span className="event-kind">{t(EVENT_TITLE[ev.kind])}</span>
-        <span className="muted">{eventWhere(ev, state.tower.currentFloor)}</span>
-      </div>
-      <p className="muted" style={{ margin: '4px 0 10px' }}>
-        {ev.kind === 'tournament'
-          ? t('Masters from other worlds gather between the floors. Pick a format — no one dies here.')
-          : ev.kind === 'recovery'
-            ? t('The main team is gone. The tower offers a breather before the next floor.')
-            : t('A quiet floor between the fights. Choose how to spend it.')}
-      </p>
-      <div className="event-options">
-        {ev.options.map((o) => (
-          <button
-            key={o}
-            className="event-option"
-            onClick={() => onResolve(o)}
-            disabled={o === 'merchant' && state.gold < merchantPrice()}
-          >
-            <span className="eo-name">{t(EVENT_OPTION_LABEL[o] ?? o)}</span>
-            <span className="eo-blurb">{optionBlurb(o, ev.floor)}</span>
-          </button>
-        ))}
-      </div>
-    </div>
-  )
-}
-
-/** What an event just did. */
-function EventOutcomeCard({
-  outcome,
-  onReplay,
-  onClose,
-}: {
-  outcome: EventOutcome
-  onReplay: (log: CombatLog) => void
-  onClose: () => void
-}) {
-  const mats = Object.entries(outcome.materials)
-  return (
-    <div className="overlay">
-      <div className="result-card">
-        <div className={`big-outcome ${outcome.won === false || (outcome.wins !== undefined && outcome.wins === 0) ? 'lose' : 'win'}`}>
-          {t(EVENT_OPTION_LABEL[outcome.option] ?? outcome.option)}
-        </div>
-        <div className="muted">
-          {/^Placed \d/.test(outcome.note) ? t('Placed {n} of 8.', { n: outcome.placing ?? 8 }) : t(outcome.note)}
-        </div>
-        {outcome.rounds && (
-          <div className="tourney-rounds">
-            {outcome.rounds.map((r, i) => (
-              <button key={i} className={`tr-round ${r.won ? 'won' : 'lost'}`} onClick={() => onReplay(r.log)} title={t('Watch this round')}>
-                {t('Round {n}', { n: i + 1 })} · {r.won ? t('won') : t('lost')} · {t('rival CP')} {r.rivalCp.toLocaleString()} ▸
-              </button>
-            ))}
-            <div className="tr-placing">{t('Placing: {n} / 8', { n: outcome.placing ?? 8 })}</div>
-          </div>
-        )}
-        <div className="reward-row">
-          {outcome.gold !== 0 && (
-            <div className="r">
-              <div className="n" style={{ color: 'var(--gold)' }}>
-                {outcome.gold > 0 ? '+' : ''}
-                {outcome.gold.toLocaleString()}
-              </div>
-              <div className="l">{t('Gold')}</div>
-            </div>
-          )}
-          {outcome.gems > 0 && (
-            <div className="r">
-              <div className="n" style={{ color: 'var(--gem)' }}>+{outcome.gems}</div>
-              <div className="l">{t('Gems')}</div>
-            </div>
-          )}
-          {mats.map(([k, v]) => (
-            <div className="r" key={k}>
-              <div className="n">+{v}</div>
-              <div className="l">{k === 'promotionStone' ? 'Stones' : k}</div>
-            </div>
-          ))}
-          {outcome.sanity !== 0 && (
-            <div className="r">
-              <div className="n" style={{ color: outcome.sanity > 0 ? 'var(--good)' : 'var(--bad)' }}>
-                {outcome.sanity > 0 ? '+' : ''}
-                {outcome.sanity}
-              </div>
-              <div className="l">{t('Sanity')}</div>
-            </div>
-          )}
-        </div>
-        {outcome.recruit && (
-          <div className="reveal" style={{ margin: '0 auto 12px' }}>
-            <HeroCard hero={outcome.recruit} />
-          </div>
-        )}
-        <button className="btn primary big" onClick={onClose}>
-          {t('Onward ▸')}
-        </button>
-      </div>
-    </div>
-  )
-}
-
-/** The Chronicle: hidden objectives found (with their lore), and what is still unknown. */
-function Chronicle({ state }: { state: GameState }) {
-  const masterSight = state.meta.masterLevel >= EV.hiddenHintMasterLevel
-  const revealed = new Set(state.meta.revealedHidden)
-  const found = new Set(state.tower.hiddenFound)
-  return (
-    <div className="pframe chronicle">
-      <div className="event-head">
-        <span className="event-kind">{t('Chronicle')}</span>
-        <span className="muted">
-          {t('{n} / {m} truths', { n: found.size, m: HIDDEN_OBJECTIVES.length })}
-        </span>
-      </div>
-      {HIDDEN_OBJECTIVES.map((h) => (
-        <div key={h.id} className={`chron-row ${found.has(h.id) ? 'found' : ''}`}>
-          <span className="chron-floor">F{h.floor}</span>
-          {found.has(h.id) ? (
-            <span>
-              <b>{t(h.name)}</b> — <i>{t(h.lore)}</i>
-            </span>
-          ) : (
-            <span className="muted">{masterSight || revealed.has(h.id) ? `??? — ${t(h.hint)}` : t('??? (a hidden objective)')}</span>
-          )}
-        </div>
-      ))}
-      {!masterSight && (
-        <div className="muted" style={{ fontSize: 13 }}>
-          {t('From Master Lv {n} you sense what the floors are hiding — or a Devoted hero can reveal one.', { n: EV.hiddenHintMasterLevel })}
-        </div>
-      )}
-    </div>
-  )
-}
 
 /** A Devoted hero's peek: the current floor's enemies and what they're weak to. */
 function PeekLine({ preview }: { preview: ReturnType<typeof buildEncounter> }) {
@@ -227,119 +49,54 @@ function PeekLine({ preview }: { preview: ReturnType<typeof buildEncounter> }) {
   return <div className="peek-line">👁 {notes.size > 0 ? [...notes].join(' · ') : t('No special weakness — just steel and nerve.')}</div>
 }
 
-const THREAT_LABEL: Record<ScoutReport['threat'], string> = {
-  safe: 'Safe',
-  fair: 'Fair fight',
-  risky: 'Risky',
-  deadly: 'Deadly',
-}
-const THREAT_COLOR: Record<ScoutReport['threat'], string> = {
-  safe: 'var(--good)',
-  fair: 'var(--gold)',
-  risky: 'var(--warn)',
-  deadly: 'var(--bad)',
+/** The Enter sheet's question, while it is open. */
+interface Confirm {
+  forecast: Forecast | null
+  concerns: EnterConcern | null
+  worldEnd: boolean
+  subvert: boolean
+  /** At F90, when the Master may refuse: the odds of the subverted fight. */
+  subverted?: Forecast | null
 }
 
-function keywordNote(k: ScoutReport['enemies'][number]['keywords'][number]): string | null {
-  switch (k.kind) {
-    case 'immune':
-      return t('immune to {what}', { what: t(k.damageType) })
-    case 'resist':
-      return t('resists {what}', { what: t(k.damageType) })
-    case 'vulnerable':
-      return t('weak to {what}', { what: t(ELEMENT_VIS[k.element].label) })
-    case 'looming':
-      return t('too strong to fight — finish first')
-    case 'phased':
-      return t('shielded until its guard falls')
-    case 'enrage':
-      return t('enrages after {n} ticks', { n: k.afterTick })
-    case 'aegis':
-      return t('shrugs off the first {n} hits', { n: k.charges })
-    default:
-      return null
-  }
-}
-
-/** The scouting report: who waits on the floor, and how the party measures up. */
-function ScoutPanel({ state, report, onSuggest }: { state: GameState; report: ScoutReport; onSuggest: () => void }) {
-  const pct = Math.min(100, (report.ratio / 2) * 100)
-  return (
-    <div className="pframe scout">
-      <div className="event-head">
-        <span className="event-kind">{t('Scouting report · F{n}', { n: report.floor })}</span>
-        <span className="muted">
-          {t(report.mission)} · {tn(report.waves, '1 wave', '{n} waves')}
-        </span>
-      </div>
-      <div className="threat-row">
-        <span className="threat-label" style={{ color: THREAT_COLOR[report.threat] }}>
-          {t(THREAT_LABEL[report.threat])}
-        </span>
-        <span className="gauge threat-gauge">
-          <span style={{ width: `${pct}%`, background: THREAT_COLOR[report.threat] }} />
-        </span>
-        <span className="muted small">
-          {t('party {p} vs floor {f}', { p: Math.round(report.partyCp).toLocaleString(), f: Math.round(report.budget).toLocaleString() })}
-        </span>
-      </div>
-      <div className="muted small">
-        {report.expectedDeaths === 0
-          ? t('Parties this strong have come back whole.')
-          : t('Parties this strong lose about {n} heroes an attempt.', { n: report.expectedDeaths })}
-      </div>
-      <FloorModsLine mods={report.modifiers} />
-      <div className="scout-enemies">
-        {report.enemies.map((e) => {
-          const notes = report.studied || e.studied || e.keywords.some((k) => k.kind === 'looming') ? e.keywords.map(keywordNote).filter(Boolean) : []
-          return (
-            <div key={`${e.name}|${e.level}`} className="scout-enemy">
-              <span className="el-dot" style={{ background: ELEMENT_VIS[e.element].color }} title={t(ELEMENT_VIS[e.element].label)} />
-              <b>{t(e.name)}</b>
-              {e.count > 1 && <span className="muted">×{e.count}</span>}
-              <span className="muted small">Lv{shownLevel(e)}</span>
-              {e.target && <span className="chip">{t('target')}</span>}
-              {notes.length > 0 && <span className="scout-notes">{notes.join(' · ')}</span>}
-              <ScoutCodexNote enemy={e} floorStudied={report.studied} />
-            </div>
-          )
-        })}
-      </div>
-      {!report.studied && (
-        <div className="muted small">{t('Weaknesses unknown — a Scholar in the Library can study this floor.')}</div>
-      )}
-      {report.immune.physical && <div className="scout-warn">⚠ {t('Most of this floor shrugs off physical blows — bring magic.')}</div>}
-      {report.immune.magic && <div className="scout-warn">⚠ {t('Most of this floor shrugs off magic — bring blades.')}</div>}
-      <div className="scout-actions">
-        <button className="pbtn sm" onClick={onSuggest} disabled={Object.values(state.heroes).filter((h) => h.alive).length === 0}>
-          ✦ {t('Suggest a party')}
-        </button>
-      </div>
-    </div>
-  )
-}
-
-export function TowerScreen({ state, store }: { state: GameState; store: Store }) {
+/**
+ * The Tower as a war room (O22): the tower art, a sticky command panel (event floors, the
+ * forecast, the party, the side door, Enter) and the floor list with the Chronicle. While
+ * a battle and its results play, the room shows the tower as it stood when the party went
+ * in — nothing behind the overlay gives the outcome away.
+ */
+export function TowerScreen({ state: live, store }: { state: GameState; store: Store }) {
   const [combat, setCombat] = useState<CombatLog | null>(null)
   const [pending, setPending] = useState<FloorResult | null>(null)
   const [showResult, setShowResult] = useState(false)
   const [outcome, setOutcome] = useState<EventOutcome | null>(null)
   const [replay, setReplay] = useState<CombatLog | null>(null)
   const [err, setErr] = useState<string | null>(null)
-  const [aiming, setAiming] = useState(false)
+  const [aiming, setAiming] = useState<{ subvert?: boolean } | null>(null)
   const [orders, setOrders] = useState<BattleOrders | null>(null)
-  const [openActs, setOpenActs] = useState<Set<string>>(() => new Set([actForFloor(state.tower.currentFloor).id]))
-
+  const [confirm, setConfirm] = useState<Confirm | null>(null)
+  // The tower as it stood when the party went in (until the results are dismissed).
+  const [frozen, setFrozen] = useState<GameState | null>(null)
+  const state = frozen ?? live
   const current = state.tower.currentFloor
+  const atKey = `${state.accountId}|${current}|${state.tower.attemptIndex}`
+  // An opening order (the forecast's "Open with Focus") belongs to this floor and attempt.
+  const [opening, setOpening] = useState<{ at: string; orders: BattleOrder[] }>({ at: '', orders: [] })
+  const openingOrders = opening.at === atKey ? opening.orders : []
+  const [openActs, setOpenActs] = useState<Set<string>>(() => new Set([actForFloor(current).id]))
+
   const currentRef = useRef<HTMLDivElement>(null)
+  const listRef = useRef<HTMLElement>(null)
   const eventRef = useRef<HTMLDivElement>(null)
-  const hasEvent = state.tower.event !== null
-  // The tower is drawn bottom-up; bring the floor you're standing on into view — or the
-  // event floor the climb is waiting on, which sits above the list.
+  const event = state.tower.event
+  const hasEvent = event !== null
+  // Bring the floor you stand on into view inside the floor column (never yank the page).
   useEffect(() => {
-    if (hasEvent) eventRef.current?.scrollIntoView?.({ block: 'center' })
-    else currentRef.current?.scrollIntoView?.({ block: 'center' })
-  }, [current, hasEvent])
+    const list = listRef.current
+    const row = currentRef.current
+    if (!list || !row || list.scrollHeight <= list.clientHeight + 4) return
+    list.scrollTop = Math.max(0, row.offsetTop - list.offsetTop - list.clientHeight / 2)
+  }, [current])
   const toEvent = () => eventRef.current?.scrollIntoView?.({ block: 'center', behavior: 'smooth' })
   useEffect(() => {
     setOpenActs((cur) => new Set([...cur, actForFloor(current).id]))
@@ -348,39 +105,90 @@ export function TowerScreen({ state, store }: { state: GameState; store: Store }
   // The engine's deploy rails decide who can fight (the engine refuses an empty attempt).
   const deployable = fitCount(state) > 0
   const summit = state.tower.highestCleared >= MAX_FLOOR
-  const event = state.tower.event
   const loop = state.tower.loop
   // A disabled Enter always says why (and an event floor can be reached from here).
   const block = enterBlock(state, deployable)
 
-  function enter() {
-    if (!deployable || current > MAX_FLOOR || event !== null) return
-    // Anchors with a mission minigame (the ballista) are played first.
-    if (ANCHORS[current]?.minigame === 'ballista') {
-      setAiming(true)
+  // The current floor, built once: the enemy count, the peek, and every name the war room
+  // needs (bosses and escorts by tag, foes by id).
+  const preview = useMemo(() => (current <= MAX_FLOOR ? buildEncounter(state, current) : null), [state, current])
+  const names = useMemo(() => {
+    const out: Record<string, string> = {}
+    for (const u of [...(preview?.waves.flatMap((w) => w.units) ?? []), ...(preview?.allies ?? [])]) {
+      out[u.id] = t(u.name)
+      if (u.targetTag !== undefined && out[u.targetTag] === undefined) out[u.targetTag] = t(u.name)
+    }
+    return out
+  }, [preview])
+  const report = useMemo(() => (current <= MAX_FLOOR && !hasEvent ? scoutFloor(state) : null), [state, current, hasEvent])
+
+  // The crystal: the real fight, run many times (off the main thread), for the plan on the board.
+  const plan = useMemo(() => ({ opening: openingOrders }), [openingOrders])
+  // (Behind a battle the room keeps the forecast it showed when the party went in.)
+  const view = useForecast(state, plan, report !== null)
+
+  const worldEnd = current === TUNING.tower.worldEndFloor && !state.tower.worldEnded && !state.tower.worldSaved
+
+  /** Enter: ask first when the war room has something to say (or the world would end). */
+  function enter(subvert = false) {
+    if (block !== null || current > MAX_FLOOR) return
+    // Subverting strips the Herald's aegis: the sheet must weigh THAT fight, not the plain clear.
+    const f = subvert ? forecastNow(live, { ...plan, subvert: true }) : (view.forecast ?? forecastNow(live, plan))
+    const concerns = f ? enterConcerns(f) : null
+    if ((worldEnd && !subvert) || concerns) {
+      const sheetWorld = worldEnd && !subvert
+      // The world sheet offers Subvert too: give its odds beside the plain clear's.
+      const subverted = sheetWorld && truthStanding(live).qualified ? forecastNow(live, { ...plan, subvert: true }) : undefined
+      setConfirm({ forecast: f, concerns, worldEnd: sheetWorld, subvert, subverted })
       return
     }
-    fight(undefined)
+    go(subvert)
+  }
+  /** Past the sheet: the ballista first on its anchors, then the fight. */
+  function go(subvert: boolean) {
+    setConfirm(null)
+    if (ANCHORS[current]?.minigame === 'ballista') {
+      setAiming({ subvert })
+      return
+    }
+    fight(undefined, subvert)
   }
   function fight(ballista: number | undefined, subvert?: boolean) {
-    setAiming(false)
+    setAiming(null)
+    setErr(null)
     const pre = store.getState()!
-    const { result } = attemptFloorWithResult(pre, undefined, ballista, subvert) // capture the log for playback
-    store.dispatch({ type: 'ATTEMPT_FLOOR', ballista, subvert }) // advance the store identically (deterministic)
-    setPending(result)
-    setCombat(result.result.log)
+    // An opening Focus is one of the battle's orders; only aim it at someone on this floor.
+    const initial = openingOrders.filter((o) => o.kind !== 'focus' || names[o.enemyId] !== undefined)
+    const first = initial.length > 0 ? initial : undefined
+    let attempt: { state: GameState; result: FloorResult }
+    try {
+      attempt = attemptFloorWithResult(pre, undefined, ballista, subvert || undefined, first) // capture the log for playback
+    } catch (e) {
+      setErr(t(e instanceof Error ? e.message.replace(/^\w+: /, '') : 'That failed'))
+      return
+    }
+    // B14: the attempt is decided now; keep its replay until the results are seen, so a
+    // reload shows the fight instead of applying it in silence.
+    savePendingReplay(attempt.state, attempt.result)
+    setFrozen(pre)
+    store.dispatch({ type: 'ATTEMPT_FLOOR', ballista, subvert: subvert || undefined, orders: first }) // advance the store identically (deterministic)
+    setPending(attempt.result)
+    setCombat(attempt.result.result.log)
+    setOpening({ at: '', orders: [] })
     // Mid-battle orders re-resolve the same fight from the same state (deterministic up to
     // the order's tick) and revise the attempt the store just recorded.
-    const given: BattleOrder[] = []
+    const given: BattleOrder[] = [...initial]
     setOrders({
-      left: ordersAllowed(pre),
+      left: ordersAllowed(pre) - initial.filter((o) => o.kind !== 'retreat').length,
+      focusBonus: tacticalFocusBonus(pre.facilities.tacticalCenter.level),
       give: (order) => {
         try {
           const next = [...given, order]
-          const r = attemptFloorWithResult(pre, undefined, ballista, subvert, next)
-          store.revise({ type: 'ATTEMPT_FLOOR', ballista, subvert, orders: next })
+          const r = attemptFloorWithResult(pre, undefined, ballista, subvert || undefined, next)
+          store.revise({ type: 'ATTEMPT_FLOOR', ballista, subvert: subvert || undefined, orders: next })
           given.push(order)
           setPending(r.result)
+          savePendingReplay(r.state, r.result)
           return r.result.result.log
         } catch {
           return null
@@ -390,8 +198,15 @@ export function TowerScreen({ state, store }: { state: GameState; store: Store }
   }
 
   function suggest() {
-    const p = suggestParty(state)
+    const p = suggestParty(live)
     if (p.slots.some(Boolean)) store.dispatch({ type: 'SET_PARTY', slots: p.slots, lines: p.lines })
+  }
+
+  /** Adopt an odds-changer: its party on the board, its opening order in the plan. */
+  function adopt(a: ForecastAlternative) {
+    const same = a.slots.every((s, i) => (s ?? null) === (live.party.slots[i] ?? null) && a.lines[i] === live.party.lines[i])
+    if (!same) store.dispatch({ type: 'SET_PARTY', slots: a.slots, lines: a.lines })
+    setOpening({ at: atKey, orders: [...a.opening] })
   }
 
   function resolve(option: string) {
@@ -412,6 +227,8 @@ export function TowerScreen({ state, store }: { state: GameState; store: Store }
   function resultDone() {
     setShowResult(false)
     setPending(null)
+    setFrozen(null)
+    clearPendingReplay()
   }
   const toggleAct = (id: string) =>
     setOpenActs((cur) => {
@@ -421,156 +238,114 @@ export function TowerScreen({ state, store }: { state: GameState; store: Store }
       return next
     })
 
-  // Floor descriptions (anchors are labelled; the current floor gets a live preview).
-  const preview = current <= MAX_FLOOR ? buildEncounter(state, current) : null
-  const report = current <= MAX_FLOOR && !event ? scoutFloor(state) : null
+  const enemyCount = preview ? preview.waves.reduce((n, w) => n + w.units.length, 0) : null
+  const truths = truthStanding(state)
 
   return (
-    <div className="screen">
+    <div className="screen war-room">
       <h2>{t('The Tower')}</h2>
-      <p className="sub">
-        {t('100 floors of permadeath. Falling heroes are gone for good.')}
-        {state.tower.worldEnded && ` ${t('The world you climbed is gone.')}`}
-        <CodexButton state={state} />
-      </p>
-
-      {summit && (
-        <div className="result-card" style={{ marginTop: 0, marginBottom: 20 }}>
-          <div className="big-outcome win">{state.tower.worldSaved ? t('TRUE END ✦') : t('SUMMIT ✦')}</div>
-          <div className="muted">
-            {t('Tell, the Architect, has fallen. You conquered all {n} floors', { n: MAX_FLOOR })}
-            {state.tower.worldSaved ? t(' — and the world you climbed is still there.') : t(' — for a world that is already gone.')}
-          </div>
+      <div className="war-grid">
+        <div className="war-art">
+          <TowerExterior state={state} hold={combat !== null || showResult} />
         </div>
-      )}
-      {state.tower.worldEnded && !summit && (
-        <div className="pframe world-ended">
-          {t('The ninetieth floor is behind you, and the world beneath it has ended. The climb goes on into floors that were never finished.')}
-        </div>
-      )}
 
-      {loop && (
-        <div className="pframe loop-banner">
-          <b>{t('Looped mission')}</b> —{' '}
-          {t('F{a}–{b}. Failing F{b} sends the room back to F{c}.', {
-            a: TUNING.tower.loop.start,
-            b: TUNING.tower.loop.gate,
-            c: TUNING.tower.loop.fallbackTo,
-          })}{' '}
-          {t('Attempts left:')} <b>{loop.attemptsLeft}</b>
-          {loop.scars > 0 && <> · {t('scars:')} <b>{loop.scars}</b> {t('(the loop has hardened)')}</>}
-        </div>
-      )}
+        <CommandPanel
+          state={state}
+          store={store}
+          view={view}
+          report={report}
+          names={names}
+          opening={openingOrders}
+          block={block}
+          err={err}
+          eventRef={eventRef}
+          onResolve={resolve}
+          onEnter={() => enter(false)}
+          onSubvert={() => enter(true)}
+          onSuggest={suggest}
+          onUse={adopt}
+          onClearOpening={() => setOpening({ at: '', orders: [] })}
+          onToEvent={toEvent}
+        >
+          <p className="sub">
+            {t('100 floors of permadeath. Falling heroes are gone for good.')}
+            {state.tower.worldEnded && ` ${t('The world you climbed is gone.')}`}
+            <CodexButton state={state} />
+          </p>
 
-      {event && <EventPanel state={state} onResolve={resolve} panelRef={eventRef} />}
-      {err && <div className="muted" style={{ color: 'var(--bad)' }}>{err}</div>}
-      <TowerChallenges state={state} store={store} />
-
-      {report && <ScoutPanel state={state} report={report} onSuggest={suggest} />}
-      {report && <SynergyPanel state={state} />}
-
-      {block === 'party' && (
-        <div className="empty" style={{ color: 'var(--warn)' }}>
-          {t("No deployable heroes — set your Party (heroes in training or broken down can't fight).")}
-        </div>
-      )}
-
-      <div className="tower-layout">
-      <TowerExterior state={state} hold={combat !== null || showResult} />
-      <div className="tower">
-        {ACTS.flatMap((act) => {
-          const open = openActs.has(act.id)
-          const floors = open ? Array.from({ length: act.to - act.from + 1 }, (_, i) => act.from + i) : []
-          return [...floors, `act:${act.id}`]
-        }).map((f) => {
-          if (typeof f === 'string') {
-            const act = ACTS.find((a) => `act:${a.id}` === f)!
-            const cleared = Math.max(0, Math.min(act.to, state.tower.highestCleared) - act.from + 1)
-            return (
-              <button key={f} className={`act-head ${openActs.has(act.id) ? 'open' : ''}`} onClick={() => toggleAct(act.id)}>
-                <span className="act-title">
-                  {openActs.has(act.id) ? '▾' : '▸'} {t(act.title)}
-                </span>
-                <span className="muted">
-                  {t(act.subtitle)} · {cleared}/{act.to - act.from + 1}
-                </span>
-              </button>
-            )
-          }
-          const cleared = f <= state.tower.highestCleared
-          const isCurrent = f === current
-          const locked = f > current
-          const anchor = ANCHORS[f]
-          const cls = ['floor', cleared ? 'cleared' : '', isCurrent ? 'current' : '', locked ? 'locked' : ''].filter(Boolean).join(' ')
-          const mission = isCurrent && preview ? preview.mission.type : anchor ? anchor.missionType : 'Seeded floor'
-          const enemyCount = isCurrent && preview ? preview.waves.reduce((n, w) => n + w.units.length, 0) : null
-          return (
-            <div key={f} className={cls} ref={isCurrent ? currentRef : undefined}>
-              <div className="fnum">{cleared ? '✓' : `F${f}`}</div>
-              <div className="fdesc">
-                <div className="ft">
-                  {t('Floor {n}', { n: f })} {anchor && <span className="anchor-badge">{t('ANCHOR')}</span>}
-                  {f === TUNING.tower.worldEndFloor && <span className="anchor-badge danger">{t('WORLD\'S END')}</span>}
-                  <FloorModBadge state={state} floor={f} />
-                </div>
-                <div className="fs">
-                  {t(mission)}
-                  {enemyCount !== null && ` · ${tn(enemyCount, '1 enemy', '{n} enemies')}`}
-                  {f === current && state.tower.attemptIndex > 0 && ` · ${t('attempt {n}', { n: state.tower.attemptIndex + 1 })}`}
-                  {anchor?.minigame === 'ballista' && ` · 🎯 ${t('ballista')}`}
-                </div>
-                {isCurrent && preview && state.meta.peekedFloors.includes(f) && <PeekLine preview={preview} />}
-                {isCurrent && f <= MAX_FLOOR && block && (
-                  <div className="enter-why">
-                    {enterBlockText(block)}{' '}
-                    {block === 'event' && (
-                      <button className="linkish" onClick={toEvent}>
-                        {t('Go to the event ↑')}
-                      </button>
-                    )}
-                  </div>
-                )}
+          {summit && (
+            <div className="result-card" style={{ marginTop: 0, marginBottom: 20 }}>
+              <div className="big-outcome win">{state.tower.worldSaved ? t('TRUE END ✦') : t('SUMMIT ✦')}</div>
+              <div className="muted">
+                {t('Tell, the Architect, has fallen. You conquered all {n} floors', { n: MAX_FLOOR })}
+                {state.tower.worldSaved ? t(' — and the world you climbed is still there.') : t(' — for a world that is already gone.')}
               </div>
-              {isCurrent && f <= MAX_FLOOR && (
-                <span className="enter-wrap" title={block ? enterBlockText(block) : undefined}>
-                  <button className="btn primary" onClick={enter} disabled={block !== null}>
-                    {f === TUNING.tower.worldEndFloor && !state.tower.worldSaved ? t('Clear it ▸') : t('Enter ▸')}
-                  </button>
-                </span>
-              )}
-              {isCurrent && f === TUNING.tower.worldEndFloor && state.tower.hiddenFound.length >= TUNING.lifecycle.subvertTruths && (
-                <button
-                  className="btn gem"
-                  onClick={() => fight(undefined, true)}
-                  disabled={!deployable || event !== null}
-                  title={t('You know what clearing this floor does. Refuse the win condition.')}
-                >
-                  {t('Subvert ✦')}
-                </button>
+            </div>
+          )}
+          {state.tower.worldEnded && !summit && (
+            <div className="pframe world-ended">
+              {t('The ninetieth floor is behind you, and the world beneath it has ended. The climb goes on into floors that were never finished.')}
+            </div>
+          )}
+
+          {loop && (
+            <div className="pframe loop-banner">
+              <b>{t('Looped mission')}</b> —{' '}
+              {t('F{a}–{b}. Failing F{b} sends the room back to F{c}.', {
+                a: TUNING.tower.loop.start,
+                b: TUNING.tower.loop.gate,
+                c: TUNING.tower.loop.fallbackTo,
+              })}{' '}
+              {t('Attempts left:')} <b>{loop.attemptsLeft}</b>
+              {loop.scars > 0 && (
+                <>
+                  {' '}
+                  · {t('scars:')} <b>{loop.scars}</b> {t('(the loop has hardened)')}
+                </>
               )}
             </div>
-          )
-        })}
+          )}
+        </CommandPanel>
+
+        <section className="war-floors" ref={listRef} aria-label={t('Floors')}>
+          <FloorList
+            state={state}
+            openActs={openActs}
+            onToggle={toggleAct}
+            currentRef={currentRef}
+            enemyCount={enemyCount}
+            peek={preview && state.meta.peekedFloors.includes(current) ? <PeekLine preview={preview} /> : undefined}
+          />
+          <Chronicle state={state} />
+        </section>
       </div>
 
-      </div>
-
-      <Chronicle state={state} />
-
+      {confirm && (
+        <EnterConfirm
+          state={live}
+          forecast={confirm.forecast}
+          concerns={confirm.concerns}
+          worldEnd={confirm.worldEnd}
+          subverted={confirm.subverted ?? null}
+          onBack={() => setConfirm(null)}
+          onEnter={() => go(confirm.subvert)}
+          onSubvert={confirm.worldEnd && truths.qualified ? () => go(true) : undefined}
+        />
+      )}
       {aiming && (
         <TimingGame
           title={t('The Ballista')}
           verb={t('Shoot')}
           skill={state.meta.skill.ballista}
           hint={t('Loose the bolt as the sight crosses the heart. A true shot breaks the scales before the fight begins.')}
-          onDone={fight}
-          onCancel={() => setAiming(false)}
+          onDone={(perf) => fight(perf, aiming.subvert)}
+          onCancel={() => setAiming(null)}
         />
       )}
-      {combat && <BattleScene log={combat} state={state} onDone={combatDone} orders={orders ?? undefined} />}
-      {showResult && pending && <ResultsScreen result={pending} state={state} onContinue={resultDone} />}
+      {combat && <BattleScene log={combat} state={live} onDone={combatDone} orders={orders ?? undefined} />}
+      {showResult && pending && <ResultsScreen result={pending} state={live} onContinue={resultDone} />}
       {outcome && !replay && <EventOutcomeCard outcome={outcome} onReplay={setReplay} onClose={() => setOutcome(null)} />}
-      {replay && <BattleScene log={replay} state={state} onDone={() => setReplay(null)} />}
+      {replay && <BattleScene log={replay} state={live} onDone={() => setReplay(null)} />}
     </div>
   )
 }

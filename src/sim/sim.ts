@@ -22,6 +22,7 @@ import { banquetReady, banquetWouldHelp } from '../engine/kitchen'
 import { boundElsewhere, canCraft, equippedItemIds } from '../engine/equipment'
 import { floorPower, buildEncounter, fitCount } from '../engine/tower'
 import { heroCpFull } from '../engine/unit/trueCp'
+import { forecastFloor } from '../engine/scout/forecast'
 import { ANCHORS } from '../engine/content'
 import { loginClaimed, packageRefusal } from '../engine/shop'
 import { crackRefusal, dispatchRefusal } from '../engine/rift'
@@ -84,6 +85,8 @@ export interface Profile {
   raids: boolean
   trial: boolean
   duels: boolean
+  /** Read the war room's forecast before a floor: enter on good odds, or after a week of waiting. */
+  forecast: boolean
 }
 
 export const PROFILES: Record<ProfileId, Profile> = {
@@ -110,6 +113,7 @@ export const PROFILES: Record<ProfileId, Profile> = {
     raids: false,
     trial: false,
     duels: false,
+    forecast: false,
   },
   engaged: {
     id: 'engaged',
@@ -133,6 +137,7 @@ export const PROFILES: Record<ProfileId, Profile> = {
     raids: true,
     trial: true,
     duels: true,
+    forecast: true,
   },
   whale: {
     id: 'whale',
@@ -156,6 +161,7 @@ export const PROFILES: Record<ProfileId, Profile> = {
     raids: true,
     trial: true,
     duels: true,
+    forecast: true,
   },
 }
 
@@ -232,6 +238,11 @@ const JOB_ORDER: JobId[] = ['healer', 'cook', 'instructor', 'scholar', 'merchant
 /** A fixed real-time epoch so runs never depend on the wall clock. */
 const REAL_EPOCH = Date.UTC(2026, 0, 5)
 const SIZE = TUNING.account.partySize
+/** The war room: a forecast bot enters when the crystal gives at least this win %… */
+const FORECAST_ENTER_WIN = 70
+/** …and costs fewer heroes than this an attempt; otherwise it waits — up to a week on a floor. */
+const FORECAST_ENTER_DEATHS = 1.5
+const FORECAST_PATIENCE_DAYS = 7
 
 /**
  * The CP a person sees on screen — the TRUE CP combat fields (gear, favor, Sanity…:
@@ -270,6 +281,8 @@ class Bot {
   private lastDuelDay = -1
   /** After a loss, the party strength and day it happened (a person waits to get stronger). */
   private lastLoss: { floor: number; ratio: number; day: number; wiped: boolean } | null = null
+  /** The floor the crystal first told the bot to wait on, and the day (lane C's war room). */
+  private waitingSince: { floor: number; day: number } | null = null
 
   constructor(
     readonly p: Profile,
@@ -759,7 +772,8 @@ class Bot {
       // or, after a week stuck, at no weaker than last time. Nobody feeds a party to a wall
       // every other day.
       const ll = this.lastLoss
-      if (ll && ll.floor === floor) {
+      // A forecast bot reads the crystal instead of guessing from CP (below).
+      if (ll && ll.floor === floor && !this.p.forecast) {
         const stronger = ratio >= ll.ratio * (ll.wiped ? 1.2 : 1.1)
         const patient = day - ll.day >= 7 && ratio >= ll.ratio
         if (!stronger && !patient) return
@@ -773,6 +787,7 @@ class Bot {
         this.lever('NOBODY_FIT')
         return
       }
+      if (this.p.forecast && !this.forecastSaysGo(pre, floor, day, ballista, subvert)) return
       let out
       try {
         out = attemptFloorWithResult(pre, undefined, ballista, subvert)
@@ -810,6 +825,28 @@ class Bot {
       this.lastLoss = null
       this.sideRoom()
     }
+  }
+
+  /**
+   * The war room (lane C): run the real fight in the crystal and enter on good odds — at least
+   * FORECAST_ENTER_WIN % to clear at under FORECAST_ENTER_DEATHS heroes an attempt. Otherwise
+   * wait (the bench trains, the camp rests, the gear improves); after a week stuck on the
+   * floor, go anyway, as a person would.
+   */
+  private forecastSaysGo(pre: GameState, floor: number, day: number, ballista?: number, subvert?: boolean): boolean {
+    const f = forecastFloor(pre, { ballista, subvert })
+    if (!f || f.fielded === 0) return true
+    if (f.winPct >= FORECAST_ENTER_WIN && f.expectedDeaths < FORECAST_ENTER_DEATHS) {
+      this.waitingSince = null
+      return true
+    }
+    if (this.waitingSince?.floor !== floor) this.waitingSince = { floor, day }
+    if (day - this.waitingSince.day >= FORECAST_PATIENCE_DAYS) {
+      this.lever('FORECAST_DARED')
+      return true
+    }
+    this.lever('FORECAST_WAIT')
+    return false
   }
 
   /** Tower challenges: an engaged player walks through the side door an anchor revealed. */

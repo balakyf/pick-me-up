@@ -13,21 +13,24 @@ function roster(seed: number, n = 8): GameState {
 }
 
 describe('scouting', () => {
-  it('reports the floor’s enemies, the party’s strength and a threat band', () => {
+  it('reports the floor’s enemies and the party’s strength against the encounter built', () => {
     const s = roster(1)
     const r = scoutFloor(s)!
     expect(r.floor).toBe(1)
     expect(r.enemies.length).toBeGreaterThan(0)
     expect(r.enemies.reduce((n, e) => n + e.count, 0)).toBeGreaterThan(0)
     expect(r.partyCp).toBeGreaterThan(0)
-    expect(['safe', 'fair', 'risky', 'deadly']).toContain(r.threat)
+    expect(r.budget).toBeGreaterThan(0)
   })
 
-  it('threat bands follow the bots’ calibration', () => {
-    expect(threatFor(2).threat).toBe('safe')
-    expect(threatFor(1.2).threat).toBe('fair')
-    expect(threatFor(0.7).threat).toBe('risky')
-    expect(threatFor(0.3).threat).toBe('deadly')
+  it('threat bands read the forecast: wins and deaths, not a CP ratio', () => {
+    expect(threatFor(100, 0)).toBe('safe')
+    expect(threatFor(95, 0.3)).toBe('fair')
+    expect(threatFor(80, 0.5)).toBe('fair')
+    expect(threatFor(60, 0.5)).toBe('risky')
+    expect(threatFor(100, 1)).toBe('risky')
+    expect(threatFor(40, 0)).toBe('deadly')
+    expect(threatFor(90, 2.4)).toBe('deadly')
   })
 
   it('suggests the strongest rested heroes, sturdy in front', () => {
