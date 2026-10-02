@@ -22,6 +22,11 @@ const hit = (target = 'e1', extra: Partial<{ crit: boolean; eff: 'weak' | 'resis
 const cues = (beat: CombatEvent[], c: BeatSfxContext = ctx) => cuesForBeat(beat, c).map((x) => x.cue)
 
 describe('battle sounds: event → cue', () => {
+  it('a boss beat sounds: the wind-up, its cancelling, a phase and a summons', () => {
+    expect(cues([ev({ kind: 'telegraph-end', unitId: 'e1', skillId: 'x', reason: 'stunned' })])).toEqual(['mission-good'])
+    expect(cues([ev({ kind: 'summon', unitId: 'e1', enemyIds: ['e2'], wave: 0 })])).toEqual(['wave-start'])
+  })
+
   it('a blow sounds in the beat’s element, panned toward the side struck, with a little detune', () => {
     const [c] = cuesForBeat([hit('e1')], ctx)
     expect(c).toMatchObject({ cue: 'hit', delayMs: 0, opts: { element: 'fire' } })

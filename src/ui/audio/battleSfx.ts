@@ -171,11 +171,24 @@ export function cuesForBeat(beat: readonly CombatEvent[], ctx: BeatSfxContext): 
       case 'end':
         // SP ticks are too frequent to sound; the end is the music's (victory / defeat).
         break
+      case 'telegraph':
+        add('telegraph', 0)
+        break
+      case 'telegraph-end':
+        // The big move dies in its throat (a stun or a kill): the party's small victory.
+        add('mission-good', 0)
+        break
+      case 'phase':
+        add('phase', 0)
+        break
+      case 'summon':
+        // Help arrives at the boss's call: it sounds like a wave.
+        add('wave-start', 0)
+        break
       default: {
-        // Kinds a later lane adds (telegraphs, boss phases) sound without a change here.
-        const k = (e as { kind: string }).kind
-        if (k === 'telegraph') add('telegraph', 0)
-        else if (k === 'phase') add('phase', 0)
+        // Kinds a later lane adds sound once they get a line here.
+        const never: never = e
+        void never
       }
     }
   }
