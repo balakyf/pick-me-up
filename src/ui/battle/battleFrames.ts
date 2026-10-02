@@ -13,6 +13,7 @@ import { DEPTH_DURATION, depthSnap } from './synergyCaptions'
 import { missionCaption, missionDuration } from './missionCaptions'
 import { STATUS_DURATION, statusDuration, statusSnap, type StatusView } from './statusCaptions'
 import { afterCharged, BOSS_DURATION, bossDuration, bossSnap, chargedCaption, orderCaption, type BossView } from './bossCaptions'
+import { bossShows, showHolds } from './bossIntro'
 
 /** One frame of the replay: the field as it stands after a beat. */
 export interface Snap {
@@ -76,6 +77,8 @@ export const MOURN_LINGER_MS = 1200
 
 const HERO_X: Record<Line, number> = { front: 250, mid: 286, back: 322 }
 const ENEMY_X: Record<Line, number> = { front: 140, mid: 102, back: 64 }
+/** A sprite this tall (a boss) is laid out abreast of its rank (see `layout`). */
+const TALL = 48
 /** The middle of the 384px canon: a squeezed layout draws the two sides in toward it. */
 export const CANON_MID = 192
 
@@ -97,7 +100,12 @@ export function skillName(id: string): string {
  * Where each unit stands (feet position) on the 384×216 stage. `squeeze` (≤ 1) draws both
  * sides in toward the middle, so a narrow phone can crop the empty edges and zoom in.
  */
-export function layout(log: CombatLog, squeeze = 1): Record<string, { x: number; y: number }> {
+export function layout(
+  log: CombatLog,
+  squeeze = 1,
+  /** Lane I: a unit's sprite size, so a rank holding a towering boss gives it room. */
+  sizeOf?: (id: string) => { w: number; h: number },
+): Record<string, { x: number; y: number }> {
   const waveOf: Record<string, number> = {}
   for (const e of log.events) {
     if (e.kind === 'battle-start') for (const id of e.enemyIds) waveOf[id] = 0
@@ -117,6 +125,24 @@ export function layout(log: CombatLog, squeeze = 1): Record<string, { x: number;
   const pos: Record<string, { x: number; y: number }> = {}
   for (const [key, units] of groups) {
     const side = key.split('|')[0]
+    // Lane I: a rank with a towering foe in it (a boss and the echoes or guards it calls)
+    // stands abreast, front to back, instead of stacking bodies twice a hero's height.
+    const tall = sizeOf ? units.filter((u) => sizeOf(u.id).h >= TALL) : []
+    if (side === 'enemy' && sizeOf && units.length > 1 && tall.length > 0) {
+      const big = [...tall, ...units.filter((u) => !tall.includes(u))]
+      const front = ENEMY_X[units[0]!.line]
+      const xs: number[] = []
+      big.forEach((u, i) => xs.push(i === 0 ? front : xs[i - 1]! - ((sizeOf(big[i - 1]!.id).w + sizeOf(u.id).w) * 0.32 + 6)))
+      // A crowd that would run off the stage's edge closes ranks to fit.
+      const last = big[big.length - 1]!
+      const minX = sizeOf(last.id).w / 2 + 4
+      const k = xs[xs.length - 1]! < minX ? (front - minX) / Math.max(1, front - xs[xs.length - 1]!) : 1
+      big.forEach((u, i) => {
+        const x = front - (front - xs[i]!) * k
+        pos[u.id] = { x: Math.round(CANON_MID + (x - CANON_MID) * squeeze), y: i % 2 === 0 ? 176 : 150 }
+      })
+      continue
+    }
     // A crowded enemy line splits into two ranks so late-floor waves stay readable.
     const cols = side === 'enemy' && units.length > 3 ? 2 : 1
     const n = Math.ceil(units.length / cols)
@@ -451,6 +477,14 @@ export interface HoldOpts {
   nonLethal?: boolean
   /** The acts whose cut-in plays (`cutInActs`); none at 4× or under reduced motion. */
   cutIns?: ReadonlySet<number>
+  /** Lane I: extra hold (ms at 1×) per beat, keyed by its first event — a boss's title card,
+   *  a finisher's slow motion, the Lv999 Creature waking (`showHoldsFor`). */
+  shows?: ReadonlyMap<number, number>
+}
+
+/** The extra holds a replay's boss shows add, per beat (see bossIntro.bossShows). */
+export function showHoldsFor(log: CombatLog, byId: Record<string, CombatUnitInit>, opts: FrameOpts = {}): Map<number, number> {
+  return showHolds(bossShows(log, byId), beatRanges(log, byId, opts))
 }
 
 /**
@@ -470,6 +504,7 @@ export function frameHold(snap: Snap, events: readonly CombatEvent[], byId: Reco
     const blows = evs.filter((e) => POPUP_KINDS.has(e.kind)).length
     ms = SWEEP_MS + popupDelay(blows - 1) + (evs.some((e) => e.kind === 'death') ? SWEEP_DEATH_MS : 0)
   }
+  ms += opts.shows?.get(snap.from) ?? 0
   ms /= speed
   if (evs.some((e) => e.kind === 'hit' && e.crit)) ms += HITSTOP_MS
   const last = evs[evs.length - 1]!
@@ -480,10 +515,15 @@ export function frameHold(snap: Snap, events: readonly CombatEvent[], byId: Reco
 }
 
 /** The replay's length at 1× (ms), as the scene plays it: beats, hit-stops, cut-ins, deaths. */
-export function replayLength(log: CombatLog, opts: { nonLethal?: boolean; cutIns?: boolean } = {}): number {
+export function replayLength(log: CombatLog, opts: { nonLethal?: boolean; cutIns?: boolean; shows?: boolean } = {}): number {
   const byId = Object.fromEntries(log.unitsInit.map((u) => [u.id, u]))
   const frames = buildFrames(log, byId, (id) => id, opts)
-  const hold: HoldOpts = { speed: 1, nonLethal: opts.nonLethal, cutIns: opts.cutIns ? cutInActs(log, byId) : undefined }
+  const hold: HoldOpts = {
+    speed: 1,
+    nonLethal: opts.nonLethal,
+    cutIns: opts.cutIns ? cutInActs(log, byId) : undefined,
+    shows: opts.shows ? showHoldsFor(log, byId, opts) : undefined,
+  }
   let ms = 0
   for (let k = 0; k < frames.length - 1; k++) ms += frameHold(frames[k]!, log.events, byId, hold)
   return ms

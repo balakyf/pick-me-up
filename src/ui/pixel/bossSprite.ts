@@ -457,11 +457,14 @@ export function drawTell(f: IdleFrame): Bitmap {
   paint(b, (m) => poly(m, P(40, 2, 46, 2, 47, 8, 43, 16, 39, 8), 1), GOLD)
   vline(b, 43, 5, 9, INK)
   disc(b, 43, 18 + br, 1, f ? WHITE : hex('#9ad4ff'))
-  // feather vanes up the shaft
-  for (let i = 0; i < 5; i++) {
-    line(b, 41, 20 + i * 4, 37, 16 + i * 4, paper.l)
-    line(b, 44, 20 + i * 4, 48, 16 + i * 4, paper.m)
+  // the feather: two long vanes either side of the shaft, a few barbs parted
+  paint(b, (m) => poly(m, P(42, 18, 38, 22, 36, 32, 37, 42, 42, 46), 1), paper, { light: 'left' })
+  paint(b, (m) => poly(m, P(43, 18, 47, 22, 49, 32, 48, 42, 43, 46), 1), paper)
+  for (const y of [26, 33, 39]) {
+    line(b, 41, y + 2, 38, y, paper.d)
+    line(b, 44, y + 2, 47, y, paper.d)
   }
+  vline(b, 42, 18, 28, GOLD.d)
   // the pages of the draft, circling
   const pages: Pt[] = f ? P(6, 30, 48, 46, 10, 56, 50, 26) : P(5, 34, 49, 50, 12, 52, 51, 22)
   pages.forEach(([x, y], i) => {

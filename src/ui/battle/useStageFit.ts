@@ -15,7 +15,8 @@ import { layout, unitSpan } from './battleFrames'
  */
 export function useStageFit(log: CombatLog, byId: Record<string, CombatUnitInit>, sizeOf: (u: CombatUnitInit) => { w: number; h: number }) {
   const [mode, setMode] = useState<BattleLayout>(() => (typeof window === 'undefined' ? 'wide' : battleLayout(window.innerWidth, window.innerHeight)))
-  const pos = useMemo(() => layout(log, mode === 'narrow' ? NARROW_SQUEEZE : 1), [log, mode])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const pos = useMemo(() => layout(log, mode === 'narrow' ? NARROW_SQUEEZE : 1, (id) => (byId[id] ? sizeOf(byId[id]!) : { w: 24, h: 32 })), [log, mode])
   /** The stretch of the canon the units stand on (a phone crops the stage to it). */
   const span = useMemo(() => {
     const s = unitSpan(pos, (id) => (byId[id] ? sizeOf(byId[id]!).w / 2 : 12) + 8)
