@@ -7,6 +7,7 @@ import { SKILLS } from '../../engine/content'
 import { maxTrainableGrade, drillXp, trainingOptions, practiceFocus, practiceRate } from '../../engine/training'
 import { lifeOf } from '../../engine/life'
 import { Portrait, SkillList } from '../bits'
+import { skillBlurb } from '../skillText'
 import { t } from '../i18n/i18n'
 import { HeroChip, timeLeft } from './shared'
 import { HeroTag, pickerName } from '../hero/heroLabel'
@@ -85,7 +86,7 @@ export function TrainingAction({ state, store }: { state: GameState; store: Stor
       )}
       {selected && (
         <div className="drill-list">
-          <SkillList hero={selected} />
+          <SkillList hero={selected} detailed />
           {trainingOptions(state, selected.id).map((o) => {
             const def = SKILLS[o.skillId]!
             return (
@@ -93,6 +94,7 @@ export function TrainingAction({ state, store }: { state: GameState; store: Stor
                 <span className="skill-grade">{def.grade}</span>
                 <span className="drill-name">
                   {o.mode === 'learn' ? t('Learn') : t('Refine')} {t(def.name)}
+                  <span className="drill-blurb">{skillBlurb(def, selected.skills.find((s) => s.id === o.skillId)?.level ?? 1)}</span>
                 </span>
                 <span className="muted">{o.cost.toLocaleString()} ◆</span>
                 <button

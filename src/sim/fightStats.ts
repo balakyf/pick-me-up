@@ -1,13 +1,14 @@
 /**
  * What one battle felt like, read back from its CombatLog: how many rounds the party
  * fought, whether the enemies ever swung, how much of the party's damage came from
- * sweeps (all-enemies skills), how much was wasted on overkill or immunity, and how
- * long the replay holds the screen at 1×. Pure; the combat-feel gate
+ * sweeps (all-enemies skills), how much was wasted on overkill or immunity, how long
+ * the replay holds the screen at 1×, and (lane F) how the roles played: heals, shields,
+ * taunts, statuses on foes, and how much of the damage taken was healed back or soaked. Pure; the combat-feel gate
  * (`src/sim/combatMetrics.ts`) aggregates these over the bots' real floor attempts.
  */
 import type { CombatEvent, CombatLog, CombatOutcome } from '../engine/types'
 import { SKILLS } from '../engine/content'
-import { eventDuration, HERO_DEATH_MS, HITSTOP_MS } from '../ui/battle/battleFrames'
+import { eventDuration, HERO_DEATH_MS, HITSTOP_MS, replayLength } from '../ui/battle/battleFrames'
 
 export interface FightStats {
   floor: number
@@ -32,8 +33,22 @@ export interface FightStats {
   weakHits: number
   /** Heroes the battle killed. */
   deaths: number
-  /** Estimated replay length at 1× (ms): the scene's own per-event timings. */
+  /** Estimated replay length at 1× (ms): the scene's own beats (battleFrames.replayLength). */
   replayMs: number
+  // ── Roles (lane F) ──
+  /** Heals the party's skills landed on its own side (regeneration pulses included). */
+  heals: number
+  /** HP those heals restored. */
+  healed: number
+  /** Shields the party raised on its own side, and the HP they soaked. */
+  shields: number
+  absorbed: number
+  /** Taunts the party's front line raised. */
+  taunts: number
+  /** Statuses the party left on foes (debuffs, DoTs, stuns). */
+  foeStatuses: number
+  /** HP the party lost to blows and DoTs (after shields). */
+  damageTaken: number
 }
 
 /** Estimated 1× replay length of a log, as BattleScene times it (each frame waits for the
@@ -65,6 +80,13 @@ export function fightStats(log: CombatLog): FightStats {
   let heroHits = 0
   let weakHits = 0
   let deaths = 0
+  let heals = 0
+  let healed = 0
+  let shields = 0
+  let absorbed = 0
+  let taunts = 0
+  let foeStatuses = 0
+  let damageTaken = 0
   // The action in flight: whose it is and whether it sweeps (a follow-up is a basic strike).
   let actor: string | null = null
   let sweeping = false
@@ -83,6 +105,7 @@ export function fightStats(log: CombatLog): FightStats {
       case 'hit': {
         const before = hp.get(e.targetId) ?? 0
         hp.set(e.targetId, e.hpAfter)
+        if (side.get(e.targetId) === 'hero' && side.get(e.actorId) !== 'hero') damageTaken += Math.max(0, Math.min(e.amount, before))
         if (side.get(e.actorId) !== 'hero' || side.get(e.targetId) === 'hero') break
         const dealt = Math.max(0, Math.min(e.amount, before))
         heroHits++
@@ -94,8 +117,33 @@ export function fightStats(log: CombatLog): FightStats {
         break
       }
       case 'heal':
+        hp.set(e.unitId, e.hpAfter)
+        if (e.sourceId !== undefined && side.get(e.unitId) === 'hero' && side.get(e.sourceId) === 'hero') {
+          heals++
+          healed += e.amount
+        }
+        break
       case 'hp-cost':
         hp.set(e.unitId, e.hpAfter)
+        break
+      case 'dot': {
+        const before = hp.get(e.unitId) ?? 0
+        hp.set(e.unitId, e.hpAfter)
+        const dealt = Math.max(0, Math.min(e.amount, before))
+        if (side.get(e.unitId) === 'hero') {
+          if (side.get(e.sourceId) !== 'hero') damageTaken += dealt
+        } else if (side.get(e.sourceId) === 'hero') heroDamage += dealt
+        break
+      }
+      case 'status':
+        if (side.get(e.sourceId) !== 'hero') break
+        if (side.get(e.unitId) === 'hero') {
+          if (e.status === 'shield') shields++
+          else if (e.status === 'taunt') taunts++
+        } else foeStatuses++
+        break
+      case 'shield':
+        if (side.get(e.unitId) === 'hero') absorbed += e.absorbed
         break
       case 'death':
         if (heroIds.has(e.unitId)) deaths++
@@ -119,7 +167,14 @@ export function fightStats(log: CombatLog): FightStats {
     heroHits,
     weakHits,
     deaths,
-    replayMs: replayMs(log),
+    replayMs: replayLength(log),
+    heals,
+    healed,
+    shields,
+    absorbed,
+    taunts,
+    foeStatuses,
+    damageTaken,
   }
 }
 
@@ -155,6 +210,15 @@ export interface FightSummary {
   immunePerFight: number
   /** Share of the party's hits that struck a weakness, 0..1. */
   weakShare: number
+  // ── Roles (lane F) ──
+  healsPerFight: number
+  shieldsPerFight: number
+  tauntsPerFight: number
+  foeStatusesPerFight: number
+  /** Of everything the foes threw at the party, the share healed back or soaked, 0..1. */
+  healingShare: number
+  /** Share of fights in which the party healed, shielded or taunted at least once, 0..1. */
+  roleFightShare: number
 }
 
 export function summarizeFights(fs: readonly FightStats[], deathsOf: (f: FightStats) => number = (f) => f.deaths): FightSummary {
@@ -174,5 +238,14 @@ export function summarizeFights(fs: readonly FightStats[], deathsOf: (f: FightSt
     overkillShare: dmg + sum((f) => f.overkill) > 0 ? sum((f) => f.overkill) / (dmg + sum((f) => f.overkill)) : 0,
     immunePerFight: sum((f) => f.immuneHits) / n,
     weakShare: sum((f) => f.heroHits) > 0 ? sum((f) => f.weakHits) / sum((f) => f.heroHits) : 0,
+    healsPerFight: sum((f) => f.heals ?? 0) / n,
+    shieldsPerFight: sum((f) => f.shields ?? 0) / n,
+    tauntsPerFight: sum((f) => f.taunts ?? 0) / n,
+    foeStatusesPerFight: sum((f) => f.foeStatuses ?? 0) / n,
+    healingShare: (() => {
+      const thrown = sum((f) => (f.damageTaken ?? 0) + (f.absorbed ?? 0))
+      return thrown > 0 ? sum((f) => (f.healed ?? 0) + (f.absorbed ?? 0)) / thrown : 0
+    })(),
+    roleFightShare: fs.filter((f) => (f.heals ?? 0) + (f.shields ?? 0) + (f.taunts ?? 0) > 0).length / n,
   }
 }

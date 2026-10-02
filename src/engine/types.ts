@@ -127,7 +127,62 @@ export interface XpProgress {
 // Skills (slice subset)
 // ─────────────────────────────────────────────────────────────────────────────
 
-export type SkillTarget = 'single' | 'all-enemies'
+/**
+ * Who a skill strikes or tends (lane F adds the support and formation shapes):
+ * one foe (the class rule picks), every foe, the caster, the caster's most wounded ally,
+ * the ally the foes are lined up on (a shield's mark), the caster's whole side, every foe
+ * on the front-most line, or one foe and its neighbour.
+ */
+export type SkillTarget = 'single' | 'all-enemies' | 'self' | 'ally-lowest' | 'ally-threatened' | 'all-allies' | 'front-row' | 'cleave'
+
+/** A stat a buff or debuff bends for a while: attack (both kinds), defence (both kinds),
+ *  speed, crit chance (in points), or `guard` — damage taken (up = takes less; down = a
+ *  Mark: takes more). */
+export type BuffStat = 'atk' | 'def' | 'spd' | 'crit' | 'guard'
+
+/** Damage over time: a bleeding cut, a poison, a burn. */
+export type DotKind = 'bleed' | 'poison' | 'burn'
+
+/** A status a unit can carry in battle (what the replay's icons show). */
+export type StatusKey = 'taunt' | 'shield' | 'regen' | 'stun' | DotKind | `${BuffStat}-up` | `${BuffStat}-down`
+
+/** Who a skill's effect lands on: the skill's own targets (default), the caster, the
+ *  caster's whole side, or the caster's most wounded ally. */
+export type EffectTo = 'targets' | 'self' | 'allies' | 'ally-lowest'
+
+/**
+ * One thing a skill does besides (or instead of) its blow (lane F). Magnitudes are integer
+ * percents that grow by `perLevel` per skill level above 1. Durations are in the caster's
+ * own turns (resolved to ticks at the cast from the caster's speed), so a slow tank's
+ * taunt and a quick thief's bleed each last about as many of their own actions.
+ * `chance` (percent, foes only) is rolled on the battle's Rng only when 0 < chance < 100,
+ * and the target's statusRes shaves it.
+ */
+export type SkillEffectDef =
+  /** Restore HP now: `pct` of the caster's mAtk, or of the recipient's max HP. */
+  | { kind: 'heal'; from: 'mAtk' | 'maxHP'; pct: number; perLevel?: number; to?: EffectTo }
+  /** Restore HP each turn for `turns` turns (a heal over time). */
+  | { kind: 'regen'; from: 'mAtk' | 'maxHP'; pct: number; perLevel?: number; turns: number; to?: EffectTo }
+  /** An absorb pool (of the caster's mAtk, the recipient's max HP, or the caster's pDef)
+   *  that soaks damage before HP, for `turns` turns. */
+  | { kind: 'shield'; from: 'mAtk' | 'maxHP' | 'def'; pct: number; perLevel?: number; turns: number; to?: EffectTo }
+  /** Raise a stat by `pct`% (crit: by `pct` points) for `turns` turns. */
+  | { kind: 'buff'; stat: BuffStat; pct: number; perLevel?: number; turns: number; to?: EffectTo }
+  /** Lower a stat by `pct`% (guard: the target takes `pct`% more) for `turns` turns. */
+  | { kind: 'debuff'; stat: BuffStat; pct: number; perLevel?: number; turns: number; chance?: number; to?: EffectTo }
+  /** Damage each turn for `turns` turns: `pct` of the caster's attack, or of the recipient's
+   *  max HP. `dot: 'element'` picks by the caster's element (fire/light burn, earth/water/dark
+   *  poison, others bleed). */
+  | { kind: 'dot'; dot: DotKind | 'element'; from: 'atk' | 'maxHP'; pct: number; perLevel?: number; turns: number; chance?: number; to?: EffectTo }
+  /** Push the target's action gauge back by `push`% of a turn (it stays dazed until it acts). */
+  | { kind: 'stun'; push: number; chance?: number; perLevel?: number; to?: EffectTo }
+  /** Foes must strike the recipient (single-target blows) for `turns` turns. */
+  | { kind: 'taunt'; turns: number; to?: EffectTo }
+  /** Give (`amount` > 0) or drain (`amount` < 0) SP. */
+  | { kind: 'sp'; amount: number; perLevel?: number; to?: EffectTo }
+
+/** A skill effect at its level: magnitudes leveled, `perLevel` gone. */
+export type ResolvedEffect = SkillEffectDef extends infer E ? (E extends unknown ? Omit<E, 'perLevel'> : never) : never
 
 /** Skill grade ladder (Layer 1 §2.1). Grade sets the level cap and the CP weight. */
 export type SkillGrade = 'F' | 'E' | 'D' | 'C' | 'B' | 'A' | 'S' | 'U'
@@ -146,6 +201,10 @@ export interface SkillEffect {
   spCost: number
   /** HP spent per cast (the canon "consumes vitality" ultimates). Absent = none. */
   hpCost?: number
+  /** Strikes this many times, `skillMult` each (each hit rolls and logs on its own). Absent = 1. */
+  hits?: number
+  /** What the skill does besides its blow (heals, shields, statuses…). Absent = a plain blow. */
+  effects?: ResolvedEffect[]
 }
 
 /** A passive skill's effect: never cast; resolved into keywords / stat bonuses at unit
@@ -183,6 +242,12 @@ export interface SkillDef {
   passive?: PassiveEffect
   /** Achievement skills are bound: never trained, transferred or copied. */
   bound?: boolean
+  /** Strikes this many times at `baseMult` (+ perLevel) each. Absent = 1. */
+  hits?: number
+  /** What the skill does besides its blow (lane F). A support skill has baseMult 0. */
+  effects?: SkillEffectDef[]
+  /** An enemy's skill (a priest's prayer, a knight's shield wall): never a hero's. */
+  enemy?: boolean
 }
 
 /** A hero's copy of a skill: it levels by being cast (auto-learn, Layer 1 §2.4). */
@@ -199,6 +264,8 @@ export interface SkillUnlock {
   skillId: string
   minLevel: number
   minFloorCleared?: number
+  /** Only heroes of these classes learn it (absent = every class). */
+  classes?: readonly HeroClass[]
 }
 
 /** Achievement skill (Layer 1 §2.1): granted to every deployed survivor of a WON battle
@@ -1184,7 +1251,8 @@ export type HitEffect = 'weak' | 'resist' | 'immune'
 export type CombatEvent = { seq: number; tick: number } & (
   | { kind: 'battle-start'; heroIds: string[]; enemyIds: string[] }
   | { kind: 'wave-spawn'; wave: number; enemyIds: string[] }
-  | { kind: 'act'; actorId: string; skillId: string; targetId: string }
+  /** `spAfter`: the actor's SP once the cast is paid (for an SP bar; absent on old logs). */
+  | { kind: 'act'; actorId: string; skillId: string; targetId: string; spAfter?: number }
   /** `eff` says how the blow met its target's defences (absent = plainly): a weakness
    *  (element advantage or a vulnerability), a resistance (element disadvantage or a
    *  resist keyword), or an immunity (the hit did nothing). */
@@ -1196,8 +1264,22 @@ export type CombatEvent = { seq: number; tick: number } & (
   | { kind: 'panic'; unitId: string }
   /** An aegis charge absorbed a hit (no damage). */
   | { kind: 'guard'; actorId: string; targetId: string }
-  /** A unit recovered HP (lifesteal). */
-  | { kind: 'heal'; unitId: string; amount: number; hpAfter: number }
+  /** A unit recovered HP: lifesteal (no `sourceId`), or a heal / regeneration from
+   *  `sourceId`'s skill (`status: 'regen'` on a heal-over-time pulse). */
+  | { kind: 'heal'; unitId: string; amount: number; hpAfter: number; sourceId?: string; status?: 'regen' }
+  /** A status took hold of `unitId` (lane F): from `sourceId`, for `ticks` ticks (0 = until
+   *  it next acts, a stun). `value`: the % of a buff/debuff (crit: points), the pool of a
+   *  shield, the HP per pulse of a DoT or regeneration. `nth`: the n-th unit (from 1) the same
+   *  cast reached after the first (a war cry over the party) — absent on the first. */
+  | { kind: 'status'; unitId: string; status: StatusKey; sourceId: string; ticks: number; value?: number; nth?: number }
+  /** A status wore off (`expired`), broke (a shield emptied), or ended as its bearer acted (a stun). */
+  | { kind: 'status-end'; unitId: string; status: StatusKey; reason: 'expired' | 'broken' | 'acted' }
+  /** A DoT pulse hurt `unitId` (no crit, no variance, no defence). */
+  | { kind: 'dot'; unitId: string; status: DotKind; amount: number; hpAfter: number; sourceId: string }
+  /** A shield soaked `absorbed` of a blow (or a DoT) meant for `unitId`; `left` remains. */
+  | { kind: 'shield'; unitId: string; actorId: string; absorbed: number; left: number }
+  /** A skill gave (`amount` > 0) or drained (< 0) `unitId`'s SP. */
+  | { kind: 'sp'; unitId: string; amount: number; spAfter: number; sourceId: string }
   | { kind: 'death'; unitId: string }
   /** A mission beat. `note` is a plain-English line (old replays carry only that);
    *  `code`/`params` say what happened so the replay can caption it in any language. */
@@ -1333,6 +1415,9 @@ export interface EnemyTemplate {
   /** A caster: its basic attack is a Spell — magic damage from its mAtk against the
    *  target's mDef — instead of a physical Strike. */
   caster?: boolean
+  /** Enemy skills (ENEMY_SKILLS ids) it fights with beside its basic attack (lane F: a
+   *  priest heals, a shaman poisons, a knight taunts). */
+  kit?: readonly string[]
 }
 
 /** A hero-side NPC an anchor fields (e.g. the F15 escort target). */

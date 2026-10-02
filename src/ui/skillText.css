@@ -1,0 +1,23 @@
+/* Lane F · what a skill does: the role tag on a chip, the description under it, and the
+   one-line description in a drill row. */
+
+.skill-role {
+  display: inline-block; margin-right: 2px; padding: 0 3px; vertical-align: 1px;
+  font-size: 9px; line-height: 12px; letter-spacing: 0.5px; color: #fff6e0;
+  background: #3e3478; border: 1px solid #000;
+}
+.skill-role.role-strike { background: #7a3a3a; }
+.skill-role.role-sweep { background: #8a5a20; }
+.skill-role.role-tank { background: #3a5a8a; }
+.skill-role.role-heal { background: #2f7a4a; }
+.skill-role.role-support { background: #6a4ad0; }
+.skill-role.role-control { background: #7a3a7a; }
+.skill-role.role-passive { background: #3a3a50; }
+
+.skill-entry { display: flex; flex-direction: column; gap: 1px; }
+.skill-blurb { font-size: 12px; line-height: 1.25; color: var(--ink-dim); padding: 0 4px 2px 26px; }
+
+.drill-name .drill-blurb {
+  display: block; font-size: 11px; line-height: 1.2; color: var(--ink-dim);
+  white-space: normal; overflow: visible;
+}

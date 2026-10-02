@@ -11,6 +11,7 @@ import { ELEMENT_VIS } from '../bits'
 import { t } from '../i18n/i18n'
 import { DEPTH_DURATION, depthSnap } from './synergyCaptions'
 import { missionCaption, missionDuration } from './missionCaptions'
+import { STATUS_DURATION, statusDuration, statusSnap, type StatusView } from './statusCaptions'
 
 /** One frame of the replay: the field as it stands after a beat. */
 export interface Snap {
@@ -25,6 +26,8 @@ export interface Snap {
   skill: { name: string; color: string; caster: string } | null
   /** The element of the current action (colours its hit sparks). */
   element: Element
+  /** Statuses on the field and their pops (lane F, statusCaptions.ts). */
+  status?: StatusView
   /** The events this frame plays: log.events[from..to] (frame 0, the empty field, is -1..-1). */
   from: number
   to: number
@@ -52,11 +55,12 @@ export const DURATION: Record<CombatEvent['kind'], number> = {
   order: 900,
   end: 600,
   ...DEPTH_DURATION,
+  ...STATUS_DURATION,
 }
 
 /** How long one event holds the screen at 1× (each mission beat has its own timing). */
 export function eventDuration(e: CombatEvent): number {
-  return e.kind === 'mission' ? missionDuration(e) : DURATION[e.kind]
+  return e.kind === 'mission' ? missionDuration(e) : statusDuration(e) ?? DURATION[e.kind]
 }
 
 /** A hero's death holds the scene: the moment is not skipped past at speed. */
@@ -264,8 +268,10 @@ function step(cur: Snap, e: CombatEvent, byId: Record<string, CombatUnitInit>, n
       next.element = el
       if (def) {
         next.skill = { name: t(def.name), color: ELEMENT_VIS[el].color, caster: e.actorId }
-        if (def.spCost > 0) next.sp = { ...cur.sp, [e.actorId]: Math.max(0, (cur.sp[e.actorId] ?? 0) - def.spCost) }
+        if (e.spAfter === undefined && def.spCost > 0) next.sp = { ...cur.sp, [e.actorId]: Math.max(0, (cur.sp[e.actorId] ?? 0) - def.spCost) }
       }
+      // The engine says what SP the cast left (regen included); older logs fall back above.
+      if (e.spAfter !== undefined) next.sp = { ...cur.sp, [e.actorId]: e.spAfter }
       break
     }
     case 'hit':
@@ -336,13 +342,15 @@ function step(cur: Snap, e: CombatEvent, byId: Record<string, CombatUnitInit>, n
       break
     default: {
       // Combat depth: cover, follow-ups, rivalry and the floor's conditions.
-      const d = depthSnap(e, nameOf)
+      const d = depthSnap(e, nameOf) ?? statusSnap(e, nameOf, next)
       if (d) Object.assign(next, d)
       // A follow-up is the friend's own strike: their element colours the sparks.
       if (e.kind === 'followup') {
         next.element = byId[e.unitId]?.element ?? 'physical'
         next.skill = null
       }
+      // An SP drain or restore moves the bar.
+      if (e.kind === 'sp') next.sp = { ...next.sp, [e.unitId]: e.spAfter }
     }
   }
   return next

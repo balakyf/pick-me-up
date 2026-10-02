@@ -125,6 +125,7 @@ export const ENEMY_TEMPLATES: Record<string, EnemyTemplate> = {
     family: 'humanoid',
     element: 'physical',
     attrMult: { str: 1.3, agi: 0.6, vit: 1.7, int: 0.4, wil: 1.1 },
+    kit: ['e_shield_wall'],
   },
 
   // ── Bosses ───────────────────────────────────────────────────────────────
@@ -139,6 +140,7 @@ export const ENEMY_TEMPLATES: Record<string, EnemyTemplate> = {
     attrMult: { str: 1.4, agi: 1.2, vit: 2.0, int: 2.2, wil: 2.0 },
     caster: true,
     keywords: [{ kind: 'phased' }],
+    kit: ['e_curse'],
   },
   // Lv999 creature (canon Townia F10 wave 3). A PUZZLE, not a stat-check: it
   // Enrages and is not meant to be killed — clearing the waves + slaying the
@@ -167,6 +169,7 @@ export const ENEMY_TEMPLATES: Record<string, EnemyTemplate> = {
       { kind: 'vulnerable', element: 'light' },
       { kind: 'enrage', afterTick: TUNING.tower.f20EnrageTick, multiplier: 2.5 },
     ],
+    kit: ['e_dragon_breath'],
   },
 
   // ══ Act III — The Swamp (F21–29; F25 Escape, F30 Explore) ══════════════════
@@ -185,6 +188,7 @@ export const ENEMY_TEMPLATES: Record<string, EnemyTemplate> = {
     attrMult: { str: 0.3, agi: 0.8, vit: 0.6, int: 1.6, wil: 1.2 },
     caster: true,
     unitClass: 'mage',
+    kit: ['e_venom_spit'],
   },
   lizard_rider: {
     id: 'lizard_rider',
@@ -357,6 +361,7 @@ export const ENEMY_TEMPLATES: Record<string, EnemyTemplate> = {
     element: 'fire',
     attrMult: { str: 2.8, agi: 1.2, vit: 3.2, int: 0.8, wil: 2.2 },
     keywords: [{ kind: 'guard', reduction: 0.15 }],
+    kit: ['e_iron_blood'],
   },
   // Canon F41: Versace of Silver Lightning, the last Order executive — very fast.
   versace: {
@@ -419,6 +424,7 @@ export const ENEMY_TEMPLATES: Record<string, EnemyTemplate> = {
     caster: true,
     unitClass: 'mage',
     keywords: [{ kind: 'lifesteal', fraction: 0.2 }],
+    kit: ['e_saints_grace'],
   },
 
   // ══ Act VI — The Inflection (F70–79) ═══════════════════════════════════════
@@ -440,6 +446,7 @@ export const ENEMY_TEMPLATES: Record<string, EnemyTemplate> = {
     // Steel passes half-through a wraith: mages (or Light) are the answer, but a party
     // without one is slowed, not locked out of a whole act.
     keywords: [{ kind: 'resist', damageType: 'physical', reduction: 0.75 }, { kind: 'vulnerable', element: 'light' }],
+    kit: ['e_soul_siphon'],
   },
   chimera_matriarch: {
     id: 'chimera_matriarch',

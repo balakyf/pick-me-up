@@ -1,6 +1,8 @@
 import type { CombatUnitInit } from '../../engine/types'
 import type { Pose } from './choreo'
 import { HpBar } from './HpBar'
+import { StatusIcons } from './StatusIcons'
+import type { UnitStatusView } from './statusCaptions'
 import { ObjectiveMark } from './ObjectiveMark'
 
 /** How one unit looks on this frame (BattleScene works it out; this only draws it). */
@@ -28,6 +30,8 @@ export interface UnitLook {
   panic: boolean
   /** Staggers the march-in. */
   enterDelayMs: number
+  /** Its statuses and their pops (lane F). */
+  status?: UnitStatusView
   /** The mission's mark over this unit: a crown for its target, a shield for its escort. */
   mark?: 'target' | 'escort' | null
   /** When a sweep strikes it: its place in the stagger (ms, already speed-scaled). */
@@ -79,6 +83,7 @@ export function UnitSprite({ u, look, onClick }: { u: CombatUnitInit; look: Unit
       {!look.dead && <HpBar kind="bhp" pct={look.hpPct} className={isHero && !u.isNpc ? 'hero-hp' : ''} />}
       {look.mark && !look.dead && <ObjectiveMark kind={look.mark} className="on-stage" />}
       {look.panic && <span className="bsweat">💧</span>}
+      {look.status && <StatusIcons view={look.status} dead={look.dead} />}
     </div>
   )
 }

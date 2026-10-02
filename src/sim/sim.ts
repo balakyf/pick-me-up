@@ -216,8 +216,9 @@ export interface SimResult {
   /** Commands the bot tried that the engine refused, by type (a sanity check on the bot). */
   refusals: Record<string, number>
   /** How often each lever was pulled (see LEVERS; plus RETREAT, RAID_CLEAR, RAID_DEATHS,
-   *  RETREAT_SAVED — heroes a retreat brought home — SACRIFICED to synthesis, ADV_PULLS, and
-   *  TRIAL_BEST, the best weekly score). */
+   *  RETREAT_SAVED — heroes a retreat brought home — SACRIFICED to synthesis, ADV_PULLS,
+   *  TRIAL_BEST, the best weekly score, and TRAIN_ROLE — a drill that gave the top five its
+   *  first healer or tank, lane F). */
   levers: Record<string, number>
 }
 
@@ -232,6 +233,11 @@ const KEEP_RANKS = 15
 /** Jobs the bots fill, most useful first (the forge needs an order and stones: left out). */
 /** Gold a bot keeps in hand when paying for drills, skill transfers and duels. */
 const SPARE_GOLD = 15_000
+/** Skills that bind wounds, and skills that hold the line (lane F: the bots' role drills). */
+const HEAL_SKILLS: readonly string[] = ['first_aid', 'regeneration', 'field_medicine', 'mending_light']
+const TANK_SKILLS: readonly string[] = ['basic_shield', 'indomitability', 'unyielding', 'sword_shield_technique']
+/** How much a missing role weighs in a drill choice, in skill-CP points. */
+const ROLE_DRILL_BONUS = 8
 /** A raid goes ahead only when every party's CP is this multiple of the anchor's budget. */
 const RAID_MARGIN = 1.5
 const JOB_ORDER: JobId[] = ['healer', 'cook', 'instructor', 'scholar', 'merchant', 'gardener', 'guard']
@@ -625,20 +631,40 @@ class Bot {
     }
   }
 
-  /** Training Center: before logging off, drill the strongest few (a drill takes an hour). */
+  /** Training Center: before logging off, drill the strongest few (a drill takes an hour).
+   *  ROLES (lane F): a top five with nobody to bind wounds learns First Aid or Regeneration,
+   *  and one with nobody to hold the line puts Basic Shield or Indomitability on a front-liner
+   *  (counted as TRAIN_ROLE). */
   private drills(): void {
     const centre = this.s.facilities.trainingCenter.level
     if (centre <= 0) return
     let started = 0
+    const top = this.ranked().slice(0, 5)
+    const knows = (ids: readonly string[]) => top.some((h) => h.skills.some((sk) => ids.includes(sk.id)))
+    let needHeal = !knows(HEAL_SKILLS)
+    let needTank = !knows(TANK_SKILLS)
     for (const h of this.ranked().slice(0, 8)) {
       if (started >= 5 || this.s.gold < SPARE_GOLD) break
       if (!available(h) || refusesDeploy(this.s, h.id)) continue
       const before = skillCp(h.skills)
+      const frontLiner = h.heroClass === 'warrior' || h.heroClass === 'spearman'
+      const roleBonus = (id: string) =>
+        (needHeal && HEAL_SKILLS.includes(id) ? ROLE_DRILL_BONUS : 0) + (needTank && frontLiner && TANK_SKILLS.includes(id) ? ROLE_DRILL_BONUS : 0)
       const best = trainingOptions(this.s, h.id)
         .filter((o) => o.ok && this.s.gold - o.cost >= SPARE_GOLD)
-        .map((o) => ({ o, gain: skillCp(completeTraining({ ...h, training: { skillId: o.skillId, mode: o.mode, completesAtWorld: 0 } }, centre).skills) - before }))
+        .map((o) => ({
+          o,
+          gain: skillCp(completeTraining({ ...h, training: { skillId: o.skillId, mode: o.mode, completesAtWorld: 0 } }, centre).skills) - before + roleBonus(o.skillId),
+        }))
         .sort((a, b) => b.gain - a.gain || Number(b.o.mode === 'refine') - Number(a.o.mode === 'refine') || a.o.cost - b.o.cost)[0]
-      if (best && this.try({ type: 'TRAIN_SKILL', heroId: h.id, skillId: best.o.skillId })) started++
+      if (best && this.try({ type: 'TRAIN_SKILL', heroId: h.id, skillId: best.o.skillId })) {
+        started++
+        if (roleBonus(best.o.skillId) > 0) {
+          this.lever('TRAIN_ROLE')
+          if (HEAL_SKILLS.includes(best.o.skillId)) needHeal = false
+          if (TANK_SKILLS.includes(best.o.skillId)) needTank = false
+        }
+      }
     }
   }
 

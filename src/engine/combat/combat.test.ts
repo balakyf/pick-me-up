@@ -822,8 +822,13 @@ describe('skill selection (strongest castable)', () => {
       encounter([[enemy({ id: 'e', skills: [strike], sp: 100, stats: { maxHP: 1e9, pDef: 0, spd: 50, pAtk: 0 } })]], survive(10)),
       6,
     )
-    // 60 SP / 30 → exactly two Strikes, then basic attacks (not tallied).
-    expect(r.skillCasts).toEqual({ h: { strike: 2 } })
+    // 60 SP / 30 → two Strikes up front; the SP rhythm (lane F: SP back per action and per
+    // wound) brings more later. The tally counts exactly the Strikes the hero cast — never
+    // its basic attacks, never the enemy's casts.
+    const strikes = r.log.events.filter((e) => e.kind === 'act' && e.actorId === 'h' && e.skillId === 'strike').length
+    expect(strikes).toBeGreaterThanOrEqual(2)
+    expect(r.log.events.some((e) => e.kind === 'act' && e.actorId === 'h' && e.skillId === 'basic')).toBe(true)
+    expect(r.skillCasts).toEqual({ h: { strike: strikes } })
   })
 
   it('stays deterministic', () => {

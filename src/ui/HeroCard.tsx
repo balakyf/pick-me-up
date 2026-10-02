@@ -57,7 +57,7 @@ export function HeroCard({ hero, onClick, selected, showStats, masterLevel = 1 }
         </span>
       </div>
       <EngravingBadge hero={hero} />
-      <SkillList hero={hero} max={showStats ? undefined : 3} />
+      <SkillList hero={hero} max={showStats ? undefined : 3} detailed={showStats} />
       {dead && <div className="muted" style={{ color: 'var(--bad)', marginTop: 6, fontWeight: 700 }}>{t('☠ Fallen')}</div>}
       {stats && (
         <div className="statgrid">

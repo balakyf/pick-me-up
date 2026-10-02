@@ -118,7 +118,9 @@ describe('anchors F25–F100', () => {
       for (const al of a.allies ?? []) expect(ALLY_TEMPLATES[al.templateId]).toBeDefined()
       const enc = buildEncounter(onFloor(f), f)
       const cp = enc.waves.reduce((n, w) => n + w.units.reduce((m, u) => m + u.cp, 0), 0)
-      expect(cp, `F${f}`).toBeGreaterThanOrEqual(floorPower(f, 1) * T.anchorBudgetMult * 0.99)
+      // (The anchors from the Herald up take the smaller Herald step, not the post-Wall one.)
+      const set = f >= T.worldEndFloor ? T.heraldPowerMult / T.postWallPowerMult : 1
+      expect(cp, `F${f}`).toBeGreaterThanOrEqual(floorPower(f, 1) * T.anchorBudgetMult * set * 0.99)
     }
   })
 

@@ -190,6 +190,8 @@ export function runRaid(
     let after = hp
     for (const e of res.log.events) {
       if (e.kind === 'hit' && e.targetId === boss.id) after = Math.max(0, e.hpAfter)
+      // A DoT pulse or a heal (lane F) moves the boss's HP too: the next party meets it as left.
+      if ((e.kind === 'dot' || e.kind === 'heal') && e.unitId === boss.id) after = Math.max(0, e.hpAfter)
       if (e.kind === 'death' && e.unitId === boss.id) after = 0
     }
     results.push({ heroIds: [...party], outcome: res.outcome, bossHpBefore: hp, bossHpAfter: after, fallen: [...res.fallenHeroIds], log: res.log })

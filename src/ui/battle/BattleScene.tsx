@@ -29,6 +29,7 @@ import { useStageFit } from './useStageFit'
 import { devFxFloor, layerUrls, useReducedMotion } from './stageFx'
 import { UnitSprite } from './UnitSprite'
 import { DamagePopups } from './DamagePopups'
+import { unitStatus } from './statusCaptions'
 import { beatPopups, flinchDelays } from './popupStyle'
 import { FoeHud } from './FoeHud'
 import { PartyRows } from './PartyRows'
@@ -440,6 +441,7 @@ export function BattleScene({
                         turnMark: snap.actor === u.id && !dead && !atEnd && !casting,
                         panic: snap.panic === u.id,
                         enterDelayMs: (isHero ? heroes.indexOf(u) : enemies.indexOf(u) % 6) * 70,
+                        status: unitStatus(snap.status, u.id),
                         mark: markOf(u.id),
                         hurtDelayMs: Math.round((hurtDelay[u.id] ?? 0) / speed),
                       }}

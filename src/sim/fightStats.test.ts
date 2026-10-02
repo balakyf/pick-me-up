@@ -81,3 +81,50 @@ describe('fightStats', () => {
     expect(percentile([1, 2, 3, 4, 5, 6, 7, 8, 9, 10], 90)).toBe(9)
   })
 })
+
+describe('fightStats · roles (lane F)', () => {
+  const events = [
+    ev({ kind: 'battle-start', heroIds: ['h1', 'h2'], enemyIds: ['a', 'b'] }),
+    // h1 taunts and braces; h2 shields h1.
+    ev({ kind: 'act', actorId: 'h1', skillId: 'basic_shield', targetId: 'h1' }),
+    ev({ kind: 'status', unitId: 'h1', status: 'taunt', sourceId: 'h1', ticks: 20, value: 0 }),
+    ev({ kind: 'status', unitId: 'h1', status: 'guard-up', sourceId: 'h1', ticks: 20, value: 25 }),
+    ev({ kind: 'act', actorId: 'h2', skillId: 'barrier', targetId: 'h2' }),
+    ev({ kind: 'status', unitId: 'h1', status: 'shield', sourceId: 'h2', ticks: 20, value: 30 }),
+    // a hits h1: the shield soaks 30, 20 gets through.
+    ev({ kind: 'act', actorId: 'a', skillId: 'e_basic', targetId: 'h1' }),
+    ev({ kind: 'shield', unitId: 'h1', actorId: 'a', absorbed: 30, left: 0 }),
+    ev({ kind: 'status-end', unitId: 'h1', status: 'shield', reason: 'broken' }),
+    ev({ kind: 'hit', actorId: 'a', targetId: 'h1', amount: 20, crit: false, hpAfter: 80 }),
+    // b poisons h1 (a status on the party — not counted as the party's): 10 a pulse.
+    ev({ kind: 'status', unitId: 'h1', status: 'poison', sourceId: 'b', ticks: 20, value: 10 }),
+    ev({ kind: 'dot', unitId: 'h1', status: 'poison', amount: 10, hpAfter: 70, sourceId: 'b' }),
+    // h2 heals h1 for 25; a lifesteal heal (no source) is not a role heal.
+    ev({ kind: 'act', actorId: 'h2', skillId: 'first_aid', targetId: 'h2' }),
+    ev({ kind: 'heal', unitId: 'h1', amount: 25, hpAfter: 95, sourceId: 'h2' }),
+    ev({ kind: 'heal', unitId: 'h2', amount: 5, hpAfter: 100 }),
+    // h2's bleed on a ticks for 8 (party damage).
+    ev({ kind: 'status', unitId: 'a', status: 'bleed', sourceId: 'h2', ticks: 20, value: 8 }),
+    ev({ kind: 'dot', unitId: 'a', status: 'bleed', amount: 8, hpAfter: 42, sourceId: 'h2' }),
+    ev({ kind: 'end', outcome: 'win' }),
+  ]
+  const f = fightStats(log(events))
+
+  it('counts heals, shields, taunts, statuses on foes, soaks and damage taken', () => {
+    expect(f.heals).toBe(1)
+    expect(f.healed).toBe(25)
+    expect(f.shields).toBe(1)
+    expect(f.absorbed).toBe(30)
+    expect(f.taunts).toBe(1)
+    expect(f.foeStatuses).toBe(1)
+    expect(f.damageTaken).toBe(30) // 20 through the shield + 10 of poison
+    expect(f.heroDamage).toBe(8) // the bleed
+  })
+
+  it('the healing share: what the foes threw that was healed back or soaked', () => {
+    const s = summarizeFights([f])
+    expect(s.healingShare).toBeCloseTo((25 + 30) / (30 + 30))
+    expect(s.healsPerFight).toBe(1)
+    expect(s.roleFightShare).toBe(1)
+  })
+})

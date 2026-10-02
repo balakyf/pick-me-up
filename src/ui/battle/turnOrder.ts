@@ -13,8 +13,9 @@
  *
  * What the gauges cannot know ahead: deaths and new waves (the forecast assumes the field
  * stays as it is), and anything that bends speed or skips turns mid-fight beyond the
- * floor's Gale (stuns, haste — none exist yet). A turn the replay did not expect is counted
- * in `divergences` and the gauges are resynchronised on the spot.
+ * floor's Gale and the statuses the log announces (a stun pushes the gauge back; a speed
+ * buff or debuff bends the fill, as the engine does). A turn the replay did not expect is
+ * counted in `divergences` and the gauges are resynchronised on the spot.
  */
 import type { CombatLog, CombatUnitInit, FloorModifierId } from '../../engine/types'
 import { TUNING } from '../../engine/tuning'
@@ -31,6 +32,9 @@ export interface GaugeState {
   /** Foes that spent a silent turn and have not woken since. */
   dormant: Set<string>
   mods: FloorModifierId[]
+  /** Speed buffs and debuffs standing on each unit (percent; one of each at most) and the
+   *  tick each wears off (a status applied in tick T for n ticks expires at the top of T+n). */
+  spdPct: Map<string, { up: number; upEnd: number; down: number; downEnd: number }>
   /** Turns that came out of order (0 for every log the engine writes today). */
   divergences: number
 }
@@ -47,14 +51,23 @@ function rank(st: GaugeState): string[] {
   })
 }
 
+/** A unit's gauge fill per tick: the engine's speedOf (floor mods, then speed statuses). */
+function speedOf(st: GaugeState, units: Map<string, CombatUnitInit>, id: string): number {
+  const base = modSpeed(st.mods, units.get(id)?.spd ?? 0)
+  const m = st.spdPct.get(id)
+  // A status that wears off in this tick is gone before the gauges fill.
+  const pct = m ? (m.upEnd > st.tick ? m.up : 0) - (m.downEnd > st.tick ? m.down : 0) : 0
+  return pct === 0 ? base : Math.floor((base * Math.max(10, 100 + pct)) / 100)
+}
+
 function fill(st: GaugeState, units: Map<string, CombatUnitInit>): void {
-  for (const id of st.alive) st.gauge.set(id, (st.gauge.get(id) ?? 0) + modSpeed(st.mods, units.get(id)?.spd ?? 0))
+  for (const id of st.alive) st.gauge.set(id, (st.gauge.get(id) ?? 0) + speedOf(st, units, id))
 }
 
 /** Replay the gauges through the first `applied` events of the log. */
 export function replayGauges(log: CombatLog, applied: number): GaugeState {
   const units = new Map(log.unitsInit.map((u) => [u.id, u]))
-  const st: GaugeState = { tick: 0, gauge: new Map(), alive: new Set(), dormant: new Set(), mods: [], divergences: 0 }
+  const st: GaugeState = { tick: 0, gauge: new Map(), alive: new Set(), dormant: new Set(), mods: [], spdPct: new Map(), divergences: 0 }
   const silent = (id: string) => {
     st.gauge.set(id, (st.gauge.get(id) ?? 0) - MAX)
     const u = units.get(id)
@@ -75,6 +88,10 @@ export function replayGauges(log: CombatLog, applied: number): GaugeState {
     st.divergences++
     st.gauge.set(id, Math.max(0, (st.gauge.get(id) ?? 0) - MAX))
     st.dormant.delete(id)
+  }
+  const endSpd = (unitId: string, status: string) => {
+    const m = st.spdPct.get(unitId)
+    if (m) st.spdPct.set(unitId, status === 'spd-up' ? { ...m, up: 0, upEnd: 0 } : { ...m, down: 0, downEnd: 0 })
   }
   const advanceTo = (tick: number) => {
     while (st.tick < tick) {
@@ -128,6 +145,22 @@ export function replayGauges(log: CombatLog, applied: number): GaugeState {
       case 'panic':
         take(e.unitId)
         break
+      case 'status': {
+        if (e.status === 'stun') {
+          // The engine pushes the gauge back by `value`% of a turn, never below its floor.
+          const floor = -Math.floor((MAX * TUNING.roles.stunFloorPm) / 1000)
+          const push = Math.floor((MAX * (e.value ?? 0)) / 100)
+          st.gauge.set(e.unitId, Math.max(floor, (st.gauge.get(e.unitId) ?? 0) - push))
+        } else if (e.status === 'spd-up' || e.status === 'spd-down') {
+          const m = st.spdPct.get(e.unitId) ?? { up: 0, upEnd: 0, down: 0, downEnd: 0 }
+          const end = e.tick + e.ticks
+          st.spdPct.set(e.unitId, e.status === 'spd-up' ? { ...m, up: e.value ?? 0, upEnd: end } : { ...m, down: e.value ?? 0, downEnd: end })
+        }
+        break
+      }
+      case 'status-end':
+        if (e.status === 'spd-up' || e.status === 'spd-down') endSpd(e.unitId, e.status)
+        break
       case 'mission':
         if (e.code === 'wakes' && e.params?.unitId !== undefined) st.dormant.delete(e.params.unitId)
         break
@@ -147,7 +180,7 @@ export function upcomingTurns(log: CombatLog, applied: number, n = 6): string[] 
   const st = replayGauges(log, applied)
   const units = new Map(log.unitsInit.map((u) => [u.id, u]))
   const counts = (id: string) => !units.get(id)?.isNpc && !st.dormant.has(id)
-  const anyMoves = [...st.alive].some((id) => counts(id) && modSpeed(st.mods, units.get(id)?.spd ?? 0) > 0)
+  const anyMoves = [...st.alive].some((id) => counts(id) && speedOf(st, units, id) > 0)
   const out: string[] = []
   if (!anyMoves) return out
   for (let guard = 0; out.length < n && guard < 20_000; guard++) {

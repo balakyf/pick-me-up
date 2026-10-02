@@ -255,7 +255,9 @@ describe('the account lifecycle and the terminus', () => {
   it('F90: subversion needs the truths, and a subverted clear saves the world', () => {
     const acct = createAccount(11)
     const id = Object.keys(acct.heroes)[0] as HeroId
-    const god: OwnedHero = { ...acct.heroes[id]!, star: 7, heroClass: 'mage', element: 'light', xp: { level: 150, xpIntoLevel: 0, heldXp: 0, atCap: false }, baseAttrs: { str: 999, agi: 999, vit: 999, int: 999, wil: 999 }, growthGrades: { str: 10, agi: 10, vit: 10, int: 10, wil: 10 } }
+    // A god mage with a mage's burst (lane F: the starter's Berserk now bleeds its caster, and
+    // the Herald stands a step above its old budget).
+    const god: OwnedHero = { ...acct.heroes[id]!, star: 7, heroClass: 'mage', element: 'light', xp: { level: 150, xpIntoLevel: 0, heldXp: 0, atCap: false }, baseAttrs: { str: 999, agi: 999, vit: 999, int: 999, wil: 999 }, growthGrades: { str: 10, agi: 10, vit: 10, int: 10, wil: 10 }, skills: [{ id: 'arcane_burst', level: 6, xp: 0 }] }
     const s: GameState = { ...acct, heroes: { [id]: god }, tower: { ...acct.tower, currentFloor: 90, highestCleared: 89 } }
     expect(() => playFloor(s, undefined, undefined, true)).toThrow(/truths/)
     const wise = { ...s, tower: { ...s.tower, hiddenFound: ['a', 'b', 'c', 'd', 'e', 'f', 'g'] } }

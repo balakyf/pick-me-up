@@ -3,6 +3,8 @@ import { gradeValueToLetter } from '../engine/stats'
 import { heroBustUrl } from './pixel/sprites'
 import { ENGRAVINGS, SKILLS } from '../engine/content'
 import { maxLevelFor } from '../engine/skills'
+import { roleLabel, skillBlurb, skillRole } from './skillText'
+import './skillText.css'
 import { t } from './i18n/i18n'
 import { heroCpFull, heroStatsFull, type CpContext } from '../engine/unit/trueCp'
 import { peekState } from './useGame'
@@ -80,8 +82,9 @@ export function EngravingBadge({ hero }: { hero: OwnedHero }) {
   )
 }
 
-/** A hero's skills as `name · grade · Lv N` chips (read-only, Layer 1 §2). */
-export function SkillList({ hero, max }: { hero: OwnedHero; max?: number }) {
+/** A hero's skills as `name · grade · Lv N` chips (read-only, Layer 1 §2); each chip's
+ *  tooltip says what the skill does, and `detailed` writes it under the chip (lane F). */
+export function SkillList({ hero, max, detailed = false }: { hero: OwnedHero; max?: number; detailed?: boolean }) {
   const shown = max !== undefined ? hero.skills.slice(0, max) : hero.skills
   if (hero.skills.length === 0) return <div className="skill-list empty-skills">{t('No skills yet')}</div>
   return (
@@ -90,17 +93,27 @@ export function SkillList({ hero, max }: { hero: OwnedHero; max?: number }) {
         const def = SKILLS[s.id]
         if (!def) return null
         const cap = maxLevelFor(def.grade)
-        return (
+        const role = skillRole(def)
+        const chip = (
           <div
             key={s.id}
             className={`skill-chip grade-${def.grade} ${def.passive ? 'passive' : ''}`}
-            title={`${t(def.name)} · ${t('grade')} ${def.grade} · Lv ${s.level}/${cap}${def.passive ? ' · ' + t('passive') : ''}${def.bound ? ' · ' + t('achievement (bound)') : ''}`}
+            title={`${t(def.name)} · ${t('grade')} ${def.grade} · Lv ${s.level}/${cap}${def.passive ? ' · ' + t('passive') : ''}${def.bound ? ' · ' + t('achievement (bound)') : ''}\n${skillBlurb(def, s.level)}`}
           >
             <span className="skill-grade">{def.grade}</span>
             <span className="skill-name">{t(def.name)}</span>
             <span className="skill-lv">Lv {s.level}</span>
             {def.hpCost !== undefined && <span className="skill-hp" title={t('Costs HP to cast')}>♥</span>}
             {def.bound && <span className="skill-bound" title={t('Achievement skill — bound to this hero')}>✦</span>}
+          </div>
+        )
+        if (!detailed) return chip
+        return (
+          <div key={s.id} className="skill-entry">
+            {chip}
+            <div className="skill-blurb">
+              <span className={`skill-role role-${role}`}>{roleLabel(role)}</span> {skillBlurb(def, s.level)}
+            </div>
           </div>
         )
       })}

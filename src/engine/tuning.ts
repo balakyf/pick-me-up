@@ -85,6 +85,72 @@ export const TUNING = {
     damageScale: 0.58,
   },
 
+  /**
+   * Skills & roles (lane F): the SP rhythm, the statuses' clock, the formation shapes and
+   * what the combat brain weighs a heal, a shield, a taunt or a buff against a blow.
+   * Every weight is a per-mille on "HP of damage dealt": 1000 = worth exactly as much as
+   * the same number of HP struck from a foe.
+   */
+  roles: {
+    /** SP regained after each action a unit takes (skills are a rhythm, not an opener). */
+    spPerAction: 4,
+    /** SP regained on taking damage: this much for a whole bar of max HP lost (pro rata). */
+    spPerBarTaken: 12,
+    /** A cleave's neighbour takes this % of the blow. */
+    cleavePct: 50,
+    /** A chance-based status on a foe lands × 100 / (100 + statusRes × this / 100). */
+    statusResWeight: 100,
+    /** The fewest ticks a timed status lasts, whatever the caster's speed. */
+    minStatusTicks: 4,
+    /** A stun can push an action gauge no lower than −this share of a turn (per-mille). */
+    stunFloorPm: 500,
+    /** A buff's or debuff's magnitude is capped here (percent; crit: points). */
+    maxStatPct: 60,
+    /** STALEMATE: the party falls back after this many of its actions per living hero (at
+     *  least stallMinActs) without wearing the foes' HP on the field to a new low — heals
+     *  and shields must never hold a fight until the 5000-tick clock. */
+    stallActsPerHero: 6,
+    stallMinActs: 12,
+    /** …where wearing them down means a step of at least this % of the field's foes' max HP. */
+    stallStepPct: 3,
+    /** HEAL FATIGUE: each skill heal a unit has already taken this battle makes the next one
+     *  restore this many % less (never below healFatigueFloorPct) — clutch heals stay big,
+     *  but no healer out-heals a whole wave forever. */
+    healFatiguePct: 25,
+    healFatigueFloorPct: 25,
+    /** WEARINESS: heals and shields also hold this many % less per 100 ticks the fight has
+     *  run (floored as above) — a long siege at the Wall grinds down to a decision instead
+     *  of a 4-minute replay of heals answering blows. */
+    wearPctPer100Ticks: 25,
+    brain: {
+      /** A heal is only worth casting on an ally below this % of max HP (above it, waste). */
+      healBelowPct: 65,
+      /** …and a regeneration on an ally below this %. */
+      regenBelowPct: 75,
+      /** HP healed is worth this much (per-mille of a damage HP): a death is permanent. */
+      healWeightPm: 1300,
+      /** A blow expected to kill also scores the victim's next blow, at this weight (its
+       *  turns are gone): so a healer weighs a wound against the one who keeps opening it. */
+      killWeightPm: 1000,
+      /** …doubled again when the ally would fall to the next blow coming its way. */
+      lethalHealMult: 2,
+      /** HP a shield is expected to soak, per-mille of a damage HP. */
+      shieldWeightPm: 1000,
+      /** Damage a taunt pulls off a squishier friend, per-mille of a damage HP. */
+      tauntWeightPm: 1000,
+      /** Damage a buff adds (or a debuff takes away), per-mille of a damage HP. */
+      buffWeightPm: 900,
+      /** A status counts for at most this many of its bearer's turns in the estimate. */
+      maxTurnsCounted: 3,
+      /** HP a self-inflicted drain costs, per-mille (a hero minds its own blood less than a foe's). */
+      selfDrainWeightPm: 500,
+      /** A skill that drains its caster is never cast below this % of max HP. */
+      selfDrainFloorPct: 50,
+      /** One SP given to an ally who needs it, in damage HP (per-mille of a turn's blow / 100 SP). */
+      spWeightPm: 400,
+    },
+  },
+
   cp: {
     weights: {
       maxHP: 0.1,
@@ -192,8 +258,18 @@ export const TUNING = {
      *  through at +20 levels (balance pass 2). Only the gate: F81+ keep their curve.
      *  1.8 → 2.3 (lane D): with the lower base and anchorBudgetMult 1.4 the gate stands at
      *  about its old CP, and it holds for 6 whales in 6 over 30 days (at 2.2 two broke
-     *  through to F84; before the combat brain one reached F89). */
-    wallPowerMult: 2.3,
+     *  through to F84; before the combat brain one reached F89). 2.3 → 2.6 (lane F): heals,
+     *  shields and taunts make a party last; at 2.3 engaged bots broke through too. */
+    wallPowerMult: 2.6,
+    /** Every floor behind the Wall (F81+) has its budget × this (lane F). With heals,
+     *  shields and taunts a party that broke the gate walked every floor after it on the
+     *  first try (F81–99 in a day); before roles a whale that broke through stalled in
+     *  F84–89. */
+    postWallPowerMult: 1.5,
+    /** …and the anchors from the Herald up (F90, F95, F100) take this smaller step instead
+     *  (lane F): at 1.0 whales who broke the Wall walked through the Herald to F93–97; at
+     *  1.5 not even a party of five Lv150 gods could reach the summit. */
+    heraldPowerMult: 1.25,
     /** Past the inflection the budget exponent eases to this (the LEVEL curve steepens
      *  instead), so a maxed party can reach the summit. 1.04 → 1.045 (lane D): Act VI had
      *  gone soft under the lower base (whales cleared it on day 4 instead of day 12). */

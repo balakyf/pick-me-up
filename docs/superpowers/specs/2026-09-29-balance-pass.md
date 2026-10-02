@@ -251,3 +251,66 @@ whale 18/66/26 → 7/38/26.
   3★ party gains the most from the brain. The Wall still holds them.
 - **Late replays are long at 1×**: F61–79 median 67 s (p90 108 s). Inside the gate, but the
   readability lane should make 2× the comfortable default for long fights, or trim beat timings.
+
+## Skills & roles retune (2026-10-02, lane F)
+
+Lane F gave skills effects (heals, regeneration, shields, buffs and debuffs, DoTs, stuns,
+taunts, SP), multi-hit and formation shapes, an SP rhythm, and re-authored the kit so the five
+classes play differently (notes: `docs/superpowers/specs/2026-10-02-lane-f.md`). A party with a
+healer and a tank lasts longer than one without, so the first runs moved the late game: whales
+reached F99 by day 29 and engaged bots broke the Wall, and sustain stretched Wall fights to the
+5000-tick clock.
+
+### What moved (and why)
+
+| Knob | Before → after | Why |
+|---|---|---|
+| `roles.*` (new block) | — | SP rhythm (+4 per action, +12 per bar of HP lost), status clock, cleave share, statusRes weight, the brain's weights (heal ×1.3, lethal ×2, kill value ×1), heal fatigue (−25 % per heal taken, floor 25 %), weariness (−25 % per 100 ticks), the stalemate guard (6 actions per hero, a 3 % step) |
+| `tower.wallPowerMult` | 2.3 → 2.6 | at 2.3 engaged bots broke through too |
+| `tower.postWallPowerMult` (new) | — → 1.5 | every floor past the Wall: a party that broke the gate walked F81–99 in a day |
+| `tower.heraldPowerMult` (new) | — → 1.25 | the anchors from F90 up take this instead (at 1.0 whales walked through the Herald to F93–97; at 1.5 a party of five Lv150 gods could not reach the summit) |
+
+Acts I–VI budgets are unchanged. The golden combat values did not move (Han has no skills; no
+new roll is drawn without a chance-based status).
+
+### Before → after (30 days, base 8cf6073)
+
+| | AoE share | Median rounds | Enemies act | Deaths / attempt | Median replay 1× |
+|---|---|---|---|---|---|
+| before · 6 seeds | 25.4 % | 2.60 | 99.5 % | 0.212 | 44.8 s |
+| after · 6 seeds | 18.4 % | 3.00 | 99.4 % | 0.183 | 52.0 s |
+| before · 3 seeds | 29.9 % | 2.40 | 99.5 % | 0.199 | 40.2 s |
+| after · 3 seeds | 22.0 % | 2.60 | 99.7 % | 0.202 | 48.3 s |
+
+**Progression** (`npm run sim -- 30 6`, medians; highest floor cleared by the end of day *d*):
+
+| Profile | d0 | d1 | d2 | d3 | d5 | d7 | d10 | d14 | d20 | d29 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| casual before | 6 | 12 | 18 | 24 | 36 | 40 | 40 | 52 | 75 | 79 |
+| casual after | 6 | 12 | 18 | 24 | 36 | 40 | 40 | 55 | 79 | 79 |
+| engaged before | 16 | 32 | 40 | 40 | 40 | 47 | 78 | 79 | 79 | 79 |
+| engaged after | 16 | 32 | 40 | 40 | 59 | 59 | 79 | 79 | 79 | 79 |
+| whale before | 25 | 49 | 67 | 78 | 79 | 79 | 79 | 79 | 79 | 84 |
+| whale after | 25 | 50 | 72 | 79 | 79 | 79 | 79 | 79 | 84 | 89 |
+
+| Profile | Finals (6 seeds) | Battle deaths (median) |
+|---|---|---|
+| casual before | 79, 76, 79, 77, 69, 79 | 30.5 |
+| casual after | 79, 79, 79, 79, 68, 79 | 16.5 |
+| engaged before | 79 × 6 | 8.5 |
+| engaged after | 79, 79, 79, 89, 79, 80 | 14 |
+| whale before | 84, 84, 79, 79, 86, 89 | 17 |
+| whale after | 89, 84, 89, 84, 89, 89 | 8.5 |
+
+`npm run sim -- 30 3`: casual 79/76/79 → 79/79/79, engaged 79 × 3 → 79 × 3, whale 84/84/79 →
+89/84/89; dead casual 17/44/33 → 21/29/12, engaged 20/2/9 → 6/17/18, whale 9/18/17 → 5/27/18.
+
+**Roles** (6 seeds, from F41, per fight): heals 4.7, shields 1.3, taunts 2.6, statuses on foes
+8.9; healing share 12–14 % in Acts V–VI and 56 % at the Wall.
+
+### Still open
+
+- **Wall fights are long**: F80–100 p90 replay 60 → 201 s at 1× (sustain against sustain).
+- **The Wall breaks more often** (whales 4/6 by day 29, one engaged run); the Herald holds.
+- **Engaged loses a few more heroes** (median 8.5 → 14 over 30 days) while casual and whales
+  lose far fewer; Act V's archers (the Demon's Marksman strikes the weakest) do most of it.

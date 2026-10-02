@@ -221,7 +221,7 @@ export function completePromotion(hero: OwnedHero, accountSeed: Seed, highestCle
     hero.xp.heldXp,
     newStar,
   )
-  skills = applyUnlocks(skills, xp.level, highestCleared)
+  skills = applyUnlocks(skills, xp.level, highestCleared, heroClass)
 
   // Rank deepens the hero's connection with the Master: Intervention Points (Layer 3 §D2).
   const ip = (hero.ip ?? 0) + TUNING.intervention.perPromotion

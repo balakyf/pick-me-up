@@ -257,6 +257,13 @@ export function analyzeRun(res: BattleResult, bossIds: readonly string[]): Forec
         lastHit.set(e.targetId, e.actorId)
       }
       if (hp.has(e.targetId)) hp.set(e.targetId, e.hpAfter)
+    } else if (e.kind === 'dot' || e.kind === 'heal') {
+      // A DoT pulse or a heal (lane F) moves a boss's HP as well; a foe's poison is its harm.
+      if (e.kind === 'dot' && isParty(e.unitId) && !isParty(e.sourceId)) {
+        dmgBy[e.sourceId] = (dmgBy[e.sourceId] ?? 0) + Math.max(0, Math.min(e.amount, e.hpAfter + e.amount))
+        lastHit.set(e.unitId, e.sourceId)
+      }
+      if (hp.has(e.unitId)) hp.set(e.unitId, e.hpAfter)
     } else if (e.kind === 'death' && isParty(e.unitId)) {
       const by = lastHit.get(e.unitId)
       if (by !== undefined) killsBy[by] = (killsBy[by] ?? 0) + 1
