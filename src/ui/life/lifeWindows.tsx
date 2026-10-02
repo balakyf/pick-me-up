@@ -3,6 +3,7 @@
  * they are, what they want, who they love and hate, what they remember, their job), and
  * Isel's letter — the canon login report of what the heroes did while the Master was away.
  */
+import { TraitBadge } from '../people/TraitBadge'
 import { SKILLS } from '../../engine/content'
 import { useState } from 'react'
 import type { GameState, HeroId, JobId, Memory, OwnedHero } from '../../engine/types'
@@ -270,6 +271,7 @@ export function HeroProfile({
             <div className="muted">
               {t('Loves {food}', { food: t(p.food) })} · {t('Hobby: {h}', { h: t(p.hobby) })} · {t('Here since day {n}', { n: accountDay(state, life.arrivedDay) })}
             </div>
+            <TraitBadge hero={hero} full />
             <div className="profile-now">“{speak(state, hero, inParty, 'profile')}”</div>
             <div className="muted small">{statusLine(state, hero)}</div>
             <EstateNotes state={state} hero={hero} />
