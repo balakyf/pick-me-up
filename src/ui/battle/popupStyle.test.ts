@@ -3,6 +3,7 @@ import type { CombatEvent, CombatUnitInit } from '../../engine/types'
 import { ELEMENT_VIS } from '../bits'
 import { beatPopups, crowdScale, flinchDelays, MIN_SCREEN_PX, planPopups, popupColor, popupFontPx, popupLook, type PopupEvent, type PopupInput } from './popupStyle'
 import { popupDelay } from './battleFrames'
+import { popupPlaces } from './choreo'
 
 const hit = (p: Partial<Extract<CombatEvent, { kind: 'hit' }>> = {}): Extract<CombatEvent, { kind: 'hit' }> => ({
   seq: 1,
@@ -104,6 +105,17 @@ describe('popup plan', () => {
   it('keeps a number on the visible stretch of a cropped stage', () => {
     const [p] = planPopups([{ e: hit({ targetId: 'a', amount: 40 }), element: 'fire', maxHP: 100, delayMs: 0 }], { a: { x: 4, y: 170 } }, head, 1, { left: 0, right: 300 })
     expect(p!.x).toBeGreaterThan(4)
+  })
+
+  it("a number sliding aside to clear another never leaves the stage's visible edge", () => {
+    // The only free spot at lift 0 is a slide to the left, past the cropped stage's edge.
+    const box = { x: 20, y: 100, w: 30, h: 10 }
+    const banner = { x: 35, y: 100, w: 30, h: 10 }
+    const [free] = popupPlaces([box], 3, 90, 0.9, [banner])
+    expect(box.x + free!.dx - box.w / 2).toBeLessThan(0) // unbounded, it would slide off
+    const [kept] = popupPlaces([box], 3, 90, 0.9, [banner], { left: 0, right: 300 })
+    expect(box.x + kept!.dx - box.w / 2).toBeGreaterThanOrEqual(0)
+    expect(kept!.lift).toBeGreaterThan(0) // it rises instead
   })
 
   it("a sweep's numbers land one after another, and each target flinches with its own", () => {

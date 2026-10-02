@@ -119,7 +119,8 @@ export function BattleScene({
   useEffect(() => {
     const e = current
     if (!e) return
-    if (e.kind === 'hit') sfx(beat.some((b) => b.kind === 'hit' && b.crit) ? 'crit' : 'hit')
+    // A sweep sounds its blows if any landed, even when its first target dodged.
+    if (beat.some((b) => b.kind === 'hit')) sfx(beat.some((b) => b.kind === 'hit' && b.crit) ? 'crit' : 'hit')
     else if (e.kind === 'miss') sfx('miss')
     else if (e.kind === 'guard') sfx('guard')
     else if (e.kind === 'heal') sfx('heal')
@@ -409,7 +410,8 @@ export function BattleScene({
                   const acting =
                     snap.actor === u.id &&
                     (current?.kind === 'act' || current?.kind === 'hit' || current?.kind === 'miss' || current?.kind === 'followup')
-                  const hurt = current?.kind === 'hit' && snap.targets.includes(u.id) && beat.some((e) => e.kind === 'hit' && e.targetId === u.id)
+                  // Every unit a blow of this beat lands on flinches (even when the sweep's first blow missed).
+                  const hurt = beat.some((e) => e.kind === 'hit' && e.targetId === u.id)
                   const skillHit = hurt && snap.skill !== null
                   const dead = !!snap.dead[u.id]
                   // The skill's name stays over its caster through every blow of the act.

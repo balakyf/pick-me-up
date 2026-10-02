@@ -157,7 +157,10 @@ export function planPopups(
       const look = popupLook(it.e)
       const fs = Math.round(Math.max(popupFontPx(it.e, it.maxHP) * crowdScale(it.crowd ?? 1), minFs) * 10) / 10
       const tagFs = Math.round(Math.max(TAG_PX, minTag) * 10) / 10
-      const w = Math.max(Math.ceil(look.text.length * fs * 0.66) + 4, look.tag !== null ? Math.ceil(look.tag.length * tagFs * 0.72) + 6 : 0)
+      // The digits are Silkscreen (fonts.css), about 0.75em a glyph at the numbers' weight;
+      // words are Pixelify Sans, narrower.
+      const perChar = /^[+\d]+$/.test(look.text) ? 0.78 : 0.7
+      const w = Math.max(Math.ceil(look.text.length * fs * perChar) + 4, look.tag !== null ? Math.ceil(look.tag.length * tagFs * 0.72) + 6 : 0)
       const half = w / 2
       const x = bounds.right - bounds.left > w ? Math.min(Math.max(p.x, bounds.left + half), bounds.right - half) : p.x
       const box: PopupBox = { x, y: p.y - Math.min(headOf(who), 60) - fs - 4, w, h: fs + (look.tag !== null ? tagFs + 3 : 2) }
@@ -170,6 +173,7 @@ export function planPopups(
     140,
     0.9,
     reserved,
+    bounds,
   )
   return rows.map((r, i) => ({
     key: r.it.e.seq,

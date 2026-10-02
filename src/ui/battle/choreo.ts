@@ -125,6 +125,8 @@ export function popupPlaces(
   slide = 0.9,
   /** Boxes already on screen that popups must keep clear of (a skill's name banner). */
   fixed: readonly PopupBox[] = [],
+  /** The visible stretch (stage px): a sideways slide never pushes a box off it. */
+  bounds: { left: number; right: number } = { left: -Infinity, right: Infinity },
 ): { dx: number; lift: number }[] {
   const placed: { l: number; r: number; t: number; b: number }[] = fixed.map((p) => ({ l: p.x - p.w / 2, r: p.x + p.w / 2, t: p.y, b: p.y + p.h }))
   const out: { dx: number; lift: number }[] = boxes.map(() => ({ dx: 0, lift: 0 }))
@@ -134,7 +136,9 @@ export function popupPlaces(
   for (let i = boxes.length - 1; i >= 0; i--) {
     const p = boxes[i]!
     const s = Math.round((p.w * slide) / 3)
-    const shifts = s > 0 ? [0, -s, s, -2 * s, 2 * s, -3 * s, 3 * s] : [0]
+    // A slide may not carry the box off the visible stretch (unless it was off it already).
+    const inside = (dx: number) => dx === 0 || (p.x + dx - p.w / 2 >= bounds.left && p.x + dx + p.w / 2 <= bounds.right)
+    const shifts = (s > 0 ? [0, -s, s, -2 * s, 2 * s, -3 * s, 3 * s] : [0]).filter(inside)
     let best = { dx: 0, lift: 0 }
     search: for (let lift = 0; ; lift += step) {
       for (const dx of shifts) {

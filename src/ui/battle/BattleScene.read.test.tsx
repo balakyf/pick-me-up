@@ -123,6 +123,15 @@ describe('BattleScene: reading the fight', () => {
     expect(container.querySelector('.cutin')).toBeNull()
   })
 
+  it('every foe a sweep lands on flinches, even when its first target dodged', () => {
+    const log = sweepLog()
+    log.events[2] = { seq: 2, tick: 2, kind: 'miss', actorId: 'h1', targetId: 'e1' }
+    mount(log)
+    advance(300 + 700 + 860)
+    expect(container.querySelectorAll('.bunit.hurt')).toHaveLength(2) // e2 and e3 were struck; e1 dodged
+    expect(Array.from(container.querySelectorAll('.dmg')).map((d) => d.textContent)).toEqual(['MISS', 'WEAK!41', 'WEAK!42'])
+  })
+
   it('explains WEAK! once, and remembers it was read', () => {
     mount()
     advance(300 + 700 + 860)
