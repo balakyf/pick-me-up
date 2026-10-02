@@ -1,6 +1,6 @@
 # The Dream Game · Program Plan
 
-> **Status:** In progress · **Date:** 2026-10-02 · **Branch:** `claude/busy-einstein-ofq1o3`
+> **Status:** Paused after wave 5 (owner's request) · **Date:** 2026-10-02 · **Branch:** `claude/busy-einstein-ofq1o3`
 > **Brief from the owner:** "improve this game like you want, go crazy, build the best version that can exist, make it your dream game."
 > **Evidence:** an understand pass (5 code readers, 3 browser playtests at F1–F15, F59 and F79 using `npm run mksave` bot saves, 1 canon-gap analysis). Raw reports were kept out of the repo; this plan records the conclusions.
 
@@ -74,4 +74,5 @@ Each lane's detailed brief lives in its workflow prompt; its notes file records 
 | 1 · A, B | merged, reviewed | `0e7a09b` |
 | 2 · C, D | merged, reviewed (1,300 tests; `npm run sim -- 30 3` in 32 s) | `1256083` |
 | 3 · E, F | merged, reviewed (1,408 tests; combat gate passes with beat timing; sim 64 s). Merge glue: SP bars read `spAfter`/'sp', the turn order replays stuns and speed statuses, the sim's replay length uses `battleFrames.replayLength` | `59fdf5f` |
-| 4 · G, H | merged, reviewed (1,554 tests; combat gate passes; boss beats from F41: 0.18 telegraphs/fight, 40% answered). Merge glue: cancelled big moves and boss summons get their own sounds | (this commit) |
+| 4 · G, H | merged, reviewed (1,554 tests; combat gate passes; boss beats from F41: 0.18 telegraphs/fight, 40% answered). Merge glue: cancelled big moves and boss summons get their own sounds | `f282864` |
+| 5 · I, J | merged, reviewed (1,653 tests; combat gate passes). The program pauses here at the owner's request; waves 6-9 (K–R) are not started | `2d30e74` |
