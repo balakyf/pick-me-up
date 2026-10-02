@@ -60,11 +60,11 @@
 .obj-mark { display: inline-block; vertical-align: middle; width: 9px; height: 6px; margin-right: 3px; fill: var(--gold); flex: none; }
 .obj-mark.escort { fill: #7ac8ff; width: 8px; height: 7px; }
 .obj-mark.on-stage {
-  position: absolute; left: calc(50% + 12px); top: -12px; width: 7px; height: 5px; margin: 0; z-index: 4;
+  position: absolute; left: calc(50% + 12px); top: -13px; width: 9px; height: 6px; margin: 0; z-index: 4;
   filter: drop-shadow(1px 0 0 #000) drop-shadow(-1px 0 0 #000) drop-shadow(0 1px 0 #000);
   animation: turnBob 0.9s steps(2) infinite;
 }
-.obj-mark.on-stage.escort { width: 6px; height: 6px; }
+.obj-mark.on-stage.escort { width: 8px; height: 7px; }
 .foe-name .obj-mark { width: 11px; height: 7px; }
 
 /* ── The turn order ─────────────────────────────────────────────────────── */
