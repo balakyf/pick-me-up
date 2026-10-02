@@ -42,6 +42,7 @@ import { passiveBonuses, resolveSkillEffect, skillCp } from '../skills'
 import { engravingCp, engravingEffect } from '../engravings'
 import { favorStatMult, isDefiant } from '../favor'
 import { TUNING } from '../tuning'
+import { SKILLS } from '../content'
 
 /** Apply relative % bonuses to a stat block (rounded; CRIT re-capped). */
 function applyStatPct(stats: DerivedStats, pct: Partial<Record<keyof DerivedStats, number>>): DerivedStats {
@@ -256,7 +257,8 @@ export function buildEnemyUnit(
     currentSP: maxSP,
     actionGauge: 0,
     alive: true,
-    skills: [enemyBasicAttack(template)],
+    // Lane F: a template's kit (a priest's prayer, a knight's shield wall) rides beside its strike.
+    skills: [enemyBasicAttack(template), ...resolveSkills([...(template.kit ?? [])], SKILLS)],
     keywords: [...(template.keywords ?? []), ...(opts?.keywords ?? [])],
     cp: combatPower(stats),
     targetTag: opts?.targetTag ?? template.id,

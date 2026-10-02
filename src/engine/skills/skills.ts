@@ -16,7 +16,9 @@ import type {
   HeroSkill,
   KeywordTag,
   MergeRecipe,
+  ResolvedEffect,
   SkillDef,
+  SkillEffectDef,
   SkillEffect,
   SkillGrade,
   SkillProgress,
@@ -100,7 +102,30 @@ export function resolveSkillEffect(skill: HeroSkill, registry: SkillRegistry = S
   }
   const hp = hpCostAt(def, skill.level)
   if (hp > 0) effect.hpCost = hp
+  if (def.hits !== undefined && def.hits > 1) effect.hits = def.hits
+  if (def.effects !== undefined && def.effects.length > 0) effect.effects = def.effects.map((e) => effectAt(e, def, skill.level))
   return effect
+}
+
+/**
+ * A skill effect at a level (lane F): its magnitude (`pct`, a stun's chance, an SP amount)
+ * grows by `perLevel` per level above 1, level clamped to the grade cap. Integer math.
+ */
+export function effectAt(e: SkillEffectDef, def: SkillDef, level: number): ResolvedEffect {
+  const per = 'perLevel' in e ? (e.perLevel ?? 0) : 0
+  const up = per * (clampLevel(def, level) - 1)
+  const rest = { ...e } as ResolvedEffect & { perLevel?: number }
+  delete rest.perLevel
+  switch (rest.kind) {
+    case 'stun':
+      return up !== 0 ? { ...rest, chance: Math.min(100, (rest.chance ?? 100) + up) } : rest
+    case 'sp':
+      return { ...rest, amount: rest.amount + (rest.amount < 0 ? -up : up) }
+    case 'taunt':
+      return rest
+    default:
+      return { ...rest, pct: rest.pct + up }
+  }
 }
 
 /** Mint a freshly owned hero's skills from innate ids (Lv1, no XP); unknown ids dropped. */
@@ -172,10 +197,17 @@ export function skillCp(skills: readonly HeroSkill[], registry: SkillRegistry = 
  * Conditional unlocks (Layer 1 §2.2): add every SKILL_UNLOCKS skill whose level (and
  * floor) threshold the hero now meets and that it does not hold. Table order; Lv1.
  */
-export function applyUnlocks(skills: readonly HeroSkill[], heroLevel: number, highestCleared: number): HeroSkill[] {
+export function applyUnlocks(
+  skills: readonly HeroSkill[],
+  heroLevel: number,
+  highestCleared: number,
+  heroClass?: HeroClass | null,
+): HeroSkill[] {
   const out = skills.map((s) => ({ ...s }))
   for (const u of SKILL_UNLOCKS) {
     if (heroLevel < u.minLevel) continue
+    // A class-bound unlock (an archer's Mark, a mage's Spellbind) needs that class.
+    if (u.classes !== undefined && (heroClass === undefined || heroClass === null || !u.classes.includes(heroClass))) continue
     if (u.minFloorCleared !== undefined && highestCleared < u.minFloorCleared) continue
     if (out.some((s) => s.id === u.skillId)) continue
     out.push({ id: u.skillId, level: 1, xp: 0 })
@@ -245,6 +277,8 @@ export interface FoldContext {
   /** The tower floor fought (achievement conditions); undefined off-tower. */
   floor?: number
   defeatedTargetTags: readonly string[]
+  /** The hero's class (class-bound unlocks: an archer's Mark, a mage's Spellbind). */
+  heroClass?: HeroClass | null
 }
 
 /**
@@ -263,7 +297,7 @@ export function foldBattleSkills(
   for (const s of skills) if (isPassive(s.id)) xp[s.id] = (xp[s.id] ?? 0) + T.passiveXpPerBattle
   let next = resolveMerges(awardSkillXp(skills, xp))
   if (ctx !== undefined) {
-    next = applyUnlocks(next, ctx.heroLevel, ctx.highestCleared)
+    next = applyUnlocks(next, ctx.heroLevel, ctx.highestCleared, ctx.heroClass)
     for (const id of achievementsEarned(ctx.won, ctx.floor, ctx.defeatedTargetTags)) {
       if (!next.some((s) => s.id === id)) next.push({ id, level: 1, xp: 0 })
     }

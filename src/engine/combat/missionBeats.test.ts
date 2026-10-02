@@ -216,12 +216,18 @@ describe('mission beats', () => {
       expect(beats(r, 'futile')).toHaveLength(1)
     })
 
-    it('a spell in hand keeps the fight on — until the SP to cast it is spent', () => {
+    it('a spell in hand keeps the fight on — SP comes back, so only a spell beyond the pool is no hope', () => {
       const withSp = runBattle([hero('m', { spd: 100, mAtk: 2000 }, { skills: [bolt], maxSP: 100, currentSP: 100 })], enc([[warden()]], [{ kind: 'annihilate' }]), 14)
       expect(withSp.outcome).toBe('win')
       expect(beats(withSp, 'futile')).toEqual([])
+      // Dry, the mage swings for free and saves up (the SP rhythm, lane F), then casts.
       const dry = runBattle([hero('m', { spd: 100, mAtk: 2000 }, { skills: [bolt], maxSP: 100, currentSP: 5 })], enc([[warden()]], [{ kind: 'annihilate' }]), 14)
-      expect(dry.outcome).toBe('retreat')
+      expect(dry.outcome).toBe('win')
+      expect(dry.log.events.some((e) => e.kind === 'act' && e.skillId === 'bolt')).toBe(true)
+      // A spell the pool can never pay for is no hope at all.
+      const dear = { ...bolt, spCost: 500 }
+      const never = runBattle([hero('m', { spd: 100, mAtk: 2000 }, { skills: [dear], maxSP: 100, currentSP: 5 })], enc([[warden()]], [{ kind: 'annihilate' }]), 14)
+      expect(never.outcome).toBe('retreat')
     })
 
     it('a phased foe the blades could hurt is out of reach while an immune wavemate shields it', () => {
@@ -229,8 +235,9 @@ describe('mission beats', () => {
       const r = runBattle([hero('a', { spd: 100 })], enc([[warden(), priest]], [{ kind: 'annihilate' }]), 16)
       expect(r.outcome).toBe('retreat')
       expect(beats(r, 'futile')[0]!.params).toEqual({ unitId: 'warden' })
-      // …but a hurtable shield is only in the way: the fight goes on.
-      const goblin = enemy('goblin', { maxHP: 1e6, spd: 1, pAtk: 0 })
+      // …but a hurtable shield is only in the way: the fight goes on (a shield the blades
+      // wear down for real — lane F's stalemate guard calls a hopeless chip at a mountain).
+      const goblin = enemy('goblin', { maxHP: 2000, spd: 1, pAtk: 0 })
       const held = runBattle([hero('a', { spd: 100 })], enc([[goblin, priest]], [{ kind: 'annihilate' }], 200), 16)
       expect(beats(held, 'futile')).toEqual([])
     })

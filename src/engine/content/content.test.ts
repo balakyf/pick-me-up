@@ -152,13 +152,19 @@ describe('SKILLS', () => {
     for (const [key, skill] of Object.entries(SKILLS)) {
       expect(skill.id).toBe(key)
       expect(skill.name.length).toBeGreaterThan(0)
-      // Passives are never cast, so they carry no multiplier.
-      if (skill.passive === undefined) expect(skill.baseMult).toBeGreaterThan(0)
+      // Passives are never cast, so they carry no multiplier; a support skill (lane F) has
+      // none either, but always carries effects.
+      if (skill.passive === undefined && (skill.effects ?? []).length === 0) expect(skill.baseMult).toBeGreaterThan(0)
+      if (skill.baseMult === 0 && skill.passive === undefined) expect(skill.effects!.length).toBeGreaterThan(0)
       expect(skill.perLevel).toBeGreaterThanOrEqual(0)
       expect(['F', 'E', 'D', 'C', 'B', 'A', 'S', 'U']).toContain(skill.grade)
       expect(['physical', 'magic']).toContain(skill.damageType)
-      expect(['single', 'all-enemies']).toContain(skill.target)
+      expect(['single', 'all-enemies', 'self', 'ally-lowest', 'ally-threatened', 'all-allies', 'front-row', 'cleave']).toContain(skill.target)
       expect(skill.spCost).toBeGreaterThanOrEqual(0)
+      if (skill.hits !== undefined) expect(skill.hits).toBeGreaterThan(1)
+      // A support skill tends its own side; an enemy kit is never a hero's to learn.
+      if (skill.baseMult === 0 && skill.passive === undefined) expect(['self', 'ally-lowest', 'ally-threatened', 'all-allies']).toContain(skill.target)
+      if (skill.enemy === true) expect(skill.learnable || skill.trainable || skill.bound !== true).toBe(false)
     }
   })
 })
