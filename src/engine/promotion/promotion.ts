@@ -175,6 +175,9 @@ export interface PromotionPreview {
   skillOffers: string[]
   /** The skill learned when the Master does not choose. */
   defaultSkill: string | null
+  /** Skills the levels the promotion releases unlock on their own (a class's Mark, a floor's
+   *  lesson) — learned alongside the chosen one, whatever the Master picks. */
+  unlocks: string[]
   /** The engraving: evolves one grade, may awaken (a chance — the outcome stays a secret), or
    *  nothing happens. */
   engraving: { kind: 'evolve'; from: HeroEngraving; to: HeroEngraving } | { kind: 'awaken'; chancePct: number } | { kind: 'none' }
@@ -254,10 +257,14 @@ function grownGrades(hero: OwnedHero, accountSeed: Seed, rolledGrades: GrowthGra
  * the trait. PURE and seeded exactly as `completePromotion` is, so what the chamber shows is
  * what happens — only an engraving's awakening stays a secret, shown as its chance.
  */
-export function promotionPreview(hero: OwnedHero, accountSeed: Seed, choice: PromotionChoice = {}): PromotionPreview {
+export function promotionPreview(hero: OwnedHero, accountSeed: Seed, choice: PromotionChoice = {}, highestCleared = 0): PromotionPreview {
   const heroClass = classAfter(hero, accountSeed, choice.heroClass)
   const d = promotionDraws(hero, accountSeed, heroClass)
   const { grades, bonusAttr } = grownGrades(hero, accountSeed, d.rolled.grades)
+  const known = new Set(hero.skills.map((s) => s.id))
+  const unlocks = applyUnlocks(hero.skills, releasedXp(hero, d.newStar).level, highestCleared, heroClass)
+    .map((s) => s.id)
+    .filter((id) => !known.has(id))
   const engraving: PromotionPreview['engraving'] =
     hero.engraving !== null
       ? { kind: 'evolve', from: hero.engraving, to: evolveEngraving(hero.engraving) }
@@ -275,6 +282,7 @@ export function promotionPreview(hero: OwnedHero, accountSeed: Seed, choice: Pro
     heroClass,
     skillOffers: d.offers,
     defaultSkill: d.defaultSkill,
+    unlocks,
     engraving,
     trait: { from: traitOf(hero).id, to: traitAtStar({ ...hero, heroClass }, d.newStar).id },
   }
@@ -384,11 +392,7 @@ export function completePromotion(hero: OwnedHero, accountSeed: Seed, highestCle
   }
 
   // Lift the cap and release held XP into the newly available levels.
-  const xp = applyXp(
-    { level: hero.xp.level, xpIntoLevel: hero.xp.xpIntoLevel, heldXp: 0, atCap: false },
-    hero.xp.heldXp,
-    newStar,
-  )
+  const xp = releasedXp(hero, newStar)
   skills = applyUnlocks(skills, xp.level, highestCleared, heroClass)
 
   // Rank deepens the hero's connection with the Master: Intervention Points (Layer 3 §D2).
@@ -398,6 +402,11 @@ export function completePromotion(hero: OwnedHero, accountSeed: Seed, highestCle
   const { displayStar: _shown, ...rest } = hero
   void _shown
   return { ...rest, heroClass, star: newStar, baseAttrs, growthGrades, skills, xp, engraving, ip, promotion: null }
+}
+
+/** The hero's XP once the cap lifts: held XP released into the newly available levels. */
+function releasedXp(hero: OwnedHero, newStar: Star): OwnedHero['xp'] {
+  return applyXp({ level: hero.xp.level, xpIntoLevel: hero.xp.xpIntoLevel, heldXp: 0, atCap: false }, hero.xp.heldXp, newStar)
 }
 
 /**

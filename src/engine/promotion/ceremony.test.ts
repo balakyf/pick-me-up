@@ -86,6 +86,24 @@ describe('promotionPreview — pure, seeded, and the truth', () => {
     }
   })
 
+  it('names the skills the released levels unlock on their own (held XP, the floor, the class)', () => {
+    let saw = 0
+    for (let i = 0; i < 30; i++) {
+      for (const star of [1, 2, 3, 4, 5] as Star[]) {
+        for (const floor of [0, 40, 80]) {
+          const cap = levelCapForStar(star)
+          const h = capped({ id: `h_ul${i}` as HeroId, star, xp: { level: cap, xpIntoLevel: 0, heldXp: i * 4000, atCap: true } })
+          const pv = promotionPreview(h, SEED, {}, floor)
+          const done = completePromotion(h, SEED, floor)
+          const fresh = done.skills.map((s) => s.id).filter((id) => isConditionalSkill(id) && !h.skills.some((s) => s.id === id))
+          expect(pv.unlocks).toEqual(fresh)
+          saw += pv.unlocks.length
+        }
+      }
+    }
+    expect(saw).toBeGreaterThan(0)
+  })
+
   it('an engraving evolves in plain sight; an awakening is only a chance', () => {
     const engraved = capped({ star: 4, engraving: { id: 'beast_king_heir', grade: 'B' } })
     expect(promotionPreview(engraved, SEED).engraving).toEqual({ kind: 'evolve', from: { id: 'beast_king_heir', grade: 'B' }, to: { id: 'beast_king_heir', grade: 'A' } })

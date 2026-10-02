@@ -133,6 +133,16 @@ describe('PromotionPlanner', () => {
     expect(() => startPromotion(s, hero.id as HeroId, 0, picks[0])).not.toThrow()
   })
 
+  it('names the skills the released levels unlock on their own', () => {
+    const { s, hero } = scene()
+    const twenty: OwnedHero = { ...hero, skills: [], xp: { level: 20, xpIntoLevel: 0, heldXp: 0, atCap: true } }
+    const pv = promotionPreview(twenty, s.seed, {}, s.tower.highestCleared)
+    expect(pv.unlocks).toContain('projectile_defense')
+    const el = render(<PromotionPlanner state={s} hero={twenty} affordable onPromote={() => {}} />)
+    expect(el.textContent).toContain('The new levels also unlock:')
+    expect(el.textContent).toContain(SKILLS.projectile_defense!.name)
+  })
+
   it('a classed hero chooses one of three skills', () => {
     const { s, hero } = scene()
     const three: OwnedHero = { ...hero, star: 3, heroClass: 'warrior', skills: [{ id: 'power_strike', level: 1, xp: 0 }] }

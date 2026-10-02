@@ -162,6 +162,7 @@ export default {
   'Learns {skill}': 'Apprend {skill}',
   "the chamber's pick": 'le choix de la chambre',
   'Choose a skill to learn': 'Choisir une compétence à apprendre',
+  'The new levels also unlock: {list}': 'Les nouveaux niveaux débloquent aussi : {list}',
   'Knows every skill the chamber could teach.': 'Connaît déjà tout ce que la chambre pourrait enseigner.',
   'What the chamber shows is what happens.': 'Ce que la chambre montre est ce qui arrivera.',
   '⬆ Begin the promotion': '⬆ Lancer la promotion',

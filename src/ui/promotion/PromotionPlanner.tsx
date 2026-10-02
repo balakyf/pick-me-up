@@ -27,9 +27,10 @@ export function PromotionPlanner({
   affordable: boolean
   onPromote: (choice: PromotionChoice) => void
 }) {
-  const plain = useMemo(() => promotionPreview(hero, state.seed), [hero, state.seed])
+  const floor = state.tower.highestCleared
+  const plain = useMemo(() => promotionPreview(hero, state.seed, {}, floor), [hero, state.seed, floor])
   const [cls, setCls] = useState<HeroClass | undefined>(plain.classOffers.length > 1 ? plain.heroClass ?? undefined : undefined)
-  const pv = useMemo(() => promotionPreview(hero, state.seed, cls ? { heroClass: cls } : {}), [hero, state.seed, cls])
+  const pv = useMemo(() => promotionPreview(hero, state.seed, cls ? { heroClass: cls } : {}, floor), [hero, state.seed, cls, floor])
   const [skill, setSkill] = useState<string | undefined>(undefined)
   const chosenSkill = skill !== undefined && pv.skillOffers.includes(skill) ? skill : (pv.defaultSkill ?? undefined)
   const rows = gradeRows(pv.grades.before, pv.grades.after)
@@ -140,6 +141,10 @@ export function PromotionPlanner({
         <div className="muted">{t('Learns {skill}', { skill: t(SKILLS[pv.skillOffers[0]!]?.name ?? pv.skillOffers[0]!) })}</div>
       ) : (
         <div className="muted">{t('Knows every skill the chamber could teach.')}</div>
+      )}
+
+      {pv.unlocks.length > 0 && (
+        <div className="muted">{t('The new levels also unlock: {list}', { list: pv.unlocks.map((id) => t(SKILLS[id]?.name ?? id)).join(', ') })}</div>
       )}
 
       <div className="promo-plan-foot">

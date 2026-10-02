@@ -6,6 +6,10 @@
 .sr { --card-w: clamp(236px, min(30vw, 40vh), 340px); --portrait: calc(var(--card-w) * 0.5); }
 .sr-name { font-size: clamp(18px, calc(var(--card-w) * 0.075), 26px); }
 
+/* 1–2★ flip fast (revealPlan.isFastBeat): the beam rises in the time the beat allows */
+.sr-fast:not(.sr-calm) .sr-beam { animation-duration: 0.36s; }
+.sr-fast:not(.sr-calm) .sr-circle { animation-duration: 0.25s; }
+
 /* the hero and the card, side by side (the body steps out of the light beside the card) */
 .sr-reveal { position: relative; z-index: 2; display: flex; align-items: flex-end; gap: 10px; }
 .sr-body { position: relative; width: 96px; height: 128px; flex: none; animation: sr-step 0.9s steps(6) both 0.15s; }
