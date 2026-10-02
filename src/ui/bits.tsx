@@ -5,7 +5,6 @@ import { ENGRAVINGS, SKILLS } from '../engine/content'
 import { maxLevelFor, skillCp } from '../engine/skills'
 import { engravingCp } from '../engine/engravings'
 import { t } from './i18n/i18n'
-import { fixArticles } from './text'
 
 /** Visual tokens for elements. */
 export const ELEMENT_VIS: Record<Element, { glyph: string; color: string; label: string }> = {
@@ -128,7 +127,7 @@ export function ElementBadge({ element }: { element: Element }) {
  * in the tooltip.
  */
 export function ClassBadge({ heroClass, trade }: { heroClass: HeroClass | null; trade?: string }) {
-  const title = trade ? fixArticles(t('{cls} · a {trade} before the summon', { cls: classLabel(heroClass), trade })) : classLabel(heroClass)
+  const title = trade ? t('{cls} · by trade: {trade}', { cls: classLabel(heroClass), trade }) : classLabel(heroClass)
   return (
     <>
       <span className="tag" title={title}>

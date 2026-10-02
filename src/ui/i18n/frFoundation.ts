@@ -40,7 +40,7 @@ export const FR_FOUNDATION: Record<string, string> = {
   // ── Heroes in pickers, classes ─────────────────────────────────────────────
   '{star}★ Lv{level}': '{star}★ Niv.{level}',
   Untrained: 'Sans formation',
-  '{cls} · a {trade} before the summon': '{cls} · {trade} avant l’invocation',
+  '{cls} · by trade: {trade}': '{cls} · métier d’origine : {trade}',
 
   // ── Summon ─────────────────────────────────────────────────────────────────
   'A ten-pull costs {gold} Gold.': 'Une invocation ×10 coûte {gold} or.',
