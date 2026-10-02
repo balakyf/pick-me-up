@@ -71,7 +71,9 @@ export function SummonReveal({ heroes, masterLevel, pool = 'advanced', onClose, 
 
   const star = stars[idx] ?? 1
   const steps = beamSteps(star, reduced, rareAt)
-  const tier: Tier = steps[Math.min(step, steps.length - 1)]!
+  // While the beam rises it may still be teasing; once the card turns, it shows the truth
+  // (a click that skips the beam must not leave a 4★ card in the 3★ blue).
+  const tier: Tier = phase === 'card' ? tierOf(star) : steps[Math.min(step, steps.length - 1)]!
 
   const flip = useCallback(() => {
     setPhase('card')
