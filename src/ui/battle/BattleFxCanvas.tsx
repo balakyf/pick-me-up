@@ -13,6 +13,7 @@ import {
   type Particle,
   type WeatherKind,
 } from './battleFx'
+import { fxFlash, fxOps, type FxCast } from './skillFx'
 
 /** What the scene can ask of the particle layer. */
 export interface FxHandle {
@@ -20,9 +21,21 @@ export interface FxHandle {
   burst(kind: BurstKind, element: Element, x: number, y: number, dir: 1 | -1): void
   /** Hit-stop: hold every particle still for `ms`. */
   freeze(ms: number): void
+  /** Lane I: a skill's effect (skillFx.ts) playing over `ms` real milliseconds. */
+  skill(cast: FxCast, ms: number): void
 }
 
 const MAX_PARTICLES = 500
+/** A phone keeps fewer particles in the air (lane I). */
+const MAX_PARTICLES_PHONE = 220
+/** At most this many skill effects at once (a late fight's casts overlap). */
+const MAX_CASTS = 6
+
+interface LiveCast {
+  cast: FxCast
+  ms: number
+  elapsed: number
+}
 
 /**
  * The battle's particle layer: act weather drifting over the stage and the sparks of
@@ -31,22 +44,38 @@ const MAX_PARTICLES = 500
  */
 export const BattleFxCanvas = forwardRef<
   FxHandle,
-  { width: number; height: number; horizon: number; weather: WeatherKind; density: number }
->(function BattleFxCanvas({ width, height, horizon, weather, density }, ref) {
+  {
+    width: number
+    height: number
+    horizon: number
+    weather: WeatherKind
+    density: number
+    /** A phone: fewer particles at once. */
+    phone?: boolean
+    /** Full-stage flashes are allowed (the Settings window; reduced motion turns them off). */
+    flashes?: boolean
+  }
+>(function BattleFxCanvas({ width, height, horizon, weather, density, phone = false, flashes = true }, ref) {
   const cv = useRef<HTMLCanvasElement | null>(null)
-  const sim = useRef({ weather: [] as Particle[], sparks: [] as Particle[], carry: [] as number[], frozenUntil: 0 })
-  const cfg = useRef({ width, height, horizon, weather, density })
-  cfg.current = { width, height, horizon, weather, density }
+  const sim = useRef({ weather: [] as Particle[], sparks: [] as Particle[], carry: [] as number[], frozenUntil: 0, casts: [] as LiveCast[] })
+  const cfg = useRef({ width, height, horizon, weather, density, phone, flashes })
+  cfg.current = { width, height, horizon, weather, density, phone, flashes }
+  const cap = () => (cfg.current.phone ? MAX_PARTICLES_PHONE : MAX_PARTICLES)
 
   useImperativeHandle(ref, () => ({
     burst(kind, element, x, y, dir) {
       const s = sim.current
       const ps = spawnBurst(burstParams(kind, element, dir, Math.max(0.5, cfg.current.density)), x, y, Math.random)
       s.sparks.push(...ps)
-      if (s.sparks.length > MAX_PARTICLES) s.sparks.splice(0, s.sparks.length - MAX_PARTICLES)
+      if (s.sparks.length > cap()) s.sparks.splice(0, s.sparks.length - cap())
     },
     freeze(ms) {
       sim.current.frozenUntil = performance.now() + ms
+    },
+    skill(cast, ms) {
+      const s = sim.current
+      s.casts.push({ cast, ms: Math.max(120, ms), elapsed: 0 })
+      if (s.casts.length > MAX_CASTS) s.casts.splice(0, s.casts.length - MAX_CASTS)
     },
   }))
 
@@ -84,10 +113,12 @@ export const BattleFxCanvas = forwardRef<
         spec.streams.forEach((st, i) => {
           const { n, carry } = emitCount(st.rate, dt, c.density, c.width, s.carry[i] ?? 0)
           s.carry[i] = carry
-          for (let k = 0; k < n && s.weather.length < MAX_PARTICLES; k++) s.weather.push(spawnWeather(st, c.width, c.height, c.horizon, Math.random))
+          for (let k = 0; k < n && s.weather.length < cap(); k++) s.weather.push(spawnWeather(st, c.width, c.height, c.horizon, Math.random))
         })
         s.weather = stepParticles(s.weather, dt, c.width, c.height)
         s.sparks = stepParticles(s.sparks, dt, c.width, c.height)
+        for (const lc of s.casts) lc.elapsed += dt * 1000
+        s.casts = s.casts.filter((lc) => lc.elapsed < lc.ms)
       }
       ctx.clearRect(0, 0, c.width, c.height)
       for (const list of [s.weather, s.sparks]) {
@@ -97,6 +128,22 @@ export const BattleFxCanvas = forwardRef<
           ctx.fillStyle = p.color
           ctx.fillRect(Math.round(p.x), Math.round(p.y), p.w, p.h)
         }
+      }
+      // Skills' effects (lane I): whole logical pixels, drawn over the sparks.
+      let flash: string | null = null
+      for (const lc of s.casts) {
+        const t = lc.elapsed / lc.ms
+        for (const op of fxOps(lc.cast, t)) {
+          ctx.globalAlpha = op.alpha
+          ctx.fillStyle = op.color
+          ctx.fillRect(op.x, op.y, op.w, op.h)
+        }
+        flash ??= c.flashes ? fxFlash(lc.cast.profile, t) : null
+      }
+      if (flash) {
+        ctx.globalAlpha = 0.28
+        ctx.fillStyle = flash
+        ctx.fillRect(0, 0, c.width, c.height)
       }
       ctx.globalAlpha = 1
     }
