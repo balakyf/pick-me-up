@@ -11,7 +11,8 @@ import type { LookSource } from '../pixel/look'
 import { ELEMENT_VIS } from '../bits'
 import { t } from '../i18n/i18n'
 import { attackStyle, choreograph, type AttackStyle } from './choreo'
-import { actionSkillId, buildFrames, DURATION, HERO_DEATH_MS, HITSTOP_MS, layout, MOURN_LINGER_MS, type Snap } from './battleFrames'
+import { actionSkillId, buildFrames, DURATION, eventActor, HERO_DEATH_MS, HITSTOP_MS, layout, type Snap } from './battleFrames'
+import { useMourning } from './useMourning'
 import { devFxFloor, layerUrls, punch, shake, useReducedMotion } from './stageFx'
 import { UnitSprite } from './UnitSprite'
 import { DamagePopups, popupEvents } from './DamagePopups'
@@ -46,11 +47,14 @@ export function BattleScene({
   state,
   onDone,
   orders,
+  nonLethal = false,
 }: {
   log: CombatLog
   state: GameState | null
   onDone: () => void
   orders?: BattleOrders
+  /** A trial (the weekly echo): nobody dies, so no death moment and no DEFEAT. */
+  nonLethal?: boolean
 }) {
   const [log, setLog] = useState(initialLog)
   const [aim, setAim] = useState<Aim>(null)
@@ -62,7 +66,7 @@ export function BattleScene({
   }
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  const frames = useMemo<Snap[]>(() => buildFrames(log, byId, nameOf), [log])
+  const frames = useMemo<Snap[]>(() => buildFrames(log, byId, nameOf, { nonLethal }), [log])
 
   const [cursor, setCursor] = useState(0)
   // Battle music while the scene is up; the scene underneath gets its theme back after.
@@ -90,8 +94,8 @@ export function BattleScene({
     let ms = (ev ? DURATION[ev.kind] : 400) / speed
     // Hit-stop: a critical blow freezes the frame for a beat.
     if (shown?.kind === 'hit' && shown.crit) ms += HITSTOP_MS
-    // A hero's death is not rushed, whatever the speed.
-    if (shown?.kind === 'death' && byId[shown.unitId]?.side === 'hero' && !byId[shown.unitId]?.isNpc) ms = Math.max(ms, HERO_DEATH_MS / Math.min(speed, 2))
+    // A hero's death is not rushed, whatever the speed (a trial's knock-out is).
+    if (!nonLethal && shown?.kind === 'death' && byId[shown.unitId]?.side === 'hero' && !byId[shown.unitId]?.isNpc) ms = Math.max(ms, HERO_DEATH_MS / Math.min(speed, 2))
     const tm = setTimeout(() => setCursor((c) => Math.min(frames.length - 1, c + 1)), ms)
     return () => clearTimeout(tm)
   }, [cursor, playing, atEnd, speed, frames.length, log.events, byId])
@@ -143,10 +147,12 @@ export function BattleScene({
   // Choreography: who runs where, who fires what (see choreo.ts).
   const sizeOf = (u: CombatUnitInit) => (u.side === 'hero' ? { w: 24, h: 32 } : enemySize(u.name, u.element))
   const style = useMemo<AttackStyle | null>(() => {
-    if (!current || !('actorId' in current)) return null
-    // The action's skill comes from its 'act' (hits and misses follow it).
-    const skillId = actionSkillId(log.events, cursor - 1, current.actorId)
-    const u = byId[current.actorId]
+    const actor = eventActor(current)
+    if (!actor) return null
+    // The action's skill comes from its 'act' (hits and misses follow it); a follow-up
+    // is the friend's own basic strike, with their own projectile.
+    const skillId = actionSkillId(log.events, cursor - 1, actor)
+    const u = byId[actor]
     return u ? attackStyle(u, skillId, sizeOf(u).w) : null
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [current?.seq, log])
@@ -170,24 +176,15 @@ export function BattleScene({
   const outcome = log.outcome
 
   // The death moment: the world greys, the fallen hero sinks slowly, their last words…
+  // (A trial has no deaths: a hero who drops is only out.)
   const fallen =
-    current?.kind === 'death' && byId[current.unitId]?.side === 'hero' && !byId[current.unitId]?.isNpc ? byId[current.unitId]! : null
+    !nonLethal && current?.kind === 'death' && byId[current.unitId]?.side === 'hero' && !byId[current.unitId]?.isNpc ? byId[current.unitId]! : null
   // …which linger a moment after the replay moves on, then fade.
-  const [mourning, setMourning] = useState<{ unit: CombatUnitInit; words: string; seq: number; fading: boolean } | null>(null)
-  useEffect(() => {
-    if (!fallen || current?.kind !== 'death') return
-    const seq = current.seq
-    const words = state ? lastWords(state, { heroId: fallen.id as HeroId, name: fallen.name }) : '…'
-    setMourning({ unit: fallen, words, seq, fading: false })
-    const hold = HERO_DEATH_MS / Math.min(speed, 2) + MOURN_LINGER_MS
-    const fade = setTimeout(() => setMourning((m) => (m && m.seq === seq ? { ...m, fading: true } : m)), hold)
-    const gone = setTimeout(() => setMourning((m) => (m && m.seq === seq ? null : m)), hold + 600)
-    return () => {
-      clearTimeout(fade)
-      clearTimeout(gone)
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [current?.seq, log])
+  const mourning = useMourning(
+    fallen && current ? { unit: fallen, seq: current.seq } : null,
+    (u) => (state ? lastWords(state, { heroId: u.id as HeroId, name: u.name }) : '…'),
+    speed,
+  )
 
   // Impact juice for each blow as it lands: element sparks, and on a crit the hit-stop,
   // the camera punch and the heavy shake; a killing blow gets a smaller punch.
@@ -261,11 +258,20 @@ export function BattleScene({
     setRetreatArmed(false)
     setPlaying(false)
   }
+  /** Retreat throws the fight away: the first press (key or click) asks, the second sounds it. */
+  const retreat = () => {
+    if (retreatArmed) give({ tick: tick + 1, kind: 'retreat' })
+    else {
+      setRetreatArmed(true)
+      setAim(null)
+      setPlaying(false)
+    }
+  }
 
   // Keyboard: the battle is a modal overlay, so it listens first (capture phase) and
   // keeps every key from reaching the lobby or the windows underneath.
-  const live = useRef({ atEnd, retreatArmed, hasOrders: !!orders, give, toggleAim, onDone, tick, last: frames.length - 1 })
-  live.current = { atEnd, retreatArmed, hasOrders: !!orders, give, toggleAim, onDone, tick, last: frames.length - 1 }
+  const live = useRef({ atEnd, hasOrders: !!orders, retreat, toggleAim, onDone, last: frames.length - 1 })
+  live.current = { atEnd, hasOrders: !!orders, retreat, toggleAim, onDone, last: frames.length - 1 }
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (isTypingTarget(e.target)) return
@@ -297,14 +303,7 @@ export function BattleScene({
           if (L.hasOrders) L.toggleAim(act.kind)
           return
         case 'retreat':
-          if (!L.hasOrders) return
-          // Retreat throws the fight away: the first press asks, the second sounds it.
-          if (L.retreatArmed) L.give({ tick: L.tick + 1, kind: 'retreat' })
-          else {
-            setRetreatArmed(true)
-            setAim(null)
-            setPlaying(false)
-          }
+          if (L.hasOrders) L.retreat()
           return
         case 'escape':
           setAim(null)
@@ -321,7 +320,7 @@ export function BattleScene({
   const stagePxW = Math.round(stageW * zoom)
 
   return (
-    <div className={`battle ${reduced ? 'calm' : ''} ${beside ? 'beside' : ''}`}>
+    <div className={`battle ${reduced ? 'calm' : ''} ${beside ? 'beside' : ''} ${nonLethal ? 'trial' : ''}`}>
       <div
         ref={wrapRef}
         className={`battle-stage-wrap ${aim ? 'aiming' : ''} ${fallen ? 'death-moment' : ''}`}
@@ -344,7 +343,8 @@ export function BattleScene({
                 if (!snap.visible[u.id] && u.side === 'enemy') return null
                 const p = pos[u.id]!
                 const isHero = u.side === 'hero'
-                const acting = snap.actor === u.id && (current?.kind === 'act' || current?.kind === 'hit' || current?.kind === 'miss')
+                const acting =
+                  snap.actor === u.id && (current?.kind === 'act' || current?.kind === 'hit' || current?.kind === 'miss' || current?.kind === 'followup')
                 const hurt = snap.target === u.id && current?.kind === 'hit'
                 const skillHit = hurt && snap.skill !== null
                 const dead = !!snap.dead[u.id]
@@ -402,7 +402,7 @@ export function BattleScene({
 
           {fallen && <DeathVeil />}
 
-          {atEnd && <ResultBanner outcome={outcome} />}
+          {atEnd && <ResultBanner outcome={outcome} nonLethal={nonLethal} />}
           {card && <DeathCard key={card.unit.id} unit={card.unit} words={card.words} fading={card.fading} bust={heroBustUrl(heroSrc(card.unit))} />}
         </div>
         <div className="battle-caption pframe">{snap.caption}</div>
@@ -431,7 +431,7 @@ export function BattleScene({
           onDone={onDone}
           orders={
             orders
-              ? { aim, left: ordersLeft, retreatArmed, onAim: toggleAim, onRetreat: () => give({ tick: tick + 1, kind: 'retreat' }) }
+              ? { aim, left: ordersLeft, retreatArmed, onAim: toggleAim, onRetreat: retreat }
               : null
           }
           kbd={kbd}

@@ -60,26 +60,28 @@ export function choreograph(
   element: Element,
 ): { poses: Record<string, Pose>; shot: Shot | null } {
   const poses: Record<string, Pose> = {}
-  if (!e || (e.kind !== 'act' && e.kind !== 'hit' && e.kind !== 'miss' && e.kind !== 'guard')) return { poses, shot: null }
-  const a = pos[e.actorId]
+  if (!e || (e.kind !== 'act' && e.kind !== 'hit' && e.kind !== 'miss' && e.kind !== 'guard' && e.kind !== 'followup')) return { poses, shot: null }
+  // A follow-up is the friend's own strike: they move (or loose a shot) like an 'act'.
+  const actorId = e.kind === 'followup' ? e.unitId : e.actorId
+  const a = pos[actorId]
   const tgt = pos[e.targetId]
-  const actor = byId[e.actorId]
-  if (!a || !tgt || !actor || e.actorId === e.targetId) return { poses, shot: null }
+  const actor = byId[actorId]
+  if (!a || !tgt || !actor || actorId === e.targetId) return { poses, shot: null }
   const toward = Math.sign(tgt.x - a.x) || (actor.side === 'hero' ? -1 : 1)
   const s = style ?? 'melee'
   if (s === 'melee') {
     // Stop just short of the target, on the attacker's side of it.
-    const gap = Math.round(widthOf(e.targetId) / 2 + widthOf(e.actorId) / 2 - 4)
-    poses[e.actorId] = { dx: tgt.x - toward * gap - a.x, dy: tgt.y - a.y, z: tgt.y + 1 }
+    const gap = Math.round(widthOf(e.targetId) / 2 + widthOf(actorId) / 2 - 4)
+    poses[actorId] = { dx: tgt.x - toward * gap - a.x, dy: tgt.y - a.y, z: tgt.y + 1 }
   } else {
-    poses[e.actorId] = { dx: toward * (s === 'lunge' ? 14 : 6), dy: 0 }
+    poses[actorId] = { dx: toward * (s === 'lunge' ? 14 : 6), dy: 0 }
   }
   if (e.kind === 'hit') poses[e.targetId] = { dx: toward * (e.crit ? 8 : 4), dy: 0 }
   const shot: Shot | null =
-    e.kind === 'act' && (s === 'arrow' || s === 'magic')
+    (e.kind === 'act' || e.kind === 'followup') && (s === 'arrow' || s === 'magic')
       ? {
           style: s,
-          from: { x: a.x + toward * 8, y: a.y - Math.round(heightOf(e.actorId) * 0.6) },
+          from: { x: a.x + toward * 8, y: a.y - Math.round(heightOf(actorId) * 0.6) },
           to: { x: tgt.x, y: tgt.y - Math.round(heightOf(e.targetId) / 2) },
           element,
           key: e.seq,
@@ -88,14 +90,32 @@ export function choreograph(
   return { poses, shot }
 }
 
-/** Damage numbers on one target stack upward instead of piling on each other. */
-export function popupOffsets<T extends { target: string }>(popups: readonly T[]): number[] {
-  const seen = new Map<string, number>()
-  const out: number[] = []
-  for (let i = popups.length - 1; i >= 0; i--) {
-    const k = seen.get(popups[i]!.target) ?? 0
-    seen.set(popups[i]!.target, k + 1)
-    out[i] = k
+/** A damage number's box on the stage: centred on `x`, its top at `y`, before lifting. */
+export interface PopupBox {
+  x: number
+  y: number
+  w: number
+  h: number
+}
+
+/**
+ * Lanes for damage numbers: how many px each one rises so that no two boxes overlap —
+ * neither on the same target (they stack) nor on neighbours standing side by side (a
+ * crit on one and a hit on the next never merge into one long number). The newest
+ * popup keeps its place; older ones make way, upward, in small steps.
+ */
+export function popupLanes(boxes: readonly PopupBox[], step = 3, maxLift = 90): number[] {
+  const placed: { l: number; r: number; t: number; b: number }[] = []
+  const out: number[] = new Array(boxes.length).fill(0)
+  const at = (p: PopupBox, lift: number) => ({ l: p.x - p.w / 2, r: p.x + p.w / 2, t: p.y - lift, b: p.y - lift + p.h })
+  const clash = (r: { l: number; r: number; t: number; b: number }) =>
+    placed.some((q) => r.l < q.r + 1 && q.l < r.r + 1 && r.t < q.b + 1 && q.t < r.b + 1)
+  for (let i = boxes.length - 1; i >= 0; i--) {
+    const p = boxes[i]!
+    let lift = 0
+    while (lift < maxLift && clash(at(p, lift))) lift += step
+    placed.push(at(p, lift))
+    out[i] = lift
   }
   return out
 }

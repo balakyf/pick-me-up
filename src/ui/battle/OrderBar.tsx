@@ -46,7 +46,7 @@ export function OrderBar({
         onClick={onRetreat}
         title={t('End the fight now: the living come home, nothing is won')}
       >
-        🏳 {t('Retreat')}
+        🏳 {retreatArmed ? t('Sound the retreat?') : t('Retreat')}
         {kbd(BATTLE_KEYS.retreat)}
       </button>
     </div>

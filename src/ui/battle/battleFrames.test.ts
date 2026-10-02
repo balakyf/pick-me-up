@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { CombatEvent, CombatLog, CombatUnitInit } from '../../engine/types'
-import { actionSkillId, buildFrames, DURATION, layout } from './battleFrames'
+import { actionSkillId, buildFrames, DURATION, eventActor, layout, shownLevel } from './battleFrames'
 
 const unit = (id: string, side: 'hero' | 'enemy', line: CombatUnitInit['line'] = 'front'): CombatUnitInit => ({
   id,
@@ -50,5 +50,41 @@ describe('battleFrames', () => {
   it('puts the party on the right and the foes on the left', () => {
     const pos = layout(log)
     expect(pos.h1!.x).toBeGreaterThan(pos.e1!.x)
+  })
+
+  it('a follow-up is the friend striking: their element, their basic strike', () => {
+    const fl: CombatEvent[] = [
+      { seq: 0, tick: 0, kind: 'battle-start', heroIds: ['h1', 'h2'], enemyIds: ['e1'] },
+      { seq: 1, tick: 1, kind: 'act', actorId: 'h1', skillId: 'basic', targetId: 'e1' },
+      { seq: 2, tick: 1, kind: 'hit', actorId: 'h1', targetId: 'e1', amount: 10, crit: false, hpAfter: 90 },
+      { seq: 3, tick: 1, kind: 'followup', unitId: 'h2', allyId: 'h1', targetId: 'e1' },
+      { seq: 4, tick: 1, kind: 'hit', actorId: 'h2', targetId: 'e1', amount: 5, crit: false, hpAfter: 85 },
+    ]
+    const units = [unit('h1', 'hero'), { ...unit('h2', 'hero'), element: 'water' as const }, unit('e1', 'enemy')]
+    const l: CombatLog = { ...log, unitsInit: units, events: fl }
+    const frames = buildFrames(l, Object.fromEntries(units.map((u) => [u.id, u])), (id) => id)
+    expect(frames[4]!.element).toBe('water')
+    expect(frames[4]!.actor).toBe('h2')
+    expect(eventActor(fl[3])).toBe('h2')
+    expect(actionSkillId(fl, 4, 'h2')).toBe('basic')
+    // The first striker's own hits still find their act past the friend's follow-up.
+    expect(actionSkillId(fl, 2, 'h1')).toBe('basic')
+  })
+
+  it('a trial: heroes who drop are out, and it ends without a defeat', () => {
+    const wipe: CombatEvent[] = [
+      { seq: 0, tick: 0, kind: 'battle-start', heroIds: ['h1'], enemyIds: ['e1'] },
+      { seq: 1, tick: 1, kind: 'death', unitId: 'h1' },
+      { seq: 2, tick: 1, kind: 'end', outcome: 'wipe' },
+    ]
+    const frames = buildFrames({ ...log, events: wipe, outcome: 'wipe' }, byId, (id) => id, { nonLethal: true })
+    expect(frames[2]!.caption).toBe('h1 is out of the trial.')
+    expect(frames[3]!.caption).toBe('The trial ends. Nobody dies here.')
+  })
+
+  it('shows the template display level over the real one', () => {
+    expect(shownLevel({ level: 60, templateId: 'lv999_creature' })).toBe(999)
+    expect(shownLevel({ level: 12, templateId: 'goblin' })).toBe(12)
+    expect(shownLevel({ level: 7 })).toBe(7)
   })
 })

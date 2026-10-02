@@ -68,7 +68,7 @@ export function BattleControls({
               {kbd(BATTLE_KEYS.close)}
             </span>
           )}
-          {orders?.retreatArmed && <span className="aim-hint">{t('Press R again to sound the retreat (Esc to cancel)')}</span>}
+          {orders?.retreatArmed && <span className="aim-hint">{t('Click Retreat or press R again to sound it (Esc to cancel)')}</span>}
         </>
       ) : (
         <button className="pbtn primary big" onClick={onDone}>

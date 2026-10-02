@@ -19,6 +19,7 @@ import { PixelWindow } from '../kit'
 import { BattleScene } from '../battle/BattleScene'
 import { cpOf, ELEMENT_VIS } from '../bits'
 import { t } from '../i18n/i18n'
+import { tn } from '../text'
 import { HeroChip, lootLine } from './common'
 import './challenge.css'
 
@@ -42,21 +43,23 @@ export function ruleName(rule: WeeklyRule): string {
 function ruleBlurb(rule: WeeklyRule): string {
   switch (rule.id) {
     case 'lowStar':
-      return t('The Crack only lets through heroes of 3★ or less. Old hands, prove your recruits.')
+      return t('The echoes only answer heroes of 3★ or less. Old hands, prove your recruits.')
     case 'element':
       return t('Only heroes of one element may enter. The rest of the roster watches.')
     case 'duo':
-      return t('Two heroes, back to back, against everything the Crack sends.')
+      return t('Two heroes, back to back, against everything the echoes send.')
     case 'tough':
       return t('The echoes come back thicker than they were. Every enemy has half again its HP.')
     case 'noMages':
-      return t('The Crack swallows spells. Blades, bows and fists only.')
+      return t('The echoes swallow spells. Blades, bows and fists only.')
   }
 }
 
 /**
- * The weekly Crack of Time trial: this week's rule, the gauntlet, three attempts, the
- * Master's best, and the thresholds that pay once a week. A simulation — nobody dies.
+ * The weekly Echo Trial: this week's rule, the gauntlet, three attempts, the Master's
+ * best, and the thresholds that pay once a week. A simulation — nobody dies, so its
+ * replay ends on 'Trial ended', never on DEFEAT. (It used to be called the Crack of Time
+ * trial, which collided with the ML20 Crack of Time; it is its own place now.)
  */
 export function WeeklyTrial({ state, store, onClose }: { state: GameState; store: Store; onClose: () => void }) {
   const nowWorld = toWorldTime(Date.now())
@@ -92,6 +95,7 @@ export function WeeklyTrial({ state, store, onClose }: { state: GameState; store
       <BattleScene
         log={watch.log}
         state={state}
+        nonLethal
         onDone={() => {
           setResult(watch)
           setWatch(null)
@@ -101,9 +105,9 @@ export function WeeklyTrial({ state, store, onClose }: { state: GameState; store
   }
 
   return (
-    <PixelWindow title={t('Crack of Time · weekly trial')} icon="⟡" onClose={onClose} wide>
+    <PixelWindow title={t('The Echo Trial · weekly')} icon="⟡" onClose={onClose} wide>
       {!weeklyUnlocked(state) ? (
-        <div className="muted">{t('The Crack replays its trials for Masters past F{n}.', { n: W.unlockFloor })}</div>
+        <div className="muted">{t('The tower replays its echoes for Masters past F{n}.', { n: W.unlockFloor })}</div>
       ) : result ? (
         <div className="raid-result">
           <div className="big-outcome win">{t('{n} waves', { n: result.score })}</div>
@@ -115,7 +119,7 @@ export function WeeklyTrial({ state, store, onClose }: { state: GameState; store
           ) : (
             <div className="muted small">{t('No new threshold reached this time.')}</div>
           )}
-          <div className="muted small">{t('It was only an echo: everyone walks back out of the Crack unharmed.')}</div>
+          <div className="muted small">{t('It was only an echo: everyone walks back out unharmed.')}</div>
           <div style={{ display: 'flex', gap: 10, justifyContent: 'center', marginTop: 12 }}>
             <button className="pbtn" onClick={() => setWatch(result)}>
               ▸ {t('Watch again')}
@@ -167,7 +171,7 @@ export function WeeklyTrial({ state, store, onClose }: { state: GameState; store
             </button>
             <span className="spacer" />
             <button className="pbtn primary" disabled={why !== null} onClick={enter}>
-              ⟡ {t('Enter the Crack')}
+              ⟡ {t('Enter the echo')}
             </button>
           </div>
           {why && <div className="muted small" style={{ color: 'var(--warn)' }}>{t(why)}</div>}
@@ -178,7 +182,7 @@ export function WeeklyTrial({ state, store, onClose }: { state: GameState; store
   )
 }
 
-/** A small launcher for the lobby's Crack of Time place (shown once the Crack is open). */
+/** A small launcher for the Echo Trial (also reachable from the Crack of Time once it opens). */
 export function WeeklyTrialLauncher({ state, store }: { state: GameState; store: Store }) {
   const [open, setOpen] = useState(false)
   const nowWorld = toWorldTime(Date.now())
@@ -186,10 +190,10 @@ export function WeeklyTrialLauncher({ state, store }: { state: GameState; store:
   return (
     <div className="lr-action">
       <div className="lr-action-note">
-        ⟡ {t('Weekly trial: {rule}', { rule: ruleName(rule) })} · {t('{n} attempts left', { n: weeklyAttemptsLeft(state, nowWorld) })}
+        ⟡ {t('Echo Trial: {rule}', { rule: ruleName(rule) })} · {tn(weeklyAttemptsLeft(state, nowWorld), '1 attempt left', '{n} attempts left')}
       </div>
       <button className="pbtn" onClick={() => setOpen(true)} disabled={!weeklyUnlocked(state)}>
-        {t('Open the weekly trial')}
+        {t('Open the Echo Trial')}
       </button>
       {open && <WeeklyTrial state={state} store={store} onClose={() => setOpen(false)} />}
     </div>

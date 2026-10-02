@@ -56,10 +56,29 @@ afterEach(() => {
   container.remove()
 })
 
-function mount(props: { onDone?: () => void; orders?: BattleOrders } = {}) {
+function mount(props: { onDone?: () => void; orders?: BattleOrders; log?: CombatLog; nonLethal?: boolean } = {}) {
   act(() => {
-    root.render(<BattleScene log={syntheticLog()} state={null} onDone={props.onDone ?? (() => {})} orders={props.orders} />)
+    root.render(
+      <BattleScene log={props.log ?? syntheticLog()} state={null} onDone={props.onDone ?? (() => {})} orders={props.orders} nonLethal={props.nonLethal} />,
+    )
   })
+}
+
+/** A fight where hero h1 falls, then the party wipes. */
+function deathLog(): CombatLog {
+  const ev: CombatEvent[] = [
+    { seq: 0, tick: 0, kind: 'battle-start', heroIds: ['h1', 'h2'], enemyIds: ['e1'] },
+    { seq: 1, tick: 1, kind: 'act', actorId: 'e1', skillId: 'basic', targetId: 'h1' },
+    { seq: 2, tick: 1, kind: 'hit', actorId: 'e1', targetId: 'h1', amount: 100, crit: true, hpAfter: 0 },
+    { seq: 3, tick: 1, kind: 'death', unitId: 'h1' },
+    { seq: 4, tick: 2, kind: 'act', actorId: 'e1', skillId: 'basic', targetId: 'h2' },
+    { seq: 5, tick: 2, kind: 'hit', actorId: 'e1', targetId: 'h2', amount: 10, crit: false, hpAfter: 90 },
+    { seq: 6, tick: 3, kind: 'act', actorId: 'e1', skillId: 'basic', targetId: 'h2' },
+    { seq: 7, tick: 3, kind: 'hit', actorId: 'e1', targetId: 'h2', amount: 90, crit: false, hpAfter: 0 },
+    { seq: 8, tick: 3, kind: 'death', unitId: 'h2' },
+    { seq: 9, tick: 3, kind: 'end', outcome: 'wipe' },
+  ]
+  return { seed: 1, floor: 3, encounterContext: 'tower', unitsInit: [unit('h1', 'hero'), unit('h2', 'hero'), unit('e1', 'enemy', 50)], events: ev, outcome: 'wipe', rngDraws: 0 }
 }
 
 function press(key: string, target: EventTarget = window) {
@@ -126,10 +145,90 @@ describe('BattleScene', () => {
     press('Escape')
     expect(text()).not.toContain('Click an enemy…')
     press('r')
-    expect(text()).toContain('Press R again')
+    expect(text()).toContain('press R again')
     expect(give).not.toHaveBeenCalled()
     press('r')
     expect(give).toHaveBeenCalledTimes(1)
     expect((give.mock.calls[0] as unknown as [{ kind: string }])[0].kind).toBe('retreat')
+  })
+
+  it('the Retreat button asks first, like the R key: one stray click throws nothing away', () => {
+    const give = vi.fn(() => null)
+    mount({ orders: { left: 1, give } })
+    const retreat = () => Array.from(container.querySelectorAll('button')).find((b) => /Retreat|Sound the retreat/.test(b.textContent ?? ''))!
+    act(() => retreat().click())
+    expect(give).not.toHaveBeenCalled()
+    expect(text()).toContain('Sound the retreat?')
+    act(() => retreat().click())
+    expect(give).toHaveBeenCalledTimes(1)
+  })
+
+  it("the fallen hero's card fades and goes once the replay moves on", () => {
+    vi.useFakeTimers()
+    try {
+      mount({ log: deathLog() })
+      let sawCard = false
+      for (let i = 0; i < 60; i++) {
+        act(() => {
+          vi.advanceTimersByTime(250)
+        })
+        if (container.querySelector('.death-card')) sawCard = true
+      }
+      expect(sawCard).toBe(true)
+      expect(text()).toContain('DEFEAT')
+      // h2 fell last: give its card time to linger and fade too.
+      act(() => {
+        vi.advanceTimersByTime(6000)
+      })
+      expect(container.querySelector('.death-card')).toBeNull()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('a trial ends without DEFEAT, corpses or a death moment', () => {
+    mount({ log: deathLog(), nonLethal: true })
+    press('s')
+    expect(text()).toContain('TRIAL ENDED')
+    expect(text()).toContain('Nobody dies here.')
+    expect(text()).not.toContain('DEFEAT')
+    expect(container.querySelector('.battle.trial')).not.toBeNull()
+    expect(container.querySelector('.death-card')).toBeNull()
+  })
+
+  it('a wave of more than six keeps an HP bar per foe, each one a Focus target', () => {
+    const foes = Array.from({ length: 9 }, (_, i) => unit(`e${i}`, 'enemy', 50))
+    const log: CombatLog = {
+      seed: 1,
+      floor: 60,
+      encounterContext: 'tower',
+      unitsInit: [unit('h1', 'hero'), ...foes],
+      events: [
+        { seq: 0, tick: 0, kind: 'battle-start', heroIds: ['h1'], enemyIds: foes.map((f) => f.id) },
+        { seq: 1, tick: 1, kind: 'act', actorId: 'h1', skillId: 'basic', targetId: 'e0' },
+        { seq: 2, tick: 1, kind: 'hit', actorId: 'h1', targetId: 'e0', amount: 5, crit: false, hpAfter: 45 },
+        { seq: 3, tick: 2, kind: 'end', outcome: 'timeout' },
+      ],
+      outcome: 'timeout',
+      rngDraws: 0,
+    }
+    vi.useFakeTimers()
+    try {
+      const give = vi.fn(() => null)
+      mount({ log, orders: { left: 2, give } })
+      // The foes march in on the first beat.
+      act(() => {
+        vi.advanceTimersByTime(750)
+      })
+      const rows = container.querySelectorAll('.battle-foes.many .foe-row')
+      expect(rows).toHaveLength(9)
+      expect(container.querySelectorAll('.battle-foes.many .foe-hp')).toHaveLength(9)
+      press('f')
+      act(() => (rows[4] as HTMLElement).click())
+      expect(give).toHaveBeenCalledTimes(1)
+      expect((give.mock.calls[0] as unknown as [{ kind: string; enemyId: string }])[0]).toMatchObject({ kind: 'focus', enemyId: 'e4' })
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

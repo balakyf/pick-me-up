@@ -4,7 +4,7 @@
  * the screen. BattleScene plays these frames; nothing here touches the DOM.
  */
 import type { CombatEvent, CombatLog, CombatUnitInit, Element, Line } from '../../engine/types'
-import { SKILLS } from '../../engine/content'
+import { ENEMY_TEMPLATES, SKILLS } from '../../engine/content'
 import { ELEMENT_VIS } from '../bits'
 import { t } from '../i18n/i18n'
 import { DEPTH_DURATION, depthSnap } from './synergyCaptions'
@@ -54,6 +54,11 @@ export const MOURN_LINGER_MS = 1200
 const HERO_X: Record<Line, number> = { front: 250, mid: 286, back: 322 }
 const ENEMY_X: Record<Line, number> = { front: 140, mid: 102, back: 64 }
 
+/** The level a unit shows: an enemy template may override it (the F10 Lv999 Creature). */
+export function shownLevel(u: Pick<CombatUnitInit, 'level' | 'templateId'>): number {
+  return (u.templateId !== undefined ? ENEMY_TEMPLATES[u.templateId]?.displayLevel : undefined) ?? u.level
+}
+
 export function skillName(id: string): string {
   if (id === 'basic') return t('Attack')
   return t(SKILLS[id]?.name ?? 'Strike')
@@ -92,11 +97,17 @@ export function layout(log: CombatLog): Record<string, { x: number; y: number }>
   return pos
 }
 
+export interface FrameOpts {
+  /** A trial (the weekly echo): heroes who drop are out, not dead. */
+  nonLethal?: boolean
+}
+
 /** The frames of a replay: frame 0 is the empty field, frame i+1 follows event i. */
 export function buildFrames(
   log: CombatLog,
   byId: Record<string, CombatUnitInit>,
   nameOf: (id: string) => string,
+  opts: FrameOpts = {},
 ): Snap[] {
   const out: Snap[] = []
   let cur: Snap = {
@@ -176,7 +187,10 @@ export function buildFrames(
         break
       case 'death':
         next.dead[e.unitId] = true
-        next.caption = t('{name} falls!', { name: nameOf(e.unitId) })
+        next.caption =
+          opts.nonLethal && byId[e.unitId]?.side === 'hero'
+            ? t('{name} is out of the trial.', { name: nameOf(e.unitId) })
+            : t('{name} falls!', { name: nameOf(e.unitId) })
         break
       case 'mission':
         next.caption = t(e.note)
@@ -193,7 +207,9 @@ export function buildFrames(
       }
       case 'end':
         next.caption =
-          e.outcome === 'win'
+          opts.nonLethal && e.outcome !== 'win'
+            ? t('The trial ends. Nobody dies here.')
+            : e.outcome === 'win'
             ? t('Victory!')
             : e.outcome === 'wipe'
               ? t('The party has fallen…')
@@ -207,6 +223,11 @@ export function buildFrames(
         // Combat depth: cover, follow-ups, rivalry and the floor's conditions.
         const d = depthSnap(e, nameOf)
         if (d) Object.assign(next, d)
+        // A follow-up is the friend's own strike: their element colours the sparks.
+        if (e.kind === 'followup') {
+          next.element = byId[e.unitId]?.element ?? 'physical'
+          next.skill = null
+        }
       }
     }
     out.push(next)
@@ -215,10 +236,22 @@ export function buildFrames(
   return out
 }
 
-/** The skill behind the event at `index` (its action's 'act'); null for none. */
+/** Who strikes in this event: the actor of an act, hit, miss or guard; the friend of a follow-up. */
+export function eventActor(e: CombatEvent | undefined): string | null {
+  if (!e) return null
+  if (e.kind === 'act' || e.kind === 'hit' || e.kind === 'miss' || e.kind === 'guard') return e.actorId
+  if (e.kind === 'followup') return e.unitId
+  return null
+}
+
+/**
+ * The skill behind the event at `index`: its action's 'act', or the basic strike of a
+ * follow-up (a friend pressing the attack has no 'act' of their own). Null for none.
+ */
 export function actionSkillId(events: readonly CombatEvent[], index: number, actorId: string): string | null {
   for (let i = index; i >= 0; i--) {
     const ev = events[i]!
+    if (ev.kind === 'followup' && ev.unitId === actorId) return 'basic'
     if (ev.kind === 'act' && ev.actorId === actorId) return ev.skillId
     if (ev.kind === 'act') break
   }

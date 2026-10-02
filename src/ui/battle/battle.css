@@ -11,7 +11,7 @@
 .battle-stage { position: absolute; left: 0; top: 0; width: 384px; height: 216px; transform-origin: 0 0; }
 .battle-bg { position: absolute; inset: 0; }
 /* Units run to their target and back; timings follow the replay speed (--spd). */
-.bunit { position: absolute; transition: transform calc(0.2s / var(--spd, 1)) steps(5); }
+.bunit { position: absolute; transition: transform calc(0.2s / var(--spd, 1)) steps(5), filter 0.5s steps(4); }
 .bunit.entering { animation: marchInR calc(0.55s / var(--spd, 1)) steps(8) var(--enter-delay, 0ms) both; }
 .bunit.enemy.entering { animation-name: marchInL; }
 @keyframes marchInR { from { transform: translateX(150px); opacity: 0; } 30% { opacity: 1; } to { transform: none; } }
@@ -136,14 +136,16 @@
 .order-bar { display: inline-flex; gap: 6px; align-items: center; padding-left: 10px; border-left: 2px solid var(--line); }
 .aim-hint { color: var(--gold); animation: blink 1s steps(2) infinite; }
 .death-card {
-  position: absolute; left: 50%; top: 18px; transform: translateX(-50%); z-index: 1000;
-  display: flex; gap: 8px; align-items: center; padding: 6px 10px; width: 300px;
+  position: absolute; left: 50%; top: 20px; transform: translateX(-50%); z-index: 1000;
+  display: flex; gap: 6px; align-items: center; padding: 4px 8px; width: auto; max-width: 250px;
   background: #0c0814ee; border: 2px solid #8a7ad8; box-shadow: 0 0 0 2px #0a0714;
   animation: deathIn 0.4s steps(4) both;
 }
-.death-card img { filter: grayscale(1) brightness(0.9); border: 1px solid #8a7ad8; }
-.death-name { color: #d8d0f0; font-size: 12px; font-weight: 600; }
-.death-words { color: #fff6e0; font-size: 11px; font-style: italic; }
+.death-card img { width: 32px; height: 32px; filter: grayscale(1) brightness(0.9); border: 1px solid #8a7ad8; }
+.death-name { color: #d8d0f0; font-size: 9px; font-weight: 600; }
+.death-words { color: #fff6e0; font-size: 8px; line-height: 10px; font-style: italic; }
+.death-card.fading { animation: deathOut 0.6s steps(4) forwards; }
+@keyframes deathOut { from { opacity: 1; } to { opacity: 0; transform: translateX(-50%) translateY(-4px); } }
 @keyframes deathIn { from { opacity: 0; transform: translateX(-50%) translateY(-6px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }
 
 /* ── Battle FX (WS1): full-screen stage, parallax, weather, impact juice, keys ── */
@@ -202,8 +204,8 @@
   100% { transform: translate(-50%, -12px) scale(1); opacity: 0; }
 }
 
-/* The death moment: the world greys and narrows; the fallen hero sinks, in colour. */
-.bunit { transition: transform 0.12s steps(3), filter 0.5s steps(4); }
+/* The death moment: the world greys and narrows; the fallen hero sinks, in colour.
+   (Unit dashes keep the speed-scaled transition of `.bunit` above.) */
 .battle-fx { transition: filter 0.5s steps(4); }
 .death-moment .bg-layer, .death-moment .bunit:not(.falling), .death-moment .battle-fx { filter: grayscale(0.85) brightness(0.7); }
 .bunit.hero.ko.falling { z-index: 940 !important; }
@@ -225,12 +227,6 @@
 @keyframes cineTop { from { transform: translateY(-100%); } to { transform: none; } }
 @keyframes cineBottom { from { transform: translateY(100%); } to { transform: none; } }
 @keyframes fadeInFx { from { opacity: 0; } to { opacity: 1; } }
-.death-card { top: 20px; width: auto; max-width: 250px; padding: 4px 8px; gap: 6px; }
-.death-card img { width: 32px; height: 32px; }
-.death-card .death-name { font-size: 9px; }
-.death-card .death-words { font-size: 8px; line-height: 10px; }
-.death-card.fading { animation: deathOut 0.6s steps(4) forwards; }
-@keyframes deathOut { from { opacity: 1; } to { opacity: 0; transform: translateX(-50%) translateY(-4px); } }
 
 /* The HUD under the stage: foes | party | controls, stacking on narrow screens. */
 .battle-hud {
@@ -276,3 +272,16 @@ kbd.bkey {
 @media (prefers-reduced-motion: reduce) {
   .bg-layer { animation: none !important; }
 }
+
+/* ── Lane A: a big wave keeps its bars (compact rows), trials, the armed retreat ── */
+.battle-foes.many {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 1px 10px; align-content: start;
+  font-size: 13px; padding: 6px 10px; max-height: 140px; overflow-y: auto;
+}
+.battle-foes.many .foe-row { gap: 4px; min-width: 0; }
+.battle-foes.many .foe-hp { width: 40px; height: 6px; }
+.battle.beside .battle-foes.many { grid-template-columns: 1fr; max-height: 120px; }
+/* A trial is an echo: a hero who drops kneels, faded, but is no corpse. */
+.battle.trial .bunit.hero.ko .bsprite { transform: none; filter: saturate(0.3) brightness(0.8); opacity: 0.5; }
+.battle-banner.trial-end { color: var(--accent-2); }
+.banner-sub { display: block; margin-top: 2px; font-size: 10px; letter-spacing: 2px; color: var(--ink); }

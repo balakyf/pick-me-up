@@ -2,7 +2,16 @@ import type { CombatLog, CombatUnitInit } from '../../engine/types'
 import { t } from '../i18n/i18n'
 
 /** The word that lands on the stage when the replay ends. */
-export function ResultBanner({ outcome }: { outcome: CombatLog['outcome'] }) {
+export function ResultBanner({ outcome, nonLethal = false }: { outcome: CombatLog['outcome']; nonLethal?: boolean }) {
+  // A trial is only an echo: it ends, nobody is defeated and nobody dies.
+  if (nonLethal) {
+    return (
+      <div className={`battle-banner ${outcome === 'win' ? 'win' : 'trial-end'}`}>
+        {outcome === 'win' ? t('TRIAL CLEARED') : t('TRIAL ENDED')}
+        <span className="banner-sub">{t('Nobody dies here.')}</span>
+      </div>
+    )
+  }
   return (
     <div className={`battle-banner ${outcome === 'win' ? 'win' : 'lose'}`}>
       {outcome === 'win'
