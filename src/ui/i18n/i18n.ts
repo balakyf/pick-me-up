@@ -26,12 +26,19 @@ function initial(): Locale {
 let locale: Locale = initial()
 const listeners = new Set<() => void>()
 
+/** <html lang> follows the locale (screen readers pick their voice, browsers hyphenate). */
+function applyDocumentLang(l: Locale): void {
+  if (typeof document !== 'undefined') document.documentElement.lang = l
+}
+applyDocumentLang(locale)
+
 export function getLocale(): Locale {
   return locale
 }
 
 export function setLocale(l: Locale): void {
   locale = l
+  applyDocumentLang(l)
   try {
     window.localStorage.setItem(KEY, l)
   } catch {

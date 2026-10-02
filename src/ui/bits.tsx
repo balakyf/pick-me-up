@@ -8,6 +8,9 @@ import './skillText.css'
 import { t } from './i18n/i18n'
 import { heroCpFull, heroStatsFull, type CpContext } from '../engine/unit/trueCp'
 import { peekState } from './useGame'
+import { cachedDataUrl } from './pixel/render'
+import { ICONS, iconBitmap, type IconName } from './pixel/icons'
+import './access.css'
 
 /** Visual tokens for elements. */
 export const ELEMENT_VIS: Record<Element, { glyph: string; color: string; label: string }> = {
@@ -26,6 +29,48 @@ export const CLASS_VIS: Record<HeroClass, { glyph: string; label: string }> = {
   thief: { glyph: '🥷', label: 'Thief' },
   archer: { glyph: '🏹', label: 'Archer' },
   mage: { glyph: '🔮', label: 'Mage' },
+}
+
+/**
+ * A pixel icon (pixel/icons.ts): shape and colour, the same on every OS. Decorative by
+ * default (hidden from screen readers, the text beside it speaks); give `label` when the
+ * icon stands alone. Where no canvas draws (tests), the old glyph stands in.
+ */
+export function PxIcon({ name, size = 14, label, className }: { name: IconName; size?: number; label?: string; className?: string }) {
+  const def = ICONS[name]
+  const url = cachedDataUrl(`icon|${name}`, () => iconBitmap(name))
+  const cls = `pxicon${className ? ` ${className}` : ''}`
+  if (!url) {
+    return (
+      <span className={`${cls} pxicon-glyph`} role={label ? 'img' : undefined} aria-label={label} aria-hidden={label ? undefined : true} title={label}>
+        {def.glyph}
+      </span>
+    )
+  }
+  const h = def.rows.length + 2
+  const w = Math.max(...def.rows.map((r) => r.length)) + 2
+  return (
+    <img
+      className={`px ${cls}`}
+      src={url}
+      height={size}
+      width={Math.round((size * w) / h)}
+      alt={label ?? ''}
+      aria-hidden={label ? undefined : true}
+      title={label}
+      draggable={false}
+    />
+  )
+}
+
+/** An element as its icon (flame, drop, gust, peak, sun, moon, blade). */
+export function ElementIcon({ element, size, label }: { element: Element; size?: number; label?: boolean }) {
+  return <PxIcon name={`el-${element}`} size={size} label={label ? t(ELEMENT_VIS[element].label) : undefined} />
+}
+
+/** A class as its icon (an untrained hero gets the beginner's leaf). */
+export function ClassIcon({ heroClass, size, label }: { heroClass: HeroClass | null; size?: number; label?: boolean }) {
+  return <PxIcon name={heroClass === null ? 'cls-none' : `cls-${heroClass}`} size={size} label={label ? classLabel(heroClass) : undefined} />
 }
 
 export const STAR_COLOR: Record<Star, string> = {
@@ -148,7 +193,7 @@ export function ElementBadge({ element }: { element: Element }) {
   const v = ELEMENT_VIS[element]
   return (
     <span className="tag" style={{ color: v.color }} title={t(v.label)}>
-      {v.glyph} {t(v.label)}
+      <ElementIcon element={element} /> {t(v.label)}
     </span>
   )
 }
@@ -163,11 +208,11 @@ export function ClassBadge({ heroClass, trade }: { heroClass: HeroClass | null; 
   return (
     <>
       <span className="tag" title={title}>
-        {classGlyph(heroClass)} {classLabel(heroClass)}
+        <ClassIcon heroClass={heroClass} /> {classLabel(heroClass)}
       </span>
       {trade && heroClass === null && (
         <span className="tag class-trade" title={title}>
-          🏠 {trade}
+          <PxIcon name="trade" /> {trade}
         </span>
       )}
     </>
@@ -207,7 +252,9 @@ export function Portrait({ hero, size = 'card' }: { hero: OwnedHero; size?: 'car
   return (
     <div className={`portrait${hero.star >= 7 ? ' aura-glow' : ''}`} style={{ background: portraitBg(hero) }}>
       {src ? <img className="px" src={src} alt={hero.name} /> : <span>{initials(hero.name)}</span>}
-      <span className="p-el">{ELEMENT_VIS[hero.element].glyph}</span>
+      <span className="p-el">
+        <ElementIcon element={hero.element} size={16} label />
+      </span>
     </div>
   )
 }

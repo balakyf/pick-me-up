@@ -4,7 +4,7 @@ import type { Store } from '../../engine/store'
 import { suggestParty, heroCp } from '../../engine/scout'
 import { levelCapForStar } from '../../engine/stats'
 import { HeroCard } from '../HeroCard'
-import { CLASS_VIS, ELEMENT_VIS, STAR_COLOR, Stars, classGlyph, classLabel } from '../bits'
+import { CLASS_VIS, ClassIcon, ELEMENT_VIS, ElementIcon, STAR_COLOR, Stars, classGlyph, classLabel } from '../bits'
 import { heroBustUrl } from '../pixel/sprites'
 import { t } from '../i18n/i18n'
 import {
@@ -394,7 +394,7 @@ export function PartyScreen({ state, store }: { state: GameState; store: Store }
           <option value="all">{t('All elements')}</option>
           {(Object.keys(ELEMENT_VIS) as Element[]).map((el) => (
             <option key={el} value={el}>
-              {ELEMENT_VIS[el].glyph} {t(ELEMENT_VIS[el].label)}
+              {t(ELEMENT_VIS[el].label)}
             </option>
           ))}
         </select>
@@ -407,7 +407,7 @@ export function PartyScreen({ state, store }: { state: GameState; store: Store }
           <option value="all">{t('All classes')}</option>
           {(Object.keys(CLASS_VIS) as HeroClass[]).map((c) => (
             <option key={c} value={c}>
-              {classGlyph(c)} {classLabel(c)}
+              {classLabel(c)}
             </option>
           ))}
           <option value="none">{classLabel(null)}</option>
@@ -493,10 +493,10 @@ export function PartyScreen({ state, store }: { state: GameState; store: Store }
                     <Stars star={star} />
                   </span>
                   <span className="c-class" title={classLabel(h.heroClass)}>
-                    {classGlyph(h.heroClass)} <span className="pb-wide">{classLabel(h.heroClass)}</span>
+                    <ClassIcon heroClass={h.heroClass} /> <span className="pb-wide">{classLabel(h.heroClass)}</span>
                   </span>
                   <span className="c-el" style={{ color: ELEMENT_VIS[h.element].color }} title={t(ELEMENT_VIS[h.element].label)}>
-                    {ELEMENT_VIS[h.element].glyph} <span className="pb-wide">{t(ELEMENT_VIS[h.element].label)}</span>
+                    <ElementIcon element={h.element} /> <span className="pb-wide">{t(ELEMENT_VIS[h.element].label)}</span>
                   </span>
                   <span className="c-lv">
                     {h.xp.level}

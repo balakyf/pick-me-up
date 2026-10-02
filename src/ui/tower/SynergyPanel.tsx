@@ -5,7 +5,7 @@
 import type { BondKind, CombatBond, GameState, HeroId, Line, OwnedHero } from '../../engine/types'
 import { DEPTH, adjacentLines, bestLine, coverChance, formationNotes, partyBonds } from '../../engine/depth'
 import { t } from '../i18n/i18n'
-import { classGlyph } from '../bits'
+import { ClassIcon } from '../bits'
 import { pickerName } from '../hero/heroLabel'
 import '../codex/combatDepth.css'
 
@@ -108,7 +108,7 @@ export function SynergyPanel({ state }: { state: GameState }) {
             <div key={m.hero.id} className="formation-row">
               <span className="formation-line">{t(LINE_LABEL[m.line])}</span>
               <span className="formation-name">
-                {classGlyph(m.hero.heroClass)} {pickerName(state, m.hero)}
+                <ClassIcon heroClass={m.hero.heroClass} label /> {pickerName(state, m.hero)}
               </span>
               <span className="formation-effects">
                 {parts.length === 0 && <span className="muted small">{t('no formation effect')}</span>}

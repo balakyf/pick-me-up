@@ -52,7 +52,11 @@ export function ta(en: string, vars?: Record<string, string | number>): string {
 
 /** A whole number with the locale's thousands separator (12,500 · 12 500). */
 export function fmtInt(n: number, locale: string = getLocale()): string {
-  return Math.round(n).toLocaleString(locale === 'fr' ? 'fr-FR' : 'en-US')
+  // French groups thousands with a narrow no-break space (U+202F), which the pixel fonts
+  // lack (it drew as nothing: "94075"); a plain no-break space keeps "94 075" readable.
+  return Math.round(n)
+    .toLocaleString(locale === 'fr' ? 'fr-FR' : 'en-US')
+    .replace(/\u202f/g, '\u00a0')
 }
 
 /**

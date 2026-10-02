@@ -1,0 +1,58 @@
+/* Accessibility and comfort (lane H): pixel icons, screen-reader text, focus, the UI
+   scale, reduced motion from the Settings window, and the flashes toggle. */
+
+/* ── Pixel icons ─────────────────────────────────────────────────────────── */
+.pxicon { display: inline-block; vertical-align: -0.18em; flex: none; }
+.pxicon-glyph { font-size: 0.95em; line-height: 1; }
+.p-el .pxicon { vertical-align: middle; }
+
+/* ── Text only screen readers hear ───────────────────────────────────────── */
+.sr-only {
+  position: absolute !important; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+
+/* ── Keyboard focus: a visible pixel ring wherever focus goes by keyboard ── */
+:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+.pwin:focus, .pwin:focus-visible { outline: none; }
+
+/* ── UI scale: windows, the HUD, the scene bar and the battle's controls grow or shrink;
+      the pixel world keeps its own integer fit. ──────────────────────────── */
+:root:not([data-ui-scale='1']) .pwin {
+  zoom: var(--ui-scale, 1);
+  width: min(560px, calc((100vw - 32px) / var(--ui-scale, 1)));
+  max-height: calc((100vh - 32px) / var(--ui-scale, 1));
+}
+:root:not([data-ui-scale='1']) .pwin.wide { width: min(900px, calc((100vw - 32px) / var(--ui-scale, 1))); }
+:root:not([data-ui-scale='1']) .hud,
+:root:not([data-ui-scale='1']) .scene-bar,
+:root:not([data-ui-scale='1']) .battle-hud,
+:root:not([data-ui-scale='1']) .qol-toast,
+:root:not([data-ui-scale='1']) .dialog-body { zoom: var(--ui-scale, 1); }
+
+/* ── Reduced motion chosen in the Settings window (the OS's own choice is also honoured
+      by each feature's @media rule). Loops and window pops stop; the game still plays. ── */
+:root[data-motion='reduce'] .pwin,
+:root[data-motion='reduce'] .dialog,
+:root[data-motion='reduce'] .dialog-next,
+:root[data-motion='reduce'] .toast,
+:root[data-motion='reduce'] .portrait.aura-glow img,
+:root[data-motion='reduce'] .pbtn.pulse,
+:root[data-motion='reduce'] .btn.gold.pulse,
+:root[data-motion='reduce'] .crystal-wait,
+:root[data-motion='reduce'] .duel-pop,
+:root[data-motion='reduce'] .bunit.cheer .bsprite,
+:root[data-motion='reduce'] .bg-layer { animation: none !important; }
+:root[data-motion='reduce'] .bunit,
+:root[data-motion='reduce'] .bunit.entering { transition: none !important; animation: none !important; }
+:root[data-motion='reduce'] .tower-marker,
+:root[data-motion='reduce'] .duel-fighter,
+:root[data-motion='reduce'] .duel-hp span { transition: none !important; }
+:root[data-motion='reduce'] .st-pop { animation: stFade 1s steps(4) forwards !important; }
+:root[data-motion='reduce'] * { scroll-behavior: auto !important; }
+
+/* ── Flashes off: no skill flare, no wave flash, no summon or ritual whiteout ── */
+:root[data-flashes='off'] .skill-flash,
+:root[data-flashes='off'] .wave-flash,
+:root[data-flashes='off'] .sr-flash,
+:root[data-flashes='off'] .ritual-flash { animation: none !important; opacity: 0 !important; }
