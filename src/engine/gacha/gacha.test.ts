@@ -22,10 +22,18 @@ import {
   summonCost,
   mercySummonAvailable,
   crystalChargeLeft,
+  startingSkillIds,
 } from './gacha'
 import { PVP_DEFAULTS } from '../account'
 import { TUNING, STAR_ENVELOPES } from '../tuning'
-import { CAMEO_HEROES, ENGRAVINGS, NAME_POOLS } from '../content'
+import { CAMEO_HEROES, CLASS_SKILL, ENGRAVINGS, NAME_POOLS } from '../content'
+
+/** Seed 98765's first three Normal pulls, as they were before lane J's starting skill. */
+const PINNED_98765: [string, string, number][] = [
+  ['h_500287', 'Aaron Delcut', 1],
+  ['h_124952', 'Juno Oakheart', 1],
+  ['h_343226', 'Joren Thornfield', 1],
+]
 import { makeSeed, rngFor, createRng } from '../rng/rng'
 import type { GameState, Seed, HeroId, Star } from '../types'
 
@@ -439,14 +447,31 @@ describe('summon', () => {
     expect(sawSub3).toBe(true)
   })
 
-  it('procedural heroes carry origin procedural and an empty authored skill list', () => {
-    const { heroes } = runSummons(98765, 100)
+  // Lane J (pin changed on purpose): a classed procedural hero (3★ on the Normal pool) now
+  // arrives knowing its class's signature skill. It takes no draw, so every other field of
+  // every pull — ids, names, grades, the pity and the stream — is exactly what it was.
+  it('procedural heroes carry origin procedural; 1–2★ arrive with no skill, a classed 3★ with its class skill', () => {
+    const { heroes } = runSummons(98765, 300)
     const proc = heroes.filter((h) => h.origin === 'procedural')
     expect(proc.length).toBeGreaterThan(0)
+    let classed = 0
     for (const h of proc) {
-      expect(h.skills).toEqual([])
+      if (h.heroClass === null) expect(h.skills).toEqual([])
+      else {
+        classed++
+        expect(h.skills).toEqual([{ id: CLASS_SKILL[h.heroClass], level: 1, xp: 0 }])
+      }
       expect(h.portraitToken).toMatch(/^#[0-9a-f]{6}$/)
     }
+    expect(classed).toBeGreaterThan(0)
+  })
+
+  it('the starting skill takes no draw: the same pulls with the skill stripped are the class-less roll', () => {
+    expect(startingSkillIds(null)).toEqual([])
+    expect(startingSkillIds('thief')).toEqual([CLASS_SKILL.thief])
+    // Pinned identities for seed 98765's first pulls (unchanged by the starting skill).
+    const { heroes } = runSummons(98765, 3)
+    expect(heroes.map((h) => [h.id, h.name, h.star])).toEqual(PINNED_98765)
   })
 
   it('star proportions across many real summons ≈ 70/25/5 (within ~3%)', () => {
