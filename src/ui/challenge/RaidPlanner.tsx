@@ -21,6 +21,7 @@ import { TimingGame } from '../metaPanels'
 import { cpOf } from '../bits'
 import { t } from '../i18n/i18n'
 import { HeroChip, lootLine } from './common'
+import { tn } from '../text'
 
 const RD = CHALLENGE.raids
 const SIZE = 5
@@ -256,7 +257,7 @@ function RaidResult({ outcome, state, onReplay, onDone }: { outcome: RaidOutcome
         </div>
       )}
       {outcome.fallen.length > 0 && (
-        <div className="muted">{t('{n} heroes did not come back from the raid.', { n: outcome.fallen.length })}</div>
+        <div className="muted">{tn(outcome.fallen.length, '1 hero did not come back from the raid.', '{n} heroes did not come back from the raid.')}</div>
       )}
       <button className="btn primary" onClick={onDone} style={{ marginTop: 12 }}>
         {t('Back to the raid table')}

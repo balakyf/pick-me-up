@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import { t } from '../i18n/i18n'
+import { tn } from '../text'
 import { BATTLE_KEYS } from './battleFx'
 
 export type Aim = 'focus' | 'protect' | null
@@ -40,7 +41,7 @@ export function OrderBar({
         🛡 {t('Protect')}
         {kbd(BATTLE_KEYS.protect)}
       </button>
-      <span className="muted small">{t('{n} orders', { n: Math.max(0, left) })}</span>
+      <span className="muted small">{tn(Math.max(0, left), '1 order', '{n} orders')}</span>
       <button
         className={`pbtn sm danger ${retreatArmed ? 'armed' : ''}`}
         onClick={onRetreat}

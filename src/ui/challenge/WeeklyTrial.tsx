@@ -110,7 +110,7 @@ export function WeeklyTrial({ state, store, onClose }: { state: GameState; store
         <div className="muted">{t('The tower replays its echoes for Masters past F{n}.', { n: W.unlockFloor })}</div>
       ) : result ? (
         <div className="raid-result">
-          <div className="big-outcome win">{t('{n} waves', { n: result.score })}</div>
+          <div className="big-outcome win">{tn(result.score, '1 wave', '{n} waves')}</div>
           <div className="muted">
             {result.newBest ? t('A new best this week!') : t('Best this week: {n} waves', { n: result.best })}
           </div>

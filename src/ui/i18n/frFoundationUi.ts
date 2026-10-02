@@ -97,4 +97,9 @@ export const FR_FOUNDATION_UI: Record<string, string> = {
 
   // ── Isel's letter ──────────────────────────────────────────────────────────
   '{line} (×{n})': '{line} (×{n})',
+
+  // ── Plurals the review caught ("1 orders", "1 enemies") ─────────────────────
+  '1 order': '1 ordre',
+  '1 enemy': '1 ennemi',
+  '1 hero did not come back from the raid.': '1 héros n’est pas revenu du raid.',
 }

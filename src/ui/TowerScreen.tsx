@@ -517,7 +517,7 @@ export function TowerScreen({ state, store }: { state: GameState; store: Store }
                 </div>
                 <div className="fs">
                   {t(mission)}
-                  {enemyCount !== null && ` · ${t('{n} enemies', { n: enemyCount })}`}
+                  {enemyCount !== null && ` · ${tn(enemyCount, '1 enemy', '{n} enemies')}`}
                   {f === current && state.tower.attemptIndex > 0 && ` · ${t('attempt {n}', { n: state.tower.attemptIndex + 1 })}`}
                   {anchor?.minigame === 'ballista' && ` · 🎯 ${t('ballista')}`}
                 </div>
