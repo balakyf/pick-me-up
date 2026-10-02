@@ -1,19 +1,23 @@
+import type { CSSProperties } from 'react'
 import { useEffect, useRef, useState } from 'react'
 import type { GameState } from '../../engine/types'
 import { TUNING } from '../../engine/tuning'
 import { cachedDataUrl } from '../pixel/render'
-import { scale } from '../pixel/bitmap'
-import { drawTowerExterior, towerDamage, TOWER_H, TOWER_W } from '../pixel/towerMap'
+import { crackStage, drawTowerStatic, floorRow, markerAt, towerDamage, TOWER_H, TOWER_W } from '../pixel/towerMap'
 import { t } from '../i18n/i18n'
 import './challenge.css'
 
 const MAX_FLOOR = TUNING.tower.sliceTopFloor
-const CLIMB_MS = 1100
 
 /**
  * The tower from outside: where the party stands on the spire of 100 floors. After a
  * clear, the marker climbs to the new floor (held while a battle or its results are still
  * on screen); the stone cracks as the Wall nears; a dead world greys the floors past F90.
+ *
+ * B26: the stone is two cached images per crack stage (dark, and fully lit — the lit one is
+ * clipped at the highest floor cleared), and the marker is a CSS overlay that glides on
+ * its own — nothing animated ever reaches the never-evicting sprite cache. The art scales
+ * with `--ts` (the war room raises it on wide screens).
  */
 export function TowerExterior({ state, hold = false }: { state: GameState; hold?: boolean }) {
   const tw = state.tower
@@ -26,27 +30,13 @@ export function TowerExterior({ state, hold = false }: { state: GameState; hold?
     if (hold) return
     const from = shown.current
     if (from === target) return
-    // Climb up (or, for the F40 loop's fall, drop straight back down).
-    if (target < from) {
-      shown.current = target
-      setMarker(target)
-      return
+    shown.current = target
+    setMarker(target)
+    // The CSS transition carries the climb; a fall back down (the F40 loop) is instant.
+    if (target > from) {
+      const id = setTimeout(() => setArrived(true), 1100)
+      return () => clearTimeout(id)
     }
-    let raf = 0
-    const start = performance.now()
-    const step = (now: number) => {
-      const k = Math.min(1, (now - start) / CLIMB_MS)
-      const eased = 1 - (1 - k) * (1 - k)
-      const m = Math.round((from + (target - from) * eased) * 2) / 2
-      setMarker(m)
-      if (k < 1) raf = requestAnimationFrame(step)
-      else {
-        shown.current = target
-        setArrived(true)
-      }
-    }
-    raf = requestAnimationFrame(step)
-    return () => cancelAnimationFrame(raf)
   }, [target, hold])
 
   useEffect(() => {
@@ -55,18 +45,40 @@ export function TowerExterior({ state, hold = false }: { state: GameState; hold?
     return () => clearTimeout(id)
   }, [arrived])
 
+  const stage = crackStage(tw.highestCleared)
+  const base = `tower3|${stage}|${tw.worldEnded}|${tw.worldSaved}`
+  const dark = cachedDataUrl(`${base}|dark`, () => drawTowerStatic({ crackHighest: stage, worldEnded: tw.worldEnded, worldSaved: tw.worldSaved, lit: false }))
+  const lit = cachedDataUrl(`${base}|lit`, () => drawTowerStatic({ crackHighest: stage, worldEnded: tw.worldEnded, worldSaved: tw.worldSaved, lit: true }))
+  // Floors 1..highest are the rows from the highest floor's row to the ground.
+  const litFrom = tw.highestCleared >= 1 ? floorRow(Math.min(100, tw.highestCleared)) : TOWER_H
   const m = hold ? shown.current : marker
-  const key = `tower2|${m}|${tw.currentFloor}|${tw.highestCleared}|${tw.worldEnded}|${tw.worldSaved}`
-  const url = cachedDataUrl(key, () =>
-    scale(
-      drawTowerExterior({ current: tw.currentFloor, highest: tw.highestCleared, worldEnded: tw.worldEnded, worldSaved: tw.worldSaved, marker: m }),
-      2,
-    ),
-  )
+  const at = markerAt(Math.max(1, Math.min(100, m)))
   const dmg = towerDamage(tw.highestCleared)
   return (
-    <div className={`tower-exterior ${arrived ? 'arrived' : ''}`} title={t('Floor {n} of {max}', { n: Math.min(tw.currentFloor, MAX_FLOOR), max: MAX_FLOOR })}>
-      {url && <img className="px" src={url} width={TOWER_W * 2} height={TOWER_H * 2} alt={t('The Tower from outside')} />}
+    <div
+      className={`tower-exterior ${arrived ? 'arrived' : ''}`}
+      title={t('Floor {n} of {max}', { n: Math.min(tw.currentFloor, MAX_FLOOR), max: MAX_FLOOR })}
+      style={{ ['--tw' as string]: TOWER_W, ['--th' as string]: TOWER_H } as CSSProperties}
+    >
+      <div className="tower-art">
+        {dark && <img className="px tower-layer" src={dark} alt={t('The Tower from outside')} />}
+        {lit && (
+          <img
+            className="px tower-layer tower-lit"
+            src={lit}
+            alt=""
+            aria-hidden="true"
+            style={{ clipPath: `inset(calc(var(--ts) * ${litFrom}px) 0 0 0)` }}
+          />
+        )}
+        {m >= 1 && m <= 100 && (
+          <span
+            className="tower-marker"
+            aria-hidden="true"
+            style={{ ['--mx' as string]: at.x, ['--my' as string]: at.y } as CSSProperties}
+          />
+        )}
+      </div>
       <div className="muted" style={{ fontSize: 12, textAlign: 'center' }}>
         {t('{n}/{max} cleared', { n: tw.highestCleared, max: MAX_FLOOR })}
       </div>
