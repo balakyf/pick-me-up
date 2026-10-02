@@ -14,15 +14,14 @@ import { TUNING } from '../engine/tuning'
 import type { GameState, HeroId, Line, OwnedHero, EquipmentSlot, Command, FloorResult, BonusRoomKind, FacilityId, JobId, CombatLog, BattleOrder } from '../engine/types'
 import { reduce, attemptFloorWithResult } from '../engine/store'
 import { toWorldTime } from '../engine/time'
-import { combatPowerForHero } from '../engine/stats'
 import { skillCp } from '../engine/skills'
-import { engravingCp } from '../engine/engravings'
 import { canPromote, canAfford } from '../engine/promotion'
 import { canUpgrade } from '../engine/facilities'
 import { dailyUnlocked, dailyAttemptsLeft, worldDayIndex } from '../engine/daily'
 import { banquetReady, banquetWouldHelp } from '../engine/kitchen'
-import { canCraft, equippedItemIds } from '../engine/equipment'
-import { floorPower, buildEncounter } from '../engine/tower'
+import { boundElsewhere, canCraft, equippedItemIds } from '../engine/equipment'
+import { floorPower, buildEncounter, fitCount } from '../engine/tower'
+import { heroCpFull } from '../engine/unit/trueCp'
 import { ANCHORS } from '../engine/content'
 import { loginClaimed, packageRefusal } from '../engine/shop'
 import { crackRefusal, dispatchRefusal } from '../engine/rift'
@@ -234,9 +233,20 @@ const JOB_ORDER: JobId[] = ['healer', 'cook', 'instructor', 'scholar', 'merchant
 const REAL_EPOCH = Date.UTC(2026, 0, 5)
 const SIZE = TUNING.account.partySize
 
-export function heroCp(h: OwnedHero): number {
-  return combatPowerForHero(h, h.xp.level, skillCp(h.skills) + engravingCp(h.engraving))
+/**
+ * The CP a person sees on screen — the TRUE CP combat fields (gear, favor, Sanity…:
+ * engine/unit/trueCp). Memoized per state object (the bot's state changes only through
+ * commands), so the bots' many sorts stay cheap. Without a state: bare-handed.
+ */
+export function heroCp(h: OwnedHero, s?: GameState): number {
+  if (!s) return heroCpFull({ inventory: [] }, h)
+  let byHero = CP_CACHE.get(s)
+  if (!byHero) CP_CACHE.set(s, (byHero = new WeakMap()))
+  let cp = byHero.get(h)
+  if (cp === undefined) byHero.set(h, (cp = heroCpFull(s, h)))
+  return cp
 }
+const CP_CACHE = new WeakMap<GameState, WeakMap<OwnedHero, number>>()
 
 function living(s: GameState): OwnedHero[] {
   return (Object.values(s.heroes) as OwnedHero[]).filter((h) => h.alive)
@@ -440,7 +450,7 @@ class Bot {
         const cur = this.s.heroes[h.id]!.equipment[slot]
         const curGrade = cur ? (this.s.inventory.find((i) => i.id === cur)?.grade ?? 'E') : null
         const free = this.s.inventory
-          .filter((i) => i.slot === slot && !worn.has(i.id) && (i.exclusiveTo === undefined || i.exclusiveTo === h.id))
+          .filter((i) => i.slot === slot && !worn.has(i.id) && !boundElsewhere(this.s, i, h.id))
           .sort((a, b) => gradeRank(b.grade) - gradeRank(a.grade))[0]
         if (free && (curGrade === null || gradeRank(free.grade) > gradeRank(curGrade))) {
           if (cur) this.try({ type: 'UNEQUIP_ITEM', heroId: h.id, slot })
@@ -508,7 +518,7 @@ class Bot {
       const kinds = Object.values(BOUNTIES)
         .filter((b) => b.minFloor <= this.s.tower.highestCleared && b.gold < spare() / 2)
         .sort((a, b) => b.gold - a.gold)
-      const bench = benchHeroes(this.s).sort((a, b) => heroCp(a) - heroCp(b))
+      const bench = benchHeroes(this.s).sort((a, b) => heroCp(a, this.s) - heroCp(b, this.s))
       const kind = kinds.find((k) => bench.length >= k.heroes)
       if (!kind) break
       const ids = bench.slice(0, kind.heroes).map((h) => h.id)
@@ -518,7 +528,7 @@ class Bot {
 
   /** CP-ranked living heroes, strongest first. */
   private ranked(): OwnedHero[] {
-    return living(this.s).sort((a, b) => heroCp(b) - heroCp(a))
+    return living(this.s).sort((a, b) => heroCp(b, this.s) - heroCp(a, this.s))
   }
 
   /** The surplus: home and free, outside the KEEP_RANKS strongest and the party (weakest first). */
@@ -527,7 +537,7 @@ class Bot {
     for (const id of this.s.party.slots) if (id) keep.add(id)
     return living(this.s)
       .filter((h) => !keep.has(h.id) && available(h) && !refusesDeploy(this.s, h.id))
-      .sort((a, b) => heroCp(a) - heroCp(b))
+      .sort((a, b) => heroCp(a, this.s) - heroCp(b, this.s))
   }
 
   /** Jobs: fill each open seat with the bench hero who takes to it best (never one who resents it). */
@@ -621,12 +631,12 @@ class Bot {
     const wm = TUNING.tower.worldMult[this.s.worldGrade]
     const fit = living(this.s)
       .filter((h) => fitToFight(h) && !refusesDeploy(this.s, h.id) && h.sanity >= 60)
-      .sort((a, b) => heroCp(b) - heroCp(a))
+      .sort((a, b) => heroCp(b, this.s) - heroCp(a, this.s))
     if (fit.length < 3 * SIZE + 1) return
     for (const floor of raidsOpen(this.s)) {
       if (!raidChestReady(this.s, floor, this.now)) continue
       const parties = [0, 1, 2].map((i) => fit.slice(i * SIZE, (i + 1) * SIZE))
-      const weakest = Math.min(...parties.map((p) => p.reduce((a, h) => a + heroCp(h), 0)))
+      const weakest = Math.min(...parties.map((p) => p.reduce((a, h) => a + heroCp(h, this.s), 0)))
       if (weakest < RAID_MARGIN * floorPower(floor, wm)) continue
       const crew = fit
         .slice(3 * SIZE)
@@ -678,7 +688,7 @@ class Bot {
   bestFive(): OwnedHero[] {
     const fit = living(this.s)
       .filter((h) => available(h) && h.sanity >= this.p.restSanity && !refusesDeploy(this.s, h.id))
-      .sort((a, b) => heroCp(b) - heroCp(a))
+      .sort((a, b) => heroCp(b, this.s) - heroCp(a, this.s))
     const need = this.immunities()
     const picked: OwnedHero[] = []
     const take = (pred: (h: OwnedHero) => boolean, n: number) => {
@@ -712,7 +722,7 @@ class Bot {
   private setParty(): void {
     const five = this.bestFive()
     // Sturdiest two stand front, the frailest two at the back.
-    const byBulk = [...five].sort((a, b) => bulk(b) - bulk(a))
+    const byBulk = [...five].sort((a, b) => bulk(b, this.s) - bulk(a, this.s))
     const lines: Line[] = ['front', 'front', 'mid', 'back', 'back']
     const slots: (HeroId | null)[] = Array.from({ length: SIZE }, (_, i) => byBulk[i]?.id ?? null)
     this.try({ type: 'SET_PARTY', slots, lines })
@@ -735,7 +745,7 @@ class Bot {
       this.setParty()
       // Wait for rest if the fit bench is thin (but a lone starter still climbs).
       if (this.bestFive().length < Math.min(3, living(this.s).filter(available).length) || this.bestFive().length === 0) return
-      const partyCp = this.bestFive().reduce((a, h) => a + heroCp(h), 0)
+      const partyCp = this.bestFive().reduce((a, h) => a + heroCp(h, this.s), 0)
       const ratio = partyCp / floorPower(floor, TUNING.tower.worldMult[this.s.worldGrade])
       // Retry a floor that beat us only once noticeably stronger (more so after a wipe) —
       // or, after a week stuck, at no weaker than last time. Nobody feeds a party to a wall
@@ -748,9 +758,15 @@ class Bot {
       }
       const ballista = ANCHORS[floor]?.minigame === 'ballista' ? 0.6 : undefined
       const subvert = floor === 90 && this.s.tower.hiddenFound.length >= TUNING.lifecycle.subvertTruths ? true : undefined
+      // The deploy rails refuse a floor no one is fit to fight (no attempt is spent); a
+      // person sees the Enter sheet say so and waits rather than knocking.
+      const pre = reduce(this.s, { type: 'TICK' }, this.now)
+      if (fitCount(pre) === 0) {
+        this.lever('NOBODY_FIT')
+        return
+      }
       let out
       try {
-        const pre = reduce(this.s, { type: 'TICK' }, this.now)
         out = attemptFloorWithResult(pre, undefined, ballista, subvert)
         // A fight going badly: call the retreat as the first hero staggers (combat is
         // deterministic, so re-resolving with the order replays the fight up to it — the
@@ -813,7 +829,7 @@ class Bot {
     const party = new Set(this.s.party.slots.filter(Boolean))
     const bench = living(this.s)
       .filter((h) => available(h) && !party.has(h.id) && !refusesDeploy(this.s, h.id))
-      .sort((a, b) => heroCp(b) - heroCp(a))
+      .sort((a, b) => heroCp(b, this.s) - heroCp(a, this.s))
       .slice(0, TUNING.rift.maxTeam)
       .map((h) => h.id)
     if (bench.length > 0 && dispatchRefusal(this.s, bench) === null) this.try({ type: 'DISPATCH_RUINS', heroIds: bench })
@@ -829,7 +845,7 @@ class Bot {
     const s = this.s
     const all = Object.values(s.heroes) as OwnedHero[]
     const top = living(s)
-      .map(heroCp)
+      .map((h) => heroCp(h, s))
       .sort((a, b) => b - a)
       .slice(0, SIZE)
     return {
@@ -850,10 +866,10 @@ class Bot {
   }
 }
 
-function bulk(h: OwnedHero): number {
+function bulk(h: OwnedHero, s: GameState): number {
   const cls = h.heroClass
   const role = cls === 'warrior' || cls === 'spearman' ? 2 : cls === 'thief' ? 1 : 0
-  return role * 1e6 + heroCp(h)
+  return role * 1e6 + heroCp(h, s)
 }
 
 /** Ballista crew value: archers aim truer, a light hero or a mage holds the altar. */
