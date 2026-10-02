@@ -1,106 +1,36 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { playMusic, sfx } from '../audio/sound'
-import type { BattleOrder, CombatEvent, CombatLog, CombatUnitInit, Element, GameState, HeroId, Line } from '../../engine/types'
+import type { BattleOrder, CombatLog, CombatUnitInit, GameState, HeroId } from '../../engine/types'
 import { lastWords } from '../life/speech'
-import { SKILLS } from '../../engine/content'
-import { bgTheme, drawBattleLayers, BG_H, BG_W, HORIZON, LAYER_ORDER, type BattleLayerName, type BattleLayers } from '../pixel/battleBg'
-import { canvasAvailable, cachedDataUrl } from '../pixel/render'
+import { bgTheme, BG_H, BG_W, HORIZON, LAYER_ORDER } from '../pixel/battleBg'
 import { BattleFxCanvas, type FxHandle } from './BattleFxCanvas'
-import { BATTLE_KEYS, battleKeyAction, fitStage, hudBeside, isTypingTarget, weatherForFloor } from './battleFx'
+import { battleKeyAction, fitStage, hudBeside, isTypingTarget, weatherForFloor } from './battleFx'
 import { allyBustUrl, allyFrameUrl, enemySize, enemyUrl, heroBustUrl, heroFrameUrl } from '../pixel/sprites'
 import type { LookSource } from '../pixel/look'
-import { ELEMENT_VIS, hpColor } from '../bits'
+import { ELEMENT_VIS } from '../bits'
 import { t } from '../i18n/i18n'
-import { DEPTH_DURATION, depthSnap } from './synergyCaptions'
-import { attackStyle, choreograph, popupOffsets, type AttackStyle } from './choreo'
+import { attackStyle, choreograph, type AttackStyle } from './choreo'
+import { actionSkillId, buildFrames, DURATION, HERO_DEATH_MS, HITSTOP_MS, layout, MOURN_LINGER_MS, type Snap } from './battleFrames'
+import { devFxFloor, layerUrls, punch, shake, useReducedMotion } from './stageFx'
+import { UnitSprite } from './UnitSprite'
+import { DamagePopups, popupEvents } from './DamagePopups'
+import { FoeHud } from './FoeHud'
+import { PartyRows } from './PartyRows'
+import { BattleControls } from './BattleControls'
+import type { Aim } from './OrderBar'
+import { DeathCard, DeathVeil, ResultBanner } from './ResultBanner'
+import './battle.css'
 
 /**
  * The battle as a side-view JRPG scene. The engine resolved the fight already;
  * this replays its CombatLog event by event: attackers lunge, targets flash and
  * shake, damage numbers pop, the fallen collapse. Party right, foes left.
+ *
+ * The timeline (frames, layout, durations) is built in battleFrames.ts; the pieces on
+ * screen are UnitSprite, DamagePopups, FoeHud, PartyRows, BattleControls/OrderBar and
+ * ResultBanner. This component keeps the orchestration: the clock, the orders, the
+ * keyboard, and the juice that fires as each blow lands.
  */
-
-interface Snap {
-  hp: Record<string, number>
-  dead: Record<string, boolean>
-  visible: Record<string, boolean>
-  actor: string | null
-  target: string | null
-  panic: string | null
-  caption: string
-  /** The authored skill being cast this action (kept through its hits). */
-  skill: { name: string; color: string; caster: string } | null
-  /** The element of the current action (colours its hit sparks). */
-  element: Element
-}
-
-const SPEEDS = [1, 2, 4] as const
-
-/** Real milliseconds each event is held on screen at 1× speed. */
-const DURATION: Record<CombatEvent['kind'], number> = {
-  'battle-start': 700,
-  'wave-spawn': 800,
-  act: 340,
-  hit: 460,
-  miss: 400,
-  'hp-cost': 450,
-  panic: 650,
-  guard: 420,
-  heal: 380,
-  death: 600,
-  mission: 900,
-  order: 900,
-  end: 600,
-  ...DEPTH_DURATION,
-}
-
-/** A hero's death holds the scene: the moment is not skipped past at speed. */
-const HERO_DEATH_MS = 2600
-/** Hit-stop: a critical blow freezes the frame this long before the impact lands. */
-const HITSTOP_MS = 120
-/** The fallen hero's last words linger this long after the scene moves on. */
-const MOURN_LINGER_MS = 1200
-
-const HERO_X: Record<Line, number> = { front: 250, mid: 286, back: 322 }
-const ENEMY_X: Record<Line, number> = { front: 140, mid: 102, back: 64 }
-
-function skillName(id: string): string {
-  if (id === 'basic') return t('Attack')
-  return t(SKILLS[id]?.name ?? 'Strike')
-}
-
-/** Where each unit stands (feet position) on the 384×216 stage. */
-function layout(log: CombatLog): Record<string, { x: number; y: number }> {
-  const waveOf: Record<string, number> = {}
-  for (const e of log.events) {
-    if (e.kind === 'battle-start') for (const id of e.enemyIds) waveOf[id] = 0
-    if (e.kind === 'wave-spawn') for (const id of e.enemyIds) waveOf[id] = e.wave
-  }
-  const groups = new Map<string, CombatUnitInit[]>()
-  for (const u of log.unitsInit) {
-    const key = `${u.side}|${u.side === 'enemy' ? waveOf[u.id] ?? 0 : 0}|${u.line}`
-    if (!groups.has(key)) groups.set(key, [])
-    groups.get(key)!.push(u)
-  }
-  const pos: Record<string, { x: number; y: number }> = {}
-  for (const [key, units] of groups) {
-    const side = key.split('|')[0]
-    // A crowded enemy line splits into two ranks so late-floor waves stay readable.
-    const cols = side === 'enemy' && units.length > 3 ? 2 : 1
-    const n = Math.ceil(units.length / cols)
-    const top = 134
-    const bottom = 200
-    units.forEach((u, idx) => {
-      const col = idx % cols
-      const i = Math.floor(idx / cols)
-      const y = n === 1 ? 168 : top + ((bottom - top) * i) / (n - 1)
-      const stagger = (i % 2) * 8
-      const x = side === 'hero' ? HERO_X[u.line] + stagger : ENEMY_X[u.line] - stagger - col * 34
-      pos[u.id] = { x, y: Math.round(y) }
-    })
-  }
-  return pos
-}
 
 /** The Master's mid-battle levers (the tower passes these; replays and events don't). */
 export interface BattleOrders {
@@ -109,8 +39,6 @@ export interface BattleOrders {
   /** Re-resolve the fight with `order` (applied at its tick); returns the new log. */
   give: (order: BattleOrder) => CombatLog | null
 }
-
-type Aim = 'focus' | 'protect' | null
 
 export function BattleScene({
   log: initialLog,
@@ -132,124 +60,8 @@ export function BattleScene({
     return u ? (u.side === 'enemy' || u.isNpc ? t(u.name) : u.name) : id
   }
 
-  const frames = useMemo<Snap[]>(() => {
-    const out: Snap[] = []
-    let cur: Snap = {
-      hp: Object.fromEntries(log.unitsInit.map((u) => [u.id, u.startHP ?? u.maxHP])),
-      dead: {},
-      visible: {},
-      actor: null,
-      target: null,
-      panic: null,
-      caption: t('Floor {n}', { n: log.floor }),
-      skill: null,
-      element: 'physical',
-    }
-    out.push(cur)
-    for (const e of log.events) {
-      const keepSkill =
-        e.kind === 'hit' || e.kind === 'miss' || e.kind === 'hp-cost' || e.kind === 'guard' || e.kind === 'heal'
-      const next: Snap = {
-        ...cur,
-        hp: { ...cur.hp },
-        dead: { ...cur.dead },
-        visible: { ...cur.visible },
-        actor: null,
-        target: null,
-        panic: null,
-        skill: keepSkill ? cur.skill : null,
-      }
-      switch (e.kind) {
-        case 'battle-start':
-          for (const id of [...e.heroIds, ...e.enemyIds]) next.visible[id] = true
-          next.caption = t('Enemies approach!')
-          break
-        case 'wave-spawn':
-          for (const id of e.enemyIds) next.visible[id] = true
-          next.caption = t('Wave {n} appears!', { n: e.wave + 1 })
-          break
-        case 'act': {
-          next.actor = e.actorId
-          next.target = e.targetId
-          next.caption = `${nameOf(e.actorId)} — ${skillName(e.skillId)}`
-          const def = SKILLS[e.skillId]
-          const el = def?.element ?? byId[e.actorId]?.element ?? 'physical'
-          next.element = el
-          if (def) {
-            next.skill = { name: t(def.name), color: ELEMENT_VIS[el].color, caster: e.actorId }
-          }
-          break
-        }
-        case 'hit':
-          next.hp[e.targetId] = e.hpAfter
-          next.actor = e.actorId
-          next.target = e.targetId
-          next.caption = cur.caption
-          break
-        case 'miss':
-          next.actor = e.actorId
-          next.target = e.targetId
-          next.caption = cur.caption
-          break
-        case 'hp-cost':
-          next.hp[e.unitId] = e.hpAfter
-          next.actor = e.unitId
-          next.caption = t('{name} pays {n} HP!', { name: nameOf(e.unitId), n: e.amount })
-          break
-        case 'panic':
-          next.panic = e.unitId
-          next.caption = t('{name} panics and freezes!', { name: nameOf(e.unitId) })
-          break
-        case 'guard':
-          next.actor = e.actorId
-          next.target = e.targetId
-          next.caption = t("{name}'s scales turn the blow!", { name: nameOf(e.targetId) })
-          break
-        case 'heal':
-          next.hp[e.unitId] = e.hpAfter
-          next.caption = cur.caption
-          break
-        case 'death':
-          next.dead[e.unitId] = true
-          next.caption = t('{name} falls!', { name: nameOf(e.unitId) })
-          break
-        case 'mission':
-          next.caption = t(e.note)
-          break
-        case 'order': {
-          const o = e.order
-          next.caption =
-            o.kind === 'retreat'
-              ? t('The Master sounds the retreat!')
-              : o.kind === 'focus'
-                ? t('The Master: “Everyone on {name}!”', { name: nameOf(o.enemyId) })
-                : t('The Master: “Cover {name}!”', { name: nameOf(o.allyId) })
-          break
-        }
-        case 'end':
-          next.caption =
-            e.outcome === 'win'
-              ? t('Victory!')
-              : e.outcome === 'wipe'
-                ? t('The party has fallen…')
-                : e.outcome === 'failed'
-                  ? t('The mission has failed…')
-                  : e.outcome === 'retreat'
-                    ? t('The party falls back through the gate.')
-                    : t('Time is up…')
-          break
-        default: {
-          // Combat depth: cover, follow-ups, rivalry and the floor's conditions.
-          const d = depthSnap(e, nameOf)
-          if (d) Object.assign(next, d)
-        }
-      }
-      out.push(next)
-      cur = next
-    }
-    return out
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [log])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const frames = useMemo<Snap[]>(() => buildFrames(log, byId, nameOf), [log])
 
   const [cursor, setCursor] = useState(0)
   // Battle music while the scene is up; the lobby theme returns after.
@@ -328,24 +140,14 @@ export function BattleScene({
   }
 
   // Damage popups for the most recent few events (each animates once on mount).
-  const popups = (atEnd ? [] : log.events.slice(Math.max(0, cursor - 3), cursor))
-    .filter((e) => e.kind === 'hit' || e.kind === 'miss' || e.kind === 'guard' || e.kind === 'heal')
-  const popupStack = popupOffsets(popups.map((e) => ({ target: e.kind === 'heal' ? e.unitId : 'targetId' in e ? e.targetId : '' })))
+  const popups = popupEvents(atEnd ? [] : log.events.slice(Math.max(0, cursor - 3), cursor))
 
   // Choreography: who runs where, who fires what (see choreo.ts).
   const sizeOf = (u: CombatUnitInit) => (u.side === 'hero' ? { w: 24, h: 32 } : enemySize(u.name, u.element))
   const style = useMemo<AttackStyle | null>(() => {
     if (!current || !('actorId' in current)) return null
     // The action's skill comes from its 'act' (hits and misses follow it).
-    let skillId: string | null = null
-    for (let i = cursor - 1; i >= 0; i--) {
-      const ev = log.events[i]!
-      if (ev.kind === 'act' && ev.actorId === current.actorId) {
-        skillId = ev.skillId
-        break
-      }
-      if (ev.kind === 'act') break
-    }
+    const skillId = actionSkillId(log.events, cursor - 1, current.actorId)
     const u = byId[current.actorId]
     return u ? attackStyle(u, skillId, sizeOf(u).w) : null
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -366,8 +168,6 @@ export function BattleScene({
   const heroes = log.unitsInit.filter((u) => u.side === 'hero')
   const enemies = log.unitsInit.filter((u) => u.side === 'enemy')
   const liveEnemies = enemies.filter((u) => snap.visible[u.id] && !snap.dead[u.id])
-  const enemyCounts = new Map<string, number>()
-  for (const u of liveEnemies) enemyCounts.set(u.name, (enemyCounts.get(u.name) ?? 0) + 1)
 
   const outcome = log.outcome
 
@@ -550,62 +350,33 @@ export function BattleScene({
                 const hurt = snap.target === u.id && current?.kind === 'hit'
                 const skillHit = hurt && snap.skill !== null
                 const dead = !!snap.dead[u.id]
-                const falling = fallen?.id === u.id
-                const size = isHero ? { w: 24, h: 32 } : enemySize(u.name, u.element)
-                const src = u.isNpc
-                  ? allyFrameUrl(u.name)
-                  : isHero
-                    ? heroFrameUrl(heroSrc(u), 'left', acting ? 1 : 0)
-                    : enemyUrl(u.name, u.element)
-                const pose = poses[u.id]
-                const cheering = atEnd && outcome === 'win' && isHero && !dead
-                const cls = [
-                  'bunit',
-                  isHero ? 'hero' : 'enemy',
-                  acting ? 'acting' : '',
-                  hurt ? 'hurt' : '',
-                  dead ? 'ko' : '',
-                  falling ? 'falling' : '',
-                  entering(u) ? 'entering' : '',
-                  cheering ? 'cheer' : '',
-                ]
-                  .filter(Boolean)
-                  .join(' ')
-                const hpPct = (Math.max(0, snap.hp[u.id] ?? u.maxHP) / u.maxHP) * 100
+                const casting = snap.skill !== null && snap.skill.caster === u.id && current?.kind === 'act'
                 return (
-                  <div
+                  <UnitSprite
                     key={u.id}
-                    className={`${cls} ${aim === 'focus' && !isHero && !dead ? 'aimable' : ''} ${aim === 'protect' && isHero && !u.isNpc && !dead ? 'aimable' : ''}`}
+                    u={u}
                     onClick={() => aimAt(u)}
-                    style={{
-                      left: p.x - size.w / 2,
-                      top: p.y - size.h,
-                      width: size.w,
-                      height: size.h,
-                      zIndex: pose?.z ?? p.y,
-                      transform: pose ? `translate(${pose.dx}px, ${pose.dy}px)` : undefined,
-                      ['--enter-delay' as string]: `${(isHero ? heroes.indexOf(u) : enemies.indexOf(u) % 6) * 70}ms`,
-                      ...(skillHit ? { ['--skill-color' as string]: snap.skill!.color } : {}),
+                    look={{
+                      x: p.x,
+                      y: p.y,
+                      size: sizeOf(u),
+                      src: u.isNpc ? allyFrameUrl(u.name) : isHero ? heroFrameUrl(heroSrc(u), 'left', acting ? 1 : 0) : enemyUrl(u.name, u.element),
+                      pose: poses[u.id],
+                      acting,
+                      hurt,
+                      dead,
+                      falling: fallen?.id === u.id,
+                      entering: entering(u),
+                      cheering: atEnd && outcome === 'win' && isHero && !dead,
+                      aimable: (aim === 'focus' && !isHero && !dead) || (aim === 'protect' && isHero && !u.isNpc && !dead),
+                      hpPct: (Math.max(0, snap.hp[u.id] ?? u.maxHP) / u.maxHP) * 100,
+                      skillFlash: skillHit ? snap.skill!.color : null,
+                      banner: casting ? { name: snap.skill!.name, color: snap.skill!.color } : null,
+                      turnMark: snap.actor === u.id && !dead && !atEnd && !casting,
+                      panic: snap.panic === u.id,
+                      enterDelayMs: (isHero ? heroes.indexOf(u) : enemies.indexOf(u) % 6) * 70,
                     }}
-                  >
-                    {skillHit && <div className="skill-flash" />}
-                    {snap.skill && snap.skill.caster === u.id && current?.kind === 'act' && (
-                      <div className="skill-banner" style={{ borderColor: snap.skill.color }}>
-                        {snap.skill.name}
-                      </div>
-                    )}
-                    <div className="bshadow" style={{ width: size.w * 0.7 }} />
-                    {src && <img className="px bsprite" src={src} width={size.w} height={size.h} alt={u.name} />}
-                    {snap.actor === u.id && !dead && !atEnd && !(snap.skill?.caster === u.id && current?.kind === 'act') && (
-                      <div className="turn-mark" aria-hidden="true" />
-                    )}
-                    {!dead && (
-                      <div className={`bhp ${isHero && !u.isNpc ? 'hero-hp' : ''}`}>
-                        <span style={{ width: `${hpPct}%`, background: hpColor(hpPct) }} />
-                      </div>
-                    )}
-                    {snap.panic === u.id && <span className="bsweat">💧</span>}
-                  </div>
+                  />
                 )
               })}
 
@@ -625,59 +396,16 @@ export function BattleScene({
                 />
               )}
 
-              {popups.map((e, i) => {
-                if (e.kind !== 'hit' && e.kind !== 'miss' && e.kind !== 'guard' && e.kind !== 'heal') return null
-                const who = e.kind === 'heal' ? e.unitId : e.targetId
-                const p = pos[who]
-                if (!p) return null
-                const head = byId[who] ? sizeOf(byId[who]!).h : 32
-                const text =
-                  e.kind === 'miss' ? t('MISS') : e.kind === 'guard' ? t('GUARD') : e.kind === 'heal' ? `+${e.amount}` : String(e.amount)
-                const kill = e.kind === 'hit' && e.hpAfter <= 0
-                const cls =
-                  e.kind === 'miss' || e.kind === 'guard' ? 'miss' : e.kind === 'heal' ? 'heal' : e.crit ? 'crit' : kill ? 'kill' : ''
-                return (
-                  <div
-                    key={e.seq}
-                    className={`dmg ${cls}`}
-                    style={{ left: p.x + (popupStack[i]! % 2 ? 7 : 0), top: p.y - Math.min(head, 60) - 16 - popupStack[i]! * 11, zIndex: 999 }}
-                  >
-                    {e.kind === 'hit' && e.crit && <span className="dmg-tag">{t('CRITICAL!')}</span>}
-                    {text}
-                  </div>
-                )
-              })}
+              <DamagePopups events={popups} pos={pos} headOf={(id) => (byId[id] ? sizeOf(byId[id]!).h : 32)} />
             </div>
 
             <BattleFxCanvas ref={fx} width={stageW} height={BG_H} horizon={HORIZON} weather={weather} density={reduced ? 0.25 : 1} />
           </div>
 
-          {fallen && <div className="death-vignette" />}
-          {fallen && <div className="cine-bar top" />}
-          {fallen && <div className="cine-bar bottom" />}
+          {fallen && <DeathVeil />}
 
-          {atEnd && (
-            <div className={`battle-banner ${outcome === 'win' ? 'win' : 'lose'}`}>
-              {outcome === 'win'
-                ? t('VICTORY')
-                : outcome === 'wipe'
-                  ? t('DEFEAT')
-                  : outcome === 'failed'
-                    ? t('MISSION FAILED')
-                    : outcome === 'retreat'
-                      ? t('RETREAT')
-                      : t('TIME UP')}
-            </div>
-          )}
-          {card && (
-            <div className={`death-card ${card.fading ? 'fading' : ''}`} key={card.unit.id}>
-              <img className="px" src={heroBustUrl(heroSrc(card.unit))} width={48} height={48} alt="" />
-              <div>
-                <div className="death-name">{card.unit.name}</div>
-                <div className="death-words">“{card.words || '…'}”</div>
-              </div>
-            </div>
-          )}
+          {atEnd && <ResultBanner outcome={outcome} />}
+          {card && <DeathCard key={card.unit.id} unit={card.unit} words={card.words} fading={card.fading} bust={heroBustUrl(heroSrc(card.unit))} />}
         </div>
         <div className="battle-caption pframe">{snap.caption}</div>
       </div>
@@ -687,203 +415,30 @@ export function BattleScene({
         ref={hudRef}
         style={beside ? undefined : { width: Math.max(Math.min(stagePxW, 1280), Math.min(800, window.innerWidth - 16)) }}
       >
-        <div className="pframe battle-foes">
-          {liveEnemies.length <= 6
-            ? liveEnemies.map((u) => {
-                const pct = (Math.max(0, snap.hp[u.id] ?? u.maxHP) / u.maxHP) * 100
-                return (
-                  <div
-                    key={u.id}
-                    className={`foe-row ${snap.target === u.id ? 'hit' : ''} ${aim === 'focus' ? 'aimable' : ''}`}
-                    onClick={() => aimAt(u)}
-                  >
-                    <span className="foe-name">
-                      {t(u.name)} <span className="muted small">Lv{u.level}</span>
-                    </span>
-                    <span className="gauge foe-hp">
-                      <span style={{ width: `${pct}%`, background: hpColor(pct) }} />
-                    </span>
-                  </div>
-                )
-              })
-            : [...enemyCounts.entries()].map(([name, n]) => (
-                <div key={name} className="foe-row">
-                  <span>{t(name)}</span>
-                  {n > 1 && <span className="muted">×{n}</span>}
-                </div>
-              ))}
-          {enemyCounts.size === 0 && <div className="muted">—</div>}
-        </div>
-        <div className="pframe battle-party">
-          {heroes.map((u) => {
-            const hp = Math.max(0, snap.hp[u.id] ?? u.maxHP)
-            const pct = (hp / u.maxHP) * 100
-            const dead = !!snap.dead[u.id]
-            return (
-              <div
-                key={u.id}
-                className={`party-row ${snap.actor === u.id ? 'active' : ''} ${dead ? 'dead' : ''} ${aim === 'protect' && !u.isNpc && !dead ? 'aimable' : ''}`}
-                onClick={() => aimAt(u)}
-              >
-                <img
-                  className="px party-bust"
-                  src={u.isNpc ? allyBustUrl(u.name) : heroBustUrl(heroSrc(u))}
-                  width={24}
-                  height={24}
-                  alt=""
-                />
-                <span className="party-name">
-                  {u.isNpc
-                    ? t(u.name).replace(/^(Princess|Princesse) /, '')
-                    : heroes.filter((o) => o.name.split(/\s+/)[0] === u.name.split(/\s+/)[0]).length > 1
-                      ? u.name
-                      : u.name.split(/\s+/)[0]}
-                </span>
-                <span className="party-lv">{u.isNpc ? t('escort') : `Lv${u.level}`}</span>
-                <span className="party-hp">
-                  <span className="gauge">
-                    <span style={{ width: `${pct}%`, background: hpColor(pct) }} />
-                  </span>
-                  <span className="party-hpnum">
-                    {hp}/{u.maxHP}
-                  </span>
-                </span>
-              </div>
-            )
-          })}
-        </div>
-
-        <div className="battle-controls">
-          {!atEnd ? (
-            <>
-              <div className="bctl-row">
-                <button className="pbtn" onClick={() => setPlaying((p) => !p)}>
-                  {playing ? t('❚❚ Pause') : t('▶ Play')}
-                  {kbd(BATTLE_KEYS.pause)}
-                </button>
-                {SPEEDS.map((s, i) => (
-                  <button key={s} className={`pbtn ghost ${speed === s ? 'on' : ''}`} onClick={() => setSpeed(s)}>
-                    {s}×{kbd(String(i + 1))}
-                  </button>
-                ))}
-                <button className="pbtn ghost" onClick={() => setCursor(frames.length - 1)}>
-                  {t('Skip ▸▸')}
-                  {kbd(BATTLE_KEYS.skip)}
-                </button>
-              </div>
-              {orders && (
-                <div className="bctl-row order-bar">
-                  <button
-                    className={`pbtn sm ${aim === 'focus' ? 'on' : ''}`}
-                    disabled={ordersLeft <= 0}
-                    onClick={() => toggleAim('focus')}
-                    title={t('Every hero attacks the enemy you pick')}
-                  >
-                    🎯 {t('Focus')}
-                    {kbd(BATTLE_KEYS.focus)}
-                  </button>
-                  <button
-                    className={`pbtn sm ${aim === 'protect' ? 'on' : ''}`}
-                    disabled={ordersLeft <= 0}
-                    onClick={() => toggleAim('protect')}
-                    title={t('Enemies avoid the hero you pick while anyone else stands')}
-                  >
-                    🛡 {t('Protect')}
-                    {kbd(BATTLE_KEYS.protect)}
-                  </button>
-                  <span className="muted small">{t('{n} orders', { n: Math.max(0, ordersLeft) })}</span>
-                  <button
-                    className={`pbtn sm danger ${retreatArmed ? 'armed' : ''}`}
-                    onClick={() => give({ tick: tick + 1, kind: 'retreat' })}
-                    title={t('End the fight now: the living come home, nothing is won')}
-                  >
-                    🏳 {t('Retreat')}
-                    {kbd(BATTLE_KEYS.retreat)}
-                  </button>
-                </div>
-              )}
-              {aim && (
-                <span className="aim-hint">
-                  {aim === 'focus' ? t('Click an enemy…') : t('Click a hero…')}
-                  {kbd(BATTLE_KEYS.close)}
-                </span>
-              )}
-              {retreatArmed && <span className="aim-hint">{t('Press R again to sound the retreat (Esc to cancel)')}</span>}
-            </>
-          ) : (
-            <button className="pbtn primary big" onClick={onDone}>
-              {t('Continue ▸')}
-              {kbd('Enter')}
-            </button>
-          )}
-        </div>
+        <FoeHud live={liveEnemies} snap={snap} aiming={aim === 'focus'} onAim={aimAt} />
+        <PartyRows
+          heroes={heroes}
+          snap={snap}
+          aiming={aim === 'protect'}
+          bustOf={(u) => (u.isNpc ? allyBustUrl(u.name) : heroBustUrl(heroSrc(u)))}
+          onAim={aimAt}
+        />
+        <BattleControls
+          atEnd={atEnd}
+          playing={playing}
+          speed={speed}
+          onTogglePlay={() => setPlaying((p) => !p)}
+          onSpeed={setSpeed}
+          onSkip={() => setCursor(frames.length - 1)}
+          onDone={onDone}
+          orders={
+            orders
+              ? { aim, left: ordersLeft, retreatArmed, onAim: toggleAim, onRetreat: () => give({ tick: tick + 1, kind: 'retreat' }) }
+              : null
+          }
+          kbd={kbd}
+        />
       </div>
     </div>
   )
-}
-
-// ── Scene helpers ────────────────────────────────────────────────────────────
-
-/** Which layers each backdrop theme has (known after its first build). */
-const layerPresence = new Map<string, Set<BattleLayerName>>()
-
-/** Data URLs of a floor's parallax layers, cached per backdrop theme ('' = no layer). */
-function layerUrls(floor: number): Record<BattleLayerName, string> {
-  const out = { sky: '', drift: '', far: '', mid: '', ground: '', fog: '' }
-  if (!canvasAvailable()) return out
-  const theme = bgTheme(floor)
-  let built: BattleLayers | null = null
-  const get = () => (built ??= drawBattleLayers(floor))
-  let present = layerPresence.get(theme)
-  if (!present) {
-    const L = get()
-    present = new Set(LAYER_ORDER.filter((n) => L[n] !== null))
-    layerPresence.set(theme, present)
-  }
-  for (const name of LAYER_ORDER) if (present.has(name)) out[name] = cachedDataUrl(`bbg|${theme}|${name}`, () => get()[name]!)
-  return out
-}
-
-/** Dev-only: `?battlefx=<floor>` previews another floor's backdrop and weather. */
-function devFxFloor(): number | null {
-  if (typeof window === 'undefined') return null
-  const v = Number(new URLSearchParams(window.location.search).get('battlefx'))
-  return Number.isInteger(v) && v > 0 ? v : null
-}
-
-/** The player's reduced-motion preference (no shake or zoom, sparse weather). */
-function useReducedMotion(): boolean {
-  const query = () =>
-    typeof window !== 'undefined' && typeof window.matchMedia === 'function' ? window.matchMedia('(prefers-reduced-motion: reduce)') : null
-  const [reduce, setReduce] = useState(() => !!query()?.matches)
-  useEffect(() => {
-    const q = query()
-    if (!q || typeof q.addEventListener !== 'function') return
-    const on = () => setReduce(q.matches)
-    q.addEventListener('change', on)
-    return () => q.removeEventListener('change', on)
-  }, [])
-  return reduce
-}
-
-/** Camera punch: a quick zoom toward (x, y) and back, after `delay` ms of hit-stop. */
-function punch(el: HTMLElement | null, at: { x: number; y: number }, amount: number, delay: number) {
-  if (!el || typeof el.animate !== 'function') return
-  el.style.transformOrigin = `${at.x}px ${at.y}px`
-  el.animate([{ transform: 'scale(1)' }, { transform: `scale(${amount})`, offset: 0.3 }, { transform: 'scale(1)' }], {
-    duration: 380,
-    delay,
-    easing: 'steps(6, end)',
-  })
-}
-
-/** Screen shake of the whole stage, `px` screen pixels at its strongest. */
-function shake(el: HTMLElement | null, px: number, delay: number) {
-  if (!el || typeof el.animate !== 'function') return
-  const k = (a: number, b: number) => ({ transform: `translate(${Math.round(a * px)}px, ${Math.round(b * px)}px)` })
-  el.animate([k(0, 0), k(-1, 0.5), k(1, -0.5), k(-0.75, -0.25), k(0.75, 0.5), k(-0.25, 0), k(0, 0)], {
-    duration: px > 2 ? 320 : 220,
-    delay,
-    easing: 'steps(6, end)',
-  })
 }
