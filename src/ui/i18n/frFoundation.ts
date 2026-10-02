@@ -32,8 +32,10 @@ export const FR_FOUNDATION: Record<string, string> = {
   'Put a hero in the slot.': 'Placez un héros à cette place.',
 
   // ── The Memorial ────────────────────────────────────────────────────────────
-  'Their {item} was passed on to {name}.': 'Héritage : {item} — désormais entre les mains de {name}.',
-  'Their {item} waits in the armory.': 'Héritage : {item} — attend à l’armurerie.',
+  'Carried {item} — now in {name}’s hands.': 'Héritage : {item} — désormais entre les mains de {name}.',
+  'Carried {item} — it waits in the armory.': 'Héritage : {item} — attend à l’armurerie.',
+  // The Kitchen panel shows this refusal with its engine prefix (until it strips it).
+  'banquet: the hall is still being cleaned': 'banquet : la salle est encore en cours de nettoyage',
   'A well-kept Memorial (Lv {n}): each visit eases a mourner’s grief faster.':
     'Un Mémorial bien entretenu (Niv. {n}) : chaque visite apaise plus vite le deuil.',
 }

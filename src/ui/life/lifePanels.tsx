@@ -206,8 +206,8 @@ export function MemorialPanel({ state }: { state: GameState }) {
           {heirlooms(state, g).map((h) => (
             <div key={h.itemId} className="muted small heirloom">
               {h.wielder
-                ? t('Their {item} was passed on to {name}.', { item: gearLabel(h.name), name: shortName(state, h.wielder.id) })
-                : t('Their {item} waits in the armory.', { item: gearLabel(h.name) })}
+                ? t('Carried {item} — now in {name}’s hands.', { item: gearLabel(h.name), name: shortName(state, h.wielder.id) })
+                : t('Carried {item} — it waits in the armory.', { item: gearLabel(h.name) })}
             </div>
           ))}
         </div>

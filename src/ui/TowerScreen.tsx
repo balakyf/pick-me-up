@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { GameState, FloorResult, CombatLog, BattleOrder } from '../engine/types'
 import { scoutFloor, suggestParty, type ScoutReport } from '../engine/scout'
-import { ordersAllowed } from '../engine/tower'
+import { fitCount, ordersAllowed } from '../engine/tower'
 import type { Store } from '../engine/store'
 import { attemptFloorWithResult, resolveEventWithResult } from '../engine/store'
 import { buildEncounter } from '../engine/tower'
@@ -328,10 +328,8 @@ export function TowerScreen({ state, store }: { state: GameState; store: Store }
     setOpenActs((cur) => new Set([...cur, actForFloor(current).id]))
   }, [current])
 
-  const deployable = state.party.slots.some((id) => {
-    const h = id ? state.heroes[id] : undefined
-    return !!h && h.alive && h.sanity > 0 && h.training === null
-  })
+  // The engine's deploy rails decide who can fight (the engine refuses an empty attempt).
+  const deployable = fitCount(state) > 0
   const summit = state.tower.highestCleared >= MAX_FLOOR
   const event = state.tower.event
   const loop = state.tower.loop
