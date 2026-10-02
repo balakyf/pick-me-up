@@ -28,6 +28,8 @@ const BANNED: { pattern: RegExp; label: string }[] = [
   { pattern: /\bMath\.sin\b/, label: 'Math.sin' },
   { pattern: /\bMath\.cos\b/, label: 'Math.cos' },
   { pattern: /\bMath\.tan\b/, label: 'Math.tan' },
+  // The rest of the transcendental family (`\bMath\.log\b` does not match Math.log2).
+  { pattern: /\bMath\.(?:log2|log10|log1p|expm1|a?sinh?|a?cosh?|a?tanh?|atan2|hypot|cbrt)\b/, label: 'transcendental Math.*' },
   // `**` with a fractional exponent is the same transcendental hazard as Math.pow.
   { pattern: /\*\*\s*[\d.]*\.\d/, label: '** with fractional exponent' },
   // …and so is `**` with a NON-LITERAL exponent (`level ** M.xpExp` slipped past the rule
@@ -38,7 +40,7 @@ const BANNED: { pattern: RegExp; label: string }[] = [
 ]
 
 /** The guard's own patterns, tried on known-good and known-bad snippets. */
-const GOOD_SNIPPETS = ['const a = x ** 2', 'const b = 2 ** 10', 'n ** 3 + 1', '/** a doc comment */ const c = 1']
+const GOOD_SNIPPETS = ['const a = x ** 2', 'const b = 2 ** 10', 'n ** 3 + 1', '/** a doc comment */ const c = 1', 'Math.sqrt(x) + Math.sign(y) + Math.floor(z)']
 const BAD_SNIPPETS = [
   'Math.round(M.xpCoeff * level ** M.xpExp)',
   'F.costGrowth ** level',
@@ -48,6 +50,9 @@ const BAD_SNIPPETS = [
   'x ** 0.5',
   'x ** .5',
   'Math.pow(x, 2)',
+  'Math.log2(n)',
+  'Math.atan2(y, x)',
+  'Math.hypot(a, b)',
 ]
 
 /** Files explicitly allowed to use a listed construct, with the reason. */
