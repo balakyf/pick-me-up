@@ -36,6 +36,22 @@ const GROUPS: { title: string; keys: [string[], string][] }[] = [
     ],
   },
   {
+    title: 'In battle',
+    keys: [
+      [['Space'], 'Pause / play'],
+      [['1', '2', '3'], 'Speed 1× / 2× / 4×'],
+      [['S'], 'Skip to the end'],
+      [['F'], 'Focus: every hero on the foe you pick'],
+      [['P'], 'Protect: foes look past the hero you pick'],
+      [['U'], 'Unleash: the hero you pick acts now, all out'],
+      [['G'], 'Guard: the party braces for the big blow'],
+      [['H'], 'Hold: keep SP for a crowd or the boss'],
+      [['X'], 'Swap: two heroes trade places'],
+      [['R'], 'Retreat (press twice)'],
+      [['Esc'], 'Put an order away'],
+    ],
+  },
+  {
     title: 'Windows and dialogue',
     keys: [
       [['Esc'], 'Close the window'],
@@ -61,7 +77,7 @@ export function KeyboardHelp({ onClose }: { onClose: () => void }) {
             ))}
           </section>
         ))}
-        <p className="muted qol-keys-foot">{t('Battles have their own controls, shown on the battle screen.')}</p>
+        <p className="muted qol-keys-foot">{t('Battles show their keys on their buttons too.')}</p>
       </div>
     </PixelWindow>
   )
