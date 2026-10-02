@@ -90,12 +90,27 @@ export function withFavor(hero: OwnedHero, favor: number): OwnedHero {
   return { ...hero, favor: next, bondTier, ip }
 }
 
+/** The hero's latest gifts, oldest first (an older save's unbroken streak stands in). */
+export function recentGifts(hero: Pick<OwnedHero, 'gift'>): string[] {
+  const g = hero.gift
+  if (g.recent) return g.recent.slice(-F.repeatWindow)
+  return g.last === null ? [] : Array.from({ length: Math.min(g.streak, F.repeatWindow) }, () => g.last!)
+}
+
+/**
+ * How many times this gift is among the hero's last few (B47: "repetitive gifts lower
+ * favorability" — counted over a window, so A, B, A, B decays like A, A, A did).
+ */
+export function giftRepeats(hero: Pick<OwnedHero, 'gift'>, giftId: string): number {
+  return recentGifts(hero).filter((g) => g === giftId).length
+}
+
 /** Favor a gift would change on this hero right now (preference + repeat decay). */
 export function giftDelta(hero: OwnedHero, giftId: string): number {
   const gift = GIFTS[giftId]
   if (!gift) return 0
   const pref = giftPreferences(hero.id)
-  const repeat = hero.gift.last === giftId ? hero.gift.streak : 0
+  const repeat = giftRepeats(hero, giftId)
   if (repeat >= F.repeatSour) return -F.sourLoss
   let v = gift.favor
   if (gift.category === pref.liked) v *= F.likedMult
@@ -114,7 +129,8 @@ export function giveGift(state: GameState, heroId: HeroId, giftId: string): Game
   if (state.gems < gift.gems) throw new Error('giveGift: not enough gems')
   const delta = giftDelta(hero, giftId)
   const streak = hero.gift.last === giftId ? hero.gift.streak + 1 : 1
-  const given = withFavor({ ...hero, gift: { last: giftId, streak } }, hero.favor + delta)
+  const recent = [...recentGifts(hero), giftId].slice(-F.repeatWindow)
+  const given = withFavor({ ...hero, gift: { last: giftId, streak, recent } }, hero.favor + delta)
   return {
     ...state,
     gold: state.gold - gift.gold,

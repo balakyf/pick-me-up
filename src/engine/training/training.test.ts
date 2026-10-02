@@ -17,7 +17,7 @@ import {
 import { createAccount } from '../account'
 import { advanceTime } from '../time'
 import { reduce } from '../store'
-import { playFloor } from '../tower'
+import { playFloor, deployReport } from '../tower'
 import { canUpgrade, unlockMasterLevel } from '../facilities'
 import { stepLife } from '../life'
 import { SKILLS } from '../content'
@@ -230,9 +230,9 @@ describe('Training Center — across the engine', () => {
     const { state, id } = withCenter(4, [])
     const training = startTraining(state, id, 'composure', 0)
     const party = { slots: [id, null, null, null, null], lines: state.party.lines }
-    // Only the training hero is in the party → nobody deploys.
-    const { result } = playFloor({ ...training, party })
-    expect(result.result.log.unitsInit.filter((u) => u.side === 'hero')).toEqual([])
+    // Only the training hero is in the party → nobody deploys, so the attempt is refused.
+    expect(deployReport({ ...training, party })[0]).toMatchObject({ heroId: id, fit: false, reason: 'training' })
+    expect(() => playFloor({ ...training, party })).toThrow(/no one is fit to fight/)
   })
 })
 

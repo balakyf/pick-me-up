@@ -60,9 +60,18 @@ export function promotionCost(hero: OwnedHero): Record<MaterialId, number> {
   }
 }
 
-/** Gate: a living hero at its level cap, below the ceiling, with no promotion in flight. */
+/** Gate: a living hero at its level cap, below the ceiling, with no promotion in flight,
+ *  home (not in the Ruins, not held) and not in the middle of a Training Center drill. */
 export function canPromote(hero: OwnedHero): boolean {
-  return hero.alive && hero.xp.atCap && hero.star < P.maxStar && hero.promotion === null && !hero.expedition && !hero.captiveOf
+  return (
+    hero.alive &&
+    hero.xp.atCap &&
+    hero.star < P.maxStar &&
+    hero.promotion === null &&
+    !hero.expedition &&
+    !hero.captiveOf &&
+    !hero.training
+  )
 }
 
 /** True when the account holds enough of every material the promotion costs. */
@@ -216,7 +225,11 @@ export function completePromotion(hero: OwnedHero, accountSeed: Seed, highestCle
 
   // Rank deepens the hero's connection with the Master: Intervention Points (Layer 3 §D2).
   const ip = (hero.ip ?? 0) + TUNING.intervention.perPromotion
-  return { ...hero, heroClass, star: newStar, baseAttrs, growthGrades, skills, xp, engraving, ip, promotion: null }
+  // The chamber shows the truth (B41): a whale-bait display star does not survive a promotion
+  // (left in place, a twice-promoted bait hero would show LESS than their real star).
+  const { displayStar: _shown, ...rest } = hero
+  void _shown
+  return { ...rest, heroClass, star: newStar, baseAttrs, growthGrades, skills, xp, engraving, ip, promotion: null }
 }
 
 /**

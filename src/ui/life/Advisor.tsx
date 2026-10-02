@@ -6,7 +6,7 @@
 import { useMemo, useState } from 'react'
 import type { GameState, JobId } from '../../engine/types'
 import type { Store } from '../../engine/store'
-import { advise, type Advice, type AdvicePlace } from '../../engine/advisor'
+import { advise, adviceSignature, type Advice, type AdvicePlace } from '../../engine/advisor'
 import { JOB_FACILITY, personalityOf } from '../../engine/life'
 import { GIFTS } from '../../engine/favor'
 import { SKILLS } from '../../engine/content'
@@ -156,7 +156,11 @@ export function phrase(state: GameState, a: Advice): Tip {
 /** The tips still worth showing (the session's dismissals removed). */
 export function useAdvice(state: GameState): { tips: Advice[]; dismiss: (id: string) => void } {
   const [dismissed, setDismissed] = useState<Set<string>>(() => new Set())
-  const all = useMemo(() => advise(state), [state])
+  // The lobby ticks a new state every second; advice is recomputed only when something it
+  // reads has moved (a cheap fingerprint), not on every tick.
+  const sig = adviceSignature(state)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const all = useMemo(() => advise(state), [sig])
   return {
     tips: all.filter((a) => !dismissed.has(a.id)),
     dismiss: (id) => setDismissed((d) => new Set(d).add(id)),

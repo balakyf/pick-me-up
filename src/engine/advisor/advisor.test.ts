@@ -4,7 +4,7 @@ import { reduce } from '../store'
 import { TUNING } from '../tuning'
 import type { GameState, HeroId, OwnedHero } from '../types'
 import { aptitude, lifeOf } from '../life'
-import { advise, type Advice } from './advisor'
+import { advise, adviceSignature, type Advice } from './advisor'
 
 /** An account with `n` extra Normal pulls. */
 function roster(seed: number, n = 9): GameState {
@@ -35,6 +35,35 @@ describe('advisor', () => {
     expect(new Set(heroes).size).toBe(heroes.length)
     const cooks = jobs.filter((a) => a.kind === 'job' && a.job === 'cook').length
     expect(cooks).toBeLessThanOrEqual(s.facilities.kitchen.level * TUNING.life.jobs.seatsPerLevel)
+  })
+
+  it('suggests a banquet for a pale party — but not while the hall is being cleaned', () => {
+    const s0 = roster(6)
+    const heroes = { ...s0.heroes }
+    for (const h of living(s0)) heroes[h.id] = { ...h, sanity: 20 }
+    const pale = { ...s0, heroes, gold: 100_000 }
+    const tip = advise(pale).find((a) => a.kind === 'banquet')
+    expect(tip).toBeDefined()
+    const fed = run(pale, tip!)
+    const again = { ...fed, heroes: Object.fromEntries(Object.entries(fed.heroes).map(([id, h]) => [id, { ...h, sanity: 20 }])) }
+    expect(advise(again).some((a) => a.kind === 'banquet')).toBe(false)
+  })
+
+  it('the advice fingerprint ignores a quiet tick but moves with anything advice reads', () => {
+    const s = roster(4)
+    const sig = adviceSignature(s)
+    // A few real seconds later (the 1 Hz lobby TICK): same advice inputs.
+    const ticked = reduce(s, { type: 'TICK' }, s.meta.lastSeenAtWorld + 3_000 * TUNING.time.worldTimeFactor)
+    expect(ticked).not.toBe(s)
+    expect(adviceSignature(ticked)).toBe(sig)
+    expect(advise(ticked)).toEqual(advise(s))
+    // Things the advice depends on move it.
+    const id = living(s)[0]!.id
+    expect(adviceSignature({ ...s, gold: s.gold + 1 })).not.toBe(sig)
+    expect(adviceSignature({ ...s, heroes: { ...s.heroes, [id]: { ...s.heroes[id]!, sanity: s.heroes[id]!.sanity - 1 } } })).not.toBe(sig)
+    expect(adviceSignature({ ...s, party: { ...s.party, slots: [null, null, null, null, null] } })).not.toBe(sig)
+    expect(adviceSignature({ ...s, life: { ...s.life, slot: s.life.slot + 1 } })).not.toBe(sig)
+    expect(adviceSignature({ ...s, meta: { ...s.meta, banquetDay: 3 } })).not.toBe(sig)
   })
 
   it('points out empty party slots when rested heroes are waiting', () => {

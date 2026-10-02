@@ -1,8 +1,8 @@
 import type { OwnedHero, Star } from '../engine/types'
 import { baitRevealed, shownStar } from '../engine/shop'
 import { favorTierName } from '../engine/favor'
-import { deriveStatsForHero, levelCapForStar } from '../engine/stats'
-import { Stars, ElementBadge, ClassBadge, Portrait, STAR_COLOR, cpOf, gradeLetters, SkillList, EngravingBadge } from './bits'
+import { levelCapForStar } from '../engine/stats'
+import { Stars, ElementBadge, ClassBadge, Portrait, STAR_COLOR, cpOf, statsOf, gradeLetters, SkillList, EngravingBadge } from './bits'
 import { t } from './i18n/i18n'
 import { bornTrade } from './hero/heroLabel'
 import { BondBadge } from './bond/BondBadge'
@@ -22,7 +22,7 @@ export function HeroCard({ hero, onClick, selected, showStats, masterLevel = 1 }
   const cap = levelCapForStar(hero.star)
   const dead = !hero.alive
   const cls = ['card', onClick ? 'click' : '', selected ? 'sel' : '', dead ? 'dead' : ''].filter(Boolean).join(' ')
-  const stats = showStats ? deriveStatsForHero(hero, hero.xp.level) : null
+  const stats = showStats ? statsOf(hero) : null
   const grades = gradeLetters(hero)
 
   return (

@@ -6,19 +6,25 @@
 import type { CombatUnit, DerivedStats, GameState, HeroId } from '../types'
 import { TRAUMA } from './constants'
 
+/** The estate's reason to keep a hero off the field right now: out on a bounty, or burnt
+ *  out and still resting (null = free). The one source of truth for both checks below and
+ *  for the tower's deploy rails (tower/deploy.ts). */
+export function estateRefusal(state: GameState, heroId: HeroId): 'bounty' | 'burnout' | null {
+  if ((state.estate?.bounties ?? []).some((b) => b.heroIds.includes(heroId))) return 'bounty'
+  const t = state.estate?.trauma?.[heroId]
+  if (t && t.burnoutUntil !== null && t.burnoutUntil > state.meta.lastSeenAtWorld) return 'burnout'
+  return null
+}
+
 /** Burnt out (still resting) or out on a bounty: this hero won't deploy right now. */
 export function refusesDeploy(state: GameState, heroId: HeroId): boolean {
-  const t = state.estate?.trauma?.[heroId]
-  if (t && t.burnoutUntil !== null && t.burnoutUntil > state.meta.lastSeenAtWorld) return true
-  return (state.estate?.bounties ?? []).some((b) => b.heroIds.includes(heroId))
+  return estateRefusal(state, heroId) !== null
 }
 
 /** Why the estate keeps this hero off the field right now (bounty or burnout), or null. */
 export function estateBusy(state: GameState, heroId: HeroId): string | null {
-  if ((state.estate?.bounties ?? []).some((b) => b.heroIds.includes(heroId))) return 'is out on a bounty'
-  const t = state.estate?.trauma?.[heroId]
-  if (t && t.burnoutUntil !== null && t.burnoutUntil > state.meta.lastSeenAtWorld) return 'is burnt out and resting'
-  return null
+  const r = estateRefusal(state, heroId)
+  return r === 'bounty' ? 'is out on a bounty' : r === 'burnout' ? 'is burnt out and resting' : null
 }
 
 const SCALED: (keyof DerivedStats)[] = ['maxHP', 'pAtk', 'mAtk', 'pDef', 'mDef', 'spd']

@@ -29,7 +29,11 @@ export function unlockMasterLevel(facility: FacilityId): number {
 }
 
 export function upgradeCost(facility: FacilityId, level: number): number {
-  return Math.round(F.baseCost[facility]! * F.costGrowth ** level)
+  // costGrowth^level as a multiply loop (no runtime `**` with a variable exponent — the
+  // determinism guard; for 1.5 and these levels the product is exact, so costs are unchanged).
+  let growth = 1
+  for (let i = 0; i < level; i++) growth *= F.costGrowth
+  return Math.round(F.baseCost[facility]! * growth)
 }
 
 /** World-time a build to `toLevel` takes (scales with the target level). */

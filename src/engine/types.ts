@@ -324,7 +324,14 @@ export interface OwnedHero extends Omit<Hero, 'skillIds'> {
   /** Intervention Points (Layer 3 §D2). */
   ip: number
   /** The last gift given and how many times in a row (repeat gifts decay). */
-  gift: { last: string | null; streak: number }
+  gift: {
+    last: string | null
+    streak: number
+    /** The latest gifts, oldest first (at most TUNING.favor.repeatWindow): repeats are
+     *  counted here, so alternating two gifts no longer resets the decay. Absent on older
+     *  saves (read through favor.recentGifts). */
+    recent?: string[]
+  }
   /** Whale-bait inflation: the star the summon SHOWED (engine always uses `star`). */
   displayStar?: Star
   /** Guarantee an action: the next tower battle's first strike lands ×2. */
@@ -511,6 +518,9 @@ export interface FallenRecord {
   bestFloor: number
   /** Ids of the friends left behind (affinity ≥ friend threshold at death). */
   mourners: HeroId[]
+  /** What they carried at the end (the gear went back to the armory, so their blade can
+   *  be passed on). Absent on older graves and for heroes who carried nothing. */
+  carried?: { slot: EquipmentSlot; itemId: EquipmentId; name: string; grade: EquipmentGrade }[]
 }
 
 /** Running totals since the Master last read Isel's letter. */
@@ -637,6 +647,9 @@ export interface TowerState {
   attemptIndex: number
   /** An open event floor (bonus / recovery / tournament); the climb waits on it (schema v7). */
   event: TowerEvent | null
+  /** Event floors waiting behind the open one (B19: a heavy-loss first clear of F41 opens
+   *  the recovery first, then the tournament — neither is lost). Absent = none. */
+  eventQueue?: TowerEvent[]
   /** The F36–40 looped mission, while inside it. */
   loop: LoopState | null
   /** Hidden objectives found so far (sorted ids). */
@@ -734,6 +747,8 @@ export interface MetaState {
   piZeroSince: number | null
   /** Six months at zero: the account is deleted (canon grey towers). */
   deleted: boolean
+  /** World-day of the last Kitchen Banquet (absent = never held). */
+  banquetDay?: number
 }
 
 export interface DailiesState {
@@ -1192,12 +1207,27 @@ export interface FloorResult {
   loopRollback: boolean
   /** This attempt cleared F90: the world ends. */
   worldEnded: boolean
-  /** Heroes who refused to deploy (Wary and broken — Layer 3 rebellion). */
+  /** Heroes who refused the order (rebellion, burnout or a bounty — the old meaning; kept
+   *  for compatibility). `refusals` has every slotted hero who stayed behind, with why. */
   refusedHeroIds: HeroId[]
+  /** Every slotted hero who did not fight this attempt, and the true reason (deploy rails). */
+  refusals: { heroId: HeroId; reason: DeployReason }[]
   /** F90 was cleared by subversion: the world was saved. */
   worldSaved: boolean
   result: BattleResult
 }
+
+/** Why a slotted hero stays behind (see engine/tower/deploy.ts). */
+export type DeployReason =
+  | 'dead'
+  | 'captive'
+  | 'expedition'
+  | 'promotion'
+  | 'training'
+  | 'bounty'
+  | 'burnout'
+  | 'exhausted'
+  | 'rebellion'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Content templates (authored data → built into Heroes / CombatUnits)

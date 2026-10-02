@@ -16,7 +16,9 @@
  */
 
 import { TUNING } from '../tuning'
-import { buildFillerEncounter } from '../tower'
+import { buildFillerEncounter } from '../tower/tower'
+import { deployParty } from '../tower/deploy'
+import { addMasterXp } from '../master'
 import { buildCombatUnit } from '../unit'
 import { runBattle } from '../combat'
 import { SKILLS } from '../content'
@@ -182,19 +184,12 @@ export function attemptDaily(state: GameState, nowWorld: number): { state: GameS
   const dayIndex = worldDayIndex(nowWorld)
   const attempt = state.dailies.attemptsUsed
 
-  // Build the deployed party (skip empty slots, the dead, and the broken-down).
-  const heroUnits: CombatUnit[] = []
-  const deployedIds: HeroId[] = []
-  const { slots, lines } = state.party
-  for (let s = 0; s < slots.length; s++) {
-    const heroId = slots[s]
-    if (heroId === null || heroId === undefined) continue
-    const hero = state.heroes[heroId]
-    // A hero in a Training Center drill is in the yard, not the party.
-    if (hero === undefined || !hero.alive || hero.sanity <= 0 || hero.training !== null || hero.expedition || hero.captiveOf) continue
-    heroUnits.push(buildCombatUnit(hero, lines[s] ?? 'front', SKILLS, state.inventory))
-    deployedIds.push(heroId)
-  }
+  // Build the deployed party through the deploy rails (the tower's own rule: no one away,
+  // promoting, drilling, on a bounty, burnt out or broken down). No rebellion draw: the
+  // dungeon is non-lethal and the draw belongs to the tower attempt.
+  const deployed = deployParty(state, (hero, line) => buildCombatUnit(hero, line, SKILLS, state.inventory), { rebellion: false })
+  const heroUnits: CombatUnit[] = deployed.units
+  const deployedIds: HeroId[] = deployed.ids
   if (heroUnits.length === 0) throw new Error('attemptDaily: no deployable heroes')
 
   // Seeded encounter + battle (reuses the tower filler power-budget generator).
@@ -241,6 +236,8 @@ export function attemptDaily(state: GameState, nowWorld: number): { state: GameS
     heroes,
     dailies: { ...state.dailies, attemptsUsed: state.dailies.attemptsUsed + 1 },
     codex: recordBattle(state.codex, res.log),
+    // The Master learns from every dungeon cleared (B21).
+    ...(cleared ? { meta: addMasterXp(state.meta, TUNING.lobby.master.xpPerDailyClear) } : {}),
   }
 
   return {

@@ -20,7 +20,7 @@
  * PURE and deterministic (rolls via rngFor).
  */
 import { chance, rngFor } from '../rng'
-import { GIFTS, giftDelta, giftPreferences, withFavor, type GiftCategory } from '../favor'
+import { GIFTS, giftDelta, giftPreferences, giftRepeats, withFavor, type GiftCategory } from '../favor'
 import { TUNING } from '../tuning'
 import type { AttentionMark, ChronicleEntry, GameState, HeroId, HeroTrauma, OwnedHero } from '../types'
 import { FAVORITISM as F, TRAUMA as T } from './constants'
@@ -157,7 +157,7 @@ export function giftMeaningBonus(state: GameState, hero: OwnedHero, giftId: stri
   if (!gift) return 0
   const m = giftMeanings(state, hero.id).find((x) => x.category === gift.category)
   if (!m) return 0
-  const soured = hero.gift.last === giftId && hero.gift.streak >= TUNING.favor.repeatSour
+  const soured = giftRepeats(hero, giftId) >= TUNING.favor.repeatSour
   if (soured) return 0
   const base = giftDelta(hero, giftId)
   // A dead friend's favourite overrides a dislike: it is not the thing, it is the person.

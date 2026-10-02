@@ -8,9 +8,9 @@ import { TUNING } from '../tuning'
 import type { Command, EquipmentSlot, GameState, HeroId, JobId, OwnedHero } from '../types'
 import { JOBS, aptitude, jobFeeling, jobHolders, jobOpen, jobSeats, bondOf, relationsOf, lifeOf } from '../life'
 import { canPromote, canAfford } from '../promotion'
-import { banquetWouldHelp } from '../kitchen'
+import { banquetRefusal, banquetWouldHelp } from '../kitchen'
 import { dailyUnlocked, dailyAttemptsLeft } from '../daily'
-import { equippedItemIds } from '../equipment'
+import { boundElsewhere, equippedItemIds } from '../equipment'
 import { GIFTS, favorTier, giftDelta } from '../favor'
 import { trainingOptions } from '../training'
 import { canFight, heroCp } from '../scout'
@@ -76,12 +76,69 @@ function inParty(state: GameState): Set<HeroId> {
   return new Set(state.party.slots.filter((s): s is HeroId => s !== null))
 }
 
+const WORLD_DAY_MS = 24 * 3_600_000
+
+/**
+ * A cheap fingerprint of everything `advise` reads that can change (B9: the lobby's 1 Hz
+ * TICK makes a new state every second, but almost nothing advice depends on moves that
+ * fast). The UI memoizes `advise` on it. Covers commands (party, gold, gear, jobs,
+ * materials, facilities, the roster) and the clock's slow beats: the life slot (relations,
+ * jobs, needs), the world-day (dailies, the banquet hall), whole points of Sanity, timers
+ * finishing, bounties coming home and burnout ending.
+ */
+export function adviceSignature(state: GameState): string {
+  const parts: (string | number)[] = [
+    state.life?.slot ?? 0,
+    Math.floor(state.meta.lastSeenAtWorld / WORLD_DAY_MS),
+    state.gold,
+    state.gems,
+    state.party.slots.join(','),
+    state.party.lines.join(','),
+    state.inventory.length,
+    state.dailies.attemptsUsed,
+    state.dailies.lastResetWorldDay,
+    state.meta.banquetDay ?? -1,
+    state.meta.masterLevel,
+    state.tower.highestCleared,
+    JSON.stringify(state.materials),
+    (state.estate?.bounties ?? []).map((b) => b.id).join(','),
+  ]
+  for (const [id, f] of Object.entries(state.facilities)) parts.push(`${id}${f.level}${f.build ? '+' : ''}`)
+  for (const h of Object.values(state.heroes) as OwnedHero[]) {
+    if (!h.alive) {
+      parts.push(`${h.id}†`)
+      continue
+    }
+    const e = h.equipment
+    parts.push(
+      [
+        h.id,
+        Math.floor(h.sanity),
+        h.favor,
+        h.star,
+        h.xp.level,
+        h.xp.atCap ? 'c' : '',
+        h.training ? 't' : '',
+        h.promotion ? 'p' : '',
+        h.expedition ? 'x' : '',
+        h.captiveOf ? 'k' : '',
+        h.life?.job ?? '',
+        `${e.weapon ?? ''}/${e.armor ?? ''}/${e.accessory ?? ''}`,
+        h.skills.length,
+        `${h.gift.last ?? ''}${h.gift.streak}`,
+        refusesDeploy(state, h.id) ? 'r' : '',
+      ].join(':'),
+    )
+  }
+  return parts.join('|')
+}
+
 /** Every tip for the waiting room right now, most useful first. */
 export function advise(state: GameState): Advice[] {
   const out: Advice[] = []
   const party = inParty(state)
   const heroes = living(state)
-  const ready = (h: OwnedHero) => canFight(h) && !refusesDeploy(state, h.id)
+  const ready = (h: OwnedHero) => canFight(h, state)
 
   // ── The party ────────────────────────────────────────────────────────────
   const bench = heroes.filter((h) => !party.has(h.id) && ready(h) && h.sanity >= A.benchMinSanity)
@@ -95,8 +152,8 @@ export function advise(state: GameState): Advice[] {
     const h = state.heroes[id]
     if (!h?.alive || h.sanity >= A.tiredBelow) continue
     const swap = bench
-      .filter((b) => b.sanity >= A.restedAt && !usedSwaps.has(b.id) && heroCp(b) >= heroCp(h) * A.swapCpRatio)
-      .sort((a, b) => heroCp(b) - heroCp(a))[0]
+      .filter((b) => b.sanity >= A.restedAt && !usedSwaps.has(b.id) && heroCp(b, state) >= heroCp(h, state) * A.swapCpRatio)
+      .sort((a, b) => heroCp(b, state) - heroCp(a, state))[0]
     if (!swap) continue
     usedSwaps.add(swap.id)
     const slots = state.party.slots.map((s) => (s === h.id ? swap.id : s))
@@ -113,7 +170,7 @@ export function advise(state: GameState): Advice[] {
   const partyHeroes = [...party].map((id) => state.heroes[id]).filter((h): h is OwnedHero => !!h?.alive)
   if (partyHeroes.length > 0) {
     const avg = partyHeroes.reduce((n, h) => n + h.sanity, 0) / partyHeroes.length
-    if (avg < A.banquetBelow && banquetWouldHelp(state) && state.gold >= TUNING.lobby.banquet.gold) {
+    if (avg < A.banquetBelow && banquetWouldHelp(state) && banquetRefusal(state) === null) {
       out.push({ id: 'banquet', kind: 'banquet', priority: 70, actions: [{ type: 'BANQUET' }] })
     }
   }
@@ -186,7 +243,7 @@ export function advise(state: GameState): Advice[] {
     for (const slot of ['weapon', 'armor', 'accessory'] as EquipmentSlot[]) {
       if (h.equipment[slot]) continue
       const item = state.inventory.find(
-        (i) => i.slot === slot && !worn.has(i.id) && !taken.has(i.id) && (i.exclusiveTo === undefined || i.exclusiveTo === h.id),
+        (i) => i.slot === slot && !worn.has(i.id) && !taken.has(i.id) && !boundElsewhere(state, i, h.id),
       )
       if (!item) continue
       taken.add(item.id)
@@ -222,7 +279,7 @@ export function advise(state: GameState): Advice[] {
   // ── Bench heroes could drill a skill ──
   if (state.facilities.trainingCenter.level > 0) {
     let n = 0
-    const benchByCp = heroes.filter((h) => !party.has(h.id) && ready(h)).sort((a, b) => heroCp(b) - heroCp(a))
+    const benchByCp = heroes.filter((h) => !party.has(h.id) && ready(h)).sort((a, b) => heroCp(b, state) - heroCp(a, state))
     for (const h of benchByCp) {
       if (n >= 2) break
       const opt = trainingOptions(state, h.id).find((o) => o.ok && o.cost <= state.gold / 4)

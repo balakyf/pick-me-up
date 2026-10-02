@@ -17,6 +17,7 @@
 import { TUNING } from '../tuning'
 import { floatStream } from '../rng'
 import { applyXp, xpToNext } from '../stats'
+import { addMasterXp } from '../master'
 import { forgeCost, forgeGrade, statBlockFor, itemName, smithyUnlocked } from '../equipment'
 import type {
   ActivityKind,
@@ -427,6 +428,16 @@ function cloneLife(l: HeroLife): HeroLife {
 }
 
 /**
+ * What one mourning visit to the Memorial does (grief eased, Sanity steadied): the base
+ * visit, plus a little more for each Memorial level above the first (B47 — upgrades used
+ * to change nothing).
+ */
+export function mournComfort(memorialLevel: number): { grief: number; sanity: number } {
+  const up = Math.max(0, memorialLevel - 1)
+  return { grief: L.grief.mourn + up * L.memorial.griefPerLevel, sanity: 1 + up * L.memorial.sanityPerLevel }
+}
+
+/**
  * Advance the Living Lobby to world-time `nowWorld`. Returns the same reference when no
  * slot boundary was crossed.
  */
@@ -470,6 +481,8 @@ export function stepLife(state: GameState, nowWorld: number): GameState {
   const pantryCap = Math.max(4, work.length * L.jobs.pantryPerHero)
   const seed = state.seed
   let lastStallDay = -1
+  /** Job tier-ups this catch-up (each teaches the Master — B21). */
+  let tierUps = 0
   const mods = estateLifeMods(state)
 
   for (let slot = from + 1; slot <= target; slot++) {
@@ -519,6 +532,7 @@ export function stepLife(state: GameState, nowWorld: number): GameState {
       w.life.jobXp[job] = (w.life.jobXp[job] ?? 0) + 1
       const after = jobTier(w.life.jobXp[job]!)
       if (after > before) {
+        tierUps++
         addMemory(w.life, { kind: 'jobTier', day, detail: `${job}:${after}`, weight: 45 })
         pushChronicle(chronicle, { at: atWorld, kind: 'jobTier', heroIds: [w.hero.id], detail: `${job}:${after}` })
       }
@@ -688,8 +702,10 @@ export function stepLife(state: GameState, nowWorld: number): GameState {
           w.sanity += L.sanity.pray
           break
         case 'mourn': {
-          w.life.grief -= L.grief.mourn
-          w.sanity += 1
+          // A better-kept Memorial eases more grief per visit (B47).
+          const comfort = mournComfort(state.facilities.memorial?.level ?? 1)
+          w.life.grief -= comfort.grief
+          w.sanity += comfort.sanity
           // The first visit for a fallen friend is remembered.
           const lost = salientMemories(w.life, day).find((m) => m.kind === 'friendDied')
           if (lost?.other && !w.life.memories.some((m) => m.kind === 'mourned' && m.other === lost.other)) {
@@ -794,7 +810,7 @@ export function stepLife(state: GameState, nowWorld: number): GameState {
     materials,
     inventory,
     heroes,
-    meta: { ...state.meta, pi, peekedFloors: peeked },
+    meta: addMasterXp({ ...state.meta, pi, peekedFloors: peeked }, tierUps * TUNING.lobby.master.xpPerJobTier),
     life: { ...state.life, slot: target, relations, chronicle, pantry: Math.round(pantry * 100) / 100, forge, research, guardPower, tally },
   }
 }

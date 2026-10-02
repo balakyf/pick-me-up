@@ -27,6 +27,8 @@ import { runBattle } from '../combat'
 import { buildEncounter, floorPower, floorXp, sanityDrain } from '../tower'
 import { applyXp } from '../stats'
 import { clampSanity } from '../kitchen'
+import { releaseGear } from '../equipment'
+import { addMasterXp } from '../master'
 import { clampPerformance, practice } from '../minigames'
 import { worldDayIndex } from '../daily'
 import { rngFor, hash, chance } from '../rng/rng'
@@ -104,7 +106,7 @@ export function raidRefusal(state: GameState, floor: number, parties: readonly H
   if (crew.length > RD.maxCrew) return `The ballista takes at most ${RD.maxCrew} crew.`
   const all = [...fighting.flat(), ...crew]
   if (distinct(all).length !== all.length) return 'A hero can only be in one place.'
-  if (all.some((id) => !fitToFight(state.heroes[id]) || refusesDeploy(state, id))) return 'Everyone sent must be fit to fight.'
+  if (all.some((id) => !fitToFight(state.heroes[id], state))) return 'Everyone sent must be fit to fight.'
   return null
 }
 
@@ -207,7 +209,7 @@ export function runRaid(
     const drain = sanityDrain(floorPower(floor, worldMult), partyCp, cleared, r.fallen.length > 0)
     for (const id of r.heroIds) {
       const h = heroes[id]!
-      if (fallen.has(id)) heroes[id] = { ...h, alive: false, blessed: false }
+      if (fallen.has(id)) heroes[id] = releaseGear({ ...h, alive: false, blessed: false })
       else heroes[id] = { ...h, sanity: clampSanity(h.sanity - drain), xp: xp > 0 ? applyXp(h.xp, xp, h.star) : h.xp }
     }
   }
@@ -239,7 +241,9 @@ export function runRaid(
     attempts: record.attempts + 1,
     lastClearWeek: cleared ? week : record.lastClearWeek,
   }
-  const meta = ballista !== undefined ? practice(state.meta, 'ballista') : state.meta
+  const practised = ballista !== undefined ? practice(state.meta, 'ballista') : state.meta
+  // A raid boss felled teaches the Master (B21).
+  const meta = cleared ? addMasterXp(practised, TUNING.lobby.master.xpPerRaidClear) : practised
   return {
     state: {
       ...state,

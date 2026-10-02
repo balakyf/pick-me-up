@@ -92,10 +92,13 @@ const CAMEO: Record<string, Partial<Personality>> = {
   'Aaron Delcut': { diligence: 0.8, courage: 0.8, voice: 'formal', background: 'knight', hobby: 'sparring' },
   Dika: { curiosity: 0.9, voice: 'quiet', background: 'sage', hobby: 'reading', chronotype: 'owl' },
   Ridigeon: { temper: 0.8, courage: 0.9, voice: 'rough', background: 'mercenary', hobby: 'cards' },
-  'Muden Nighdelk': { warmth: 0.3, curiosity: 0.8, voice: 'grim', background: 'courtMage', hobby: 'stargazing', chronotype: 'owl' },
-  'Nihaku Gastfeel': { diligence: 0.9, voice: 'formal', background: 'swordMaster', hobby: 'carving' },
-  Anasis: { sociability: 0.85, warmth: 0.75, voice: 'cheerful', background: 'priest', hobby: 'music' },
-  Kishasha: { temper: 0.7, sociability: 0.3, voice: 'quiet', background: 'hunter', hobby: 'gardening' },
+  // Classed cameos take a background their class could have had (BG_BY_CLASS, B47): the
+  // King's Spear served as a knight; the Thunderbringer and the Beast King's heir sold
+  // their skill as mercenaries before the summon; Anasis bore the dragon's blood as a knight.
+  'Muden Nighdelk': { warmth: 0.3, curiosity: 0.8, voice: 'grim', background: 'knight', hobby: 'stargazing', chronotype: 'owl' },
+  'Nihaku Gastfeel': { diligence: 0.9, voice: 'formal', background: 'mercenary', hobby: 'carving' },
+  Anasis: { sociability: 0.85, warmth: 0.75, voice: 'cheerful', background: 'knight', hobby: 'music' },
+  Kishasha: { temper: 0.7, sociability: 0.3, voice: 'quiet', background: 'mercenary', hobby: 'gardening' },
 }
 
 /** 0..1 from a hash (integer arithmetic only — determinism guard). */
@@ -103,18 +106,38 @@ function unit(h: number): number {
   return (h >>> 0) / 4294967296
 }
 
+/** The backgrounds a hero of this star and class can have had (a classed 3★+ hero's past
+ *  leans on their class: a mage was never a shepherd). */
+export function backgroundPool(star: number, heroClass: HeroClass | null): readonly string[] {
+  const classPool = heroClass ? BG_BY_CLASS[heroClass] : undefined
+  if (classPool && star >= 3) return classPool
+  return BG_BY_STAR[star <= 1 ? 'low' : star === 2 ? 'mid' : 'high']
+}
+
+type PersonaInputs = Pick<OwnedHero, 'id' | 'name' | 'star' | 'heroClass' | 'portraitToken'>
+
+/**
+ * Memo of `derivePersonality`, keyed on EVERY input it reads (B25: keyed on id and name
+ * alone, a promoted hero kept the background of whatever star the process first saw, so a
+ * long session and a reload disagreed). Bounded by roster × stars.
+ */
 const cache = new Map<string, Personality>()
 
-export function personalityOf(hero: Pick<OwnedHero, 'id' | 'name' | 'star' | 'heroClass' | 'portraitToken'>): Personality {
-  const key = `${hero.id}|${hero.name}`
+export function personalityOf(hero: PersonaInputs): Personality {
+  const key = `${hero.id}|${hero.name}|${hero.portraitToken}|${hero.star}|${hero.heroClass ?? '-'}`
   const hit = cache.get(key)
   if (hit) return hit
+  const p = derivePersonality(hero)
+  cache.set(key, p)
+  return p
+}
+
+/** Who a hero is, from identity alone (uncached; `personalityOf` memoizes it). */
+export function derivePersonality(hero: PersonaInputs): Personality {
   const r = (salt: string) => unit(hash('persona', hero.id, hero.name, hero.portraitToken, salt))
   // Traits cluster around the middle (average of two draws) — few people are extreme.
   const trait = (salt: string) => Math.round(((r(salt) + r(salt + '2')) / 2) * 100) / 100
-  const tier = hero.star <= 1 ? 'low' : hero.star === 2 ? 'mid' : 'high'
-  const classPool = hero.heroClass ? BG_BY_CLASS[hero.heroClass] : undefined
-  const pool = classPool && hero.star >= 3 ? classPool : BG_BY_STAR[tier]
+  const pool = backgroundPool(hero.star, hero.heroClass)
   const chrono = r('chrono')
   const base: Personality = {
     diligence: trait('dil'),
@@ -129,9 +152,7 @@ export function personalityOf(hero: Pick<OwnedHero, 'id' | 'name' | 'star' | 'he
     hobby: HOBBIES[Math.floor(r('hobby') * HOBBIES.length)]!,
     background: pool[Math.floor(r('bg') * pool.length)]!,
   }
-  const p = { ...base, ...(CAMEO[hero.name] ?? {}) }
-  cache.set(key, p)
-  return p
+  return { ...base, ...(CAMEO[hero.name] ?? {}) }
 }
 
 /** Pair chemistry −1..1: some people simply click (symmetric, stable). */

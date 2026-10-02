@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { crackRefusal, openCrack, dispatchRuins, dispatchRefusal, expeditionHaul } from './rift'
 import { createAccount } from '../account'
 import { advanceTime } from '../time'
-import { playFloor } from '../tower'
+import { playFloor, deployReport } from '../tower'
 import { piAfterGap, piUnlocked } from '../interference'
 import { canUpgrade } from '../facilities'
 import { TUNING } from '../tuning'
@@ -44,7 +44,9 @@ describe('the Crack of Time and Space', () => {
     expect(dispatchRefusal(state, [id])).toMatch(/closed/)
     const away = dispatchRuins(open, [id], 0)
     expect(away.heroes[id]!.expedition).toEqual({ completesAtWorld: R.expeditionMs })
-    expect(playFloor(away).result.result.log.unitsInit.filter((u) => u.side === 'hero')).toHaveLength(0)
+    // Away in the Ruins: not fielded (alone, the attempt is refused outright).
+    expect(deployReport(away).find((r) => r.heroId === id)).toMatchObject({ fit: false, reason: 'expedition' })
+    expect(() => playFloor(away)).toThrow(/no one is fit to fight/)
     const haul = expeditionHaul(away.heroes[id]!, away.seed)
     const home = advanceTime(away, R.expeditionMs + 1)
     expect(home.heroes[id]!.expedition).toBeNull()

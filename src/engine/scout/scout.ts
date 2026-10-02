@@ -8,12 +8,11 @@
  * 0.6–1.0 won ~88% with ~0.8 deaths; below 0.6 the party lost more than it won and
  * ~3 heroes died an attempt.
  */
-import { refusesDeploy } from '../estate/deploy'
 import { TUNING } from '../tuning'
-import { combatPowerForHero } from '../stats'
-import { skillCp } from '../skills'
-import { engravingCp } from '../engravings'
 import { buildEncounter, floorPower } from '../tower'
+import { fitToDeploy, heroUnfitReason } from '../tower/deploy'
+import { heroCpFull, heroUnitFull, type CpContext } from '../unit/trueCp'
+import { applyPartyBonuses } from '../challenge/bonds'
 import { ELEMENT_ADVANTAGE } from '../tuning'
 import type { Element, EnemyFamily, FloorModifierId, GameState, HeroId, KeywordTag, Line, OwnedHero } from '../types'
 import { isStudied } from '../codex'
@@ -54,12 +53,33 @@ export interface ScoutReport {
   modifiers: FloorModifierId[]
 }
 
-export function heroCp(h: OwnedHero): number {
-  return combatPowerForHero(h, h.xp.level, skillCp(h.skills) + engravingCp(h.engraving))
+export { heroCpFull, heroUnitFull, heroStatsFull, type CpContext } from '../unit/trueCp'
+
+const NO_GEAR: CpContext = { inventory: [] }
+
+/**
+ * A hero's CP — the TRUE number combat fields (unit/trueCp.ts): gear, passive and
+ * engraving %, favor, the Sanity penalty and withdrawal included. Pass the account (or at
+ * least its inventory) for gear to count; without it the hero is read bare-handed.
+ */
+export function heroCp(h: OwnedHero, state?: CpContext): number {
+  return heroCpFull(state ?? NO_GEAR, h)
 }
 
-export function canFight(h: OwnedHero): boolean {
-  return h.alive && h.sanity > 0 && h.training === null && h.expedition === null && !h.captiveOf && h.promotion === null
+/** The party's CP as the tower would field these heroes: true CP plus the party's bond
+ *  set bonuses and the Cursed Shrine's blessing on this floor. */
+export function partyCp(state: GameState, heroes: readonly OwnedHero[]): number {
+  const units = applyPartyBonuses(heroes.map((h) => heroUnitFull(state, h)), state)
+  return units.reduce((n, u) => n + u.cp, 0)
+}
+
+/**
+ * Can this hero fight right now? With the account `state` this is the deploy rails
+ * (tower/deploy.ts: bounty and burnout too); without it only what the hero carries.
+ * No rebellion draw — a suggestion, not the attempt.
+ */
+export function canFight(h: OwnedHero, state?: GameState): boolean {
+  return state ? fitToDeploy(state, h, { rebellion: false }).ok : heroUnfitReason(h) === null
 }
 
 export function threatFor(ratio: number): { threat: Threat; expectedDeaths: number } {
@@ -69,8 +89,12 @@ export function threatFor(ratio: number): { threat: Threat; expectedDeaths: numb
   return { threat: 'deadly', expectedDeaths: 3 }
 }
 
+/** The party heroes who will actually fight the next attempt (the deploy rails, the
+ *  rebellion draw included — a rebel won't be there). */
 function partyHeroes(state: GameState): OwnedHero[] {
-  return state.party.slots.map((id) => (id ? state.heroes[id] : undefined)).filter((h): h is OwnedHero => !!h && canFight(h))
+  return state.party.slots
+    .map((id) => (id ? state.heroes[id] : undefined))
+    .filter((h): h is OwnedHero => !!h && fitToDeploy(state, h).ok)
 }
 
 /** Scout the current floor for the current party (or `heroes`). */
@@ -109,14 +133,14 @@ export function scoutFloor(state: GameState, heroes: OwnedHero[] = partyHeroes(s
   }
   const worldMult = TUNING.tower.worldMult[state.worldGrade]
   const budget = floorPower(floor, worldMult)
-  const partyCp = heroes.reduce((n, h) => n + heroCp(h), 0)
-  const ratio = budget > 0 ? partyCp / budget : 0
+  const cp = partyCp(state, heroes)
+  const ratio = budget > 0 ? cp / budget : 0
   return {
     floor,
     mission: enc.mission.type,
     waves: enc.waves.length,
     enemies: [...groups.values()],
-    partyCp,
+    partyCp: cp,
     budget,
     ratio: Math.round(ratio * 100) / 100,
     ...threatFor(ratio),
@@ -133,10 +157,10 @@ function advantaged(h: OwnedHero, enemyElements: Element[]): boolean {
   return enemyElements.filter((e) => e === beats).length > enemyElements.length / 3
 }
 
-function bulk(h: OwnedHero): number {
+function bulk(h: OwnedHero, cp: number): number {
   const cls = h.heroClass
   const role = cls === 'warrior' || cls === 'spearman' ? 2 : cls === 'thief' ? 1 : 0
-  return role * 1e9 + heroCp(h)
+  return role * 1e9 + cp
 }
 
 /**
@@ -149,9 +173,13 @@ export function suggestParty(state: GameState, minSanity = 40): { slots: (HeroId
   const size = TUNING.account.partySize
   const report = scoutFloor(state, [])
   const elems = report ? report.enemies.flatMap((e) => Array.from({ length: e.count }, () => e.element)) : []
-  const score = (h: OwnedHero) => heroCp(h) * (advantaged(h, elems) ? 1.25 : 1)
-  const fit = Object.values(state.heroes)
-    .filter((h) => canFight(h) && h.sanity >= minSanity && !refusesDeploy(state, h.id))
+  // True CP (gear, favor, Sanity…), computed once per hero.
+  const cps = new Map<HeroId, number>()
+  const cpOf = (h: OwnedHero) => cps.get(h.id) ?? (cps.set(h.id, heroCpFull(state, h)), cps.get(h.id)!)
+  const score = (h: OwnedHero) => cpOf(h) * (advantaged(h, elems) ? 1.25 : 1)
+  // Fit by the deploy rails, the rebellion draw included: a rebel would not answer.
+  const fit = (Object.values(state.heroes) as OwnedHero[])
+    .filter((h) => h.sanity >= minSanity && fitToDeploy(state, h).ok)
     .sort((a, b) => score(b) - score(a))
   const picked: OwnedHero[] = []
   const take = (pred: (h: OwnedHero) => boolean, n: number) => {
@@ -160,7 +188,7 @@ export function suggestParty(state: GameState, minSanity = 40): { slots: (HeroId
   if (report?.immune.physical) take((h) => h.heroClass === 'mage', 2)
   if (report?.immune.magic) take((h) => h.heroClass !== 'mage', 3)
   take(() => true, size)
-  const byBulk = [...picked].sort((a, b) => bulk(b) - bulk(a))
+  const byBulk = [...picked].sort((a, b) => bulk(b, cpOf(b)) - bulk(a, cpOf(a)))
   return {
     slots: Array.from({ length: size }, (_, i) => byBulk[i]?.id ?? null),
     lines: ['front', 'front', 'mid', 'back', 'back'],

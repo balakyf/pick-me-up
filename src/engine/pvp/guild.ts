@@ -18,6 +18,7 @@ import { worldDayIndex } from '../daily'
 import { rngFor, hash, chance, nextFloat } from '../rng'
 import { GUILDS, guildById } from './rivals'
 import { pvpReady, worldWeek } from './pvp'
+import { addMasterXp } from '../master'
 
 const G = TUNING.guild
 const P = TUNING.pvp
@@ -26,7 +27,7 @@ function party(state: GameState): CombatUnit[] {
   const out: CombatUnit[] = []
   state.party.slots.forEach((id, i) => {
     const h = id ? state.heroes[id] : undefined
-    if (pvpReady(h)) out.push(buildCombatUnit(h, state.party.lines[i] ?? 'front', SKILLS, state.inventory))
+    if (pvpReady(state, h)) out.push(buildCombatUnit(h, state.party.lines[i] ?? 'front', SKILLS, state.inventory))
   })
   return out
 }
@@ -106,7 +107,16 @@ export function guildRaid(state: GameState, nowWorld: number): { state: GameStat
   if (book) materials.bookOfReverseHeaven = (materials.bookOfReverseHeaven ?? 0) + 1
   return {
     outcome: { dealt, mates, bossHp, felled, book, gold, gems },
-    state: { ...state, gold: state.gold + gold, gems: state.gems + gems, materials, pvp: { ...state.pvp, guildRaidWeek: week }, codex: recordBattle(state.codex, res.log) },
+    state: {
+      ...state,
+      gold: state.gold + gold,
+      gems: state.gems + gems,
+      materials,
+      pvp: { ...state.pvp, guildRaidWeek: week },
+      codex: recordBattle(state.codex, res.log),
+      // Felling the guild boss teaches the Master (B21).
+      meta: felled ? addMasterXp(state.meta, TUNING.lobby.master.xpPerPvpWin) : state.meta,
+    },
   }
 }
 
@@ -142,6 +152,7 @@ export function serverWar(state: GameState, nowWorld: number): { state: GameStat
     state: {
       ...state,
       gems: state.gems + G.warGems[wins]!,
+      meta: won ? addMasterXp(state.meta, TUNING.lobby.master.xpPerPvpWin) : state.meta,
       pvp: {
         ...state.pvp,
         warWeek: week,

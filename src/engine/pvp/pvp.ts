@@ -20,9 +20,12 @@ import { SKILLS } from '../content'
 import { buildCombatUnit } from '../unit'
 import { runBattle } from '../combat'
 import { rivalSquad } from '../events'
+import { deployParty, fitToDeploy } from '../tower/deploy'
+import { addMasterXp } from '../master'
 import { worldDayIndex } from '../daily'
 import { tacticalFocusBonus } from '../tactical'
 import { clampSanity } from '../kitchen'
+import { releaseGear } from '../equipment'
 import { withFavor } from '../favor'
 import { rngFor, hash, chance, nextFloat, pick } from '../rng'
 import { findRival, raidTargets, sectorRivals, guildById, type RivalMaster } from './rivals'
@@ -35,21 +38,15 @@ export function worldWeek(nowWorld: number): number {
   return Math.floor(worldDayIndex(nowWorld) / 7)
 }
 
-/** Can this hero fight in PvP right now (home, alive, not held, not busy)? */
-export function pvpReady(h: OwnedHero | undefined): h is OwnedHero {
-  return !!h && h.alive && h.sanity > 0 && h.training === null && !h.expedition && !h.captiveOf && h.promotion === null
+/** Can this hero fight in PvP right now (home, alive, not held, not busy — the deploy rails:
+ *  no bounty, no burnout, Sanity above 0)? No rebellion draw: that is the tower's. */
+export function pvpReady(state: GameState, h: OwnedHero | undefined): h is OwnedHero {
+  return fitToDeploy(state, h, { rebellion: false }).ok
 }
 
 /** The heroes that would fight for `slots` (in order), as combat units. */
 function unitsFor(state: GameState, slots: readonly (HeroId | null)[], lines = state.party.lines): { units: CombatUnit[]; ids: HeroId[] } {
-  const units: CombatUnit[] = []
-  const ids: HeroId[] = []
-  slots.forEach((id, i) => {
-    const h = id ? state.heroes[id] : undefined
-    if (!pvpReady(h)) return
-    units.push(buildCombatUnit(h, lines[i] ?? 'front', SKILLS, state.inventory))
-    ids.push(h.id)
-  })
+  const { units, ids } = deployParty(state, (h, line) => buildCombatUnit(h, line, SKILLS, state.inventory), { rebellion: false }, slots, lines)
   return { units, ids }
 }
 
@@ -147,7 +144,9 @@ export function raidRival(state: GameState, rivalId: string, nowWorld: number): 
   for (const id of ids) heroes[id] = { ...heroes[id]!, sanity: clampSanity(heroes[id]!.sanity - P.raidSanity) }
   const materials = { ...state.materials, promotionStone: (state.materials.promotionStone ?? 0) + stones }
   const raided = state.pvp.raidWeek === week ? [...state.pvp.raided, rivalId] : [rivalId]
-  const next: GameState = { ...state, heroes, materials, gold: state.gold + gold }
+  // A won raid teaches the Master (B21).
+  const meta = won ? addMasterXp(state.meta, TUNING.lobby.master.xpPerPvpWin) : state.meta
+  const next: GameState = { ...state, heroes, materials, gold: state.gold + gold, meta }
   const rec: InvasionRecord = {
     worldDay: worldDayIndex(nowWorld),
     direction: 'out',
@@ -230,7 +229,10 @@ function invasion(state: GameState, day: number, nowWorld: number): GameState {
   const cp = Math.max(100, cpOf(defense)) * (lo + ratio.value * (hi - lo)) * (raider.whale ? P.whaleCpMult : 1)
   const attackers = ghostParty(state, raider, Math.max(3, defense.length), cp, `inv${day}`)
   const now = day * WORLD_DAY_MS
-  const shieldUntil = now + P.shieldMs
+  // B40: the shield runs from the END of the invasion's day, so the whole next world-day is
+  // protected (from its start it reached only the next day's first instant, protecting
+  // nothing: resolveInvasions skips a day only when it starts before shieldUntil).
+  const shieldUntil = now + WORLD_DAY_MS + P.shieldMs
 
   const res = defense.length > 0 ? runBattle(defense, encounterOf(attackers, raider.floor), hash(state.seed, 'invasion', day)) : null
   if (res !== null && res.outcome === 'win') {
@@ -301,7 +303,7 @@ export function resolveInvasions(state: GameState, nowWorld: number): GameState 
   let log = s.pvp.log
   for (const h of Object.values(s.heroes) as OwnedHero[]) {
     if (h.alive && h.captiveOf && h.captiveOf.deadlineWorld <= nowWorld) {
-      heroes = { ...heroes, [h.id]: { ...h, alive: false, captiveOf: null } }
+      heroes = { ...heroes, [h.id]: releaseGear({ ...h, alive: false, captiveOf: null }) }
       log = [
         { worldDay: today, direction: 'in' as const, rival: h.captiveOf.master, won: false, goldDelta: 0, note: `synthesized ${h.name}` },
         ...log,
@@ -351,7 +353,7 @@ export function counterRaid(state: GameState, heroId: HeroId, nowWorld: number):
     goldDelta: 0,
     note: won ? `stormed their lobby and freed ${h.name}` : `failed to free ${h.name}`,
   }
-  const next: GameState = { ...state, heroes }
+  const next: GameState = { ...state, heroes, meta: won ? addMasterXp(state.meta, TUNING.lobby.master.xpPerPvpWin) : state.meta }
   return { won, state: { ...next, pvp: { ...pushLog(next, rec), rating: state.pvp.rating + (won ? P.ratingWin : -P.ratingLoss) } } }
 }
 

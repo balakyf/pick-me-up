@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from 'react'
 import { createStore, type Store } from '../engine/store'
-import type { StoragePort } from '../engine/types'
+import type { GameState, StoragePort } from '../engine/types'
 
 /**
  * The UI's single connection to the engine. One module-level store, wired to
@@ -24,8 +24,27 @@ export function getStore(): Store {
   if (singleton === null) {
     singleton = createStore(typeof window !== 'undefined' ? { storage: localStoragePort() } : {})
     singleton.load() // restore an existing save if present (no-op if none)
+    flushOnLeave(singleton)
   }
   return singleton
+}
+
+/**
+ * The store saves the 1 Hz lobby TICK only every few seconds (B9), so write whatever is
+ * pending the moment the page is hidden (tab switch, phone lock) or closed.
+ */
+function flushOnLeave(store: Store): void {
+  if (typeof window === 'undefined' || typeof document === 'undefined') return
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') store.flush()
+  })
+  window.addEventListener('pagehide', () => store.flush())
+}
+
+/** The live account, if the store exists yet (never creates it). For helpers such as
+ *  `cpOf` that need the account's inventory but are called with a hero alone. */
+export function peekState(): GameState | null {
+  return singleton?.getState() ?? null
 }
 
 export function useGame() {

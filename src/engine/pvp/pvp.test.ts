@@ -24,7 +24,7 @@ import {
 import { createAccount } from '../account'
 import { advanceTime } from '../time'
 import { reduce } from '../store'
-import { playFloor } from '../tower'
+import { playFloor, deployReport } from '../tower'
 import { TUNING } from '../tuning'
 import type { Captive, GameState, HeroId, OwnedHero } from '../types'
 
@@ -173,7 +173,9 @@ describe('incoming invasions and the kidnap-chain', () => {
     const id = taken[0]!
     const hold = after.heroes[id]!.captiveOf!
     // Captives can't deploy.
-    expect(playFloor({ ...after, party: { ...after.party, slots: [id, null, null, null, null] } }).result.result.log.unitsInit.filter((u) => u.side === 'hero')).toHaveLength(0)
+    const heldOnly = { ...after, party: { ...after.party, slots: [id, null, null, null, null] } }
+    expect(deployReport(heldOnly)[0]).toMatchObject({ heroId: id, fit: false, reason: 'captive' })
+    expect(() => playFloor(heldOnly)).toThrow(/no one is fit to fight/)
     const rich = { ...after, gold: 1_000_000, gems: 10_000 }
     expect(ransomHero(rich, id).heroes[id]!.captiveOf).toBeNull()
     const lost = resolveInvasions({ ...after, meta: { ...after.meta, crackOpen: false } }, hold.deadlineWorld + 1)

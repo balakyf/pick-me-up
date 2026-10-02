@@ -342,7 +342,7 @@ export function PartyScreen({ state, store }: { state: GameState; store: Store }
                           <span className="pb-slot-name">{h.name.split(/\s+/)[0]}</span>
                           <span className="pb-slot-meta">
                             <span style={{ color: STAR_COLOR[shownStarOf(h, state)] }}>{shownStarOf(h, state)}★</span>
-                            <span className="cp">{heroCp(h).toLocaleString()}</span>
+                            <span className="cp">{heroCp(h, state).toLocaleString()}</span>
                           </span>
                           {!deployable(h, state) && <StatusChip hero={h} state={state} />}
                         </>
@@ -479,7 +479,7 @@ export function PartyScreen({ state, store }: { state: GameState; store: Store }
                   onKeyDown={(e) => heroKeys(e, h.id)}
                   onFocus={() => setFocusId(h.id)}
                   onBlur={() => setFocusId((f) => (f === h.id ? null : f))}
-                  aria-label={`${h.name}, ${star}★, ${classLabel(h.heroClass)}, ${t(ELEMENT_VIS[h.element].label)}, ${t('Lv {level}', { level: h.xp.level })}, ${t('CP')} ${heroCp(h)}${slot !== -1 ? `, ${t('in slot {n}', { n: slot + 1 })}` : ''}`}
+                  aria-label={`${h.name}, ${star}★, ${classLabel(h.heroClass)}, ${t(ELEMENT_VIS[h.element].label)}, ${t('Lv {level}', { level: h.xp.level })}, ${t('CP')} ${heroCp(h, state)}${slot !== -1 ? `, ${t('in slot {n}', { n: slot + 1 })}` : ''}`}
                 >
                   <span className="pb-grip" aria-hidden title={t('Drag onto a slot')}>
                     ⠿
@@ -502,7 +502,7 @@ export function PartyScreen({ state, store }: { state: GameState; store: Store }
                     {h.xp.level}
                     <span className="pb-cap">/{levelCapForStar(h.star)}</span>
                   </span>
-                  <span className="c-cp cp">{heroCp(h).toLocaleString()}</span>
+                  <span className="c-cp cp">{heroCp(h, state).toLocaleString()}</span>
                   <span className="c-slot">{slot !== -1 ? <span className="pb-inslot">#{slot + 1}</span> : <span className="pb-add">+</span>}</span>
                 </div>
               )

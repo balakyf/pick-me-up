@@ -29,6 +29,8 @@ import { rngFor, chance, pick } from '../rng'
 import { attrStoneId } from '../promotion'
 import { SKILLS } from '../content'
 import { withFavor } from '../favor'
+import { releaseGear } from '../equipment'
+import { estateRefusal } from '../estate/deploy'
 import type { GameState, OwnedHero, HeroId, MaterialId, GrowthGrades, RescueChoice } from '../types'
 
 const S = TUNING.lobby.synthesis
@@ -167,6 +169,9 @@ function validate(state: GameState, input: SynthesisInput): { survivor: OwnedHer
     if (h.promotion !== null) throw new Error(`synthesize: ${id} is mid-promotion`)
     if (h.expedition) throw new Error(`synthesize: ${id} is away in the Ruins`)
     if (h.captiveOf) throw new Error(`synthesize: ${id} is held captive`)
+    // B41: a hero away on a bounty or in the middle of a drill is not in the chamber either.
+    if (h.training) throw new Error(`synthesize: ${id} is in a Training Center drill`)
+    if (estateRefusal(state, id) === 'bounty') throw new Error(`synthesize: ${id} is out on a bounty`)
     if (id === input.survivorId) throw new Error('synthesize: survivor cannot be a sacrifice')
     sacrifices.push(h)
   }
@@ -178,6 +183,12 @@ function validate(state: GameState, input: SynthesisInput): { survivor: OwnedHer
     const s = state.heroes[input.survivorId]
     if (s === undefined) throw new Error(`synthesize: unknown survivor ${input.survivorId}`)
     if (!s.alive) throw new Error(`synthesize: survivor ${input.survivorId} is not alive`)
+    // B41: the survivor must be home and free to receive it (their grades and skills change).
+    if (s.captiveOf) throw new Error(`synthesize: survivor ${input.survivorId} is held captive`)
+    if (s.expedition) throw new Error(`synthesize: survivor ${input.survivorId} is away in the Ruins`)
+    if (s.promotion !== null) throw new Error(`synthesize: survivor ${input.survivorId} is mid-promotion`)
+    if (s.training) throw new Error(`synthesize: survivor ${input.survivorId} is in a Training Center drill`)
+    if (estateRefusal(state, input.survivorId) === 'bounty') throw new Error(`synthesize: survivor ${input.survivorId} is out on a bounty`)
     survivor = s
   }
   const sacSet = new Set(input.sacrificeIds)
@@ -245,7 +256,7 @@ export function synthesize(state: GameState, input: SynthesisInput, _nowWorld = 
   }
 
   if (surv) heroes[surv.id] = surv
-  for (const sac of sacrifices) heroes[sac.id] = { ...heroes[sac.id]!, alive: false }
+  for (const sac of sacrifices) heroes[sac.id] = releaseGear({ ...heroes[sac.id]!, alive: false })
 
   // Witness Sanity hit: every other living hero (not the survivor, not the dead).
   const sacSet = new Set(input.sacrificeIds)

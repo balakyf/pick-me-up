@@ -346,7 +346,6 @@ describe('reduce — mini-playthrough determinism', () => {
     { type: 'ATTEMPT_FLOOR' }, // clear F2 → more gold
     { type: 'ATTEMPT_FLOOR' }, // clear F3 → more gold (now affordable)
     { type: 'SET_PARTY', slots: [null, null, null, null, null], lines: ['front', 'front', 'mid', 'back', 'back'] },
-    { type: 'ATTEMPT_FLOOR' }, // empty party → wipe (no advance), exercises a loss
   ]
 
   function run(cmds: Command[]): GameState | null {
@@ -357,6 +356,12 @@ describe('reduce — mini-playthrough determinism', () => {
 
   it('running the same command list twice yields deep-equal final state', () => {
     expect(run(program)).toEqual(run(program))
+  })
+
+  it('an empty party is refused outright: no attempt is spent, nothing changes', () => {
+    const before = run(program)!
+    expect(() => reduce(before, { type: 'ATTEMPT_FLOOR' })).toThrow(/no one is fit to fight/)
+    expect(before.tower.attemptIndex).toBe(run(program)!.tower.attemptIndex)
   })
 
   it('a different seed yields a different final state', () => {

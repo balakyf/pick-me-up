@@ -70,25 +70,74 @@ export function panicChance(sanity: number, statusRes: number): number {
   return Math.max(0, Math.min(1, raw))
 }
 
+const WORLD_DAY_MS = 24 * 3_600_000
+
+/** World-day index of a world-time (kept local: kitchen sits below daily in the imports). */
+function dayOf(worldMs: number): number {
+  return Math.floor(worldMs / WORLD_DAY_MS)
+}
+
+/** The world-day it is for the account (its clock is caught up before every command). */
+function today(state: GameState): number {
+  return dayOf(state.meta.lastSeenAtWorld)
+}
+
+/** Why a Banquet can't be held now (the hall is being cleaned, or the purse is short), or null. */
+export function banquetRefusal(state: GameState): string | null {
+  const last = state.meta.banquetDay
+  if (last !== undefined && today(state) - last < B.cooldownDays) return 'the hall is still being cleaned'
+  if (state.gold < B.gold) return 'insufficient gold'
+  return null
+}
+
+/** Is the hall free for a Banquet today (gold aside)? */
+export function banquetReady(state: GameState): boolean {
+  const last = state.meta.banquetDay
+  return last === undefined || today(state) - last >= B.cooldownDays
+}
+
+/** World-time the hall is free again (≤ now when it already is). */
+export function banquetReadyAt(state: GameState): number {
+  const last = state.meta.banquetDay
+  return last === undefined ? 0 : (last + B.cooldownDays) * WORLD_DAY_MS
+}
+
+/** Would a Banquet held now also warm the roster (no feast in the previous few days)? */
+export function banquetWarms(state: GameState): boolean {
+  const last = state.meta.banquetDay
+  return last === undefined || today(state) - last > B.favorGapDays
+}
+
 /**
  * Hold a Banquet: charge `banquet.gold` and raise every living hero's Sanity by
- * `banquet.restore` (clamped). Throws if `state.gold < banquet.gold`.
+ * `banquet.restore` (clamped). Once per world-day (B8); the shared table warms the roster
+ * (favor) only when no Banquet was held in the previous `favorGapDays` world-days — the
+ * Sanity always restores. Throws 'banquet: the hall is still being cleaned' on cooldown and
+ * on a short purse.
  */
 export function banquet(state: GameState): GameState {
+  const last = state.meta.banquetDay
+  if (last !== undefined && today(state) - last < B.cooldownDays) {
+    throw new Error('banquet: the hall is still being cleaned')
+  }
   if (state.gold < B.gold) {
     throw new Error(`banquet: insufficient gold (have ${state.gold}, need ${B.gold})`)
   }
 
+  const favor = banquetWarms(state) ? TUNING.favor.perBanquet : 0
   const nextHeroes: Record<HeroId, OwnedHero> = {}
   for (const key of Object.keys(state.heroes) as HeroId[]) {
     const hero = state.heroes[key]!
+    if (!hero.alive) {
+      nextHeroes[key] = hero
+      continue
+    }
+    const fed = { ...hero, sanity: clampSanity(hero.sanity + B.restore) }
     // A shared table also warms the roster to the Master a little (Layer 3 §C1).
-    nextHeroes[key] = hero.alive
-      ? withFavor({ ...hero, sanity: clampSanity(hero.sanity + B.restore) }, hero.favor + TUNING.favor.perBanquet)
-      : hero
+    nextHeroes[key] = favor !== 0 ? withFavor(fed, hero.favor + favor) : fed
   }
 
-  return { ...state, gold: state.gold - B.gold, heroes: nextHeroes }
+  return { ...state, gold: state.gold - B.gold, heroes: nextHeroes, meta: { ...state.meta, banquetDay: today(state) } }
 }
 
 /** True when at least one living hero is below full Sanity (a Banquet would help). */

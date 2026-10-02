@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { banquet, banquetWouldHelp, clampSanity } from './kitchen'
+import { banquet, banquetReady, banquetReadyAt, banquetRefusal, banquetWarms, banquetWouldHelp, clampSanity } from './kitchen'
 import { createAccount } from '../account'
 import { TUNING } from '../tuning'
 import type { GameState, OwnedHero, HeroId } from '../types'
@@ -61,6 +61,69 @@ describe('banquet', () => {
     banquet(s)
     expect(s.gold).toBe(goldBefore)
     expect((Object.values(s.heroes)[0]! as OwnedHero).sanity).toBe(sanityBefore)
+  })
+})
+
+describe('banquet — once a day, and favor only now and then (B8)', () => {
+  const DAY = 24 * 3_600_000
+  /** The account's clock at world-day `d` (midday). */
+  const at = (s: GameState, d: number): GameState => ({ ...s, meta: { ...s.meta, lastSeenAtWorld: d * DAY + DAY / 2 } })
+  const favorOf = (s: GameState) => (Object.values(s.heroes)[0]! as OwnedHero).favor
+
+  it('the hall needs a day: a second Banquet the same world-day is refused', () => {
+    const s = at({ ...stateWith([{ sanity: 10 }]), gold: 100_000 }, 5)
+    const once = banquet(s)
+    expect(once.meta.banquetDay).toBe(5)
+    expect(banquetReady(once)).toBe(false)
+    expect(banquetRefusal(once)).toBe('the hall is still being cleaned')
+    expect(() => banquet(once)).toThrow('banquet: the hall is still being cleaned')
+    expect(banquetReadyAt(once)).toBe(6 * DAY)
+    // The next world-day it is ready again.
+    const next = at(once, 6)
+    expect(banquetReady(next)).toBe(true)
+    expect(banquetRefusal(next)).toBeNull()
+    expect(() => banquet(next)).not.toThrow()
+  })
+
+  it('Sanity always restores, but favor only when no Banquet in the previous few days', () => {
+    const F = TUNING.favor
+    let s = at({ ...stateWith([{ sanity: 0 }]), gold: 1_000_000 }, 10)
+    const f0 = favorOf(s)
+    expect(banquetWarms(s)).toBe(true)
+    s = banquet(s)
+    expect(favorOf(s)).toBe(f0 + F.perBanquet)
+    // Daily feasts: Sanity yes, favor no.
+    for (let d = 11; d <= 10 + B.favorGapDays; d++) {
+      s = at({ ...s, heroes: { ...s.heroes, [Object.keys(s.heroes)[0]!]: { ...(Object.values(s.heroes)[0]! as OwnedHero), sanity: 0 } } }, d)
+      expect(banquetWarms(s)).toBe(false)
+      s = banquet(s)
+      expect((Object.values(s.heroes)[0]! as OwnedHero).sanity).toBe(B.restore)
+      expect(favorOf(s)).toBe(f0 + F.perBanquet)
+    }
+    // A feast after a proper gap warms again.
+    s = at(s, 10 + 2 * B.favorGapDays + 1)
+    expect(banquetWarms(s)).toBe(true)
+    expect(favorOf(banquet(s))).toBe(f0 + 2 * F.perBanquet)
+  })
+
+  it('a daily banquet habit can no longer max every bond: 30 days of feasts warm at most ~8 times', () => {
+    let s = at({ ...stateWith([{ sanity: 0 }]), gold: 10_000_000 }, 0)
+    const f0 = favorOf(s)
+    for (let d = 0; d < 30; d++) s = banquet(at(s, d))
+    expect(favorOf(s) - f0).toBe(TUNING.favor.perBanquet)
+    let spaced = at({ ...stateWith([{ sanity: 0 }]), gold: 10_000_000 }, 0)
+    for (let d = 0; d < 30; d += B.favorGapDays + 1) spaced = banquet(at(spaced, d))
+    expect(favorOf(spaced) - f0).toBe(Math.ceil(30 / (B.favorGapDays + 1)) * TUNING.favor.perBanquet)
+  })
+
+  it('a refused Banquet costs nothing', () => {
+    const s = banquet({ ...stateWith([{ sanity: 10 }]), gold: 100_000 })
+    try {
+      banquet(s)
+    } catch {
+      /* refused */
+    }
+    expect(s.gold).toBe(100_000 - B.gold)
   })
 })
 

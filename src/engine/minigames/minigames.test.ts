@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { upgradeEquipment, upgradeOdds, upgradeCost, upgradeRefusal, ballistaWound, woundBoss, practice, nextEquipmentGrade } from './minigames'
 import { createAccount } from '../account'
 import { craftEquipment } from '../equipment'
-import { playFloor, buildEncounter } from '../tower'
+import { playFloor, buildEncounter, deployReport } from '../tower'
 import { TUNING } from '../tuning'
 import type { EquipmentId, GameState, HeroId, OwnedHero } from '../types'
 
@@ -95,13 +95,28 @@ describe('Ballista', () => {
 })
 
 describe('tower integration', () => {
-  it('a Wary, broken hero can refuse to deploy (recorded on the result)', () => {
+  it('a Wary, broken hero can refuse to deploy (known before Enter, recorded on the result)', () => {
     let refused = 0
     for (let seed = 1; seed <= 30; seed++) {
       const acct = createAccount(seed)
       const id = Object.keys(acct.heroes)[0] as HeroId
-      const s = { ...acct, heroes: { [id]: { ...acct.heroes[id]!, favor: 0, sanity: 5 } as OwnedHero } }
-      if (playFloor(s).result.refusedHeroIds.includes(id)) refused++
+      const rebel = { ...acct.heroes[id]!, favor: 0, sanity: 5 } as OwnedHero
+      // A friend in the second slot, so the floor still has someone to fight it.
+      const friend = { ...rebel, id: 'h_friend' as HeroId, favor: 50, sanity: 100 }
+      const s = { ...acct, heroes: { [id]: rebel, [friend.id]: friend }, party: { ...acct.party, slots: [id, friend.id, null, null, null] } }
+      const report = deployReport(s)
+      const result = playFloor(s).result
+      const r = result.refusedHeroIds.includes(id)
+      // The report the Enter sheet reads says exactly what the attempt does.
+      expect(report[0]!.fit).toBe(!r)
+      if (r) {
+        refused++
+        expect(report[0]!.reason).toBe('rebellion')
+        expect(result.refusals).toContainEqual({ heroId: id, reason: 'rebellion' })
+        // Alone, a rebel leaves nobody to fight: the attempt is refused outright.
+        const alone = { ...s, heroes: { [id]: rebel }, party: { ...acct.party, slots: [id, null, null, null, null] } }
+        expect(() => playFloor(alone)).toThrow(/no one is fit to fight/)
+      }
     }
     expect(refused).toBeGreaterThan(0)
   })

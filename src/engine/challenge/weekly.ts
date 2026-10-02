@@ -14,7 +14,8 @@
  *
  * PURE and DETERMINISTIC.
  */
-import { estateBusy } from '../estate/deploy'
+import { fitToDeploy, heroUnfitReason } from '../tower/deploy'
+import { addMasterXp } from '../master'
 import type { CombatLog, CombatUnit, Element, GameState, HeroId, MaterialId, OwnedHero } from '../types'
 import { TUNING } from '../tuning'
 import { SKILLS } from '../content'
@@ -90,9 +91,16 @@ export function weeklyUnlocked(state: GameState): boolean {
   return state.tower.highestCleared >= W.unlockFloor
 }
 
-/** Can this hero enter the Crack's simulation at all (alive, home, free)? */
-export function canEnterTrial(h: OwnedHero | undefined): h is OwnedHero {
-  return !!h && h.alive && h.expedition === null && !h.captiveOf
+/**
+ * Can this hero enter the Crack's simulation at all (alive, home, free)? Routed through the
+ * deploy rails (tower/deploy.ts): the dead, the held, the away (Ruins, a bounty) and the
+ * busy (chamber, yard) stay out. Low Sanity and burnout do not matter here — the Crack
+ * fields a pristine copy at full Sanity. Without `state`, only the hero's own reasons.
+ */
+export function canEnterTrial(h: OwnedHero | undefined, state?: GameState): h is OwnedHero {
+  const check = state ? fitToDeploy(state, h, { rebellion: false }) : null
+  const reason = check ? (check.ok ? null : check.reason) : heroUnfitReason(h)
+  return reason === null || reason === 'exhausted' || reason === 'burnout'
 }
 
 /** Why this team can't run the trial now, or null. */
@@ -105,7 +113,7 @@ export function weeklyRefusal(state: GameState, heroIds: readonly HeroId[], nowW
   if (distinct(heroIds).length !== heroIds.length) return 'A hero can only enter once.'
   for (const id of heroIds) {
     const h = state.heroes[id]
-    if (!canEnterTrial(h) || estateBusy(state, id) === 'is out on a bounty') return 'Everyone must be alive and at home.'
+    if (!canEnterTrial(h, state)) return 'Everyone must be alive and at home.'
     if (!heroAllowed(rule, h)) return "Someone doesn't meet this week's rule."
   }
   return null
@@ -194,6 +202,8 @@ export function runWeeklyTrial(state: GameState, heroIds: readonly HeroId[], now
       gems: state.gems + gems,
       materials: nextMaterials,
       challenge: { ...ch, weekly: { week: cur.week, attempts: cur.attempts + 1, best, claimed } },
+      // Every wave held in the Crack teaches the Master (B21).
+      meta: addMasterXp(state.meta, score * TUNING.lobby.master.xpPerTrialWave),
     },
     outcome: { week: cur.week, rule, score, best, newBest: score > cur.best, gems, materials, reached, log: res.log },
   }

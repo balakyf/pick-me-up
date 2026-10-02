@@ -259,6 +259,9 @@ export const TUNING = {
     repeatDecay: 0.5,
     repeatSour: 3,
     sourLoss: 2,
+    /** Repeats are counted over the hero's last this-many gifts (not just an unbroken
+     *  streak), so alternating two gifts no longer resets the decay. */
+    repeatWindow: 5,
   },
 
   /** Probability Interference — passive, account-wide (Layer 3 §D1). */
@@ -445,6 +448,12 @@ export const TUNING = {
     worldTimeFactor: 3,
   },
 
+  /** Save hygiene (B9): the lobby's 1 Hz TICK reaches storage only every Nth tick; every
+   *  other command (and the page hiding or closing) saves at once. */
+  persistence: {
+    tickPersistEvery: 15,
+  },
+
   // ⚠ BALANCE PASS PENDING — every constant in `lobby` below (Sanity pressure/regen,
   // promotion costs & timers, daily reward amounts, tactical bonuses, gem costs) is a
   // FIRST-PASS value chosen for structure, not tuned for pacing. Treat as the primary
@@ -475,16 +484,32 @@ export const TUNING = {
     },
     /** Master Level — the lobby progression spine (Layer 3 §3.1). */
     master: {
-      /** masterXpToNext(L) = round(coeff × L^exp); levels stop at `cap`. */
-      xpCoeff: 60,
-      xpExp: 1.8,
+      /** masterXpToNext(L) reads the baked integer table in master/masterXpTable.ts (B21:
+       *  no runtime powers); levels stop at `cap`. Retargeted so an engaged Master reaches
+       *  roughly ML10 near F40, ML15 near F60 and ML20 near F70 (lane-B notes). */
       cap: 100,
-      /** Master XP granted per source. */
+      /** Master XP granted per source. A floor clear: xpPerFloorClear; a first clear adds
+       *  xpPerFirstClear + xpFirstClearPerFloor × floor, and an anchor's first clear a further
+       *  xpAnchorFirstClearPerFloor × floor. */
       xpPerFloorClear: 12,
       xpPerFirstClear: 30,
+      xpFirstClearPerFloor: 3,
+      xpAnchorFirstClearPerFloor: 10,
+      /** A hidden objective found (a truth of the world). */
+      xpPerHiddenObjective: 60,
       xpPerPromotion: 40,
       xpPerFacilityUpgrade: 25,
       xpPerTrainingDrill: 5,
+      /** Playing the rest of the game teaches the Master too. */
+      xpPerDailyClear: 20,
+      xpPerRaidClear: 120,
+      xpPerTrialWave: 6,
+      xpPerDuel: 10,
+      xpPerBounty: 15,
+      xpPerJobTier: 20,
+      xpPerStatue: 40,
+      xpPerTournamentWin: 20,
+      xpPerPvpWin: 30,
     },
     /** Facility upgrades — gold cost × growth^level, world-time timer, gem-skippable. */
     facilities: {
@@ -570,6 +595,11 @@ export const TUNING = {
       gold: 500,
       /** Sanity restored to every LIVING hero per Banquet (clamped to sanityMax). */
       restore: 40,
+      /** One Banquet per this many world-days (the hall needs cleaning). */
+      cooldownDays: 1,
+      /** A Banquet warms the roster (favor) only when none was held in the previous this-many
+       *  world-days; the Sanity still restores. Feasts are for occasions, not a favor mill. */
+      favorGapDays: 3,
     },
     /** Promotion: the "raise, don't roll" engine (Layer 1 §3, lobby §3.3). */
     promotion: {
@@ -647,6 +677,9 @@ export const TUNING = {
         A: { gold: 7200, promotionStone: 16 },
         S: { gold: 14000, promotionStone: 32 },
       } as Record<string, { gold: number; promotionStone: number }>,
+      /** Combat never reads evasion or accuracy (B42), so gear never rolls EVA/ACC: an older
+       *  item that still carries them gives SPD and CRIT at these rates instead. */
+      legacySubstats: { evaToSpd: 1, accToCrit: 0.5 },
     },
     /** Tower material faucet (thin trickle; Daily Dungeons are the primary source, Phase 5). */
     materialDrops: {
@@ -808,6 +841,9 @@ export const TUNING = {
       pairsPerPlace: 6,
     },
     grief: { base: 30, perAffinity: 0.6, sanityBase: 10, sanityPerAffinity: 0.15, decay: 0.4, mourn: 6, healer: 3 },
+    /** Memorial upgrades (B47): each level above the first lets a mourner's visit ease more
+     *  grief and steady them a little more (a kept garden of graves, benches, lanterns). */
+    memorial: { griefPerLevel: 1.5, sanityPerLevel: 0.5 },
     memories: { max: 12 },
     chronicleMax: 120,
     /** Jobs: skill tiers (work slots banked), the per-tier multiplier, and outputs per work slot. */

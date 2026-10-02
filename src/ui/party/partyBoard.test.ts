@@ -48,9 +48,9 @@ describe('boardHeroes', () => {
     const s = account()
     const list = boardHeroes(s, 'cp', NO_FILTER)
     expect(list.length).toBe(Object.keys(s.heroes).length)
-    const cps = list.map(heroCp)
+    const cps = list.map((h) => heroCp(h, s))
     expect(cps).toEqual([...cps].sort((a, b) => b - a))
-    const weakest = boardHeroes(s, 'cp', NO_FILTER, { flip: true }).map(heroCp)
+    const weakest = boardHeroes(s, 'cp', NO_FILTER, { flip: true }).map((h) => heroCp(h, s))
     expect(weakest).toEqual([...cps].sort((a, b) => a - b))
     // Same inputs, same order.
     expect(boardHeroes(s, 'cp', NO_FILTER).map((h) => h.id)).toEqual(list.map((h) => h.id))
@@ -129,7 +129,7 @@ describe('lineSummary / cleanDraft', () => {
       ['mid', 1],
       ['back', 2],
     ])
-    expect(sum[2]!.cp).toBe(heroCp(s.heroes[ids[2]!]!) + heroCp(s.heroes[ids[3]!]!))
+    expect(sum[2]!.cp).toBe(heroCp(s.heroes[ids[2]!]!, s) + heroCp(s.heroes[ids[3]!]!, s))
 
     const dead = patch(s, ids[0]!, { alive: false })
     expect(lineSummary(dead, d, ['front', 'front', 'mid', 'back', 'back'])[0]!.count).toBe(0)

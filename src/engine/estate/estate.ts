@@ -12,6 +12,7 @@
 import type { Command, EstateState, FallenRecord, FloorResult, GameState, HeroId, ChronicleEntry } from '../types'
 import { TUNING } from '../tuning'
 import { withFavor } from '../favor'
+import { addMasterXp } from '../master'
 import { drillCost, trainingMode, trainingRefusal } from '../training'
 import { addMemory, dayOfSlot, lifeOf, relationKey, slotOf } from '../life/life'
 import { DECOR, DECOR_CURVE, DECOR_MAX_LEVEL, FAVORITISM, REFOCUS, STATUE, TRAUMA } from './constants'
@@ -153,6 +154,8 @@ export function raiseStatue(state: GameState, heroId: HeroId, nowWorld: number):
     ...state,
     gold: state.gold - statueCost(rec),
     heroes,
+    // Honouring the fallen is part of the Master's craft too (B21).
+    meta: addMasterXp(state.meta, TUNING.lobby.master.xpPerStatue),
     life: chron(state, chronicle),
     estate: { ...e, statues: [...e.statues, heroId], trauma: book.changed ? book.map : e.trauma },
   }

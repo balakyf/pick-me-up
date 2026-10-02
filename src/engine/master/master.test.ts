@@ -1,7 +1,9 @@
 import { describe, it, expect } from 'vitest'
-import { masterXpToNext, addMasterXp } from './master'
+import { masterXpToNext, masterXpTotal, addMasterXp, floorClearMasterXp } from './master'
+import { MASTER_XP_TO_NEXT } from './masterXpTable'
 import { TUNING } from '../tuning'
 import { createAccount } from '../account'
+import { advanceTime } from '../time'
 import type { MetaState } from '../types'
 
 const BASE_META = createAccount(1).meta
@@ -13,12 +15,41 @@ function meta(masterLevel: number, masterXp: number): MetaState {
 }
 
 describe('masterXpToNext', () => {
-  it('follows round(coeff × L^exp)', () => {
-    expect(masterXpToNext(1)).toBe(Math.round(M.xpCoeff * 1 ** M.xpExp))
-    expect(masterXpToNext(5)).toBe(Math.round(M.xpCoeff * 5 ** M.xpExp))
+  it('reads the baked integer table (no runtime powers — B21)', () => {
+    expect(MASTER_XP_TO_NEXT.length).toBeGreaterThanOrEqual(M.cap - 1)
+    for (let l = 1; l < M.cap; l++) {
+      expect(masterXpToNext(l)).toBe(MASTER_XP_TO_NEXT[l - 1])
+      expect(Number.isInteger(masterXpToNext(l))).toBe(true)
+    }
   })
   it('is strictly increasing in level', () => {
-    for (let l = 1; l < 20; l++) expect(masterXpToNext(l + 1)).toBeGreaterThan(masterXpToNext(l))
+    for (let l = 1; l < M.cap - 1; l++) expect(masterXpToNext(l + 1)).toBeGreaterThan(masterXpToNext(l))
+  })
+  it('masterXpTotal sums the table', () => {
+    expect(masterXpTotal(1)).toBe(0)
+    expect(masterXpTotal(3)).toBe(masterXpToNext(1) + masterXpToNext(2))
+    // Pouring exactly the total into a fresh Master lands on that level with nothing over.
+    const at = addMasterXp(meta(1, 0), masterXpTotal(20))
+    expect(at.masterLevel).toBe(20)
+    expect(at.masterXp).toBe(0)
+  })
+})
+
+describe('floorClearMasterXp', () => {
+  it('a repeat clear pays a little; a first clear more, rising with the floor; anchors most', () => {
+    expect(floorClearMasterXp(33, false)).toBe(M.xpPerFloorClear)
+    expect(floorClearMasterXp(33, true)).toBe(M.xpPerFloorClear + M.xpPerFirstClear + 33 * M.xpFirstClearPerFloor)
+    expect(floorClearMasterXp(34, true)).toBeGreaterThan(floorClearMasterXp(33, true))
+    expect(floorClearMasterXp(35, true)).toBe(floorClearMasterXp(35, false) + M.xpPerFirstClear + 35 * (M.xpFirstClearPerFloor + M.xpAnchorFirstClearPerFloor))
+  })
+
+  it('the first unlocks keep their early pace: ML2 after a floor or two, ML3 within the first act', () => {
+    // First Steps promises the Tavern and the Garden (ML2) after "a floor or two".
+    const firstClears = (n: number) => Array.from({ length: n }, (_, i) => floorClearMasterXp(i + 1, true)).reduce((a, b) => a + b, 0)
+    expect(addMasterXp(meta(1, 0), firstClears(2)).masterLevel).toBeGreaterThanOrEqual(2)
+    expect(addMasterXp(meta(1, 0), firstClears(1)).masterLevel).toBe(1)
+    // The Promotion Chamber and Synthesis (ML3) open within the first ten floors.
+    expect(addMasterXp(meta(1, 0), firstClears(10)).masterLevel).toBeGreaterThanOrEqual(TUNING.lobby.facilities.chamberUnlockMasterLevel)
   })
 })
 
@@ -67,5 +98,15 @@ describe('addMasterXp', () => {
     addMasterXp(m, masterXpToNext(1) + 5)
     expect(m.masterLevel).toBe(1)
     expect(m.masterXp).toBe(0)
+  })
+
+  it('an older save holding more XP than the new table asks settles on the next tick', () => {
+    // Saved under round(60·L^1.8): ML7 with 1,900 of the 1,998 it then needed.
+    const acct = createAccount(4, { now: 0 })
+    const old = { ...acct, meta: { ...acct.meta, masterLevel: 7, masterXp: 1900, lastSeenAtWorld: 0 } }
+    const next = advanceTime(old, 1000).meta
+    expect(next.masterLevel).toBeGreaterThan(7)
+    expect(next.masterXp).toBeLessThan(masterXpToNext(next.masterLevel))
+    expect(masterXpTotal(next.masterLevel) + next.masterXp).toBe(masterXpTotal(7) + 1900)
   })
 })

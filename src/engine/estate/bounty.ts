@@ -16,6 +16,7 @@ import { addMemory, dayOfSlot, slotOf } from '../life/life'
 import { BOUNTIES, BOUNTY } from './constants'
 import { isBurntOut } from './trauma'
 import { TUNING } from '../tuning'
+import { addMasterXp } from '../master'
 
 const GRADES: EquipmentGrade[] = ['E', 'D', 'C', 'B', 'A', 'S', 'SS', 'SSS']
 
@@ -147,6 +148,8 @@ export function resolveBounties(state: GameState, nowWorld: number): GameState {
   const bounties = e.bounties.filter((b) => b.endsAt > nowWorld)
   return {
     ...next,
+    // Every job the board saw through teaches the Master (B21).
+    meta: addMasterXp(next.meta, reports.length * TUNING.lobby.master.xpPerBounty),
     life: { ...next.life, chronicle: [...next.life.chronicle, ...chronicle].slice(-TUNING.life.chronicleMax) },
     estate: { ...next.estate, bounties, bountyLog: [...reports.reverse(), ...(e.bountyLog ?? [])].slice(0, BOUNTY.logMax) },
   }

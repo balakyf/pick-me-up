@@ -41,12 +41,14 @@ import { runBattle } from '../combat'
 import { ENEMY_TEMPLATES, ALLY_TEMPLATES, ANCHORS, SKILLS, HIDDEN_OBJECTIVES, actForFloor } from '../content'
 import { applyXp, xpToNext } from '../stats'
 import { clampSanity } from '../kitchen'
+import { releaseGear } from '../equipment'
 import { attrStoneId } from '../promotion'
 import { tacticalFocusBonus } from '../tactical'
-import { addMasterXp } from '../master'
+import { addMasterXp, floorClearMasterXp } from '../master'
 import { foldBattleSkills } from '../skills'
-import { rebellionChance, withFavor } from '../favor'
-import { moraleAdjust, refusesDeploy } from '../estate/deploy'
+import { withFavor } from '../favor'
+import { moraleAdjust } from '../estate/deploy'
+import { deployParty, REFUSAL_REASONS } from './deploy'
 import { addPi } from '../interference'
 import { practice, woundBoss } from '../minigames'
 import { floorModifiersFor, withBonds } from '../depth'
@@ -505,34 +507,17 @@ export function playFloor(
     throw new Error(`playFloor: only a Master who knows ${TUNING.lifecycle.subvertTruths} truths can subvert the ninetieth floor`)
   }
 
-  // ── 1. Build deployed hero units (skip empty slots, dead, and Sanity-0). ────
-  const heroUnits: CombatUnit[] = []
-  const deployedIds: HeroId[] = []
-  const refusedHeroIds: HeroId[] = []
-  const { slots, lines } = state.party
-  for (let s = 0; s < slots.length; s++) {
-    const heroId = slots[s]
-    if (heroId === null || heroId === undefined) continue
-    const hero = state.heroes[heroId]
-    // Skip empty slots, the dead, and the broken-down (Sanity 0 = cannot deploy).
-    // A hero in a Training Center drill is in the yard, one in the Ruins is away.
-    if (hero === undefined || !hero.alive || hero.sanity <= 0 || hero.training !== null || hero.expedition !== null || hero.captiveOf) continue
-    // REBELLION (Layer 3 §C1): a Wary, broken hero may refuse the order. The draw is
-    // gated on a positive chance, so everyone else's replays are untouched.
-    const rebel = rebellionChance(hero)
-    if (rebel > 0 && chance(rngFor(state.seed, 'rebel', floor, state.tower.attemptIndex, heroId), rebel).value) {
-      refusedHeroIds.push(heroId)
-      continue
-    }
-    // The estate: a burnt-out hero (or one out on a bounty) refuses; the withdrawn fight dulled.
-    if (refusesDeploy(state, heroId)) {
-      refusedHeroIds.push(heroId)
-      continue
-    }
-    const line: Line = lines[s] ?? 'front'
-    heroUnits.push(moraleAdjust(state, buildCombatUnit(hero, line, SKILLS, state.inventory)))
-    deployedIds.push(heroId)
-  }
+  // ── 1. Build deployed hero units through the deploy rails (deploy.ts): the dead, the
+  //       away (captive, Ruins, chamber, yard, bounty), the burnt out, the broken (Sanity 0)
+  //       and the Wary rebels stay behind — each with the true reason. The rebellion draw
+  //       is gated on a positive chance, so everyone else's replays are untouched. ────
+  const deployed = deployParty(state, (hero, line) => moraleAdjust(state, buildCombatUnit(hero, line, SKILLS, state.inventory)))
+  const heroUnits: CombatUnit[] = deployed.units
+  const deployedIds: HeroId[] = deployed.ids
+  const refusals = deployed.refusals
+  const refusedHeroIds: HeroId[] = refusals.filter((r) => REFUSAL_REASONS.includes(r.reason)).map((r) => r.heroId)
+  // Nobody fit to fight: refuse the attempt outright (no loop attempt burned, no wipe of nobody).
+  if (heroUnits.length === 0) throw new Error('playFloor: no one is fit to fight')
 
   // ── 2. Combat seed (folds the retry counter). ───────────────────────────────
   const combatSeed = hash(state.seed, 'combat', floor, state.tower.attemptIndex)
@@ -592,7 +577,7 @@ export function playFloor(
     const hero = state.heroes[key]!
     if (fallenSet.has(key as string)) {
       // PERMADEATH: a hero that fell this battle is gone.
-      nextHeroes[key] = { ...hero, alive: false, blessed: false }
+      nextHeroes[key] = releaseGear({ ...hero, alive: false, blessed: false })
     } else if (survivorSet.has(key as string)) {
       // Deployed survivor: drain Sanity, grant XP on a clear, and auto-learn skills
       // from this battle's casts (level-ups, then merges — Layer 1 §2.4).
@@ -660,15 +645,14 @@ export function playFloor(
   if (found.length > 0) nextTower.hiddenFound = [...nextTower.hiddenFound, ...found.map((h) => h.id)].sort()
 
   // ── 6c. Event floors: a bonus after an anchor's first clear, the tournament after
-  //        F41, a recovery event after a battle that cost the main team (§5.1). ─────
-  let event: TowerEvent | null = null
-  const E = TUNING.events
-  if (fallenSet.size >= E.recoveryDeaths) event = { kind: 'recovery', floor, options: ['reinforcement', 'rest'] }
-  else if (firstClear && floor === 41) event = { kind: 'tournament', floor, options: [...TOURNAMENT_FORMATS] }
-  else if (firstClear && floor % 5 === 0 && floor < T.sliceTopFloor) {
-    event = { kind: 'bonus', floor, options: ['rest', 'treasure', 'merchant', 'gamble'] }
-  }
+  //        F41, a recovery event after a battle that cost the main team (§5.1). They
+  //        queue rather than erase each other (B19): the recovery comes first, then the
+  //        tournament or the anchor's bonus. ─────
+  const events = eventsAfter(floor, firstClear, fallenSet.size)
+  const event: TowerEvent | null = events[0] ?? null
   nextTower.event = event
+  if (events.length > 1) nextTower.eventQueue = events.slice(1)
+  else delete nextTower.eventQueue
 
   // ── 6d. The world ends on the first clear of F90 (canon). ────────────────────
   const atEnd = cleared && floor === T.worldEndFloor && !state.tower.worldEnded && !state.tower.worldSaved
@@ -677,10 +661,11 @@ export function playFloor(
   if (worldEnded) nextTower.worldEnded = true
   if (worldSaved) nextTower.worldSaved = true
 
-  // ── 6e. Master XP: floor clears feed the Master-Level spine (+first-clear bonus);
-  //        they also strengthen the world's Probability Interference (Layer 3 §D1). ──
+  // ── 6e. Master XP: floor clears feed the Master-Level spine (a first clear more, the
+  //        higher the floor the more, anchors most), and so does each truth found; they
+  //        also strengthen the world's Probability Interference (Layer 3 §D1). ──
   const MASTER = TUNING.lobby.master
-  const masterXpGain = cleared ? MASTER.xpPerFloorClear + (firstClear ? MASTER.xpPerFirstClear : 0) : 0
+  const masterXpGain = cleared ? floorClearMasterXp(floor, firstClear) + found.length * MASTER.xpPerHiddenObjective : 0
   const PI = TUNING.interference
   let nextMeta = masterXpGain > 0 ? addMasterXp(meta, masterXpGain) : meta
   if (cleared) nextMeta = addPi(nextMeta, PI.perClear + (firstClear ? PI.perFirstClear : 0))
@@ -712,6 +697,7 @@ export function playFloor(
     worldEnded,
     worldSaved,
     refusedHeroIds,
+    refusals,
     result: res,
   }
 
@@ -724,6 +710,22 @@ export function playFloor(
 
 /** The five canon tournament formats (F41/42). */
 export const TOURNAMENT_FORMATS = ['battle_royale', 'party_raid', 'team', 'pair', 'deathmatch'] as const
+
+/**
+ * The event floors an attempt opens, in the order the Master meets them (B19). A battle
+ * that cost the main team opens the recovery first; the F41 tournament or an anchor's
+ * bonus waits behind it instead of being lost forever. The first clear of F90 (the world
+ * just ended) opens no cheerful "quiet floor". PURE.
+ */
+export function eventsAfter(floor: number, firstClear: boolean, fallen: number): TowerEvent[] {
+  const out: TowerEvent[] = []
+  if (fallen >= TUNING.events.recoveryDeaths) out.push({ kind: 'recovery', floor, options: ['reinforcement', 'rest'] })
+  if (firstClear && floor === 41) out.push({ kind: 'tournament', floor, options: [...TOURNAMENT_FORMATS] })
+  else if (firstClear && floor % 5 === 0 && floor < T.sliceTopFloor && floor !== T.worldEndFloor) {
+    out.push({ kind: 'bonus', floor, options: ['rest', 'treasure', 'merchant', 'gamble'] })
+  }
+  return out
+}
 
 /**
  * The tower after one attempt. A clear advances one floor; a failure retries the same
