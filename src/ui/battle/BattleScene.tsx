@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { sfx } from '../audio/sound'
 import { useMusic } from '../audio/useSound'
 import type { BattleOrder, CombatLog, CombatUnitInit, GameState, HeroId } from '../../engine/types'
-import { lastWords } from '../life/speech'
+import { lastWordsTogether } from '../life/speech'
 import { bgTheme, BG_H, BG_W, HORIZON, LAYER_ORDER } from '../pixel/battleBg'
 import { BattleFxCanvas, type FxHandle } from './BattleFxCanvas'
 import { battleKeyAction, fitStage, hudBeside, isTypingTarget, weatherForFloor } from './battleFx'
@@ -180,11 +180,14 @@ export function BattleScene({
   const fallen =
     !nonLethal && current?.kind === 'death' && byId[current.unitId]?.side === 'hero' && !byId[current.unitId]?.isNpc ? byId[current.unitId]! : null
   // …which linger a moment after the replay moves on, then fade.
-  const mourning = useMourning(
-    fallen && current ? { unit: fallen, seq: current.seq } : null,
-    (u) => (state ? lastWords(state, { heroId: u.id as HeroId, name: u.name }) : '…'),
-    speed,
-  )
+  // Heroes who fall in one battle never share their last words (and the Memorial agrees).
+  const fallenWords = useMemo(() => {
+    const deaths = log.events.filter((e) => e.kind === 'death' && byId[e.unitId]?.side === 'hero' && !byId[e.unitId]?.isNpc)
+    const recs = deaths.map((e) => ({ heroId: (e as { unitId: string }).unitId as HeroId, name: byId[(e as { unitId: string }).unitId]!.name }))
+    return state ? lastWordsTogether(state, recs) : new Map<string, string>()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [log])
+  const mourning = useMourning(fallen && current ? { unit: fallen, seq: current.seq } : null, (u) => fallenWords.get(u.id) ?? '…', speed)
 
   // Impact juice for each blow as it lands: element sparks, and on a crit the hit-stop,
   // the camera punch and the heavy shake; a killing blow gets a smaller punch.

@@ -662,14 +662,38 @@ const LAST_WORDS: ByVoice = {
   grim: ['So this is the floor. Figures.', 'Do not waste this, Master.'],
 }
 
-/** A fallen hero's last words — the same every time they are remembered. */
-export function lastWords(state: GameState, rec: Pick<FallenRecord, 'heroId' | 'name'>): string {
+/**
+ * A fallen hero's last words — the same every time they are remembered. With `taken`
+ * (the words already spoken by others who fell beside them), the pick moves on through
+ * the hero's own lines, deterministically, so two heroes never share their last words.
+ */
+export function lastWords(state: GameState, rec: Pick<FallenRecord, 'heroId' | 'name'>, taken?: Set<string>): string {
   const hero = state.heroes[rec.heroId]
   if (!hero) return t('…')
   const p = personalityOf(hero)
   const { friend } = bondsOf(state, rec.heroId)
   const pool = [...(LAST_WORDS[p.voice] ?? []), ...(LAST_WORDS.any ?? [])].filter((s) => friend || !s.includes('{friend}'))
-  return t(choose(pool, `last|${rec.heroId}`), { friend: friend ? nameOf(state, friend) : '' })
+  const vars = { friend: friend ? nameOf(state, friend) : '' }
+  const start = hashString(`last|${rec.heroId}`) % pool.length
+  for (let k = 0; k < pool.length; k++) {
+    const line = t(pool[(start + k) % pool.length]!, vars)
+    if (!taken || !taken.has(line)) {
+      taken?.add(line)
+      return line
+    }
+  }
+  return t(pool[start]!, vars)
+}
+
+/**
+ * Last words for heroes who fell together (one battle, one grave row): never the same
+ * line twice. Assigned in hero-id order, so the battle and the Memorial agree.
+ */
+export function lastWordsTogether(state: GameState, recs: readonly Pick<FallenRecord, 'heroId' | 'name'>[]): Map<string, string> {
+  const taken = new Set<string>()
+  const out = new Map<string, string>()
+  for (const r of [...recs].sort((a, b) => (a.heroId < b.heroId ? -1 : a.heroId > b.heroId ? 1 : 0))) out.set(r.heroId, lastWords(state, r, taken))
+  return out
 }
 
 /** One line of Isel's letter for a chronicle entry. */
@@ -741,7 +765,7 @@ export function chronicleLine(state: GameState, e: ChronicleEntry): string {
  *  already used by other diarists are avoided. */
 export function diaryLine(state: GameState, hero: OwnedHero, taken: Set<string> = new Set()): string {
   const inParty = state.party.slots.includes(hero.id)
-  for (let k = 0; k < 6; k++) {
+  for (let k = 0; k < 12; k++) {
     const line = speak(state, hero, inParty, `diary${k}`)
     if (!taken.has(line)) {
       taken.add(line)
@@ -765,6 +789,15 @@ export function groupedChronicle(state: GameState, entries: ChronicleEntry[]): s
   if (rivals.length) out.push(t('Bad blood between {list}.', { list: rivals.join(', ') }))
   if (arrivals.length > 1) out.push(t('{n} newcomers came through the crystal: {list}.', { n: arrivals.length, list: arrivals.join(', ') }))
   const grouped = new Set(['friends', 'closeFriends', 'rivals', 'grudge', 'death', 'stalled', ...(arrivals.length > 1 ? ['arrival'] : [])])
-  for (const e of entries) if (!grouped.has(e.kind)) out.push(chronicleLine(state, e))
+  // The same news twice (three shouting matches between the same pair) reads once, counted.
+  const lines: string[] = []
+  const count = new Map<string, number>()
+  for (const e of entries) {
+    if (grouped.has(e.kind)) continue
+    const line = chronicleLine(state, e)
+    if (!count.has(line)) lines.push(line)
+    count.set(line, (count.get(line) ?? 0) + 1)
+  }
+  for (const line of lines) out.push(count.get(line)! > 1 ? t('{line} (×{n})', { line, n: count.get(line)! }) : line)
   return out
 }

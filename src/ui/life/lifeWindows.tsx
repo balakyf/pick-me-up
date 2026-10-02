@@ -396,7 +396,8 @@ export function LetterWindow({ state, onClose }: { state: GameState; onClose: ()
         {entries.some((e) => e.kind === 'stalled') && <p className="muted">{t('The Forge went cold for want of gold or Promotion Stones.')}</p>}
         <h4 className="panel-sub">{t('From their diaries')}</h4>
         {(() => {
-          const taken = new Set<string>()
+          // A diary never repeats a line already in the letter, or another diarist's.
+          const taken = new Set<string>([...rest, ...deaths.map((e) => chronicleLine(state, e))])
           return diarists.map((h) => ({ h, line: diaryLine(state, h, taken) }))
         })().map(({ h, line }) => (
           <div key={h.id} className="diary">
