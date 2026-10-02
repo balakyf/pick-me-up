@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { sfx } from '../audio/sound'
-import { useMusic } from '../audio/useSound'
+import { useBattleAudio } from '../audio/useBattleAudio'
+import { getSettings } from '../qol/settings'
 import { useRegisterBattle } from '../qol/windowRegistry'
 import type { BattleOrder, CombatLog, CombatUnitInit, GameState, HeroId } from '../../engine/types'
 import { lastWordsTogether } from '../life/speech'
@@ -96,12 +96,11 @@ export function BattleScene({
   const frames = useMemo<Snap[]>(() => buildFrames(log, byId, nameOf, { nonLethal }), [log])
 
   const [cursor, setCursor] = useState(0)
-  // Battle music while the scene is up; the scene underneath gets its theme back after.
-  useMusic('battle')
   // Toasts wait while the fight plays.
   useRegisterBattle()
   const [playing, setPlaying] = useState(true)
-  const [speed, setSpeed] = useState<number>(1)
+  // The Master's default speed (Settings window).
+  const [speed, setSpeed] = useState<number>(() => getSettings().battleSpeed)
   const atEnd = cursor >= frames.length - 1
   const reduced = useReducedMotion()
   // Portrait cut-ins (grade B+ skills; see cutInActs), never at 4× or under reduced motion.
@@ -115,21 +114,6 @@ export function BattleScene({
   const leadIndex = current ? log.events.indexOf(current) : -1
   /** Events played through this frame. */
   const applied = snap.to + 1
-
-  // A sound for each beat as it plays (cosmetic): one for a whole sweep.
-  useEffect(() => {
-    const e = current
-    if (!e) return
-    // A sweep sounds its blows if any landed, even when its first target dodged.
-    if (beat.some((b) => b.kind === 'hit')) sfx(beat.some((b) => b.kind === 'hit' && b.crit) ? 'crit' : 'hit')
-    else if (e.kind === 'miss') sfx('miss')
-    else if (e.kind === 'guard') sfx('guard')
-    else if (e.kind === 'heal') sfx('heal')
-    else if (e.kind === 'death') sfx('death')
-    else if (e.kind === 'panic') sfx('panic')
-    else if (e.kind === 'end') sfx(e.outcome === 'win' ? 'victory' : 'defeat')
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cursor, log.events])
 
   useEffect(() => {
     if (!playing || atEnd) return
@@ -246,6 +230,21 @@ export function BattleScene({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [log])
   const mourning = useMourning(fallen && current ? { unit: fallen, seq: current.seq } : null, (u) => fallenWords.get(u.id) ?? '…', speed)
+  // Music for the floor (act / boss / Wall / world's end), the jingle at the end, every
+  // beat's sounds, and the death moment's duck and motif (audio/useBattleAudio.ts).
+  useBattleAudio({
+    beatKey: `${cursor}|${log.seed}|${log.events.length}`,
+    beat,
+    active: !atEnd,
+    byId,
+    element: snap.element,
+    speed,
+    floor: log.floor,
+    ended: atEnd,
+    outcome,
+    nonLethal,
+    deathSeq: fallen && current ? current.seq : null,
+  })
 
   // Sparks, hit-stop, punch and shake as each blow of the beat lands (useImpactJuice.ts).
   const fx = useRef<FxHandle | null>(null)

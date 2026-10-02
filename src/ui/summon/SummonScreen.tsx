@@ -10,6 +10,7 @@ import { cachedDataUrl } from '../pixel/render'
 import { drawProp } from '../pixel/props'
 import { scale } from '../pixel/bitmap'
 import { t } from '../i18n/i18n'
+import { useMusic } from '../audio/useSound'
 
 const SUMMON_COST = TUNING.gacha.normalCostGold
 const PITY_AT = TUNING.gacha.normalPityFloor3At
@@ -31,6 +32,8 @@ export function SummonScreen({
   const [revealed, setRevealed] = useState<OwnedHero[]>([])
   const [ritual, setRitual] = useState<{ heroes: OwnedHero[]; count: 1 | 10; pool: SummonPool; nonce: number } | null>(null)
   const [err, setErr] = useState<string | null>(null)
+  // The chamber's own music (the reveal raises its layers).
+  useMusic({ scene: 'summon' })
 
   function pull(count: 1 | 10) {
     setErr(null)

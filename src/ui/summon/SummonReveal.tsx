@@ -12,7 +12,9 @@ import { useCallback, useEffect, useMemo, useState, type CSSProperties, type Mou
 import type { OwnedHero, Star } from '../../engine/types'
 import { shownStar } from '../../engine/shop'
 import { sfx } from '../audio/sound'
-import { ClassBadge, ElementBadge, ELEMENT_VIS, Stars, STAR_COLOR, classGlyph } from '../bits'
+import { useMusic } from '../audio/useSound'
+import { reducedMotion } from '../motion'
+import { ClassBadge, ClassIcon, ElementBadge, ElementIcon, ELEMENT_VIS, Stars, STAR_COLOR } from '../bits'
 import { heroBustUrl, heroFrameUrl } from '../pixel/sprites'
 import { cachedDataUrl } from '../pixel/render'
 import { drawSummonCircle } from '../pixel/summonFx'
@@ -44,15 +46,6 @@ interface Props {
 
 type Phase = 'beam' | 'card' | 'lineup'
 
-/** The OS "reduce motion" preference (false where matchMedia is missing, e.g. jsdom). */
-function prefersReducedMotion(): boolean {
-  try {
-    return typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
-  } catch {
-    return false
-  }
-}
-
 function circleUrl(tint: string): string {
   return cachedDataUrl(`circle|${tint}`, () => scale(drawSummonCircle(tint), 4))
 }
@@ -62,7 +55,7 @@ function vars(v: Record<string, string>): CSSProperties {
 }
 
 export function SummonReveal({ heroes, masterLevel, pool = 'advanced', onClose, onNavigate, again }: Props) {
-  const reduced = useMemo(prefersReducedMotion, [])
+  const reduced = useMemo(reducedMotion, [])
   const rareAt = rareAtFor(pool)
   const stars = useMemo(() => heroes.map((h) => shownStar(h, masterLevel)), [heroes, masterLevel])
   const [idx, setIdx] = useState(0)
@@ -74,6 +67,9 @@ export function SummonReveal({ heroes, masterLevel, pool = 'advanced', onClose, 
   // While the beam rises it may still be teasing; once the card turns, it shows the truth
   // (a click that skips the beam must not leave a 4★ card in the 3★ blue).
   const tier: Tier = phase === 'card' ? tierOf(star) : steps[Math.min(step, steps.length - 1)]!
+  // The chamber's music rises with the beam: each tier adds a layer, gold all of them; the
+  // lineup keeps the best pull's.
+  useMusic({ scene: 'summon', tier: phase === 'lineup' ? Math.max(0, ...stars.map(tierOf)) : tier })
 
   const flip = useCallback(() => {
     setPhase('card')
@@ -303,7 +299,7 @@ function Lineup({
               <div className="sr-mini-name">{h.name}</div>
               <Stars star={s} />
               <div className="muted sr-mini-meta">
-                {classGlyph(h.heroClass)} {ELEMENT_VIS[h.element].glyph}
+                <ClassIcon heroClass={h.heroClass} label /> <ElementIcon element={h.element} label />
               </div>
             </div>
           )
