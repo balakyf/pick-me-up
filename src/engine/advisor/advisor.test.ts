@@ -37,6 +37,18 @@ describe('advisor', () => {
     expect(cooks).toBeLessThanOrEqual(s.facilities.kitchen.level * TUNING.life.jobs.seatsPerLevel)
   })
 
+  it('suggests a banquet for a pale party — but not while the hall is being cleaned', () => {
+    const s0 = roster(6)
+    const heroes = { ...s0.heroes }
+    for (const h of living(s0)) heroes[h.id] = { ...h, sanity: 20 }
+    const pale = { ...s0, heroes, gold: 100_000 }
+    const tip = advise(pale).find((a) => a.kind === 'banquet')
+    expect(tip).toBeDefined()
+    const fed = run(pale, tip!)
+    const again = { ...fed, heroes: Object.fromEntries(Object.entries(fed.heroes).map(([id, h]) => [id, { ...h, sanity: 20 }])) }
+    expect(advise(again).some((a) => a.kind === 'banquet')).toBe(false)
+  })
+
   it('points out empty party slots when rested heroes are waiting', () => {
     const s = roster(5)
     const empty = { ...s, party: { ...s.party, slots: [null, null, null, null, null] as (HeroId | null)[] } }

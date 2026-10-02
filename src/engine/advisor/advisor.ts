@@ -8,7 +8,7 @@ import { TUNING } from '../tuning'
 import type { Command, EquipmentSlot, GameState, HeroId, JobId, OwnedHero } from '../types'
 import { JOBS, aptitude, jobFeeling, jobHolders, jobOpen, jobSeats, bondOf, relationsOf, lifeOf } from '../life'
 import { canPromote, canAfford } from '../promotion'
-import { banquetWouldHelp } from '../kitchen'
+import { banquetRefusal, banquetWouldHelp } from '../kitchen'
 import { dailyUnlocked, dailyAttemptsLeft } from '../daily'
 import { boundElsewhere, equippedItemIds } from '../equipment'
 import { GIFTS, favorTier, giftDelta } from '../favor'
@@ -113,7 +113,7 @@ export function advise(state: GameState): Advice[] {
   const partyHeroes = [...party].map((id) => state.heroes[id]).filter((h): h is OwnedHero => !!h?.alive)
   if (partyHeroes.length > 0) {
     const avg = partyHeroes.reduce((n, h) => n + h.sanity, 0) / partyHeroes.length
-    if (avg < A.banquetBelow && banquetWouldHelp(state) && state.gold >= TUNING.lobby.banquet.gold) {
+    if (avg < A.banquetBelow && banquetWouldHelp(state) && banquetRefusal(state) === null) {
       out.push({ id: 'banquet', kind: 'banquet', priority: 70, actions: [{ type: 'BANQUET' }] })
     }
   }

@@ -20,7 +20,7 @@ import { engravingCp } from '../engine/engravings'
 import { canPromote, canAfford } from '../engine/promotion'
 import { canUpgrade } from '../engine/facilities'
 import { dailyUnlocked, dailyAttemptsLeft, worldDayIndex } from '../engine/daily'
-import { banquetWouldHelp } from '../engine/kitchen'
+import { banquetReady, banquetWouldHelp } from '../engine/kitchen'
 import { canCraft, equippedItemIds } from '../engine/equipment'
 import { floorPower, buildEncounter } from '../engine/tower'
 import { ANCHORS } from '../engine/content'
@@ -217,7 +217,7 @@ export interface SimResult {
 }
 
 /** Commands counted as levers when the engine accepts them. */
-const LEVERS = new Set<Command['type']>(['ASSIGN_JOB', 'TRAIN_SKILL', 'SYNTHESIZE', 'TRANSFER_SKILL', 'TOWER_RAID', 'WEEKLY_TRIAL', 'HOST_DUEL', 'POST_BOUNTY', 'BUY_DECOR', 'RAISE_STATUE', 'UPGRADE_FACILITY'])
+const LEVERS = new Set<Command['type']>(['BANQUET', 'ASSIGN_JOB', 'TRAIN_SKILL', 'SYNTHESIZE', 'TRANSFER_SKILL', 'TOWER_RAID', 'WEEKLY_TRIAL', 'HOST_DUEL', 'POST_BOUNTY', 'BUY_DECOR', 'RAISE_STATUE', 'UPGRADE_FACILITY'])
 
 const REAL_DAY_MS = 86_400_000
 /** Gold in hand before a bot builds a Living Lobby workplace (surplus, not summon money). */
@@ -475,7 +475,8 @@ class Bot {
   }
 
   private feast(): void {
-    if (this.avgSanity() < 55 && banquetWouldHelp(this.s) && this.s.gold >= TUNING.lobby.banquet.gold * 3) this.try({ type: 'BANQUET' })
+    // The hall needs a day between feasts (B8): a person waits for it rather than knocking.
+    if (this.avgSanity() < 55 && banquetWouldHelp(this.s) && banquetReady(this.s) && this.s.gold >= TUNING.lobby.banquet.gold * 3) this.try({ type: 'BANQUET' })
   }
 
   /**

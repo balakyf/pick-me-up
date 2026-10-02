@@ -570,6 +570,11 @@ export const TUNING = {
       gold: 500,
       /** Sanity restored to every LIVING hero per Banquet (clamped to sanityMax). */
       restore: 40,
+      /** One Banquet per this many world-days (the hall needs cleaning). */
+      cooldownDays: 1,
+      /** A Banquet warms the roster (favor) only when none was held in the previous this-many
+       *  world-days; the Sanity still restores. Feasts are for occasions, not a favor mill. */
+      favorGapDays: 3,
     },
     /** Promotion: the "raise, don't roll" engine (Layer 1 §3, lobby §3.3). */
     promotion: {

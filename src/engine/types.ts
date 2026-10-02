@@ -737,6 +737,8 @@ export interface MetaState {
   piZeroSince: number | null
   /** Six months at zero: the account is deleted (canon grey towers). */
   deleted: boolean
+  /** World-day of the last Kitchen Banquet (absent = never held). */
+  banquetDay?: number
 }
 
 export interface DailiesState {
