@@ -1,21 +1,20 @@
 /**
- * Scouting (Living Lobby spec §6): what waits on the next floor, how dangerous it is for
- * the party as it stands, and a suggested party that answers it. Pure reads — nothing
- * here changes state or consumes the floor's RNG.
+ * Scouting (Living Lobby spec §6): what waits on the next floor, the party's strength
+ * against the encounter actually built, and a suggested party that answers it. Pure reads —
+ * nothing here changes state or consumes the floor's RNG.
  *
- * The threat bands were calibrated from the playtest bots (40 days × 6 runs): with party
- * CP ÷ floor budget at 1.6 or above no hero died; 1.0–1.6 won ~95% with ~0.5 deaths;
- * 0.6–1.0 won ~88% with ~0.8 deaths; below 0.6 the party lost more than it won and
- * ~3 heroes died an attempt.
+ * How dangerous the floor is comes from the war-room forecast (forecast.ts), which runs the
+ * real fight: the old CP-ratio bands under-read every anchor and the Wall (B1).
  */
 import { TUNING } from '../tuning'
-import { buildEncounter, floorPower } from '../tower'
+import { buildEncounter } from '../tower'
 import { fitToDeploy, heroUnfitReason } from '../tower/deploy'
 import { heroCpFull, heroUnitFull, type CpContext } from '../unit/trueCp'
 import { applyPartyBonuses } from '../challenge/bonds'
 import { ELEMENT_ADVANTAGE } from '../tuning'
-import type { Element, EnemyFamily, FloorModifierId, GameState, HeroId, KeywordTag, Line, OwnedHero } from '../types'
+import type { CombatUnit, DamageType, Element, EnemyFamily, FloorModifierId, GameState, HeroId, KeywordTag, Line, OwnedHero } from '../types'
 import { isStudied } from '../codex'
+import { FORECAST } from './forecastTuning'
 
 export type Threat = 'safe' | 'fair' | 'risky' | 'deadly'
 
@@ -40,11 +39,9 @@ export interface ScoutReport {
   waves: number
   enemies: ScoutedEnemy[]
   partyCp: number
+  /** The CP of the encounter actually built (anchor and Wall scaling included). */
   budget: number
   ratio: number
-  threat: Threat
-  /** Deaths an attempt at this ratio cost, on average (from the bots). */
-  expectedDeaths: number
   /** The scholars (or an intervention) have read this floor: weaknesses are shown. */
   studied: boolean
   /** Damage types most of the floor shrugs off. */
@@ -80,13 +77,6 @@ export function partyCp(state: GameState, heroes: readonly OwnedHero[]): number 
  */
 export function canFight(h: OwnedHero, state?: GameState): boolean {
   return state ? fitToDeploy(state, h, { rebellion: false }).ok : heroUnfitReason(h) === null
-}
-
-export function threatFor(ratio: number): { threat: Threat; expectedDeaths: number } {
-  if (ratio >= 1.6) return { threat: 'safe', expectedDeaths: 0 }
-  if (ratio >= 1.0) return { threat: 'fair', expectedDeaths: 0.5 }
-  if (ratio >= 0.6) return { threat: 'risky', expectedDeaths: 0.8 }
-  return { threat: 'deadly', expectedDeaths: 3 }
 }
 
 /** The party heroes who will actually fight the next attempt (the deploy rails, the
@@ -131,8 +121,8 @@ export function scoutFloor(state: GameState, heroes: OwnedHero[] = partyHeroes(s
         })
     }
   }
-  const worldMult = TUNING.tower.worldMult[state.worldGrade]
-  const budget = floorPower(floor, worldMult)
+  // The budget is the encounter actually built (an anchor above its floor, the Wall far above).
+  const budget = enc.waves.reduce((n, w) => n + w.units.reduce((m, u) => m + u.cp, 0), 0)
   const cp = partyCp(state, heroes)
   const ratio = budget > 0 ? cp / budget : 0
   return {
@@ -143,7 +133,6 @@ export function scoutFloor(state: GameState, heroes: OwnedHero[] = partyHeroes(s
     partyCp: cp,
     budget,
     ratio: Math.round(ratio * 100) / 100,
-    ...threatFor(ratio),
     studied: state.meta.peekedFloors.includes(floor),
     immune: { physical: immPhys > total / 2, magic: immMagic > total / 2 },
     modifiers: enc.modifiers ?? [],
@@ -163,30 +152,96 @@ function bulk(h: OwnedHero, cp: number): number {
   return role * 1e9 + cp
 }
 
+/** How a floor stands against each damage type, and what its boss fears. */
+export interface FloorRead {
+  /** Share of the floor (boss weighted) that shrugs off each damage type (immune 1, resist ½). */
+  shrugs: Record<DamageType, number>
+  /** Elements on the floor, one per enemy. */
+  elements: Element[]
+  /** The mission's boss (a defeat/acquire target), if any. */
+  boss: { element: Element; weakTo: Element[]; immune: DamageType[] } | null
+}
+
+const shrugsOff = (u: CombatUnit, t: DamageType): number =>
+  u.keywords.some((k) => k.kind === 'immune' && k.damageType === t) ? 1 : u.keywords.some((k) => k.kind === 'resist' && k.damageType === t) ? 0.5 : 0
+
+/** Read a floor's encounter for counter-picking (pure). */
+export function readFloor(state: GameState, floor = state.tower.currentFloor): FloorRead | null {
+  if (floor > TUNING.tower.sliceTopFloor) return null
+  const enc = buildEncounter(state, floor)
+  const tags = new Set(enc.mission.objectives.flatMap((o) => (o.kind === 'defeat' || o.kind === 'acquire' ? [o.targetTag] : [])))
+  const units = enc.waves.flatMap((w) => w.units)
+  const bossUnit = units.find((u) => u.targetTag !== undefined && tags.has(u.targetTag))
+  let weight = 0
+  const shrugs: Record<DamageType, number> = { physical: 0, magic: 0 }
+  for (const u of units) {
+    const w = u === bossUnit ? FORECAST.bossWeight : 1
+    weight += w
+    shrugs.physical += w * shrugsOff(u, 'physical')
+    shrugs.magic += w * shrugsOff(u, 'magic')
+  }
+  if (weight > 0) {
+    shrugs.physical /= weight
+    shrugs.magic /= weight
+  }
+  return {
+    shrugs,
+    elements: units.map((u) => u.element),
+    boss: bossUnit
+      ? {
+          element: bossUnit.element,
+          weakTo: bossUnit.keywords.flatMap((k) => (k.kind === 'vulnerable' ? [k.element] : [])),
+          immune: bossUnit.keywords.flatMap((k) => (k.kind === 'immune' ? [k.damageType] : [])),
+        }
+      : null,
+  }
+}
+
 /**
  * The party a careful Master would send: the strongest heroes fit to fight (rested — at
- * least `minSanity`), counter-picked against the floor (mages against the physically
- * immune, blades against the magic-immune, element advantage as a tiebreak), sturdiest
- * in front and the frail at the back.
+ * least `minSanity`), ranked by TRUE CP with a bonus for the heroes who exploit the boss
+ * (its weakness, element advantage) and the floor, counter-picked once a damage type is
+ * shrugged off by a quarter of the floor or more (the boss counts thrice): mages against
+ * the physically immune, blades against the magic-immune. Sturdiest in front, the frail at
+ * the back.
  */
 export function suggestParty(state: GameState, minSanity = 40): { slots: (HeroId | null)[]; lines: Line[] } {
   const size = TUNING.account.partySize
-  const report = scoutFloor(state, [])
-  const elems = report ? report.enemies.flatMap((e) => Array.from({ length: e.count }, () => e.element)) : []
+  const read = readFloor(state)
+  const elems = read?.elements ?? []
   // True CP (gear, favor, Sanity…), computed once per hero.
   const cps = new Map<HeroId, number>()
   const cpOf = (h: OwnedHero) => cps.get(h.id) ?? (cps.set(h.id, heroCpFull(state, h)), cps.get(h.id)!)
-  const score = (h: OwnedHero) => cpOf(h) * (advantaged(h, elems) ? 1.25 : 1)
+  const boss = read?.boss ?? null
+  const score = (h: OwnedHero) => {
+    let s = cpOf(h)
+    if (advantaged(h, elems)) s *= FORECAST.floorAdvantageMult
+    if (boss) {
+      if (boss.weakTo.includes(h.element)) s *= FORECAST.bossWeakMult
+      else if (ELEMENT_ADVANTAGE[h.element] === boss.element) s *= FORECAST.bossAdvantageMult
+    }
+    return s
+  }
   // Fit by the deploy rails, the rebellion draw included: a rebel would not answer.
   const fit = (Object.values(state.heroes) as OwnedHero[])
     .filter((h) => h.sanity >= minSanity && fitToDeploy(state, h).ok)
-    .sort((a, b) => score(b) - score(a))
+    .sort((a, b) => score(b) - score(a) || (a.id < b.id ? -1 : 1))
   const picked: OwnedHero[] = []
   const take = (pred: (h: OwnedHero) => boolean, n: number) => {
     for (const h of fit) if (picked.length < size && n > 0 && pred(h) && !picked.includes(h)) (picked.push(h), n--)
   }
-  if (report?.immune.physical) take((h) => h.heroClass === 'mage', 2)
-  if (report?.immune.magic) take((h) => h.heroClass !== 'mage', 3)
+  const want = (share: number, bossImmune: boolean) =>
+    share < FORECAST.counterShare && !bossImmune ? 0 : Math.max(bossImmune ? 2 : 1, Math.min(size - 1, Math.round(size * share) + 1))
+  const mages = want(read?.shrugs.physical ?? 0, !!boss?.immune.includes('physical'))
+  const blades = want(read?.shrugs.magic ?? 0, !!boss?.immune.includes('magic'))
+  // The harder wall first, then the other; the rest by score.
+  if (mages >= blades) {
+    take((h) => h.heroClass === 'mage', mages)
+    take((h) => h.heroClass !== 'mage', blades)
+  } else {
+    take((h) => h.heroClass !== 'mage', blades)
+    take((h) => h.heroClass === 'mage', mages)
+  }
   take(() => true, size)
   const byBulk = [...picked].sort((a, b) => bulk(b, cpOf(b)) - bulk(a, cpOf(a)))
   return {
