@@ -24,7 +24,8 @@ export function attackStyle(u: CombatUnitInit, skillId: string | null, width: nu
     return 'melee'
   }
   if (ENEMY_ARCHER.test(u.name)) return 'arrow'
-  if (ENEMY_CASTER.test(u.name) || elemental) return 'magic'
+  // A caster foe's Spell (engine/unit ENEMY_SPELL_ID) flies as a bolt.
+  if (skillId === 'e_spell' || ENEMY_CASTER.test(u.name) || elemental) return 'magic'
   return width >= BIG ? 'lunge' : 'melee'
 }
 

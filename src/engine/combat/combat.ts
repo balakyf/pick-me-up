@@ -531,7 +531,9 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
       actorId: actor.id,
       targetId: target.id,
       amount,
-      crit,
+      // A blow the target is immune to is no critical one (the roll is still spent, so
+      // the stream is unchanged): no hit-stop, no CRITICAL! over an IMMUNE.
+      crit: crit && !immune,
       hpAfter: target.currentHP,
       // (A friend who stepped in front took a blow meant for someone else.)
       ...(eff !== undefined && !covered ? { eff } : {}),

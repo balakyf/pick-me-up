@@ -8,6 +8,7 @@ import { ENEMY_TEMPLATES, SKILLS } from '../../engine/content'
 import { ELEMENT_VIS } from '../bits'
 import { t } from '../i18n/i18n'
 import { DEPTH_DURATION, depthSnap } from './synergyCaptions'
+import { missionCaption, missionDuration } from './missionCaptions'
 
 /** One frame of the replay: the field as it stands after an event. */
 export interface Snap {
@@ -44,6 +45,11 @@ export const DURATION: Record<CombatEvent['kind'], number> = {
   ...DEPTH_DURATION,
 }
 
+/** How long one event holds the screen at 1× (each mission beat has its own timing). */
+export function eventDuration(e: CombatEvent): number {
+  return e.kind === 'mission' ? missionDuration(e) : DURATION[e.kind]
+}
+
 /** A hero's death holds the scene: the moment is not skipped past at speed. */
 export const HERO_DEATH_MS = 2600
 /** Hit-stop: a critical blow freezes the frame this long before the impact lands. */
@@ -61,6 +67,8 @@ export function shownLevel(u: Pick<CombatUnitInit, 'level' | 'templateId'>): num
 
 export function skillName(id: string): string {
   if (id === 'basic') return t('Attack')
+  // A caster foe's basic attack (engine/unit ENEMY_SPELL_ID).
+  if (id === 'e_spell') return t('Spell')
   return t(SKILLS[id]?.name ?? 'Strike')
 }
 
@@ -193,7 +201,7 @@ export function buildFrames(
             : t('{name} falls!', { name: nameOf(e.unitId) })
         break
       case 'mission':
-        next.caption = t(e.note)
+        next.caption = missionCaption(e, nameOf)
         break
       case 'order': {
         const o = e.order

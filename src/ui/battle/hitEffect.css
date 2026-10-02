@@ -1,0 +1,8 @@
+/* Hit effectiveness (lane D, combat brain): a blow that met a weakness pops a warm WEAK!
+   tag, a resisted one a cool RESIST tag, and a blow the foe is immune to reads IMMUNE
+   instead of 'CRITICAL! 0'. (Specificity — two classes — beats battle.css's `.dmg`.) */
+.dmg.immune { color: #b4c8e8; font-size: 10px; letter-spacing: 1px; }
+.dmg.weak { color: #ffd76a; font-size: 13px; }
+.dmg.resist { color: #aeb9c6; font-size: 11px; }
+.dmg-tag.weak { color: #ffb347; }
+.dmg-tag.resist { color: #9fb0c4; }

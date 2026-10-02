@@ -156,10 +156,11 @@ describe('immunity', () => {
   })
 
   it('with nothing it can hurt, the blow lands as IMMUNE (amount 0)', () => {
-    const mage = hero({ id: 'm', cls: 'mage', skills: [magicBasic], stats: { spd: 500, mAtk: 100 } })
+    // (A sure crit: an immune blow still is none.)
+    const mage = hero({ id: 'm', cls: 'mage', skills: [magicBasic], stats: { spd: 500, mAtk: 100, critPct: 100 } })
     const r = runBattle([mage], enc([[knight()]]), 4)
     expect(hits(r, 'm').length).toBeGreaterThan(0)
-    expect(hits(r, 'm').every((h) => h.amount === 0 && h.eff === 'immune')).toBe(true)
+    expect(hits(r, 'm').every((h) => h.amount === 0 && h.eff === 'immune' && !h.crit)).toBe(true)
   })
 
   it('a friend never follows up on a foe their strike cannot hurt (no roll, no wasted swing)', () => {
