@@ -7,6 +7,7 @@
 import type { BuffStat, DotKind, ResolvedEffect, SkillDef, SkillTarget } from '../engine/types'
 import { effectAt, hpCostAt, passiveMagnitude, skillMultAt } from '../engine/skills'
 import { t } from './i18n/i18n'
+import { tn } from './text'
 
 /** The role a skill plays, for its tag in the list. */
 export type SkillRole = 'strike' | 'sweep' | 'tank' | 'heal' | 'support' | 'control' | 'passive'
@@ -117,6 +118,8 @@ export function effectText(def: SkillDef, e: ResolvedEffect): string {
       return t('taunts: foes must strike {who} for {turns}', { who, turns: turns(e.turns) })
     case 'sp':
       return e.amount > 0 ? t('gives {who} {n} SP', { who, n: e.amount }) : t('drains {n} SP from {who}', { who, n: -e.amount })
+    case 'summon':
+      return tn(e.count, 'calls 1 more to its side', 'calls {n} more to its side')
   }
 }
 
@@ -140,6 +143,7 @@ function passiveText(def: SkillDef, level: number): string {
   if (p.kind === 'guard') {
     if (p.vs === undefined) return t('takes {n}% less damage, always', { n: pctOf(m) })
     if (p.vs === 'ranged') return t('takes {n}% less from archers and mages, always', { n: pctOf(m) })
+    if (p.vs === 'melee') return t('takes {n}% less from blades and fists, always', { n: pctOf(m) })
     return t('takes {n}% less {element} damage, always', { n: pctOf(m), element: t(cap(p.vs)) })
   }
   if (p.kind === 'bane') return t('+{n}% damage against {family}, always', { n: pctOf(m), family: t(cap(p.family)) })
@@ -156,6 +160,9 @@ export function skillPhrases(def: SkillDef, level: number): string[] {
   for (const e of def.effects ?? []) out.push(effectText(def, effectAt(e, def, level)))
   const hp = hpCostAt(def, level)
   out.push(hp > 0 ? t('{sp} SP · {hp} HP', { sp: def.spCost, hp }) : t('{sp} SP', { sp: def.spCost }))
+  // Lane G: a wound-up move and a boss's rhythm.
+  if (def.charge !== undefined) out.push(t('wound up a turn ahead'))
+  if (def.cooldown !== undefined && def.cooldown > 1) out.push(t('every {n} turns at most', { n: def.cooldown }))
   return out
 }
 

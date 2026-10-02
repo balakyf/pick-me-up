@@ -1,0 +1,73 @@
+/* Lane G — telegraphs, phase cinematics and summons on the battle stage. */
+
+/* ── Telegraph: a '!' in a countdown ring over the foe winding up ─────────── */
+.tg-mark {
+  position: absolute; z-index: 1001; pointer-events: none;
+  transform: translate(-50%, -100%);
+  display: flex; flex-direction: column; align-items: center;
+  animation: tgPulse calc(0.6s / var(--spd, 1)) steps(3) infinite alternate;
+}
+.tg-ring { width: 18px; height: 18px; display: block; filter: drop-shadow(1px 1px 0 #000); }
+.tg-ring-bg { fill: #2a0a0acc; stroke: #5a1a1a; stroke-width: 2; }
+.tg-ring-fill { fill: none; stroke: #ff5a3a; stroke-width: 2.4; transition: stroke-dashoffset calc(0.3s / var(--spd, 1)) steps(3); }
+.tg-bang {
+  position: absolute; top: 1px; left: 50%; transform: translateX(-50%);
+  font-size: 13px; line-height: 16px; font-weight: bold; color: #ffe08a;
+  text-shadow: 1px 1px 0 #000, -1px -1px 0 #000;
+}
+.tg-move {
+  margin-top: 1px; padding: 0 3px; white-space: nowrap;
+  font-size: max(7px, calc(10px / var(--zoom, 1))); line-height: 1.2;
+  color: #ffd0c0; background: #3a0a0acc; border: 1px solid #ff5a3a;
+  text-shadow: 1px 1px 0 #000;
+}
+@keyframes tgPulse { from { transform: translate(-50%, -100%) scale(1); } to { transform: translate(-50%, -104%) scale(1.12); } }
+
+/* Whom it threatens: a red reticle under their feet. */
+.tg-reticle {
+  position: absolute; z-index: 2; pointer-events: none;
+  width: 22px; height: 8px; transform: translate(-50%, -50%);
+  border: 2px solid #ff4a2a; border-radius: 50%;
+  box-shadow: 0 0 4px #ff4a2a;
+  animation: tgReticle calc(0.5s / var(--spd, 1)) steps(2) infinite alternate;
+}
+@keyframes tgReticle { from { opacity: 0.55; } to { opacity: 1; } }
+
+.battle.calm .tg-mark, .battle.calm .tg-reticle { animation: none; }
+.battle.calm .tg-ring-fill { transition: none; }
+
+/* ── Phase cinematic: a flash, a title card, the boss's line ─────────────── */
+.phase-cine {
+  position: absolute; inset: 0; z-index: 1045; pointer-events: none;
+  display: flex; align-items: center; justify-content: center;
+}
+.phase-flash {
+  position: absolute; inset: 0;
+  background: radial-gradient(ellipse at 50% 50%, #ffffffee, #ffb36a77 40%, #3a0a1a44 70%, transparent 85%);
+  animation: phaseFlash calc(0.7s / var(--spd, 1)) steps(7) forwards;
+}
+@keyframes phaseFlash { 0% { opacity: 1; } 100% { opacity: 0; } }
+.phase-card {
+  position: relative; text-align: center; max-width: 92%;
+  padding: 6px 14px 8px; background: linear-gradient(180deg, #120612ee, #2a0a1aee);
+  border-top: 2px solid var(--gold); border-bottom: 2px solid var(--gold);
+  box-shadow: 0 0 0 2px #000, 0 6px 18px #000a;
+  animation: phaseSlam calc(2.8s / var(--spd, 1)) steps(28) both;
+}
+.phase-name { font-size: clamp(11px, 5cqh, 20px); color: #ffd7a0; letter-spacing: 2px; text-shadow: 2px 2px 0 #000; }
+.phase-title { font-size: clamp(14px, 8cqh, 34px); color: #fff; letter-spacing: 3px; text-transform: uppercase; text-shadow: 2px 2px 0 #000, -1px -1px 0 #000; white-space: nowrap; }
+.phase-count { color: var(--gold); }
+.phase-dot { color: #ffffff88; }
+.phase-line { margin-top: 3px; font-size: clamp(10px, 4.6cqh, 18px); color: #e8dcff; font-style: italic; text-shadow: 1px 1px 0 #000; }
+@keyframes phaseSlam {
+  0% { transform: scale(1.7); opacity: 0; }
+  8% { transform: scale(1); opacity: 1; }
+  88% { opacity: 1; }
+  100% { opacity: 0; }
+}
+.phase-cine.calm .phase-card { animation: phaseCalm calc(2.8s / var(--spd, 1)) linear both; }
+@keyframes phaseCalm { 0% { opacity: 0; } 10% { opacity: 1; } 88% { opacity: 1; } 100% { opacity: 0; } }
+
+/* On a phone the title wraps rather than running off the stage. */
+.battle.narrow .phase-title { white-space: normal; letter-spacing: 1px; }
+.battle.narrow .phase-card { padding: 4px 8px 6px; }

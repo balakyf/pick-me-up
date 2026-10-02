@@ -128,7 +128,7 @@ function OddsChangers({ state, view, onUse }: { state: GameState; view: Forecast
                 </div>
               </div>
               <button className="pbtn sm" onClick={() => onUse(a)}>
-                {a.kind === 'focus' ? t('Use this plan') : t('Use this party')}
+                {a.kind === 'focus' || a.kind === 'mark' || a.kind === 'guard' ? t('Use this plan') : t('Use this party')}
               </button>
             </div>
           )
@@ -147,6 +147,8 @@ export function ForecastPanel({
   onClearOpening,
   onUse,
   onSuggest,
+  mark,
+  onMark,
 }: {
   state: GameState
   report: ScoutReport
@@ -157,7 +159,18 @@ export function ForecastPanel({
   onClearOpening: () => void
   onUse: (a: ForecastAlternative) => void
   onSuggest: () => void
+  /** Lane G: the foe marked before the fight, and how to mark one (free). */
+  mark?: string
+  onMark?: (unitId: string) => void
 }) {
+  const markBtn = (unitId: string, name: string) =>
+    onMark === undefined ? null : mark === unitId ? (
+      <span className="fc-mark muted small">⌖ {t('marked')}</span>
+    ) : (
+      <button className="linkish fc-mark" onClick={() => onMark(unitId)} title={t('Mark {name} before the fight: every hero strikes it from the first blow (free)', { name: t(name) })}>
+        ⌖ {t('Mark it')}
+      </button>
+    )
   const f = view.forecast
   const color = f ? THREAT_COLOR[f.threat] : 'var(--ink-dim)'
   const anyAlive = Object.values(state.heroes).some((h) => h.alive)
@@ -233,10 +246,14 @@ export function ForecastPanel({
             <div className="fc-deadliest">
               ☠ {t('Deadliest: {name} (wave {w}) — {p}% of the damage your party takes.', { name: t(f.deadliest.name), w: f.deadliest.wave, p: f.deadliest.sharePct })}
               {f.deadliest.killsPerRun > 0 && <span className="muted small"> {t('It fells {n} an attempt.', { n: f.deadliest.killsPerRun })}</span>}
+              {!f.deadliest.looming && markBtn(f.deadliest.unitId, f.deadliest.name)}
             </div>
           )}
           {f.boss && f.boss.hpLeftPct !== null && (
-            <div className="muted small">{t('When the party lost, {name} still had {p}% of their strength.', { name: t(f.boss.name), p: f.boss.hpLeftPct })}</div>
+            <div className="muted small">
+              {t('When the party lost, {name} still had {p}% of their strength.', { name: t(f.boss.name), p: f.boss.hpLeftPct })}
+              {f.boss.unitId !== f.deadliest?.unitId && markBtn(f.boss.unitId, f.boss.name)}
+            </div>
           )}
         </>
       )}

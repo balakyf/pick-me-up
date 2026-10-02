@@ -342,6 +342,10 @@ export type BattleKeyAction =
   | { kind: 'skip' }
   | { kind: 'focus' }
   | { kind: 'protect' }
+  | { kind: 'unleash' }
+  | { kind: 'guard' }
+  | { kind: 'hold' }
+  | { kind: 'swap' }
   | { kind: 'retreat' }
   | { kind: 'escape' }
   | { kind: 'continue' }
@@ -355,6 +359,10 @@ export const BATTLE_KEYS = {
   skip: 'S',
   focus: 'F',
   protect: 'P',
+  unleash: 'U',
+  guard: 'G',
+  hold: 'H',
+  swap: 'X',
   retreat: 'R',
   close: 'Esc',
 } as const
@@ -391,6 +399,14 @@ export function battleKeyAction(
       return { kind: 'focus' }
     case 'p':
       return { kind: 'protect' }
+    case 'u':
+      return { kind: 'unleash' }
+    case 'g':
+      return { kind: 'guard' }
+    case 'h':
+      return { kind: 'hold' }
+    case 'x':
+      return { kind: 'swap' }
     case 'r':
       return { kind: 'retreat' }
     case 'Escape':

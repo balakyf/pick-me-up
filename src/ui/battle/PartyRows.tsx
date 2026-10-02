@@ -12,6 +12,8 @@ export function PartyRows({
   aiming,
   bustOf,
   onAim,
+  aimableFor,
+  picked = null,
 }: {
   heroes: CombatUnitInit[]
   snap: Snap
@@ -19,6 +21,10 @@ export function PartyRows({
   aiming: boolean
   bustOf: (u: CombatUnitInit) => string
   onAim: (u: CombatUnitInit) => void
+  /** Which rows an order is waiting for (lane G: Unleash and Swap skip the escort). */
+  aimableFor?: (u: CombatUnitInit) => boolean
+  /** The hero already picked (the first of a swap). */
+  picked?: string | null
 }) {
   return (
     <div className="pframe battle-party">
@@ -29,7 +35,7 @@ export function PartyRows({
         return (
           <div
             key={u.id}
-            className={`party-row ${snap.actor === u.id ? 'active' : ''} ${dead ? 'dead' : ''} ${aiming && !dead ? 'aimable' : ''}`}
+            className={`party-row ${snap.actor === u.id ? 'active' : ''} ${dead ? 'dead' : ''} ${(aimableFor ? aimableFor(u) : aiming) && !dead ? 'aimable' : ''} ${picked === u.id ? 'picked' : ''}`}
             onClick={() => onAim(u)}
           >
             <img className="px party-bust" src={bustOf(u)} width={24} height={24} alt="" />

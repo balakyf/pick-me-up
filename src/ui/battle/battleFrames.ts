@@ -12,6 +12,7 @@ import { t } from '../i18n/i18n'
 import { DEPTH_DURATION, depthSnap } from './synergyCaptions'
 import { missionCaption, missionDuration } from './missionCaptions'
 import { STATUS_DURATION, statusDuration, statusSnap, type StatusView } from './statusCaptions'
+import { afterCharged, BOSS_DURATION, bossDuration, bossSnap, chargedCaption, orderCaption, type BossView } from './bossCaptions'
 
 /** One frame of the replay: the field as it stands after a beat. */
 export interface Snap {
@@ -28,6 +29,8 @@ export interface Snap {
   element: Element
   /** Statuses on the field and their pops (lane F, statusCaptions.ts). */
   status?: StatusView
+  /** Moves being wound up, the latest phase (lane G, bossCaptions.ts). */
+  boss?: BossView
   /** The events this frame plays: log.events[from..to] (frame 0, the empty field, is -1..-1). */
   from: number
   to: number
@@ -56,11 +59,12 @@ export const DURATION: Record<CombatEvent['kind'], number> = {
   end: 600,
   ...DEPTH_DURATION,
   ...STATUS_DURATION,
+  ...BOSS_DURATION,
 }
 
 /** How long one event holds the screen at 1× (each mission beat has its own timing). */
 export function eventDuration(e: CombatEvent): number {
-  return e.kind === 'mission' ? missionDuration(e) : statusDuration(e) ?? DURATION[e.kind]
+  return e.kind === 'mission' ? missionDuration(e) : bossDuration(e) ?? statusDuration(e) ?? DURATION[e.kind]
 }
 
 /** A hero's death holds the scene: the moment is not skipped past at speed. */
@@ -84,6 +88,8 @@ export function skillName(id: string): string {
   if (id === 'basic') return t('Attack')
   // A caster foe's basic attack (engine/unit ENEMY_SPELL_ID).
   if (id === 'e_spell') return t('Spell')
+  // A hero bracing under the Master's Guard (engine/combat BRACE_ID).
+  if (id === 'brace') return t('Brace')
   return t(SKILLS[id]?.name ?? 'Strike')
 }
 
@@ -96,10 +102,15 @@ export function layout(log: CombatLog, squeeze = 1): Record<string, { x: number;
   for (const e of log.events) {
     if (e.kind === 'battle-start') for (const id of e.enemyIds) waveOf[id] = 0
     if (e.kind === 'wave-spawn') for (const id of e.enemyIds) waveOf[id] = e.wave
+    // Lane G: summoned units stand with the wave they were called into.
+    if (e.kind === 'summon') for (const id of e.enemyIds) waveOf[id] = e.wave
   }
+  // A reserve never called keeps out of the ranks of those who were.
+  const reserve = new Set(log.events.flatMap((e) => (e.kind === 'summon' ? e.enemyIds : [])))
+  const unseen = (u: CombatUnitInit) => u.side === 'enemy' && waveOf[u.id] === undefined && /_r[^_]*_\d+$/.test(u.id) && !reserve.has(u.id)
   const groups = new Map<string, CombatUnitInit[]>()
   for (const u of log.unitsInit) {
-    const key = `${u.side}|${u.side === 'enemy' ? waveOf[u.id] ?? 0 : 0}|${u.line}`
+    const key = `${u.side}|${u.side === 'enemy' ? (unseen(u) ? 'r' : waveOf[u.id] ?? 0) : 0}|${u.line}`
     if (!groups.has(key)) groups.set(key, [])
     groups.get(key)!.push(u)
   }
@@ -272,6 +283,11 @@ function step(cur: Snap, e: CombatEvent, byId: Record<string, CombatUnitInit>, n
       }
       // The engine says what SP the cast left (regen included); older logs fall back above.
       if (e.spAfter !== undefined) next.sp = { ...cur.sp, [e.actorId]: e.spAfter }
+      // A wound-up move landing (lane G): its mark comes down, and the caption says how it was met.
+      if (e.charged) {
+        next.boss = afterCharged(cur.boss, e.actorId)
+        next.caption = chargedCaption(e, nameOf)
+      }
       break
     }
     case 'hit':
@@ -316,16 +332,9 @@ function step(cur: Snap, e: CombatEvent, byId: Record<string, CombatUnitInit>, n
     case 'mission':
       next.caption = missionCaption(e, nameOf)
       break
-    case 'order': {
-      const o = e.order
-      next.caption =
-        o.kind === 'retreat'
-          ? t('The Master sounds the retreat!')
-          : o.kind === 'focus'
-            ? t('The Master: “Everyone on {name}!”', { name: nameOf(o.enemyId) })
-            : t('The Master: “Cover {name}!”', { name: nameOf(o.allyId) })
+    case 'order':
+      next.caption = orderCaption(e.order, nameOf)
       break
-    }
     case 'end':
       next.caption =
         opts.nonLethal && e.outcome !== 'win'
@@ -342,7 +351,7 @@ function step(cur: Snap, e: CombatEvent, byId: Record<string, CombatUnitInit>, n
       break
     default: {
       // Combat depth: cover, follow-ups, rivalry and the floor's conditions.
-      const d = depthSnap(e, nameOf) ?? statusSnap(e, nameOf, next)
+      const d = depthSnap(e, nameOf) ?? statusSnap(e, nameOf, next) ?? bossSnap(e, nameOf, next)
       if (d) Object.assign(next, d)
       // A follow-up is the friend's own strike: their element colours the sparks.
       if (e.kind === 'followup') {

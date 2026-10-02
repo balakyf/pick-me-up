@@ -14,7 +14,9 @@
  * deaths, the median length, the enemy that hurts the party most (and its wave), what is
  * left of the boss when the party loses, the escort's odds, and a threat band. Then "what
  * would change the odds": the suggested party, the unfit swapped for the best of the
- * bench, an opening Focus on the deadliest enemy — each forecast the same way.
+ * bench, a free pre-battle mark on the deadliest enemy (lane G; an opening Focus order once
+ * a mark is set elsewhere), and a standing Guard against foes that wind up big moves —
+ * each forecast the same way.
  *
  * PURE and DETERMINISTIC. Memoized on the exact battle input (an FNV hash of it), so the
  * war room can ask as often as it renders.
@@ -22,6 +24,7 @@
 import type {
   BattleOrder,
   BattleResult,
+  FocusDirective,
   CombatOutcome,
   DeployReason,
   Encounter,
@@ -51,6 +54,8 @@ export interface ForecastPlan {
   lines?: readonly Line[]
   /** Orders given before the first blow (an opening Focus at tick 1). */
   opening?: readonly BattleOrder[]
+  /** The free pre-battle mark and Protects (lane G: the Tactical Center's slots). */
+  focus?: FocusDirective
   /** A played ballista shot (default: the Master's tracked skill, as when it is skipped). */
   ballista?: number
   /** Forecast the subversion of F90. */
@@ -132,14 +137,18 @@ export interface Forecast {
   threat: Threat
   /** Orders given before the first blow in this plan. */
   opening: BattleOrder[]
+  /** The pre-battle mark and free Protects this plan fights with (lane G). */
+  directive?: FocusDirective
 }
 
 export interface ForecastAlternative {
-  kind: 'suggested' | 'swap' | 'focus'
+  kind: 'suggested' | 'swap' | 'focus' | 'mark' | 'guard'
   slots: (HeroId | null)[]
   lines: Line[]
-  /** Orders before the first blow (the 'focus' alternative). */
+  /** Orders before the first blow (the 'focus' and 'guard' alternatives). */
   opening: BattleOrder[]
+  /** The pre-battle mark and Protects this plan fights with (the 'mark' alternative sets it). */
+  directive?: FocusDirective
   /** Who comes in for whom ('swap'; also listed for 'suggested'). */
   swaps: { out: HeroId | null; in: HeroId | null }[]
   /** The enemy to focus ('focus'). */
@@ -200,6 +209,7 @@ export function forecastInput(state: GameState, plan: ForecastPlan = {}): Foreca
   if (state.tower.currentFloor > TUNING.tower.sliceTopFloor) return null
   const planned = withPlanParty(state, plan)
   const prepared = prepareFloorBattle(planned, {
+    focus: plan.focus,
     ballista: plan.ballista,
     subvert: plan.subvert,
     orders: plan.opening && plan.opening.length > 0 ? [...plan.opening] : undefined,
@@ -417,6 +427,7 @@ export function summarizeForecast(input: ForecastInput, runs: readonly ForecastR
     enemyCp: Math.round(enemyCp),
     threat: p.battleUnits.length === 0 ? 'deadly' : threatFor(winPct, expectedDeaths),
     opening: [...(input.plan.opening ?? [])],
+    ...(input.plan.focus !== undefined ? { directive: { ...input.plan.focus } } : {}),
   }
 }
 
@@ -532,7 +543,7 @@ export function forecastAlternatives(state: GameState, base: Forecast, plan: For
   const opening = [...(plan.opening ?? [])]
   const out: ForecastAlternative[] = []
   const tryPlan = (alt: Omit<ForecastAlternative, 'forecast'>) => {
-    const f = forecastFloor(state, { ...plan, slots: alt.slots, lines: alt.lines, opening: alt.opening })
+    const f = forecastFloor(state, { ...plan, slots: alt.slots, lines: alt.lines, opening: alt.opening, ...(alt.directive !== undefined ? { focus: alt.directive } : {}) })
     // With nobody fit on the board, any party that can fight is news (even a grim one).
     if (f && f.fielded > 0 && (base.fielded === 0 || improves(base, f))) out.push({ ...alt, forecast: f })
   }
@@ -552,10 +563,22 @@ export function forecastAlternatives(state: GameState, base: Forecast, plan: For
   const sw = benchSwaps(state, base, plan)
   if (sw && !(out[0] && sameParty(out[0], sw))) tryPlan({ kind: 'swap', slots: sw.slots, lines: sw.lines, opening, swaps: sw.swaps })
 
-  // 3. An opening Focus on the enemy that hurts the party most (one of the battle's orders).
+  // 3. A free pre-battle mark on the enemy that hurts the party most (lane G) — or, when the
+  //    plan already marks someone else, an opening Focus (one of the battle's orders).
   const foe = base.deadliest
   const ordersUsed = opening.filter((o) => o.kind !== 'retreat').length
-  if (foe && !foe.looming && ordersUsed < ordersAllowed(state) && !opening.some((o) => o.kind === 'focus' && o.enemyId === foe.unitId)) {
+  const marked = plan.focus?.focusEnemyId
+  if (foe && !foe.looming && marked === undefined) {
+    tryPlan({
+      kind: 'mark',
+      slots: party.slots,
+      lines: party.lines,
+      opening,
+      directive: { ...(plan.focus ?? {}), focusEnemyId: foe.unitId },
+      swaps: [],
+      focus: { unitId: foe.unitId, name: foe.name },
+    })
+  } else if (foe && !foe.looming && marked !== foe.unitId && ordersUsed < ordersAllowed(state) && !opening.some((o) => o.kind === 'focus' && o.enemyId === foe.unitId)) {
     const focusOrder: BattleOrder = { tick: 1, kind: 'focus', enemyId: foe.unitId }
     tryPlan({
       kind: 'focus',
@@ -565,6 +588,12 @@ export function forecastAlternatives(state: GameState, base: Forecast, plan: For
       swaps: [],
       focus: { unitId: foe.unitId, name: foe.name },
     })
+  }
+
+  // 4. A standing Guard (lane G): brace the moment a foe winds up a big move (one of the orders).
+  const telegraphs = forecastInput(state, plan)?.prepared.encounter.waves.some((w) => w.units.some((u) => u.skills.some((k) => k.charge !== undefined)))
+  if (telegraphs && ordersUsed < ordersAllowed(state) && !opening.some((o) => o.kind === 'guard')) {
+    tryPlan({ kind: 'guard', slots: party.slots, lines: party.lines, opening: [...opening, { tick: 1, kind: 'guard', onTelegraph: true }], swaps: [] })
   }
 
   return out.sort((a, b) => gain(base, b.forecast) - gain(base, a.forecast)).slice(0, FORECAST.maxAlternatives)

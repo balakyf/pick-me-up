@@ -1,0 +1,22 @@
+/* Lane G — the war room's free pre-battle orders (a mark, free protects) and the floor's big moves. */
+.prebattle { margin-top: 8px; padding-top: 6px; border-top: 2px solid var(--line); display: flex; flex-direction: column; gap: 6px; }
+.prebattle-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.prebattle-head .panel-sub { margin: 0; }
+.prebattle-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; min-width: 0; }
+.prebattle-row .pb-ico { width: 18px; text-align: center; }
+.prebattle-row .pb-what { min-width: 56px; color: var(--ink-dim); }
+.prebattle-row select.pinput { min-width: 0; max-width: 100%; flex: 1 1 140px; min-height: 32px; }
+.pb-chips { display: flex; gap: 4px; flex-wrap: wrap; flex: 1 1 auto; min-width: 0; }
+.pb-chip {
+  font-family: var(--font); font-size: 13px; color: var(--ink); background: #120e2c;
+  border: 2px solid var(--line); padding: 2px 8px; min-height: 30px; cursor: pointer;
+}
+.pb-chip.on { border-color: var(--gold); background: #f2c75c22; color: var(--gold); }
+.pb-chip:disabled { opacity: 0.45; cursor: default; }
+.prebattle-moves { display: flex; flex-direction: column; gap: 3px; font-size: 13px; }
+.pb-move b { color: #ffb38a; font-weight: 600; }
+.fc-mark { margin-left: 6px; }
+@media (max-width: 640px) {
+  .pb-chip { min-height: 40px; font-size: 14px; }
+  .prebattle-row select.pinput { min-height: 40px; }
+}

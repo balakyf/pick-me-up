@@ -30,7 +30,9 @@ export function keywordText(k: KeywordTag): string {
         ? t('armoured: −{n}% damage taken', { n: Math.round(k.reduction * 100) })
         : k.vs === 'ranged'
           ? t('shrugs off ranged blows: −{n}%', { n: Math.round(k.reduction * 100) })
-          : t('resists {what}', { what: t(ELEMENT_VIS[k.vs].label) })
+          : k.vs === 'melee'
+            ? t('out of reach of blades: −{n}%', { n: Math.round(k.reduction * 100) })
+            : t('resists {what}', { what: t(ELEMENT_VIS[k.vs].label) })
     case 'vulnerable':
       return t('weak to {what}', { what: t(ELEMENT_VIS[k.element].label) })
     case 'looming':
@@ -49,5 +51,9 @@ export function keywordText(k: KeywordTag): string {
       return t('drinks the blood it spills')
     case 'bane':
       return t('slayer of the {what}', { what: familyLabel(k.family) })
+    case 'phase':
+      return k.title !== undefined
+        ? t('at {n}% HP: {title}', { n: k.atHpPct, title: t(k.title) })
+        : t('changes at {n}% HP', { n: k.atHpPct })
   }
 }

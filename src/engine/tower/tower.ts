@@ -30,6 +30,7 @@ import type {
   HeroId,
   Line,
   AnchorDef,
+  AnchorWaveSpec,
   EnemyTemplate,
   Element,
   MaterialId,
@@ -44,7 +45,7 @@ import { applyXp, xpToNext } from '../stats'
 import { clampSanity } from '../kitchen'
 import { releaseGear } from '../equipment'
 import { attrStoneId } from '../promotion'
-import { tacticalFocusBonus } from '../tactical'
+import { tacticalFocusBonus, ordersFit, clampDirective } from '../tactical'
 import { addMasterXp, floorClearMasterXp } from '../master'
 import { foldBattleSkills } from '../skills'
 import { withFavor } from '../favor'
@@ -221,19 +222,19 @@ function buildAnchorEncounter(
   worldMult: number,
   extraLevels = 0,
   powerMult = 1,
-): { waves: EnemyWave[]; mission: Mission; allies: CombatUnit[] } {
+): { waves: EnemyWave[]; mission: Mission; allies: CombatUnit[]; reserves?: Record<string, CombatUnit[]> } {
   const level = mobLevel(floor, worldMult) + extraLevels
   const waves: EnemyWave[] = []
 
-  for (let w = 0; w < anchor.waves.length; w++) {
-    const specGroups = anchor.waves[w]!
+  /** One authored group of specs, as units with stable ids (`${prefix}_${i}`). */
+  const buildGroup = (specGroups: readonly AnchorWaveSpec[], prefix: string): CombatUnit[] => {
     const units: CombatUnit[] = []
     let unitIndex = 0
     for (const spec of specGroups) {
       const template = ENEMY_TEMPLATES[spec.templateId]
       if (template === undefined) continue
       for (let c = 0; c < spec.count; c++) {
-        const instanceId = `e${floor}_w${w}_${unitIndex}`
+        const instanceId = `${prefix}_${unitIndex}`
         unitIndex++
         units.push(
           buildEnemyUnit(template, level, instanceId, {
@@ -245,7 +246,14 @@ function buildAnchorEncounter(
         )
       }
     }
-    waves.push({ units })
+    return units
+  }
+  for (let w = 0; w < anchor.waves.length; w++) waves.push({ units: buildGroup(anchor.waves[w]!, `e${floor}_w${w}`) })
+  // Lane G: the groups a boss phase or a summoning skill calls onto the field (they scale with
+  // the anchor, but its budget counts only the waves it opens with).
+  let reserves: Record<string, CombatUnit[]> | undefined
+  for (const [group, specs] of Object.entries(anchor.reserves ?? {})) {
+    ;(reserves ??= {})[group] = buildGroup(specs, `e${floor}_r${group}`)
   }
 
   const mission: Mission = {
@@ -270,7 +278,7 @@ function buildAnchorEncounter(
     )
   }
 
-  return { waves, mission, allies }
+  return { waves, mission, allies, ...(reserves !== undefined ? { reserves } : {}) }
 }
 
 /**
@@ -284,7 +292,7 @@ function buildScaledAnchor(
   floor: number,
   worldMult: number,
   extraLevels: number,
-): { waves: EnemyWave[]; mission: Mission; allies: CombatUnit[] } {
+): { waves: EnemyWave[]; mission: Mission; allies: CombatUnit[]; reserves?: Record<string, CombatUnit[]> } {
   let built = buildAnchorEncounter(anchor, floor, worldMult, extraLevels)
   if (floor <= 20) return built
   // The Wailing Wall itself (F80's anchor) stands far above its floor's budget: the gate holds.
@@ -448,7 +456,7 @@ export function buildEncounter(state: GameState, floor: number, focus?: FocusDir
   const scar = loopScarLevels(floor, state.tower.loop)
 
   const anchor = ANCHORS[floor]
-  const built: { waves: EnemyWave[]; mission: Mission; allies?: CombatUnit[] } =
+  const built: { waves: EnemyWave[]; mission: Mission; allies?: CombatUnit[]; reserves?: Record<string, CombatUnit[]> } =
     anchor !== undefined
       ? buildScaledAnchor(anchor, floor, worldMult, scar)
       : buildFillerEncounter(floor, worldMult, rng, scar)
@@ -460,6 +468,7 @@ export function buildEncounter(state: GameState, floor: number, focus?: FocusDir
     encounterContext: 'tower',
   }
   if (built.allies !== undefined && built.allies.length > 0) enc.allies = built.allies
+  if (built.reserves !== undefined) enc.reserves = built.reserves
   // Combat depth: the floor's conditions (Fog, Blood Moon…) from F40.
   const modifiers = floorModifiersFor(state, floor)
   if (modifiers.length > 0) enc.modifiers = modifiers
@@ -548,7 +557,8 @@ export function prepareFloorBattle(state: GameState, opts: FloorBattleOpts = {})
   const combatSeed = hash(state.seed, 'combat', floor, state.tower.attemptIndex)
 
   // ── 3. Encounter. ───────────────────────────────────────────────────────────
-  let enc = buildEncounter(state, floor, focus)
+  // The pre-battle mark and the free Protects (lane G), within the Tactical Center's slots.
+  let enc = buildEncounter(state, floor, clampDirective(focus, state.facilities.tacticalCenter.level))
   // BALLISTA (Layer 3 §C2): on anchors that declare it, the boss opens the fight wounded —
   // by the Master's play, or by their tracked skill when the minigame is skipped.
   const anchorDef = ANCHORS[floor]
@@ -608,8 +618,6 @@ export function playFloor(
   orders?: BattleOrder[],
 ): { state: GameState; result: FloorResult } {
   const floor = state.tower.currentFloor
-  const commands = (orders ?? []).filter((o) => o.kind !== 'retreat').length
-  if (commands > ordersAllowed(state)) throw new Error(`playFloor: the Tactical Center can relay only ${ordersAllowed(state)} orders a battle`)
   const worldMult = worldMultFor(state)
   if (state.tower.event !== null) {
     throw new Error(`playFloor: an event floor after F${state.tower.event.floor} is waiting to be resolved`)
@@ -627,6 +635,10 @@ export function playFloor(
   if (heroUnits.length === 0) throw new Error('playFloor: no one is fit to fight')
   const enc = prepared.encounter
   const res = runBattle(prepared.battleUnits, enc, combatSeed)
+  // Orders 2.0: each order must have been in hand when it was given (a cleared wave gives one back).
+  if (orders !== undefined && !ordersFit(ordersAllowed(state), orders, res.log)) {
+    throw new Error(`playFloor: the Tactical Center can relay only ${ordersAllowed(state)} orders a battle`)
+  }
 
   // ── 4. Interpret. ───────────────────────────────────────────────────────────
   const cleared = res.outcome === 'win'

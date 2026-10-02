@@ -16,6 +16,12 @@
  * floor's Gale and the statuses the log announces (a stun pushes the gauge back; a speed
  * buff or debuff bends the fill, as the engine does). A turn the replay did not expect is
  * counted in `divergences` and the gauges are resynchronised on the spot.
+ *
+ * Lane G: a foe winding up a big move spends its turn on the 'telegraph' and its gauge
+ * stands still until the move fires at the start of its tick (a charged 'act', not a turn of
+ * its own) — the strip names it there; a stun or a death cancels it. Summoned units join with
+ * an empty gauge, a boss's phase may change its speed, and an Unleash order fills a hero's
+ * gauge before the tick's fill, as the engine does.
  */
 import type { CombatLog, CombatUnitInit, FloorModifierId } from '../../engine/types'
 import { TUNING } from '../../engine/tuning'
@@ -37,13 +43,19 @@ export interface GaugeState {
   spdPct: Map<string, { up: number; upEnd: number; down: number; downEnd: number }>
   /** Turns that came out of order (0 for every log the engine writes today). */
   divergences: number
+  /** Foes winding up a move, and the tick it fires (their gauges stand still). */
+  charging: Map<string, number>
+  /** Moves that fire at the start of the current tick and have not fired in the log yet. */
+  fireDue: Set<string>
+  /** Speeds a boss phase changed (unit id → its new spd). */
+  spd: Map<string, number>
 }
 
 const byIdOrder = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0)
 
 function rank(st: GaugeState): string[] {
   const out: string[] = []
-  for (const id of st.alive) if ((st.gauge.get(id) ?? 0) >= MAX) out.push(id)
+  for (const id of st.alive) if (!st.charging.has(id) && (st.gauge.get(id) ?? 0) >= MAX) out.push(id)
   return out.sort((a, b) => {
     const ga = st.gauge.get(a) ?? 0
     const gb = st.gauge.get(b) ?? 0
@@ -53,7 +65,7 @@ function rank(st: GaugeState): string[] {
 
 /** A unit's gauge fill per tick: the engine's speedOf (floor mods, then speed statuses). */
 function speedOf(st: GaugeState, units: Map<string, CombatUnitInit>, id: string): number {
-  const base = modSpeed(st.mods, units.get(id)?.spd ?? 0)
+  const base = modSpeed(st.mods, st.spd.get(id) ?? units.get(id)?.spd ?? 0)
   const m = st.spdPct.get(id)
   // A status that wears off in this tick is gone before the gauges fill.
   const pct = m ? (m.upEnd > st.tick ? m.up : 0) - (m.downEnd > st.tick ? m.down : 0) : 0
@@ -61,13 +73,39 @@ function speedOf(st: GaugeState, units: Map<string, CombatUnitInit>, id: string)
 }
 
 function fill(st: GaugeState, units: Map<string, CombatUnitInit>): void {
-  for (const id of st.alive) st.gauge.set(id, (st.gauge.get(id) ?? 0) + speedOf(st, units, id))
+  for (const id of st.alive) if (!st.charging.has(id)) st.gauge.set(id, (st.gauge.get(id) ?? 0) + speedOf(st, units, id))
+}
+
+/** Step into the next tick: the moves due fire (their casters' gauges run again), then the fill. */
+function nextTick(st: GaugeState, units: Map<string, CombatUnitInit>): string[] {
+  st.tick++
+  const fired: string[] = []
+  for (const [id, at] of st.charging) if (at <= st.tick) fired.push(id)
+  fired.sort(byIdOrder)
+  st.fireDue.clear()
+  for (const id of fired) {
+    st.charging.delete(id)
+    if (st.alive.has(id)) st.fireDue.add(id)
+  }
+  fill(st, units)
+  return fired.filter((id) => st.alive.has(id))
 }
 
 /** Replay the gauges through the first `applied` events of the log. */
 export function replayGauges(log: CombatLog, applied: number): GaugeState {
   const units = new Map(log.unitsInit.map((u) => [u.id, u]))
-  const st: GaugeState = { tick: 0, gauge: new Map(), alive: new Set(), dormant: new Set(), mods: [], spdPct: new Map(), divergences: 0 }
+  const st: GaugeState = {
+    tick: 0,
+    gauge: new Map(),
+    alive: new Set(),
+    dormant: new Set(),
+    mods: [],
+    spdPct: new Map(),
+    divergences: 0,
+    charging: new Map(),
+    fireDue: new Set(),
+    spd: new Map(),
+  }
   const silent = (id: string) => {
     st.gauge.set(id, (st.gauge.get(id) ?? 0) - MAX)
     const u = units.get(id)
@@ -97,8 +135,7 @@ export function replayGauges(log: CombatLog, applied: number): GaugeState {
     while (st.tick < tick) {
       // Whoever is still ready when a tick ends spent a silent turn in it.
       for (let r = rank(st); r.length > 0; r = rank(st)) silent(r[0]!)
-      st.tick++
-      fill(st, units)
+      nextTick(st, units)
     }
   }
   // A sleeping giant is dormant from the moment it arrives: one that wakes later in the
@@ -107,7 +144,7 @@ export function replayGauges(log: CombatLog, applied: number): GaugeState {
   const fell = new Set<string>()
   const wakesAt = new Map<string, number>()
   log.events.forEach((e, i) => {
-    if (e.kind === 'act') acted.add(e.actorId)
+    if (e.kind === 'act' || e.kind === 'telegraph') acted.add(e.kind === 'act' ? e.actorId : e.unitId)
     else if (e.kind === 'panic') acted.add(e.unitId)
     else if (e.kind === 'death') fell.add(e.unitId)
     else if (e.kind === 'mission' && e.code === 'wakes' && e.params?.unitId !== undefined) wakesAt.set(e.params.unitId, i)
@@ -130,6 +167,7 @@ export function replayGauges(log: CombatLog, applied: number): GaugeState {
         st.mods = [...e.modifiers]
         break
       case 'wave-spawn':
+      case 'summon':
         for (const id of e.enemyIds) {
           st.alive.add(id)
           st.gauge.set(id, 0)
@@ -138,9 +176,32 @@ export function replayGauges(log: CombatLog, applied: number): GaugeState {
         break
       case 'death':
         st.alive.delete(e.unitId)
+        st.charging.delete(e.unitId)
+        st.fireDue.delete(e.unitId)
         break
       case 'act':
-        take(e.actorId)
+        // A wound-up move firing on its tick is not a turn: the wind-up was.
+        if (e.charged) st.fireDue.delete(e.actorId)
+        else take(e.actorId)
+        break
+      case 'telegraph':
+        take(e.unitId)
+        st.charging.set(e.unitId, e.firesAtTick)
+        break
+      case 'telegraph-end':
+        st.charging.delete(e.unitId)
+        break
+      case 'phase':
+        if (e.spd !== undefined) st.spd.set(e.unitId, e.spd)
+        break
+      case 'order':
+        // Unleash: the engine fills the hero's gauge to a whole turn before this tick's fill.
+        if (e.order.kind === 'unleash' && st.alive.has(e.order.allyId)) {
+          const id = e.order.allyId
+          const sp = st.charging.has(id) ? 0 : speedOf(st, units, id)
+          const pre = (st.gauge.get(id) ?? 0) - sp
+          st.gauge.set(id, Math.max(pre, MAX) + sp)
+        }
         break
       case 'panic':
         take(e.unitId)
@@ -182,12 +243,13 @@ export function upcomingTurns(log: CombatLog, applied: number, n = 6): string[] 
   const counts = (id: string) => !units.get(id)?.isNpc && !st.dormant.has(id)
   const anyMoves = [...st.alive].some((id) => counts(id) && speedOf(st, units, id) > 0)
   const out: string[] = []
-  if (!anyMoves) return out
+  // A move due this tick fires before anyone acts.
+  for (const id of [...st.fireDue].sort(byIdOrder)) if (out.length < n) out.push(id)
+  if (!anyMoves && st.charging.size === 0) return out
   for (let guard = 0; out.length < n && guard < 20_000; guard++) {
     const ready = rank(st)
     if (ready.length === 0) {
-      st.tick++
-      fill(st, units)
+      for (const id of nextTick(st, units)) if (out.length < n) out.push(id)
       continue
     }
     const id = ready[0]!
@@ -197,12 +259,19 @@ export function upcomingTurns(log: CombatLog, applied: number, n = 6): string[] 
   return out
 }
 
-/** The actors of the turns the log shows, in order ('act' and 'panic'), with their event index. */
+/** The actors of the turns the log shows, in order ('act', 'panic', a wind-up, and a
+ *  wound-up move firing), with their event index. */
 export function loggedTurns(log: CombatLog): { index: number; unitId: string }[] {
   const out: { index: number; unitId: string }[] = []
   log.events.forEach((e, index) => {
     if (e.kind === 'act') out.push({ index, unitId: e.actorId })
-    else if (e.kind === 'panic') out.push({ index, unitId: e.unitId })
+    else if (e.kind === 'panic' || e.kind === 'telegraph') out.push({ index, unitId: e.unitId })
   })
   return out
+}
+
+/** Moves being wound up as the gauges stand after `applied` events: who, and when each fires. */
+export function chargesAhead(log: CombatLog, applied: number): { unitId: string; firesAtTick: number }[] {
+  const st = replayGauges(log, applied)
+  return [...st.charging].map(([unitId, firesAtTick]) => ({ unitId, firesAtTick })).sort((a, b) => a.firesAtTick - b.firesAtTick || byIdOrder(a.unitId, b.unitId))
 }

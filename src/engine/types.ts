@@ -180,6 +180,9 @@ export type SkillEffectDef =
   | { kind: 'taunt'; turns: number; to?: EffectTo }
   /** Give (`amount` > 0) or drain (`amount` < 0) SP. */
   | { kind: 'sp'; amount: number; perLevel?: number; to?: EffectTo }
+  /** Call forth up to `count` units of the encounter's reserve `group` (an enemy's brood,
+   *  its guard, the void it speaks to) onto the caster's side of the field (lane G). */
+  | { kind: 'summon'; group: string; count: number; to?: EffectTo }
 
 /** A skill effect at its level: magnitudes leveled, `perLevel` gone. */
 export type ResolvedEffect = SkillEffectDef extends infer E ? (E extends unknown ? Omit<E, 'perLevel'> : never) : never
@@ -205,6 +208,23 @@ export interface SkillEffect {
   hits?: number
   /** What the skill does besides its blow (heals, shields, statuses…). Absent = a plain blow. */
   effects?: ResolvedEffect[]
+  /** The caster's own turns before it can cast this again (lane G: a boss's rhythm). Absent = none. */
+  cooldown?: number
+  /** A big move it winds up first (lane G): see SkillCharge. Absent = cast at once. */
+  charge?: SkillCharge
+}
+
+/**
+ * A charged move (lane G): the caster spends its turn winding up (a 'telegraph' event names
+ * the move, when it fires and whom it threatens), its gauge stops, and the move fires at
+ * that tick on its own. A stun or the caster's death cancels it; the Master's Guard and
+ * Protect soften it; a retreat escapes it.
+ */
+export interface SkillCharge {
+  /** The caster's own turns (at its speed when it winds up) until the move fires. */
+  turns: number
+  /** What the replay says as it winds up ('{name} draws a deep breath…'), in English. */
+  line?: string
 }
 
 /** A passive skill's effect: never cast; resolved into keywords / stat bonuses at unit
@@ -248,6 +268,10 @@ export interface SkillDef {
   effects?: SkillEffectDef[]
   /** An enemy's skill (a priest's prayer, a knight's shield wall): never a hero's. */
   enemy?: boolean
+  /** The caster's own turns before it can cast this again (lane G). */
+  cooldown?: number
+  /** Wound up a turn ahead and telegraphed (lane G): see SkillCharge. */
+  charge?: SkillCharge
 }
 
 /** A hero's copy of a skill: it levels by being cast (auto-learn, Layer 1 §2.4). */
@@ -1015,8 +1039,9 @@ export interface SaveEnvelope {
 
 export type CombatSide = 'hero' | 'enemy'
 
-/** What a `guard` reduction applies to: everything, ranged attackers (archer/mage), or one element. */
-export type GuardSource = 'ranged' | Element
+/** What a `guard` reduction applies to: everything, ranged attackers (archer/mage), close
+ *  combat (everyone else: a dragon in the air), or one element. */
+export type GuardSource = 'ranged' | 'melee' | Element
 
 /** Enemy families for `bane` (Dragon Slayer etc.). */
 export type EnemyFamily = 'dragon' | 'undead' | 'beast' | 'humanoid' | 'construct' | 'aquatic' | 'demon' | 'fragment'
@@ -1047,6 +1072,30 @@ export type KeywordTag =
   | { kind: 'bane'; family: EnemyFamily; multiplier: number }
   /** Takes ×(1 − reduction) damage, optionally only from one source. */
   | { kind: 'guard'; reduction: number; vs?: GuardSource }
+  /** A boss phase (lane G): the first time a blow brings it to `atHpPct`% of its max HP, it
+   *  changes — new keywords (an `aegis` adds charges), new skills, a speed change, a summoned
+   *  reserve group — and the replay plays a short cinematic with its `title` and `line`
+   *  (English; the UI translates). A blow never carries it past an unreached threshold. */
+  | PhaseKeyword
+
+/** A boss phase (see KeywordTag). */
+export interface PhaseKeyword {
+  kind: 'phase'
+  atHpPct: number
+  /** The phase's name on the title card ('Takes flight'). */
+  title?: string
+  /** What the boss says as it turns. */
+  line?: string
+  addKeywords?: KeywordTag[]
+  /** Skill ids (SKILLS) it fights with from now on, beside its own. */
+  skills?: string[]
+  /** Speed from now on, as a % of its own (e.g. 25 = a quarter faster). */
+  spdPct?: number
+  /** A reserve group (Encounter.reserves) it calls onto the field. */
+  summonWave?: string
+  /** It shakes off what the party left on it (debuffs, DoTs, a daze). */
+  cleanse?: boolean
+}
 
 /** A fully-assembled combatant. Heroes AND enemies share this shape; the sim
  *  treats them identically. Built fresh per battle by the `unit` module. */
@@ -1138,6 +1187,9 @@ export interface Encounter {
   bonds?: CombatBond[]
   /** The floor's conditions (Fog, Blood Moon…), from F40 — see engine/depth. */
   modifiers?: FloorModifierId[]
+  /** Units held off the field until a boss phase or a summoning skill calls them (lane G):
+   *  the Egg's brood, Valention's officers, the echoes Tell calls back. By group. */
+  reserves?: Record<string, CombatUnit[]>
 }
 
 /** How two party members stand with each other in battle (from Quanton Life affinity). */
@@ -1154,14 +1206,24 @@ export interface CombatBond {
 /** A floor condition that bends a battle for both sides (combat depth, F40+). */
 export type FloorModifierId = 'fog' | 'bloodMoon' | 'holyGround' | 'miasma' | 'gale' | 'frost'
 
-/** A mid-battle order (Living Lobby spec §6). */
+/** A mid-battle order (Living Lobby spec §6; orders 2.0, lane G). */
 export type BattleOrder =
   /** Pull the party out: the fight ends, survivors live, nothing is won. */
   | { tick: number; kind: 'retreat' }
-  /** Every hero attacks this enemy while it lives. */
+  /** Every hero attacks this enemy while it lives (a sweep lands on it at fuller force). */
   | { tick: number; kind: 'focus'; enemyId: string }
-  /** Enemies avoid this hero while anyone else stands. */
+  /** Enemies avoid this hero while anyone else stands; a charged blow lands on them softened. */
   | { tick: number; kind: 'protect'; allyId: string }
+  /** The hero's gauge fills at once and it casts its best skill now. */
+  | { tick: number; kind: 'unleash'; allyId: string }
+  /** The party braces: it takes less damage and holds its attacks until the big blow it
+   *  braces for has landed (or a turn has passed). `onTelegraph`: a standing order that
+   *  raises the guard the moment a foe winds up a big move. */
+  | { tick: number; kind: 'guard'; onTelegraph?: boolean }
+  /** The party keeps its SP for a sweep over a crowd or a blow on the boss. */
+  | { tick: number; kind: 'hold' }
+  /** Two heroes trade places (their lines and their order in the line). */
+  | { tick: number; kind: 'swap'; a: string; b: string }
 
 // ── Combat log (one schema; the producer's; UI replays it) ───────────────────
 
@@ -1251,8 +1313,28 @@ export type HitEffect = 'weak' | 'resist' | 'immune'
 export type CombatEvent = { seq: number; tick: number } & (
   | { kind: 'battle-start'; heroIds: string[]; enemyIds: string[] }
   | { kind: 'wave-spawn'; wave: number; enemyIds: string[] }
-  /** `spAfter`: the actor's SP once the cast is paid (for an SP bar; absent on old logs). */
-  | { kind: 'act'; actorId: string; skillId: string; targetId: string; spAfter?: number }
+  /** `spAfter`: the actor's SP once the cast is paid (for an SP bar; absent on old logs).
+   *  `charged`: a wound-up move firing on its tick (not a turn of its own; lane G), and
+   *  `answered`, how the party met it (its Guard was up / a target was Protected). */
+  | {
+      kind: 'act'
+      actorId: string
+      skillId: string
+      targetId: string
+      spAfter?: number
+      charged?: true
+      answered?: 'guard' | 'protect'
+    }
+  /** A foe winds up a big move (lane G): it fires at `firesAtTick` unless a stun or its
+   *  death cancels it. `targets`: whom it threatens (as it stands now). */
+  | { kind: 'telegraph'; unitId: string; skillId: string; firesAtTick: number; targets: string[] }
+  /** A wound-up move came to nothing: the caster was stunned, or fell. */
+  | { kind: 'telegraph-end'; unitId: string; skillId: string; reason: 'stunned' | 'fell' }
+  /** A boss changed phase (lane G): phase `phase` of `phases` (from 1), its title and line
+   *  (English), and its new speed when that changed. */
+  | { kind: 'phase'; unitId: string; phase: number; phases: number; title?: string; line?: string; spd?: number }
+  /** Units called onto the field by `unitId` (a phase or a summoning skill), into `wave`. */
+  | { kind: 'summon'; unitId: string; enemyIds: string[]; wave: number }
   /** `eff` says how the blow met its target's defences (absent = plainly): a weakness
    *  (element advantage or a vulnerability), a resistance (element disadvantage or a
    *  resist keyword), or an immunity (the hit did nothing). */
@@ -1454,6 +1536,8 @@ export interface AnchorDef {
   firstClearDrops?: Record<MaterialId, number>
   /** A mission minigame the Master can play before the fight (Layer 3 §C2). */
   minigame?: 'ballista'
+  /** Groups held off the field until a boss phase or a summoning skill calls them (lane G). */
+  reserves?: Record<string, AnchorWaveSpec[]>
 }
 
 export type SkillRegistry = Record<string, SkillDef>

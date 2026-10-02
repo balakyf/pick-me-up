@@ -23,7 +23,7 @@ import { boundElsewhere, canCraft, equippedItemIds } from '../engine/equipment'
 import { floorPower, buildEncounter, fitCount } from '../engine/tower'
 import { heroCpFull } from '../engine/unit/trueCp'
 import { forecastFloor } from '../engine/scout/forecast'
-import { ANCHORS } from '../engine/content'
+import { ANCHORS, SKILLS } from '../engine/content'
 import { loginClaimed, packageRefusal } from '../engine/shop'
 import { crackRefusal, dispatchRefusal } from '../engine/rift'
 import { challengeOf } from '../engine/challenge'
@@ -87,6 +87,8 @@ export interface Profile {
   duels: boolean
   /** Read the war room's forecast before a floor: enter on good odds, or after a week of waiting. */
   forecast: boolean
+  /** Orders 2.0 (lane G): Guard against a foe's wound-up move, Unleash on a boss's turn. */
+  orders: boolean
 }
 
 export const PROFILES: Record<ProfileId, Profile> = {
@@ -114,6 +116,7 @@ export const PROFILES: Record<ProfileId, Profile> = {
     trial: false,
     duels: false,
     forecast: false,
+    orders: false,
   },
   engaged: {
     id: 'engaged',
@@ -138,6 +141,7 @@ export const PROFILES: Record<ProfileId, Profile> = {
     trial: true,
     duels: true,
     forecast: true,
+    orders: true,
   },
   whale: {
     id: 'whale',
@@ -162,6 +166,7 @@ export const PROFILES: Record<ProfileId, Profile> = {
     trial: true,
     duels: true,
     forecast: true,
+    orders: true,
   },
 }
 
@@ -817,13 +822,16 @@ class Bot {
       let out
       try {
         out = attemptFloorWithResult(pre, undefined, ballista, subvert)
+        // Orders 2.0 (lane G): answer a foe's big move, press a boss as it turns.
+        let given: BattleOrder[] = []
+        if (this.p.orders) ({ out, given } = this.answerTheFight(pre, out, ballista, subvert))
         // A fight going badly: call the retreat as the first hero staggers (combat is
         // deterministic, so re-resolving with the order replays the fight up to it — the
         // same revise the battle screen does).
         const lost = out.result.fallenHeroIds.length
         const tick = this.p.retreat && !out.result.cleared && lost > 0 ? retreatTick(out.result.result.log) : null
         if (tick !== null) {
-          const orders: BattleOrder[] = [{ tick, kind: 'retreat' }]
+          const orders: BattleOrder[] = [...given.filter((o) => o.tick < tick), { tick, kind: 'retreat' }]
           const alt = attemptFloorWithResult(pre, undefined, ballista, subvert, orders)
           if (alt.result.fallenHeroIds.length < lost) {
             out = alt
@@ -851,6 +859,40 @@ class Bot {
       this.lastLoss = null
       this.sideRoom()
     }
+  }
+
+  /**
+   * Orders 2.0 (lane G), as a watching Master gives them: when a foe winds up a big move that
+   * then hurts the party, re-resolve with a Guard on the beat after the wind-up — or with an
+   * Unleash on a hero who can daze it — and when a boss turns (a phase), Unleash the party's
+   * strongest. Keep whatever does best (cleared first, then fewer fallen), within the orders
+   * the battle can carry. Combat is deterministic: each try replays the fight up to its order.
+   */
+  private answerTheFight(
+    pre: GameState,
+    out: { state: GameState; result: FloorResult },
+    ballista?: number,
+    subvert?: boolean,
+  ): { out: { state: GameState; result: FloorResult }; given: BattleOrder[] } {
+    const r0 = out.result
+    if (r0.cleared && r0.fallenHeroIds.length === 0) return { out, given: [] }
+    const tries = orderAnswers(r0.result.log, pre)
+    let best = out
+    let given: BattleOrder[] = []
+    for (const orders of tries) {
+      let alt
+      try {
+        alt = attemptFloorWithResult(pre, undefined, ballista, subvert, orders)
+      } catch {
+        continue
+      }
+      if (betterAttempt(alt.result, best.result)) {
+        best = alt
+        given = orders
+      }
+    }
+    for (const o of given) this.lever(`ORDER_${o.kind.toUpperCase()}`)
+    return { out: best, given }
   }
 
   /**
@@ -953,6 +995,52 @@ function gradeGain(survivor: OwnedHero, sac: OwnedHero): number {
   let n = 0
   for (const k of ['str', 'agi', 'vit', 'int', 'wil'] as const) if (sac.growthGrades[k] > survivor.growthGrades[k]) n++
   return n
+}
+
+/** Did attempt `a` go better than `b`? Cleared beats not; then fewer fallen. */
+export function betterAttempt(a: FloorResult, b: FloorResult): boolean {
+  if (a.cleared !== b.cleared) return a.cleared
+  return a.fallenHeroIds.length < b.fallenHeroIds.length
+}
+
+/**
+ * The orders a watching Master would try in this fight (lane G), each a whole plan:
+ *   - a foe's wound-up move that hurt the party → Guard on the beat after the wind-up, or
+ *     Unleash a hero who can daze its caster (the move dies in its throat);
+ *   - a boss turning (a phase) → Unleash the party's strongest on the next beat.
+ * Only the first telegraph and the first phase are answered (one order a battle, as a rule).
+ */
+export function orderAnswers(log: CombatLog, pre: GameState): BattleOrder[][] {
+  const heroIds = new Set(log.unitsInit.filter((u) => u.side === 'hero' && !u.isNpc).map((u) => u.id))
+  const out: BattleOrder[][] = []
+  const tg = bigMoveThatHurt(log)
+  if (tg !== null) {
+    out.push([{ tick: tg.tick + 1, kind: 'guard' }])
+    const stunner = [...heroIds].find((id) => (pre.heroes[id as HeroId]?.skills ?? []).some((k) => (SKILLS[k.id]?.effects ?? []).some((e) => e.kind === 'stun')))
+    if (stunner !== undefined && alive(log, stunner, tg.seq)) out.push([{ tick: tg.tick + 1, kind: 'unleash', allyId: stunner }])
+  }
+  const ph = log.events.find((e) => e.kind === 'phase')
+  if (ph !== undefined) {
+    const strongest = log.unitsInit.filter((u) => heroIds.has(u.id) && alive(log, u.id, ph.seq)).sort((a, b) => b.cp - a.cp)[0]
+    if (strongest !== undefined) out.push([{ tick: ph.tick + 1, kind: 'unleash', allyId: strongest.id }])
+  }
+  return out
+}
+
+/** The first foe's wind-up whose move, when it fired, struck the party (or that came before a death). */
+export function bigMoveThatHurt(log: CombatLog): Extract<CombatLog['events'][number], { kind: 'telegraph' }> | null {
+  const heroIds = new Set(log.unitsInit.filter((u) => u.side === 'hero').map((u) => u.id))
+  for (const e of log.events) {
+    if (e.kind !== 'telegraph' || heroIds.has(e.unitId)) continue
+    const fired = log.events.some((f) => f.kind === 'act' && f.charged && f.actorId === e.unitId && f.tick === e.firesAtTick)
+    if (fired) return e
+  }
+  return null
+}
+
+/** Was `id` still standing just before event `seq`? */
+function alive(log: CombatLog, id: string, seq: number): boolean {
+  return !log.events.some((e) => e.kind === 'death' && e.unitId === id && e.seq < seq)
 }
 
 /**

@@ -87,6 +87,46 @@ describe('turn order', () => {
     expect(upcomingTurns(l, 3, 2)).toEqual(['a', 'giant'])
   })
 
+  it('lane G: a wind-up is a turn; its caster waits, then fires on its tick (named in the strip)', () => {
+    const l = log([u('a', 'hero', 100), u('boss', 'enemy', 250)], [
+      { tick: 0, kind: 'battle-start', heroIds: ['a'], enemyIds: ['boss'] },
+      { tick: 4, kind: 'telegraph', unitId: 'boss', skillId: 'e_dragon_breath', firesAtTick: 8, targets: ['a'] },
+      { tick: 8, kind: 'act', actorId: 'boss', skillId: 'e_dragon_breath', targetId: 'a', charged: true },
+      { tick: 10, kind: 'act', actorId: 'a', skillId: 'basic', targetId: 'boss' },
+    ])
+    // After the wind-up the boss's gauge stands at 0 and does not fill until it fires.
+    const st = replayGauges(l, 2)
+    expect(st.charging.get('boss')).toBe(8)
+    expect(st.gauge.get('boss')).toBe(0)
+    // The strip names the fire at tick 8, before the hero's turn at 10.
+    expect(upcomingTurns(l, 2, 2)).toEqual(['boss', 'a'])
+    // Through the fire: no divergence (the fire is not a turn), and the boss fills again from tick 8.
+    const after = replayGauges(l, l.events.length)
+    expect(after.divergences).toBe(0)
+    expect(after.gauge.get('boss')).toBe(3 * 250)
+    expect(loggedTurns(l).map((t) => t.unitId)).toEqual(['boss', 'boss', 'a'])
+  })
+
+  it('lane G: a stun cancels a wind-up; a summon joins with an empty gauge; a phase changes speed; Unleash fills a gauge', () => {
+    const l = log([u('a', 'hero', 100), u('boss', 'enemy', 200), u('m', 'enemy', 300)], [
+      { tick: 0, kind: 'battle-start', heroIds: ['a'], enemyIds: ['boss'] },
+      { tick: 5, kind: 'telegraph', unitId: 'boss', skillId: 'e_dragon_breath', firesAtTick: 10, targets: ['a'] },
+      { tick: 6, kind: 'telegraph-end', unitId: 'boss', skillId: 'e_dragon_breath', reason: 'stunned' },
+      { tick: 6, kind: 'phase', unitId: 'boss', phase: 1, phases: 1, spd: 400 },
+      { tick: 6, kind: 'summon', unitId: 'boss', enemyIds: ['m'], wave: 0 },
+      { tick: 7, kind: 'order', order: { tick: 7, kind: 'unleash', allyId: 'a' } },
+      { tick: 7, kind: 'act', actorId: 'a', skillId: 'basic', targetId: 'boss' },
+    ])
+    const st = replayGauges(l, 5)
+    expect(st.charging.has('boss')).toBe(false)
+    expect(st.spd.get('boss')).toBe(400)
+    expect(st.alive.has('m')).toBe(true)
+    expect(st.gauge.get('m')).toBe(0)
+    // The engine fills the hero to a whole turn before tick 7's fill: 1000 + 100.
+    expect(replayGauges(l, 6).gauge.get('a')).toBe(1100)
+    expect(replayGauges(l, 7).divergences).toBe(0)
+  })
+
   it('matches the order of every turn in real battles', () => {
     const logs = realLogs()
     expect(logs.length).toBeGreaterThan(10)
@@ -106,7 +146,12 @@ describe('turn order', () => {
         // do: a healer with a hurt friend. The gauges cannot foresee that; allow it, rarely.
         const gap = l.events[index]!.tick - (k > 0 ? l.events[shown[k - 1]!.index]!.tick : 0)
         const predicted = upcomingTurns(l, index, 1)[0]
-        if (predicted !== unitId && gap * fastest > 2 * TUNING.combat.actionGaugeMax) {
+        // Likewise with no foe on the field (an escape run past the last wave): a hero with
+        // nothing to strike passes its turn in silence, and who acts first is whoever has a
+        // friend to tend.
+        const st = replayGauges(l, index)
+        const foesUp = [...st.alive].some((id) => l.unitsInit.find((u) => u.id === id)?.side === 'enemy')
+        if (predicted !== unitId && (gap * fastest > 2 * TUNING.combat.actionGaugeMax || !foesUp)) {
           unforeseeable++
           continue
         }
@@ -118,9 +163,15 @@ describe('turn order', () => {
         const actual: string[] = []
         for (let j = index; j < l.events.length && actual.length < strip.length; j++) {
           const e = l.events[j]!
-          if (e.kind === 'death' || e.kind === 'wave-spawn' || e.kind === 'mission' || e.kind === 'end') break
+          // (Lane G: a summon or a phase changes the field the same way a wave does.)
+          if (e.kind === 'death' || e.kind === 'wave-spawn' || e.kind === 'mission' || e.kind === 'end' || e.kind === 'summon' || e.kind === 'phase') break
+          // A daze or a speed change landing mid-strip re-orders what comes after it (the
+          // replay reads it from its event; the strip shown before it could not know).
+          if (e.kind === 'status' && (e.status === 'stun' || e.status === 'spd-up' || e.status === 'spd-down')) break
           if (e.kind === 'act') actual.push(e.actorId)
-          if (e.kind === 'panic') actual.push(e.unitId)
+          if (e.kind === 'panic' || e.kind === 'telegraph') actual.push(e.unitId)
+          // A wind-up's move fires on a tick of its own: the strip shown before it could not know.
+          if (e.kind === 'telegraph') break
         }
         expect(strip.slice(0, actual.length), `F${l.floor} strip at ${index}`).toEqual(actual)
         longChecks++

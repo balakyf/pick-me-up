@@ -104,6 +104,9 @@ export function resolveSkillEffect(skill: HeroSkill, registry: SkillRegistry = S
   if (hp > 0) effect.hpCost = hp
   if (def.hits !== undefined && def.hits > 1) effect.hits = def.hits
   if (def.effects !== undefined && def.effects.length > 0) effect.effects = def.effects.map((e) => effectAt(e, def, skill.level))
+  // Lane G: a boss's rhythm and its wound-up moves.
+  if (def.cooldown !== undefined && def.cooldown > 0) effect.cooldown = def.cooldown
+  if (def.charge !== undefined) effect.charge = { ...def.charge }
   return effect
 }
 
@@ -122,6 +125,7 @@ export function effectAt(e: SkillEffectDef, def: SkillDef, level: number): Resol
     case 'sp':
       return { ...rest, amount: rest.amount + (rest.amount < 0 ? -up : up) }
     case 'taunt':
+    case 'summon':
       return rest
     default:
       return { ...rest, pct: rest.pct + up }
