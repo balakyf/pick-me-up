@@ -11,6 +11,7 @@ import { allyBustUrl, allyFrameUrl, allyPosable, allyPoseUrl, enemySize, enemyUr
 import type { HeroPose } from '../pixel/heroSprite'
 import { heroPoseFor, isGuarded } from './battlePose'
 import { useBossShow } from './useBossShow'
+import { useStoryBox } from '../story/StoryBox'
 import { bossBarView } from './bossBar'
 import { BossBar } from './BossBar'
 import { castTargets, skillFx } from './skillFx'
@@ -289,6 +290,8 @@ export function BattleScene({
     wave: current?.kind === 'wave-spawn' ? { n: current.wave + 1, total: Math.max(log.mission?.waves ?? 1, current.wave + 1) } : null,
   })
   const pace = boss.pace
+  // Lane M: the bosses' lines (entrance, phase, telegraph, defeat, victory) in a text box.
+  const story = useStoryBox({ log, byId, snap, atEnd, speed, reduced })
   const bar = useMemo(() => (atEnd ? null : bossBarView(log, byId, snap, applied)), [log, byId, snap, applied, atEnd])
 
   useImpactJuice({
@@ -625,6 +628,7 @@ export function BattleScene({
           {!atEnd && waveCleared && <WaveCleared key={`c${current!.seq}`} n={waveCleared.n} total={waveCleared.total} calm={reduced} />}
           {!atEnd && current?.kind === 'phase' && <PhaseCinematic key={`p${current.seq}`} e={current} name={nameOf(current.unitId)} calm={reduced} />}
           {boss.card}
+          {story}
           <div className="stage-top">
             <div className="stage-top-left">{!docked && !beside && objective}</div>
             <div className="stage-top-mid">

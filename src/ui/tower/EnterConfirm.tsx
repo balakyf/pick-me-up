@@ -11,6 +11,7 @@ import { t } from '../i18n/i18n'
 import { tn } from '../text'
 import { useRegisterWindow } from '../qol/windowRegistry'
 import { concernLines, deathsLine, threatLabel, truthStanding } from './warRoomText'
+import { HeraldWord } from '../story/StoryNotes'
 
 export function EnterConfirm({
   state,
@@ -61,6 +62,8 @@ export function EnterConfirm({
 
         {worldEnd && (
           <div className="enter-world">
+            {/* Lane M: the Herald's own word before the choice. */}
+            <HeraldWord />
             <p className="enter-world-warn">
               {t('Clearing this floor ends the world beneath the tower. Everyone on its surface dies, and it does not come back.')}
             </p>

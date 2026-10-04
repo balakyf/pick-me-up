@@ -5,7 +5,8 @@ import { attemptFloorWithResult } from '../../engine/store'
 import { relationKey } from '../../engine/life'
 import type { FloorResult, GameState, HeroId } from '../../engine/types'
 import { lastWords, lastWordsTogether } from '../life/speech'
-import { fallenInOrder, iselClose, iselFor, ISEL_FOR, memorialBands, nameList, resultMood } from './memorialBand'
+import { fallenInOrder, iselClose, iselFor, memorialBands, nameList, resultMood } from './memorialBand'
+import { EULOGY_CLOSE } from '../story/eulogy'
 
 /** A fresh party of five sent to a floor far above it: some fall. A friend waits at home. */
 function lostBattle(): { pre: GameState; state: GameState; result: FloorResult; friend: HeroId } {
@@ -102,9 +103,10 @@ describe('the mood and Isel', () => {
     expect(mourned).toContain('Bo and Cy')
     expect(mourned).toContain('Ana')
     expect(iselFor('Ana', grave, ['Bo', 'Cy'])).toBe(mourned)
-    expect(iselFor('Ana', { ...grave, daysServed: 0 }, [])).toBe(ISEL_FOR.brief[0]!.replace('{name}', 'Ana'))
+    // (A grave without an identity: lane M's eulogy speaks the name, then the closing line.)
+    expect(iselFor('Ana', { ...grave, daysServed: 0 }, [])).toBe(`Ana. ${EULOGY_CLOSE.brief[0]}`)
     const alone = iselFor('Ana', grave, [])
-    expect(ISEL_FOR.alone.map((l) => l.replace('{name}', 'Ana').replace('{floor}', '12'))).toContain(alone)
+    expect(EULOGY_CLOSE.alone.map((l) => `Ana. ${l.replace('{floor}', '12')}`)).toContain(alone)
   })
 
   it('closes the band only when someone fell, in the mood’s words', () => {

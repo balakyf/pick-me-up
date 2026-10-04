@@ -37,6 +37,7 @@ import {
   type RoomId,
 } from './lobbyMap'
 import { iselLines } from './lines'
+import { priasisKey, priasisUnread, storyStep } from '../story/storyText'
 import { activityKey, isOffsite, spotFor, type Spot } from './heroAgent'
 import { accountDay, conversation, pairLines, speak, statusLine } from '../life/speech'
 import { HeroProfile, HeroTracker, LetterWindow, letterReady } from '../life/lifeWindows'
@@ -1462,6 +1463,9 @@ export function LobbyWorld({
           state={state}
           onClose={() => {
             setLetter(false)
+            // Lane M: the Priasis letter folded into this one is read now too.
+            const unread = priasisUnread(stateRef.current)
+            if (unread) store.dispatch({ type: 'GUIDE_STEP', step: storyStep(priasisKey(unread)) })
             store.dispatch({ type: 'READ_LETTER' }, Date.now())
             if (campAfterLetter.current) {
               campAfterLetter.current = false

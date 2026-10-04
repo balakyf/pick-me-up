@@ -36,6 +36,7 @@ import { iselClose, memorialBands, resultMood, type MemorialBand } from './memor
 import { anchorHeadline, rareDropIndices, rewardDrops } from './rewards'
 import { bannerNote, bannerWord, campView, continueLabel } from './resultsText'
 import { useCeremony } from './useCeremony'
+import { StoryAftermath } from '../story/StoryNotes'
 import { drawCampfire, FIRE_H, FIRE_W } from '../title/diorama'
 import './results.css'
 
@@ -129,6 +130,8 @@ export function ResultsScreen({ result, state, onContinue }: { result: FloorResu
               {t('{name} · {epithet}', { name: t(anchor.boss.name), epithet: t(anchor.boss.epithet) })} <span className="rc-boss-fell">{t('has fallen')}</span>
             </div>
           )}
+          {/* Lane M: the anchor's aftermath, in a line. */}
+          {anchor && win && <StoryAftermath result={result} />}
           <div className="muted">
             {t('Floor {floor}', { floor: result.floor })}
             {fillerName ? ` · ${fillerName}` : ''}

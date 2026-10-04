@@ -27,6 +27,10 @@ import { forecastNow } from './tower/forecastClient'
 import { clearPendingReplay, savePendingReplay } from './tower/pendingReplay'
 import { truthStanding } from './tower/warRoomText'
 import { SceneTransition } from './transition/SceneTransition'
+import { useReducedMotion } from './motion'
+import { AnchorBriefing } from './story/AnchorBriefing'
+import { ActCard } from './story/ActCard'
+import { actCardDue, actKey, storyStep } from './story/storyText'
 import './tower/tower.css'
 
 const MAX_FLOOR = TUNING.tower.sliceTopFloor
@@ -249,6 +253,17 @@ export function TowerScreen({ state: live, store }: { state: GameState; store: S
 
   const enemyCount = preview ? preview.waves.reduce((n, w) => n + w.units.length, 0) : null
   const truths = truthStanding(state)
+  // Lane M: a new act's title card, once per save, when nothing else holds the screen. It is
+  // latched as it shows, and lifts on its own.
+  const reduced = useReducedMotion()
+  const actDue = combat || showResult || confirm || aiming || outcome || replay ? null : actCardDue(live)
+  const [actCard, setActCard] = useState<ReturnType<typeof actCardDue>>(null)
+  useEffect(() => {
+    if (!actDue) return
+    setActCard(actDue)
+    store.dispatch({ type: 'GUIDE_STEP', step: storyStep(actKey(actDue)) })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [actDue?.id])
 
   return (
     <div className="screen war-room">
@@ -317,6 +332,8 @@ export function TowerScreen({ state: live, store }: { state: GameState; store: S
               )}
             </div>
           )}
+          {/* Lane M: before an anchor, who is up there, why it matters, and Isel's word. */}
+          {!hasEvent && <AnchorBriefing state={state} />}
         </CommandPanel>
 
         <section className="war-floors" ref={listRef} aria-label={t('Floors')}>
@@ -360,6 +377,7 @@ export function TowerScreen({ state: live, store }: { state: GameState; store: S
       <SceneTransition channel="tower" scene={combat ? 'battle' : showResult && pending ? 'results' : 'tower'} />
       {outcome && !replay && <EventOutcomeCard outcome={outcome} onReplay={setReplay} onClose={() => setOutcome(null)} />}
       {replay && <BattleScene log={replay} state={live} onDone={() => setReplay(null)} />}
+      {actCard && !combat && <ActCard key={actCard.id} act={actCard} story={actCard.story} calm={reduced} onClose={() => setActCard(null)} />}
     </div>
   )
 }
