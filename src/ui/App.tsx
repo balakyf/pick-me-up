@@ -42,6 +42,7 @@ import { devToolsEnabled } from './qol/devTools'
 import { PendingReplayHost } from './tower/PendingReplayHost'
 import { clearPendingReplay } from './tower/pendingReplay'
 import { SceneTransition } from './transition/SceneTransition'
+import { SaveErrorNotice } from './qol/SaveErrorNotice'
 
 type View = 'lobby' | WorldView
 
@@ -373,8 +374,9 @@ export function App() {
       <PendingReplayHost key={`${state.accountId}|${epoch}`} state={state} />
       {/* A promotion that completed plays its ceremony (lane J) — never over a climb. */}
       <PromotionCeremonyHost key={`pc|${state.accountId}|${epoch}`} state={state} hold={view === 'tower' || demoLog !== null} />
-      {/* Lane K: a pixel curtain between scenes. */}
+      {/* Lane K: a pixel curtain between scenes; the save-error notice (store.getSaveError). */}
       <SceneTransition scene={view} />
+      <SaveErrorNotice store={store} onExport={() => setPanel('save')} />
       <ToastHost />
     </div>
   )
