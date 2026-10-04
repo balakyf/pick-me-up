@@ -1,0 +1,55 @@
+/* The title diorama (lane K): stacked pixel layers, animated only by CSS. */
+.diorama {
+  position: relative;
+  width: min(100%, 768px);
+  aspect-ratio: 256 / 144;
+  margin: 10px 0 4px;
+  border: 3px solid var(--line);
+  box-shadow: 0 0 0 3px var(--rim-dark), 0 10px 40px rgba(58, 36, 112, 0.45);
+  overflow: hidden;
+  background: #06040f;
+}
+.diorama img { image-rendering: pixelated; display: block; }
+.dio-layer { position: absolute; inset: 0; width: 100%; height: 100%; }
+/* Two star frames alternate: a twinkle. */
+.dio-stars.s1 { animation: dioTwinkle 2.4s steps(1) infinite; }
+.dio-stars.s0 { animation: dioTwinkle 2.4s steps(1) -1.2s infinite; }
+@keyframes dioTwinkle { 0% { opacity: 1; } 50% { opacity: 0.25; } }
+/* The lobby's windows breathe like lamplight. */
+.dio-lights { animation: dioLamp 3.2s steps(4) infinite alternate; }
+@keyframes dioLamp { from { opacity: 1; } to { opacity: 0.78; } }
+
+.dio-fire { position: absolute; aspect-ratio: 16 / 20; }
+.dio-fire img { position: absolute; inset: 0; width: 100%; height: 100%; }
+.dio-fire .f1 { animation: dioFlame 0.5s steps(1) infinite; }
+@keyframes dioFlame { 0% { opacity: 0; } 50% { opacity: 1; } }
+.dio-ember { position: absolute; left: 45%; top: 10%; width: 12%; aspect-ratio: 1; background: #ffd27a; opacity: 0; animation: dioEmber 2.2s steps(6) infinite; }
+.dio-ember.e1 { left: 30%; animation-delay: -0.6s; background: #ffb85a; }
+.dio-ember.e2 { left: 62%; animation-delay: -1.2s; }
+.dio-ember.e3 { left: 50%; animation-delay: -1.7s; background: #e8553b; }
+@keyframes dioEmber { 0% { opacity: 1; transform: translate(0, 0); } 100% { opacity: 0; transform: translate(60%, -420%); } }
+
+.dio-hero { position: absolute; aspect-ratio: 24 / 32; }
+.dio-hero img { position: absolute; inset: 0; width: 100%; height: 100%; }
+.dio-hero .fr1 { animation: dioStep 1.2s steps(1) infinite; }
+.dio-hero.walker .fr1 { animation-duration: 0.5s; }
+@keyframes dioStep { 0% { opacity: 0; } 50% { opacity: 1; } }
+/* The walker crosses the yard toward the tower, then starts again from the lobby. */
+.dio-hero.walker { animation: dioWalk 22s linear infinite; }
+@keyframes dioWalk {
+  0% { left: 64%; top: 84%; opacity: 0; }
+  6% { opacity: 1; }
+  72% { left: 31%; top: 55%; opacity: 1; }
+  80% { left: 29%; top: 54%; opacity: 0; }
+  100% { left: 29%; top: 54%; opacity: 0; }
+}
+
+html[data-motion='reduce'] .diorama *, html[data-motion='reduce'] .diorama { animation: none !important; }
+html[data-motion='reduce'] .dio-ember { display: none; }
+@media (prefers-reduced-motion: reduce) {
+  .diorama * { animation: none !important; }
+  .dio-ember { display: none; }
+}
+@media (max-width: 600px) {
+  .diorama { margin: 6px 0 2px; border-width: 2px; }
+}
