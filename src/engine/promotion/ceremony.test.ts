@@ -9,7 +9,7 @@ import { advanceTime } from '../time'
 import { levelCapForStar } from '../stats'
 import { makeSeed } from '../rng'
 import { CLASS_SKILL, SKILLS, traitOf } from '../content'
-import { isConditionalSkill, learnableSkillIds } from '../skills'
+import { isConditionalSkill, promotionSkillPool } from '../skills'
 import { TUNING } from '../tuning'
 import type { GameState, GrowthGrades, HeroClass, HeroId, OwnedHero, Star } from '../types'
 import { classOffers, completePromotion, promotionChoiceRefusal, promotionPreview, skipPromotion, startPromotion } from './promotion'
@@ -143,15 +143,15 @@ describe('the choices', () => {
     }
   })
 
-  it('a hero who knows their class skill chooses one of three learnable skills, and learns it', () => {
+  it('a hero who knows their class skill chooses one of three pool skills (never another class’s signature), and learns it', () => {
     const h = capped({ star: 3, skills: [{ id: 'power_strike', level: 1, xp: 0 }] })
     const pv = promotionPreview(h, SEED)
     expect(pv.skillOffers.length).toBe(TUNING.ceremony.skillOffers)
     expect(new Set(pv.skillOffers).size).toBe(pv.skillOffers.length)
     expect(pv.skillOffers[0]).toBe(pv.defaultSkill)
     for (const id of pv.skillOffers) {
-      expect(learnableSkillIds()).toContain(id)
-      expect(SKILLS[id]!.learnable).toBe(true)
+      expect(promotionSkillPool('warrior', new Set(['power_strike']))).toContain(id)
+      expect(Object.values(CLASS_SKILL)).not.toContain(id)
       const s = startPromotion(stateWith(h), h.id, 0, { skillId: id })
       const done = completePromotion(s.heroes[h.id]!, SEED)
       expect(granted(done)).toContain(id)
@@ -177,8 +177,10 @@ describe('the choices', () => {
     const one = capped({ star: 1 })
     expect(() => startPromotion(stateWith(one), one.id, 0, { heroClass: 'warrior' })).toThrow(/^startPromotion: .*does not choose a class/)
     const three = capped({ star: 3, skills: [{ id: 'power_strike', level: 1, xp: 0 }] })
-    const off = learnableSkillIds().find((id) => !promotionPreview(three, SEED).skillOffers.includes(id) && id !== 'power_strike')!
+    const off = promotionSkillPool('warrior', new Set(['power_strike'])).find((id) => !promotionPreview(three, SEED).skillOffers.includes(id))!
     expect(() => startPromotion(stateWith(three), three.id, 0, { skillId: off })).toThrow(/^startPromotion: skill .* is not on offer/)
+    // Another class's signature is never on a warrior's table (lane N).
+    expect(() => startPromotion(stateWith(three), three.id, 0, { skillId: CLASS_SKILL.mage })).toThrow(/^startPromotion: skill .* is not on offer/)
     expect(() => startPromotion(stateWith(three), three.id, 0, { skillId: 'power_strike' })).toThrow(/not on offer/)
     expect(promotionChoiceRefusal(three, SEED, {})).toBeNull()
   })

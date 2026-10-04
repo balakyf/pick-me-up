@@ -200,11 +200,12 @@ describe('the forecast', () => {
     expect(deadly).toBeGreaterThan(0)
   })
 
-  it('F80 for an 18-day bot save reads Deadly with high expected deaths — and names the boss and the danger', () => {
+  it('F80 for a 14-day bot save reads Deadly with high expected deaths — and names the boss and the danger', () => {
     // (Lane J's traits and starting skills carry this bot past the Wall by day 25 with one
-    // hero left fit to field, so the full party standing at the Wall is day 18's. Should a
-    // later balance move it, put it there.)
-    const s0 = playAccount('engaged', 1000, 18, Date.UTC(2026, 0, 5))
+    // hero left fit to field. Lane N's class-aware promotion pool moved it again: from day 18
+    // the bot's guards stall Pryos to a timeout (0 % to win, few deaths), so the party that
+    // still dies there is day 14's. Should a later balance move it, put it there.)
+    const s0 = playAccount('engaged', 1000, 14, Date.UTC(2026, 0, 5))
     const s = s0.tower.currentFloor === 80 ? s0 : { ...s0, tower: { ...s0.tower, currentFloor: 80, attemptIndex: 0, event: null, loop: null } }
     const f = forecastFloor(s)!
     expect(f.threat).toBe('deadly')
