@@ -1,0 +1,23 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   Lane Q · small late pieces: the Memorial's legends shelf, the job seats' picker,
+   the pixel place icons. (Own file — never ui.css.)
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* The legends of earlier worlds (lane O's New Cycle), on the Memorial's shelf. */
+.legends-shelf { margin-top: 12px; padding-top: 8px; border-top: 2px solid var(--line); }
+.legend-world { margin: 6px 0 8px; }
+.legend-world-name { color: var(--accent-2); letter-spacing: 2px; font-size: 13px; text-transform: uppercase; }
+.legend-row { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 4px 10px; }
+.legend { display: flex; gap: 8px; align-items: center; padding: 3px 6px; background: #120e2c; border: 1px solid var(--line); }
+.legend img { filter: grayscale(0.85) brightness(0.9) sepia(0.25); border: 1px solid var(--rim-dark); flex: none; }
+.legend.statue { border-color: var(--gold-deep); }
+.legend.statue b { color: var(--gold); }
+.legend-statue { font-size: 12px; }
+
+/* The job seats: the shared picker opens in a fold. */
+.staff-assign > summary { list-style: none; display: inline-block; cursor: pointer; margin: 4px 0; }
+.staff-assign > summary::-webkit-details-marker { display: none; }
+.staff-assign .hp-list { max-height: 240px; }
+
+/* The pixel place icons (Game Menu, facility windows, the Construction Board). */
+.place-icon { image-rendering: pixelated; vertical-align: middle; display: inline-block; }

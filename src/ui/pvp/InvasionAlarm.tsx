@@ -8,6 +8,7 @@ import { useState } from 'react'
 import type { GameState, InvasionRecord } from '../../engine/types'
 import { findRival, guildById, pvpReplayLog } from '../../engine/pvp'
 import { t } from '../i18n/i18n'
+import { useAnyWindowOpen } from '../qol/windowRegistry'
 import { CrestImg } from './RivalCardView'
 import { invasionCard, invasionKey, unseenInvasions } from './pvpModel'
 import { playOnStage } from './stageBus'
@@ -47,8 +48,10 @@ export function watchInvasion(state: GameState, rec: InvasionRecord, onDone?: ()
 
 export function InvasionAlarm({ state }: { state: GameState }) {
   const [seen, setSeen] = useState(() => readSeen(state.accountId))
+  // It waits while a window is open (the Crack's own log lists the same invasions).
+  const windowOpen = useAnyWindowOpen()
   const fresh = unseenInvasions(state.pvp.log, seen)
-  if (fresh.length === 0) return null
+  if (fresh.length === 0 || windowOpen) return null
   const rec = fresh[0]!
   const g = guildById(rec.guildId ?? null)
   const mark = (all: boolean) => {

@@ -34,7 +34,8 @@ export function RivalCardView({ card, onDone }: { card: RivalCard; onDone: () =>
   const done = useRef(onDone)
   done.current = onDone
   useEffect(() => {
-    const speed = Math.max(1, getSettings().battleSpeed)
+    // A faster battle speed shortens the card, never below half (it must still be read).
+    const speed = Math.min(2, Math.max(1, getSettings().battleSpeed))
     const id = setTimeout(() => done.current(), Math.round(CARD_MS / speed))
     const onKey = (e: KeyboardEvent) => {
       // A modal card: it listens first and keeps every key from the windows underneath.

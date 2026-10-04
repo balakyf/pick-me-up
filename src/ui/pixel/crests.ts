@@ -63,18 +63,19 @@ export function crestBanner(look: GuildLook, frame: 0 | 1 = 0): Bitmap {
   return outline(b, INK)
 }
 
-/** A small round shield for the rival rows (12×13). */
+/** A small shield for the rival rows (14×15 with its rim). */
 export function crestShield(look: GuildLook): Bitmap {
-  const b = createBitmap(12, 13)
+  const b = createBitmap(14, 15)
   const [d, m, l] = look.cloth.map(hex) as [number, number, number]
-  rect(b, 0, 0, 12, 8, m)
-  for (let y = 8; y < 13; y++) hline(b, y - 7, y, 12 - (y - 7) * 2, m)
-  vline(b, 0, 0, 8, l)
-  hline(b, 0, 0, 12, l)
-  vline(b, 11, 0, 8, d)
+  const o = 1
+  rect(b, o, o, 12, 8, m)
+  for (let y = 8; y < 13; y++) hline(b, o + y - 7, o + y, 12 - (y - 7) * 2, m)
+  vline(b, o, o, 8, l)
+  hline(b, o, o, 12, l)
+  vline(b, o + 11, o, 8, d)
   const ink = hex(look.ink)
   const rows = EMBLEMS[look.emblem]
-  // the emblem, shrunk to its middle 6×6
-  for (let y = 0; y < 6; y++) for (let x = 0; x < 6; x++) if (rows[y + 1]![x + 1] !== '.') set(b, 3 + x, 2 + y, ink)
+  // the emblem, its middle 6×6
+  for (let y = 0; y < 6; y++) for (let x = 0; x < 6; x++) if (rows[y + 1]![x + 1] !== '.') set(b, o + 3 + x, o + 2 + y, ink)
   return outline(b, INK)
 }

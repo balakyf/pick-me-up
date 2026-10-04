@@ -27,6 +27,7 @@ import { cachedDataUrl } from './pixel/render'
 import { crestShield } from './pixel/crests'
 import { HeroPicker } from './hero/HeroPicker'
 import { t } from './i18n/i18n'
+import { accountDay } from './life/speech'
 import { RaidSheet } from './pvp/RaidSheet'
 import { CaptiveBoard } from './pvp/CaptiveBoard'
 import { CrestImg } from './pvp/RivalCardView'
@@ -61,7 +62,7 @@ function useRunner(store: Store) {
 /** A guild's little shield (rows and chips). */
 export function CrestShield({ guildId }: { guildId: string | null }) {
   const url = cachedDataUrl(`crestS|${guildId ?? 'lone'}`, () => crestShield(guildLook(guildId)))
-  return url ? <img className="px pvp-shield" src={url} width={24} height={26} alt="" /> : <span className="pvp-shield" aria-hidden="true" />
+  return url ? <img className="px pvp-shield" src={url} width={28} height={30} alt="" /> : <span className="pvp-shield" aria-hidden="true" />
 }
 
 /** The PvP side of the open crack: raid, defend, captives, the invasion log (Layer 4). */
@@ -182,8 +183,8 @@ export function PvpPanel({ state, store }: { state: GameState; store: Store }) {
               <CrestShield guildId={l.guildId ?? null} />
               <span className="drill-name">
                 {l.direction === 'in'
-                  ? t('Day {d}: {rival} {note}', { d: l.worldDay, rival: l.rival, note: logNote(l.note) })
-                  : t('Day {d}: you {note} ({rival})', { d: l.worldDay, rival: l.rival, note: logNote(l.note) })}
+                  ? t('Day {d}: {rival} {note}', { d: accountDay(state, l.worldDay), rival: l.rival, note: logNote(l.note) })
+                  : t('Day {d}: you {note} ({rival})', { d: accountDay(state, l.worldDay), rival: l.rival, note: logNote(l.note) })}
               </span>
               <span className="muted">{l.goldDelta !== 0 ? `${l.goldDelta > 0 ? '+' : ''}${l.goldDelta.toLocaleString()} ◆` : ''}</span>
               {l.replay ? (

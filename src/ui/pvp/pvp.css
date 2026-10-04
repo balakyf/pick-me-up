@@ -44,10 +44,10 @@
   .pvp-card-crest img { width: 66px; height: 96px; }
   .pvp-card-skip { position: static; }
 }
-.pvp-shield { display: inline-block; width: 24px; height: 26px; flex: none; image-rendering: pixelated; }
+.pvp-shield { display: inline-block; width: 28px; height: 30px; flex: none; image-rendering: pixelated; }
 .pvp-crest { image-rendering: pixelated; display: block; }
 .pvp-crest-fallback { display: inline-block; width: 22px; height: 32px; background: var(--line); }
-.drill-row.pvp-rival, .drill-row.pvp-log { grid-template-columns: 26px 1fr auto auto; align-items: center; }
+.drill-row.pvp-rival, .drill-row.pvp-log { grid-template-columns: 30px 1fr auto auto; align-items: center; }
 
 /* ── The raid sheet ─────────────────────────────────────────────────────── */
 .raid-sheet { display: flex; flex-direction: column; gap: 10px; }
@@ -119,8 +119,7 @@
 .gr-boss { display: flex; gap: 14px; align-items: flex-end; }
 .gr-sprite { width: 136px; height: auto; image-rendering: pixelated; flex: none; filter: drop-shadow(0 4px 0 #0008); }
 .gr-boss-info { display: flex; flex-direction: column; gap: 6px; min-width: 0; flex: 1; }
-.gr-bar { position: static; width: 100%; }
-.gr-bar .hp-fill { display: block; height: 100%; background: linear-gradient(#ff6a5a, #c83a3a); }
+.guild-raid .boss-bar.gr-bar { position: static; width: 100%; min-width: 0; --boss-color: #c8b8ff; }
 @media (max-width: 640px) { .gr-boss { flex-direction: column; align-items: center; } .gr-sprite { width: 104px; } }
 
 .guild-results { display: flex; flex-direction: column; gap: 10px; cursor: pointer; }
@@ -130,11 +129,12 @@
 .gres-banner.lose { color: var(--accent-2); }
 .gres-banner.waiting { visibility: hidden; }
 .gres-banner.running { animation: pop 0.4s steps(4) both; }
-.gres-hp { position: relative; height: 22px; background: #2a1a24; border: 2px solid var(--rim-dark); box-shadow: 0 0 0 1px var(--line); display: flex; }
+.gres-hp { position: relative; height: 26px; background: #2a1a24; border: 2px solid var(--rim-dark); box-shadow: 0 0 0 1px var(--line); display: flex; }
 .gres-seg { height: 100%; }
 .gres-seg.party { background: linear-gradient(#ffe08a, #f2a630); }
 .gres-seg.mates { background: linear-gradient(#9ab8ff, #4a6ad0); }
-.gres-hp-text { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 12px; text-shadow: 1px 1px 0 #000, -1px -1px 0 #000; }
+.gres-hp-text { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 12px; }
+.gres-hp-text > span { background: #0a0714d0; padding: 1px 8px; }
 .gres-loot { display: flex; gap: 14px; justify-content: center; align-items: baseline; flex-wrap: wrap; font-size: 22px; }
 .gres-gold { color: var(--gold); }
 .gres-drop { color: var(--gem); }
@@ -177,3 +177,5 @@
 @keyframes pvpAlarm { from { transform: translate(-50%, -20px); opacity: 0; } to { transform: translateX(-50%); opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .invasion-alarm { animation: none; } }
 @media (max-width: 640px) { .invasion-alarm { top: auto; bottom: 150px; flex-wrap: wrap; } }
+.invasion-alarm .pbtn { white-space: nowrap; flex: none; }
+.drill-row.pvp-log .drill-name { white-space: normal; overflow: visible; }

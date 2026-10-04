@@ -397,13 +397,7 @@ span.arm-slot { padding: 2px 8px; border: 2px dashed #3e3478; color: var(--ink-f
 .title-wrap .subtitle { color: var(--accent-2); font-size: 20px; letter-spacing: 4px; text-transform: uppercase; margin-bottom: 8px; }
 .title-wrap .tag { color: var(--ink-dim); margin: 6px 0 20px; max-width: 480px; font-size: 17px; background: none; border: none; }
 .title-wrap .btns { display: flex; gap: 22px; }
-.title-parade { display: flex; gap: 6px; align-items: flex-end; margin: 18px 0 6px; min-height: 96px; }
-.title-parade img { animation: float 1.2s steps(2) infinite; }
-.title-parade img:nth-child(2n) { animation-delay: -0.6s; }
-/* A phone fits the whole parade of seven (each scales down to share the width). */
 @media (max-width: 600px) {
-  .title-parade { gap: 4px; min-height: 0; }
-  .title-parade img { width: calc((100vw - 56px) / 7); height: auto; }
   .title-wrap .btns { gap: 12px; flex-wrap: wrap; justify-content: center; }
 }
 

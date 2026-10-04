@@ -91,7 +91,7 @@ export function GuildRaidScreen({ state, store, onClose }: { state: GameState; s
                   <span className="bb-epithet">{t('the guild’s weekly quarry')}</span>
                 </div>
                 <div className="bb-track hpbar">
-                  <span className="hp-fill" style={{ width: '100%' }} />
+                  <span className="hp-fill" style={{ width: '100%', background: '#d84a3a' }} />
                 </div>
               </div>
               <div className="muted small">
@@ -170,7 +170,7 @@ export function GuildRaidResults({ outcome, onReplay, onDone }: { outcome: Guild
         <span className="gres-seg party" style={{ width: `${totals.party * 100 * Math.min(1, fill * 2)}%` }} />
         <span className="gres-seg mates" style={{ width: `${totals.mates * 100 * Math.max(0, fill * 2 - 1)}%` }} />
         <span className="gres-hp-text">
-          {t('Your party {a} · your guildmates {b} · of {hp}', { a: outcome.dealt.toLocaleString(), b: outcome.mates.toLocaleString(), hp: outcome.bossHp.toLocaleString() })}
+          <span>{t('Your party {a} · your guildmates {b} · of {hp}', { a: outcome.dealt.toLocaleString(), b: outcome.mates.toLocaleString(), hp: outcome.bossHp.toLocaleString() })}</span>
         </span>
       </div>
       <div className="gres-loot">

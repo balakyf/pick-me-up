@@ -20,7 +20,8 @@ import { BattleScene } from '../battle/BattleScene'
 import { cpOf, ELEMENT_VIS } from '../bits'
 import { t } from '../i18n/i18n'
 import { tn } from '../text'
-import { HeroChip, lootLine } from './common'
+import { lootLine } from './common'
+import { HeroPicker } from '../hero/HeroPicker'
 import './challenge.css'
 
 const W = CHALLENGE.weekly
@@ -159,11 +160,25 @@ export function WeeklyTrial({ state, store, onClose }: { state: GameState; store
           <h4 className="panel-sub">
             {t('Your team')} ({team.length}/{rule.maxHeroes})
           </h4>
-          <div className="raid-roster">
-            {eligible.length === 0 && <div className="muted">{t('No hero of yours meets this week’s rule.')}</div>}
-            {eligible.map((h) => (
-              <HeroChip key={h.id} state={state} hero={h} selected={team.includes(h.id)} onClick={() => toggle(h.id)} />
-            ))}
+          {eligible.length === 0 && <div className="muted">{t('No hero of yours meets this week’s rule.')}</div>}
+          {/* Lane Q: the shared hero picker (lane N); the week's rule is each row's reason. */}
+          <div className="raid-roster-picker">
+            <HeroPicker
+              state={state}
+              selected={team}
+              onPick={toggle}
+              refusal={(h) =>
+                !heroAllowed(rule, h)
+                  ? 'Not allowed by this week’s rule.'
+                  : !canEnterTrial(h, state)
+                    ? 'Cannot enter the trial now.'
+                    : team.length >= rule.maxHeroes && !team.includes(h.id)
+                      ? 'The team is full.'
+                      : null
+              }
+              label={t('Heroes for the Echo Trial')}
+              filter={{ availableOnly: true }}
+            />
           </div>
           <div className="raid-actions">
             <button className="pbtn ghost" onClick={() => setTeam(eligible.slice(0, rule.maxHeroes).map((h) => h.id))}>
