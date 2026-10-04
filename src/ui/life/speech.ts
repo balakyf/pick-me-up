@@ -937,7 +937,29 @@ export function groupedChronicle(state: GameState, entries: ChronicleEntry[]): s
   if (close.length) out.push(t('Now inseparable: {list}.', { list: close.join(', ') }))
   if (rivals.length) out.push(t('Bad blood between {list}.', { list: rivals.join(', ') }))
   if (arrivals.length > 1) out.push(t('{n} newcomers came through the crystal: {list}.', { n: arrivals.length, list: arrivals.join(', ') }))
-  const grouped = new Set(['friends', 'closeFriends', 'rivals', 'grudge', 'death', 'stalled', ...(arrivals.length > 1 ? ['arrival'] : [])])
+  // Lane L: comfort and job mastery read as one line each when there is more than one.
+  const consoled = entries.filter((e) => e.kind === 'consoled')
+  const comforters = [...new Set(consoled.map((e) => t('{b} for {a}', { a: shortName(state, e.heroIds[0]!), b: shortName(state, e.heroIds[1]!) })))]
+  if (consoled.length > 1) out.push(t('Comfort in grief: {list}.', { list: comforters.join(', ') }))
+  const tiers = entries.filter((e) => e.kind === 'jobTier')
+  if (tiers.length > 1) {
+    const list = tiers.map((e) => {
+      const [job, tier] = (e.detail ?? 'cook:1').split(':')
+      return `${shortName(state, e.heroIds[0]!)} (${t(TIER_NAMES[Number(tier)] ?? 'Novice')} ${t(JOB_NAME[job as JobId] ?? job ?? '')})`
+    })
+    out.push(t('Rising in their trades: {list} — each a lesson for the Master (+{xp} XP).', { list: list.join(', '), xp: tiers.length * TUNING.lobby.master.xpPerJobTier }))
+  }
+  const grouped = new Set([
+    'friends',
+    'closeFriends',
+    'rivals',
+    'grudge',
+    'death',
+    'stalled',
+    ...(arrivals.length > 1 ? ['arrival'] : []),
+    ...(consoled.length > 1 ? ['consoled'] : []),
+    ...(tiers.length > 1 ? ['jobTier'] : []),
+  ])
   // The same news twice (three shouting matches between the same pair) reads once, counted.
   const lines: string[] = []
   const count = new Map<string, number>()

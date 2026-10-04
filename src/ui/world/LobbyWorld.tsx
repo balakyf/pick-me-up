@@ -66,7 +66,7 @@ import { fmtInt } from '../text'
 import { GazetteWindow, gazetteBadge } from '../life/Gazette'
 import { IncidentWindow } from '../life/Incidents'
 import { CampSummaryWindow } from '../life/CampSummary'
-import { campHasNews, campSummary, towerMark } from '../life/campSummary'
+import { towerMark } from '../life/campSummary'
 import { MoralePips } from '../life/MoralePips'
 import { drawMood, moodFor } from './moodEmote'
 
@@ -545,7 +545,7 @@ export function LobbyWorld({
       store.dispatch({ type: 'GUIDE_STEP', step: 'welcome' })
     } else {
       // Home from the tower: a word on the camp (after Isel's letter, when there is one).
-      const home = lastTowerMark !== null && lastTowerMark !== towerMark(st) && campHasNews(campSummary(st))
+      const home = lastTowerMark !== null && lastTowerMark !== towerMark(st)
       if (letterReady(st, toWorldTime(Date.now()))) {
         setLetter(true)
         campAfterLetter.current = home
@@ -1302,13 +1302,13 @@ export function LobbyWorld({
           </button>
         )}
         {pendingIncidents > 0 && (
-          <button className="pbtn gem pulse inc-btn" onClick={() => setIncidentsOpen(true)} title={t('Something in the camp needs your word')}>
-            ⚑ {t('Camp')}
+          <button className="pbtn gem pulse inc-btn" onClick={() => setIncidentsOpen(true)} title={t('Something in the camp needs your word')} aria-label={t('Camp')}>
+            ⚑ <span className="hud-lbl">{t('Camp')}</span>
             <span className="badge">{pendingIncidents}</span>
           </button>
         )}
-        <button className="pbtn gz-btn" onClick={() => setGazetteOpen(true)} title={t('The Camp Gazette: the news, the fallen, and how spirits stand')}>
-          📰 {t('Gazette')}
+        <button className="pbtn gz-btn" onClick={() => setGazetteOpen(true)} title={t('The Camp Gazette: the news, the fallen, and how spirits stand')} aria-label={t('Gazette')}>
+          📰 <span className="hud-lbl">{t('Gazette')}</span>
           {news > 0 && <span className="badge">{news > 99 ? '99+' : news}</span>}
         </button>
         {!loginClaimed(state, toWorldTime(Date.now())) && (

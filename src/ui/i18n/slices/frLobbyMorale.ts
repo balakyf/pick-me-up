@@ -148,6 +148,9 @@ export default {
   '{a} kept the night watch with {b}.': '{a} a monté la garde de nuit avec {b}.',
   '{a} kept the night watch alone.': '{a} a monté la garde de nuit, seul.',
   '{a} was very much themselves today.': '{a} était vraiment lui-même aujourd’hui.',
+  '{b} for {a}': '{b} auprès de {a}',
+  'Comfort in grief: {list}.': 'Réconfort dans le deuil : {list}.',
+  'Rising in their trades: {list} — each a lesson for the Master (+{xp} XP).': 'Ils progressent dans leur métier : {list} — autant de leçons pour le Maître (+{xp} XP).',
   // ── Memories
   'Never made peace with {name}': 'N’a jamais fait la paix avec {name}',
   '{name} sat with them in their grief': '{name} l’a accompagné dans son deuil',

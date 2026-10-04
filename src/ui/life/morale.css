@@ -90,3 +90,9 @@
 
 /* The Party Board's chip for a hero whose morale broke. */
 .pb-status.st-disheartened { color: var(--mo-shaken); }
+
+/* The HUD is crowded below a wide screen: the Gazette and Camp buttons keep only their icon
+   (the tooltip and aria-label still say what they are). */
+@media (max-width: 1440px) {
+  .hud .gz-btn .hud-lbl, .hud .inc-btn .hud-lbl { display: none; }
+}
