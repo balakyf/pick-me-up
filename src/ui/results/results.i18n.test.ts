@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { FR } from '../i18n/fr'
-import { ISEL_CLOSE, ISEL_FOR } from './memorialBand'
+import { ISEL_CLOSE } from './memorialBand'
 
 /** Every literal t('…') in lane K's pieces, and every line Isel speaks, has French. */
 const FILES = [
@@ -37,7 +37,8 @@ describe('results, memorial, camp and title: French', () => {
   })
 
   it('has every line Isel speaks over the fallen, and the camp notes', () => {
-    const lines: string[] = [...Object.values(ISEL_FOR).flat(), ...Object.values(ISEL_CLOSE).flat()]
+    // (Isel's eulogy lines are lane M's, checked in ui/story/story.i18n.test.ts.)
+    const lines: string[] = [...Object.values(ISEL_CLOSE).flat()]
     lines.push('The survivors make camp on the stair. Wounds are dressed, and the fallen are named by the fire.')
     lines.push('A stranger finds the camp and asks to climb with you.')
     expect(lines.filter((l) => !(l in FR))).toEqual([])

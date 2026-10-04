@@ -1,0 +1,110 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   The story (lane M): the battle's text box, the act card, the anchor briefing,
+   the Priasis letter, the aftermath line and the Herald's word.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── The battle's text box (screen space, bottom of the stage) ──────────── */
+/* A foe's line sits under the foes (left), an ally's under the party (right); on a phone
+   the box spans the stage. */
+.story-box {
+  position: absolute; left: 8px; bottom: 8px; z-index: 1060;
+  box-sizing: border-box; width: min(480px, calc(55% - 8px));
+  display: flex; align-items: flex-start; gap: 8px; padding: 6px 10px 7px;
+  background: linear-gradient(180deg, #160f2ef2, #0b0818f2);
+  border: 2px solid var(--rim); box-shadow: 0 0 0 2px var(--rim-dark), 0 4px 0 #0008;
+  pointer-events: none; animation: storyIn 0.3s steps(4) both;
+}
+.story-box.side-ally { left: auto; right: 8px; }
+.story-box.boss { border-color: var(--boss-color, #e9a0a0); }
+.story-box.narrated { border-color: var(--line); background: #0b0818e0; }
+.story-box.ending { animation-delay: 0.6s; }
+@keyframes storyIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+.story-box.calm { animation: storyFade 0.3s linear both; }
+@keyframes storyFade { from { opacity: 0; } to { opacity: 1; } }
+.story-face {
+  flex: none; width: 36px; height: 36px; object-fit: contain; image-rendering: pixelated;
+  background: #0006; border: 1px solid var(--line);
+}
+.story-face.foe { transform: scaleX(-1); width: 40px; height: 40px; background: #3a2e6a80; }
+.story-say { min-width: 0; flex: 1; }
+.story-name { color: var(--gold); font-size: 12px; letter-spacing: 1px; text-transform: uppercase; line-height: 1.2; }
+.story-box.boss .story-name { color: var(--boss-color, #ffb0a8); text-shadow: 1px 1px 0 #000; }
+.story-text { color: var(--ink); font-size: 14px; line-height: 1.3; text-shadow: 1px 1px 0 #000; }
+.story-box.narrated .story-text { font-style: italic; color: var(--ink-dim); }
+.battle.narrow .story-box, .battle.beside .story-box { left: 4px; right: 4px; width: auto; bottom: 4px; padding: 4px 6px 5px; gap: 6px; }
+.battle.narrow .story-face { width: 28px; height: 28px; }
+.battle.narrow .story-text { font-size: 12px; }
+@media (prefers-reduced-motion: reduce) { .story-box { animation: storyFade 0.3s linear both; } }
+
+/* ── The act card ───────────────────────────────────────────────────────── */
+.story-act {
+  position: fixed; inset: 0; z-index: 900; display: flex; align-items: center; justify-content: center;
+  padding: 16px; background: #05030ccc; cursor: pointer; animation: storyFade 0.4s linear both;
+}
+.story-act-card {
+  position: relative; overflow: hidden; width: min(640px, 100%); min-height: 300px;
+  border: 2px solid var(--rim); box-shadow: 0 0 0 2px var(--rim-dark), 0 8px 0 #000a;
+  animation: actIn 0.6s steps(6) both;
+}
+@keyframes actIn { from { opacity: 0; clip-path: inset(48% 0 48% 0); } to { opacity: 1; clip-path: inset(0 0 0 0); } }
+.story-act-bg {
+  position: absolute; inset: 0; background-size: cover; background-position: center bottom;
+  image-rendering: pixelated; animation: actPan 14s linear both;
+}
+@keyframes actPan { from { transform: scale(1.12); } to { transform: scale(1); } }
+.story-act-body {
+  position: relative; display: flex; flex-direction: column; gap: 8px; align-items: center; text-align: center;
+  padding: 36px 20px 18px; min-height: 300px; justify-content: flex-end;
+  background: linear-gradient(180deg, #0000 0%, #0a0714a0 40%, #0a0714f0 100%);
+}
+.story-act-kicker { color: var(--gold); font-size: 13px; letter-spacing: 3px; text-transform: uppercase; text-shadow: 1px 1px 0 #000; }
+.story-act-name {
+  margin: 0; color: #fff; font-size: 34px; letter-spacing: 2px; line-height: 1.05;
+  text-shadow: 2px 2px 0 #000, 0 0 12px #8b6cf0aa;
+}
+.story-act-epigraph { margin: 0; max-width: 46ch; color: var(--ink); font-style: italic; text-shadow: 1px 1px 0 #000; }
+.story-act-isel { display: flex; align-items: center; gap: 8px; max-width: 52ch; text-align: left; font-size: 14px; color: var(--ink-dim); }
+.story-act-isel b { color: var(--gem); }
+.story-act-go { margin-top: 4px; }
+/* The card's own clock: a thin line that runs out as it is about to lift. */
+.story-act-timer {
+  position: absolute; left: 0; bottom: 0; height: 3px; width: 100%; background: var(--gold); transform-origin: left;
+  animation: actTimer var(--act-ms, 6500ms) linear both;
+}
+@keyframes actTimer { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+.story-act.calm .story-act-card, .story-act.calm .story-act-bg { animation: none; }
+.story-act.calm .story-act-timer { animation-timing-function: steps(10); }
+@media (prefers-reduced-motion: reduce) { .story-act-card, .story-act-bg { animation: none; } }
+@media (max-width: 520px) {
+  .story-act-name { font-size: 26px; }
+  .story-act-body { padding: 28px 12px 14px; min-height: 340px; }
+  .story-act-epigraph { font-size: 14px; }
+}
+
+/* ── The anchor briefing (war room) ─────────────────────────────────────── */
+.story-brief { display: flex; flex-direction: column; gap: 6px; padding: 8px 10px; font-size: 14px; }
+.story-brief.world { border-color: var(--bad); }
+.story-brief-head { display: flex; flex-direction: column; gap: 1px; }
+.story-brief-kicker { color: var(--ink-faint); font-size: 11px; letter-spacing: 2px; text-transform: uppercase; }
+.story-brief-title { color: var(--gold); font-size: 17px; }
+.story-brief-who { display: flex; gap: 8px; align-items: flex-start; }
+.story-brief-face {
+  flex: none; width: 40px; height: 40px; object-fit: contain; image-rendering: pixelated;
+  background: #0005; border: 1px solid var(--line);
+}
+.story-brief-face.foe { transform: scaleX(-1); background: #3a2e6a80; }
+.story-brief-isel { display: flex; gap: 6px; align-items: flex-start; color: var(--ink-dim); }
+.story-brief-isel b { color: var(--gem); }
+.story-brief-isel img { flex: none; }
+.story-herald { display: flex; flex-direction: column; gap: 3px; padding: 6px 8px; background: #2a0a1a80; border-left: 2px solid var(--bad); }
+.story-herald-quote { margin: 0; color: #ffb0ff; font-style: italic; }
+
+/* ── The Priasis letter (inside Isel's letter) ─────────────────────────── */
+.story-letter { margin: 10px 0; padding: 8px 10px; border: 1px dashed var(--gold-deep); background: #2a201040; }
+.story-letter-head { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+.story-letter-head b { color: var(--gold); }
+.story-letter p { margin: 4px 0; font-style: italic; }
+.story-letter .story-letter-sign { text-align: right; font-style: normal; color: var(--ink-dim); }
+
+/* ── The aftermath under the results banner ────────────────────────────── */
+.story-aftermath { margin-top: 4px; color: var(--ink-dim); font-style: italic; font-size: 14px; }

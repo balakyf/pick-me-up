@@ -7,6 +7,7 @@ import type { GameState, OwnedHero } from '../../engine/types'
 import { hashString } from '../pixel/rand'
 import { t } from '../i18n/i18n'
 import { ta } from '../text'
+import { iselStoryWord } from '../story/storyText'
 
 const COMMONER_JOBS = ['farmer', 'carpenter', 'baker', 'fisher', 'weaver', 'shepherd', 'miller', 'tanner']
 
@@ -57,7 +58,10 @@ export function iselLines(state: GameState): string[] {
     tip = 'Some of them still visit the Memorial every day. Grief passes faster with a healer in the Infirmary.'
   else if (state.gold >= 3000) tip = 'The Mobius crystal hums. You could afford another summon.'
   else tip = t('Floor {n} is next. Every hero who falls there is gone for good — remember that.', { n: state.tower.currentFloor })
-  return [t('Welcome back, Master. I am Isel — I keep this waiting room in order.'), t(tip)]
+  const greet = [t('Welcome back, Master. I am Isel — I keep this waiting room in order.'), t(tip)]
+  // Lane M: where the Priasis arc stands, as Isel tells it.
+  const story = iselStoryWord(state)
+  return story ? [...greet, story] : greet
 }
 
 const BANTER: string[][] = [

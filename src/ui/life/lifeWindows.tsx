@@ -32,6 +32,8 @@ import { t } from '../i18n/i18n'
 import { ta } from '../text'
 import { BOUNTIES } from '../../engine/estate'
 import { MoralePips } from './MoralePips'
+import { PriasisLetter } from '../story/StoryNotes'
+import { priasisUnread } from '../story/storyText'
 
 /** The temperament gauges (the hero sheet's Story tab). */
 export const PERSONALITY_TRAITS: [keyof ReturnType<typeof personalityOf>, string][] = [
@@ -257,7 +259,8 @@ export function letterReady(state: GameState, nowWorld: number, minGapWorld = 2 
   const since = state.life.letterReadAt
   if (nowWorld - since < minGapWorld) return false
   const tl = state.life.tally
-  const newsy = state.life.chronicle.some((e) => e.at > since) || tl.forged + tl.meals + tl.research > 0 || tl.jobGold > 0 || tl.trainXp > 0 || (tl.selfTaught ?? 0) > 0
+  const newsy =
+    state.life.chronicle.some((e) => e.at > since) || tl.forged + tl.meals + tl.research > 0 || tl.jobGold > 0 || tl.trainXp > 0 || (tl.selfTaught ?? 0) > 0 || priasisUnread(state) !== null
   return newsy
 }
 
@@ -285,6 +288,8 @@ export function LetterWindow({ state, onClose, onGazette }: { state: GameState; 
             ))}
           </div>
         )}
+        {/* Lane M: the newest letter of the Priasis arc, folded into Isel's. */}
+        <PriasisLetter state={state} />
         <div className="letter-tally">
           {tl.forged > 0 && <span className="chip">⚒ {t('{n} items forged', { n: tl.forged })}</span>}
           {tl.meals > 0 && <span className="chip">🍲 {t('{n} meals served', { n: tl.meals })}</span>}

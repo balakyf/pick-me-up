@@ -16,6 +16,7 @@ import type { LookSource } from '../pixel/look'
 import { hashString } from '../pixel/rand'
 import { lastWordsTogether, shortName } from '../life/speech'
 import { t } from '../i18n/i18n'
+import { eulogy } from '../story/eulogy'
 
 /** How the results should feel. */
 export type ResultMood = 'triumph' | 'cleared' | 'bittersweet' | 'mourning' | 'defeat' | 'retreat' | 'failed'
@@ -68,23 +69,6 @@ export function graveOf(state: GameState, heroId: string): FallenRecord | undefi
   return undefined
 }
 
-/** Isel's words for one of the fallen, by what the grave says (English source lines). */
-export const ISEL_FOR = {
-  mourned: [
-    '{name} reached floor {floor}. {mourners} will keep a lamp lit by the obelisk tonight.',
-    'I wrote {name} into the ledger on the first day. Tonight {mourners} asked to write the last line.',
-    '{mourners} will not eat tonight, Master. {name} always kept them a seat.',
-    'The obelisk has a new name, Master: {name}, floor {floor}. {mourners} have already brought flowers.',
-    '{mourners} keep asking me when {name} comes home. I have not found the words yet.',
-  ],
-  alone: [
-    '{name} climbed to floor {floor}. If no one else lights a lamp, I will.',
-    'No one in the lobby knew {name} well yet. That is not the same as no one caring.',
-    '{name} stood on floor {floor}, further than most ever will. I will cut the name deep.',
-  ],
-  brief: ['{name} was with us less than a day. Long enough to be counted among us.'],
-} as const
-
 /** Isel's last word over the whole band. */
 export const ISEL_CLOSE = {
   bittersweet: ['The floor is ours, Master. It was paid for.', 'We climb on. We do not climb on lightly.'],
@@ -111,18 +95,29 @@ export function nameList(names: readonly string[]): string {
   return t('{a} and {b}', { a: names.slice(0, -1).join(', '), b: names[names.length - 1]! })
 }
 
-/** What Isel says for one fallen hero. */
+/** What Isel says for one fallen hero: lane M's eulogy (ui/story/eulogy.ts), from who they
+ *  were (voice, trade, trait — read off the grave), how far they climbed and who mourns them. */
 export function iselFor(
   name: string,
-  grave: Pick<FallenRecord, 'heroId' | 'bestFloor' | 'floor' | 'daysServed'> | undefined,
+  grave: (Pick<FallenRecord, 'heroId' | 'bestFloor' | 'floor' | 'daysServed'> & Partial<Pick<FallenRecord, 'name' | 'star' | 'heroClass' | 'portraitToken'>>) | undefined,
   mourners: readonly string[],
   taken?: Set<string>,
 ): string {
-  const floor = grave ? Math.max(grave.bestFloor, grave.floor) : 0
-  const key = `isel|${grave?.heroId ?? name}`
-  if (mourners.length > 0) return t(pickLine(ISEL_FOR.mourned, key, taken), { name, floor, mourners: nameList(mourners) })
-  if (grave && grave.daysServed < 1) return t(pickLine(ISEL_FOR.brief, key, taken), { name, floor })
-  return t(pickLine(ISEL_FOR.alone, key, taken), { name, floor })
+  const who =
+    grave && grave.name !== undefined && grave.star !== undefined && grave.portraitToken !== undefined
+      ? { id: grave.heroId, name: grave.name, star: grave.star, heroClass: grave.heroClass ?? null, portraitToken: grave.portraitToken }
+      : undefined
+  return eulogy(
+    {
+      name,
+      who,
+      floor: grave ? Math.max(grave.bestFloor, grave.floor) : 0,
+      fellOn: grave?.floor,
+      daysServed: grave?.daysServed,
+      mourners: nameList(mourners),
+    },
+    taken,
+  )
 }
 
 /** Isel's closing line under the band (none when nobody fell). */
