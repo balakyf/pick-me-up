@@ -14,6 +14,8 @@ import type { ActDef } from '../../engine/content/acts'
 import { ENDGAME, POST_WALL, creditsOf, cycleOf, endgameOf, fateOf, missedTruths, relivableFloors } from '../../engine/endgame'
 import type { FallenRecord, GameState, HiddenObjective, Legend, OwnedHero, ReliveDifficulty, WorldFate } from '../../engine/types'
 import { TUNING } from '../../engine/tuning'
+import { worldDayIndex } from '../../engine/daily'
+import { toWorldTime } from '../../engine/time'
 import { t } from '../i18n/i18n'
 import { tn } from '../text'
 import { storySeen } from '../story/storyText'
@@ -102,10 +104,19 @@ export function creditRoll(state: GameState): CreditRoll {
     c.fallen.filter((g) => state.heroes[g.heroId] !== undefined),
   )
   const nameOf = (id: string) => state.heroes[id as OwnedHero['id']]?.name.split(' ')[0] ?? ''
+  // Graves keep the absolute world-day; the roll counts days from the Master's first.
+  const day1 = worldDayIndex(toWorldTime(state.createdAt))
+  const dayOf = (d: number) => Math.max(1, d - day1 + 1)
+  const fellHow = (g: FallenRecord) =>
+    g.cause === 'synthesis'
+      ? t('{star}★ {cls} · given to the Synthesis · day {day}', { star: g.star, cls: classOf(g.heroClass), day: dayOf(g.day) })
+      : g.cause === 'captor'
+        ? t('{star}★ {cls} · lost to a rival’s captors · day {day}', { star: g.star, cls: classOf(g.heroClass), day: dayOf(g.day) })
+        : t('{star}★ {cls} · fell on F{floor} · day {day}', { star: g.star, cls: classOf(g.heroClass), floor: g.floor, day: dayOf(g.day) })
   const fallen: RollFallen[] = c.fallen.map((g) => ({
     id: g.heroId,
     name: g.name,
-    meta: t('{star}★ {cls} · fell on F{floor} · day {day}', { star: g.star, cls: classOf(g.heroClass), floor: g.floor, day: g.day + 1 }),
+    meta: fellHow(g),
     lastWords: words.get(g.heroId) ?? t('…'),
     eulogy: iselFor(g.name.split(' ')[0]!, g, g.mourners.map(nameOf).filter((n) => n !== ''), taken),
   }))
@@ -117,14 +128,17 @@ export function creditRoll(state: GameState): CreditRoll {
   const legends: RollLegend[] = c.legends.map((l: Legend) => ({
     id: `${l.cycle}:${l.heroId}`,
     name: l.name,
-    meta: t('Cycle {n} · {star}★ {cls} · fell on F{floor}', { n: cycleNumeral(l.cycle), star: l.star, cls: classOf(l.heroClass), floor: l.floor }),
+    meta:
+      l.cause === 'battle'
+        ? t('Cycle {n} · {star}★ {cls} · fell on F{floor}', { n: cycleNumeral(l.cycle), star: l.star, cls: classOf(l.heroClass), floor: l.floor })
+        : t('Cycle {n} · {star}★ {cls}', { n: cycleNumeral(l.cycle), star: l.star, cls: classOf(l.heroClass) }),
     eulogy: iselFor(l.name.split(' ')[0]!, l, [], taken),
   }))
   const s = c.stats
   const stats = [
     t('Cycle {n}', { n: cycleNumeral(s.cycle) }),
     s.fate === 'saved' ? t('The world was spared') : s.fate === 'ended' ? t('The world ended') : t('The world still waits'),
-    ...(s.day !== null ? [t('Decided on day {n}', { n: s.day + 1 })] : []),
+    ...(s.day !== null ? [t('Decided on day {n}', { n: dayOf(s.day) })] : []),
     t('Highest floor: F{n}', { n: s.highestCleared }),
     tn(s.heroesCalled, '1 hero answered the crystal', '{n} heroes answered the crystal'),
     tn(s.fallen, '1 fell', '{n} fell'),

@@ -3,6 +3,7 @@ import type { GameState } from '../../engine/types'
 import type { Store } from '../../engine/store'
 import { fateOf, cycleOf } from '../../engine/endgame'
 import { useReducedMotion } from '../motion'
+import { useAnyWindowOpen } from '../qol/windowRegistry'
 import { storyStep } from '../story/storyText'
 import { t } from '../i18n/i18n'
 import { Ending } from './Ending'
@@ -24,8 +25,10 @@ export function EndingHost({ state, store, hold, onNewCycle }: { state: GameStat
   const fate = fateOf(state)
 
   useEffect(() => onEnding((req) => setOpen(req)), [])
-  // A sealed fate's epilogue that was never seen plays once nothing else holds the screen.
-  const due = hold ? null : epilogueDue(state)
+  // A sealed fate's epilogue that was never seen plays once nothing else holds the screen
+  // (a battle, the tower, a window such as Isel's letter).
+  const windowOpen = useAnyWindowOpen()
+  const due = hold || (windowOpen && !open) ? null : epilogueDue(state)
   useEffect(() => {
     if (due && !open) setOpen({ start: 'epilogue' })
     // eslint-disable-next-line react-hooks/exhaustive-deps

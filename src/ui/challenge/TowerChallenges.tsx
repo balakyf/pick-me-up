@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { createPortal } from 'react-dom'
 import type { CombatLog, GameState } from '../../engine/types'
 import type { Store } from '../../engine/store'
 import { bonusRoomWithResult } from '../../engine/store'
@@ -75,9 +76,11 @@ export function TowerChallenges({ state, store }: { state: GameState; store: Sto
           <span className="muted small"> {relivableFloors(state).length === 0 ? t('(clear F{n})', { n: 5 }) : memoriesLabel(state, nowWorld)}</span>
         </button>
       </div>
-      {win === 'raid' && <RaidPlanner state={state} store={store} onClose={() => setWin(null)} />}
-      {win === 'weekly' && <WeeklyTrial state={state} store={store} onClose={() => setWin(null)} />}
-      {win === 'memories' && <Memories state={state} store={store} onClose={() => setWin(null)} />}
+      {/* (Lane O: the windows open over the whole page — inside the sticky command panel the
+          floor list's column painted over them.) */}
+      {win === 'raid' && createPortal(<RaidPlanner state={state} store={store} onClose={() => setWin(null)} />, document.body)}
+      {win === 'weekly' && createPortal(<WeeklyTrial state={state} store={store} onClose={() => setWin(null)} />, document.body)}
+      {win === 'memories' && createPortal(<Memories state={state} store={store} onClose={() => setWin(null)} />, document.body)}
       {outcome && !replay && <RoomOutcomeCard outcome={outcome} onReplay={setReplay} onClose={() => setOutcome(null)} />}
       {replay && <BattleScene log={replay} state={state} onDone={() => setReplay(null)} />}
     </>

@@ -20,6 +20,7 @@ import type { CombatUnit, EnemyWave, Mission } from '../types'
 import { ALLY_TEMPLATES } from '../content'
 import { buildAllyUnit } from '../unit'
 import { ENDGAME } from './tuning'
+import { TUNING } from '../tuning'
 
 export interface PostWallFloor {
   floor: number
@@ -41,6 +42,12 @@ export const POST_WALL: Readonly<Record<number, PostWallFloor>> = {
 
 export function isPostWallFloor(floor: number): boolean {
   return POST_WALL[floor] !== undefined
+}
+
+/** How much harder than its budget a floor behind the Wall fields its squad (the climb to
+ *  the Herald): 1 + rampPerFloor × (floor − 80). */
+export function postWallRamp(floor: number): number {
+  return isPostWallFloor(floor) ? 1 + ENDGAME.postWall.rampPerFloor * (floor - TUNING.tower.wallFloor) : 1
 }
 
 /** The strongest unit's index (ties: the first). */

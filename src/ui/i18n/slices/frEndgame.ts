@@ -51,6 +51,9 @@ export default {
   '{star}★ {cls} · fell on F{floor} · day {day}': '{star}★ {cls} · tombé à l’É{floor} · jour {day}',
   '{star}★ {cls} · Lv{level}': '{star}★ {cls} · Niv{level}',
   'Cycle {n} · {star}★ {cls} · fell on F{floor}': 'Cycle {n} · {star}★ {cls} · tombé à l’É{floor}',
+  'Cycle {n} · {star}★ {cls}': 'Cycle {n} · {star}★ {cls}',
+  '{star}★ {cls} · given to the Synthesis · day {day}': '{star}★ {cls} · donné à la Synthèse · jour {day}',
+  '{star}★ {cls} · lost to a rival’s captors · day {day}': '{star}★ {cls} · perdu aux mains des ravisseurs d’un rival · jour {day}',
   'Decided on day {n}': 'Décidé le jour {n}',
   'Highest floor: F{n}': 'Étage le plus haut : É{n}',
   'Truths known: {n}': 'Vérités connues : {n}',
@@ -129,7 +132,6 @@ export default {
   'Stage two: the gate opens, and its knights come out to meet the ram.': 'Deuxième phase : la porte s’ouvre, et ses chevaliers sortent à la rencontre du bélier.',
   'Stage three: the gate gives. The wardens hold the breach with everything they are.':
     'Troisième phase : la porte cède. Les gardiens tiennent la brèche de tout leur être.',
-  'Stage four. He is standing in the breach, Master. Pryos Al Ragna.': 'Quatrième phase. Il se tient dans la brèche, Maître. Pryos Al Ragna.',
 
   // ── Behind the Wall (F81–89) ──────────────────────────────────────────────
   'The Breach Road': 'La Route de la Brèche',

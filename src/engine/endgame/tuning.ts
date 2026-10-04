@@ -28,6 +28,11 @@ export const ENDGAME = {
     garrisonTicks: 900,
     /** F86: the banner's level over the floor's. */
     bannerLevelBonus: 20,
+    /** The climb to the Herald: a floor behind the Wall fields its squad at
+     *  × (1 + this × (floor − 80)) of its budget (F81 ×1.05 … F89 ×1.45). Without it a party
+     *  that broke the Wall walked F81–89 in an afternoon, one attempt each (the 60-day sim);
+     *  at 0.1 (F89 ×1.9) F89 held whales longer than the Herald does. */
+    rampPerFloor: 0.05,
   },
 
   /** What the F90 decision changes, for the rest of this world. */

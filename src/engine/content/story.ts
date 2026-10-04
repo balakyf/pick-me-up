@@ -243,12 +243,12 @@ export const ANCHOR_STORY: Record<number, AnchorStory> = {
     why: 'Taonier’s highest leader turned half-monster to hold this Wall. Only five Rankers ever passed.',
     isel: 'Pryos is of Priasis’s house, Master. He knows what happened in the loop, and he will say so.',
     aftermath: 'Pryos Al Ragna falls standing. The Wall has a hole in it the shape of your party.',
-    // Lane O: the Siege of the Wailing Wall, stage by stage.
+    // Lane O: the Siege of the Wailing Wall, stage by stage (the fourth is Pryos's own: his
+    // title card and his entrance line).
     opening: { speaker: 'isel', line: 'The siege begins. Keep the ram moving, Master: if it breaks, so does the siege.' },
     waves: {
       1: { speaker: 'narrator', line: 'Stage two: the gate opens, and its knights come out to meet the ram.' },
       2: { speaker: 'narrator', line: 'Stage three: the gate gives. The wardens hold the breach with everything they are.' },
-      3: { speaker: 'isel', line: 'Stage four. He is standing in the breach, Master. Pryos Al Ragna.' },
     },
   },
   85: {

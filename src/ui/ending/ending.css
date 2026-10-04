@@ -44,7 +44,7 @@
   display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center; padding: 0 4px;
   animation: endingRoll var(--roll-s, 60s) linear both;
 }
-@keyframes endingRoll { from { transform: translateY(100vh); } to { transform: translateY(-100%); } }
+@keyframes endingRoll { from { transform: translateY(55vh); } to { transform: translateY(-100%); } }
 .ending-roll.calm { overflow-y: auto; mask-image: none; padding: 24px 0 56px; }
 .ending-roll.calm .ending-roll-inner { animation: none; }
 .ending-h { margin: 22px 0 4px; color: var(--gold); font-size: 15px; letter-spacing: 3px; text-transform: uppercase; }

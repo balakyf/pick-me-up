@@ -11,7 +11,7 @@ import './ending.css'
 /** How long a still holds before the next (ms). The Master can always go on sooner. */
 export const STILL_MS = 6000
 /** The credits roll's pace: px per second (reduced motion: no roll, a list to read). */
-export const ROLL_PX_PER_S = 38
+export const ROLL_PX_PER_S = 46
 
 type Phase = 'stills' | 'isel' | 'credits' | 'finale' | 'confirm'
 
@@ -170,7 +170,7 @@ function CreditsRoll({
   const [secs, setSecs] = useState(60)
   useEffect(() => {
     const h = inner.current?.scrollHeight ?? 0
-    if (h > 0) setSecs(Math.max(20, Math.round((h + 600) / ROLL_PX_PER_S)))
+    if (h > 0) setSecs(Math.max(20, Math.round((h + 400) / ROLL_PX_PER_S)))
   }, [roll])
   return (
     <div className={`ending-roll ${calm ? 'calm' : ''}`} aria-label={t('Credits')}>

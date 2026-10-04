@@ -23,6 +23,7 @@ import {
   relive,
   reliveRefusal,
   scaleFoe,
+  postWallRamp,
 } from '.'
 
 const T = TUNING.tower
@@ -137,9 +138,16 @@ describe('behind the Wall (F81–89)', () => {
       const b = buildEncounter(onFloor(floor, {}, 4242), floor)
       expect(a.mission.type, `F${floor}`).toBe(def.missionType)
       expect(JSON.stringify(a), `F${floor}`).toBe(JSON.stringify(b))
-      // The squad is the floor's power-budgeted fill (the Wall seed), only reshaped.
+      // The squad is the floor's power-budgeted fill (the Wall seed), reshaped and ramped
+      // toward the Herald (×1.05 at F81 … ×1.45 at F89).
       const fill = buildFillerEncounter(floor, 1, rngFor(makeSeed(T.wallSeed), 'floor', floor))
-      expect(cpOf(a.waves), `F${floor}`).toBe(cpOf(fill.waves))
+      const units = a.waves.flatMap((w) => w.units)
+      const filled = fill.waves.flatMap((w) => w.units)
+      expect(units.map((u) => u.templateId).sort(), `F${floor}`).toEqual(filled.map((u) => u.templateId).sort())
+      const byId = new Map(filled.map((u) => [u.id, u]))
+      for (const u of units) expect(u.stats.maxHP, `F${floor} ${u.id}`).toBe(scaleFoe(byId.get(u.id)!, postWallRamp(floor)).stats.maxHP)
+      expect(cpOf(a.waves)).toBeGreaterThan(cpOf(fill.waves))
+      if (floor > 81) expect(postWallRamp(floor)).toBeGreaterThan(postWallRamp(floor - 1))
     }
   })
 
