@@ -12,6 +12,7 @@ import { scale } from '../pixel/bitmap'
 import { t } from '../i18n/i18n'
 import { useMusic } from '../audio/useSound'
 import { challengeOf } from '../../engine/challenge'
+import { DevCameoButton } from '../hero/DevCameo'
 
 const SUMMON_COST = TUNING.gacha.normalCostGold
 const PITY_AT = TUNING.gacha.normalPityFloor3At
@@ -155,6 +156,8 @@ export function SummonScreen({
           )}
         </div>
         {gate.why && <div className="muted summon-why">{gate.why}</div>}
+        {/* Lane N: a dev-only cameo reveal for QA (dev builds or ?dev=1, never in normal play). */}
+        <DevCameoButton masterLevel={state.meta.masterLevel} />
         {err && <div className="muted" style={{ color: 'var(--bad)' }}>{err}</div>}
       </div>
       {ritual && (
