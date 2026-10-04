@@ -7,7 +7,7 @@ import { SKILLS } from '../../engine/content'
 import { t } from '../i18n/i18n'
 import { matLabel } from './shared'
 import { HeroPicker } from '../hero/HeroPicker'
-import { awayReason, sacrificeRefusal } from '../hero/refusals'
+import { busyRefusal, sacrificeRefusal } from '../hero/refusals'
 import { attrLabel, gradeDeltaLine, rescueLabel } from './facilityText'
 import { tn } from '../text'
 
@@ -94,7 +94,7 @@ export function SynthesisChamber({ state, store }: { state: GameState; store: St
           heroes={living}
           label={mode === 'transfer' ? t('Survivor (required)') : t('Rescue onto (optional)')}
           selected={survivorId ? [survivorId] : []}
-          refusal={(h) => awayReason(state, h)}
+          refusal={(h) => busyRefusal(state, h)}
           onPick={chooseSurvivor}
         />
       </div>

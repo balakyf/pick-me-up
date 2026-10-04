@@ -89,7 +89,8 @@ export function bestFor(state: GameState, hero: OwnedHero, slot: EquipmentSlot):
  */
 export function bestLoadout(state: GameState, heroId: HeroId): LoadoutChange[] {
   const hero = state.heroes[heroId]
-  if (hero === undefined || !hero.alive) return []
+  // A captive or a hero away in the Ruins would carry the gear off with them.
+  if (hero === undefined || !hero.alive || hero.captiveOf || hero.expedition) return []
   const byId = new Map(state.inventory.map((i) => [i.id, i]))
   const out: LoadoutChange[] = []
   for (const slot of LOADOUT_SLOTS) {

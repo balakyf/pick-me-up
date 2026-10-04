@@ -38,11 +38,19 @@ export function busyRefusal(state: GameState, h: OwnedHero): string | null {
   return null
 }
 
-/** Synthesis: a sacrifice must be home and not promoting (the chamber's own rule). */
+/** The Transfer Station: home and not busy, but a hero out on a bounty may still give or
+ *  receive a skill (the station's engine rule has no bounty check). */
+export function stationRefusal(state: GameState, h: OwnedHero): string | null {
+  if (estateBusy(state, h.id) === 'is out on a bounty' && h.alive && !h.captiveOf && !h.expedition) {
+    if (h.promotion !== null) return 'In the Promotion Chamber.'
+    if (h.training !== null) return 'In the middle of a drill.'
+    return null
+  }
+  return busyRefusal(state, h)
+}
+
+/** Synthesis: a sacrifice must be home, not promoting and not drilling (the chamber's own rule). */
 export function sacrificeRefusal(state: GameState, h: OwnedHero, survivorId: string | null): string | null {
   if (h.id === survivorId) return 'The survivor cannot be a sacrifice.'
-  const away = awayReason(state, h)
-  if (away) return away
-  if (h.promotion !== null) return 'In the Promotion Chamber.'
-  return null
+  return busyRefusal(state, h)
 }

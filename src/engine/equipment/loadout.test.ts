@@ -160,3 +160,16 @@ describe('heirlooms', () => {
     expect(heirloomOf(s, a.item.id)!.name).toBe('Bram')
   })
 })
+
+describe('equip best skips heroes who would carry the gear away (review of lane N)', () => {
+  it('a captive or a hero away in the Ruins gets nothing', () => {
+    const { s: s0, ids } = roster()
+    const { s } = give(s0, 'armor', 'B')
+    const id = ids[0]!
+    expect(bestLoadout(s, id).length).toBeGreaterThan(0)
+    const held = { ...s, heroes: { ...s.heroes, [id]: { ...s.heroes[id]!, captiveOf: 'rival' } } } as GameState
+    expect(bestLoadout(held, id)).toEqual([])
+    const away = { ...s, heroes: { ...s.heroes, [id]: { ...s.heroes[id]!, expedition: { until: 1 } } } } as unknown as GameState
+    expect(bestLoadout(away, id)).toEqual([])
+  })
+})

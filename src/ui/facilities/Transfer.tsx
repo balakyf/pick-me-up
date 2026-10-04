@@ -7,7 +7,7 @@ import { fuseOptions, maxTransferGrade, transferCost, transferRefusal, transferr
 import { SkillList } from '../bits'
 import { t } from '../i18n/i18n'
 import { HeroPicker } from '../hero/HeroPicker'
-import { busyRefusal } from '../hero/refusals'
+import { stationRefusal } from '../hero/refusals'
 
 const TRANSFER = TUNING.skills.transfer
 
@@ -47,7 +47,7 @@ export function TransferAction({ state, store }: { state: GameState; store: Stor
       heroes={living}
       label={label}
       selected={selected ? [selected.id] : []}
-      refusal={(h) => (h.id === exclude && other ? other : busyRefusal(state, h))}
+      refusal={(h) => (h.id === exclude && other ? other : stationRefusal(state, h))}
       onPick={(id) => pick(selected?.id === id ? null : id)}
     />
   )
