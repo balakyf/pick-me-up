@@ -62,7 +62,7 @@ import { startUpgrade, skipFacility } from '../facilities'
 import { startTraining, skipTraining } from '../training'
 import { attemptDaily, type DailyResult } from '../daily'
 import { advanceTime, toWorldTime } from '../time'
-import { assignJob, lifeOf, lifeReact } from '../life'
+import { addMemory, assignJob, dayOfSlot, lifeOf, lifeReact, resolveIncident, slotOf, type IncidentOutcome } from '../life'
 import { afterFloor, resolveBonusRoom, runRaid, runWeeklyTrial } from '../challenge'
 import { buyDecor, estateReact, hostDuel, postBounty, raiseStatue, refocusDrill, talkToHero } from '../estate'
 
@@ -310,6 +310,10 @@ function reduceCore(state: GameState | null, cmd: Command, nowWorld: number): Ga
     case 'TALK_TO_HERO':
       return talkToHero(current, cmd.heroId, nowWorld)
 
+    // Lane L: the Master's word on a camp incident.
+    case 'RESOLVE_INCIDENT':
+      return resolveIncident(current, cmd.id, cmd.choice, INCIDENT_HELPERS).state
+
     default: {
       // Exhaustiveness guard: a new Command variant must be handled here.
       const exhaustive: never = cmd
@@ -318,9 +322,28 @@ function reduceCore(state: GameState | null, cmd: Command, nowWorld: number): Ga
   }
 }
 
+const INCIDENT_HELPERS = { addMemory, slotOf, dayOfSlot }
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Side-output dispatchers (thin pass-throughs that surface the extra payload)
 // ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Like dispatching RESOLVE_INCIDENT, but also says what came of it (the brawl cleared the
+ * air, or made things worse). Runs the same catch-up and reactions `reduce` does, so the
+ * two always agree.
+ */
+export function resolveIncidentWithResult(
+  state: GameState | null,
+  id: string,
+  choice: 'intervene' | 'let',
+  nowReal = 0,
+): { state: GameState; outcome: IncidentOutcome } {
+  const nowWorld = toWorldTime(nowReal)
+  const cmd: Command = { type: 'RESOLVE_INCIDENT', id, choice }
+  const r = resolveIncident(advanceTime(requireState(state, cmd.type), nowWorld), id, choice, INCIDENT_HELPERS)
+  return { state: estateReact(state, lifeReact(state, r.state, cmd, nowWorld), cmd, nowWorld), outcome: r.outcome }
+}
 
 /**
  * Like dispatching SUMMON through `reduce`, but also returns the summoned hero so

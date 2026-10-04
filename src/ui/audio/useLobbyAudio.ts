@@ -96,14 +96,16 @@ export function useLobbyAudio(state: GameState): (v: LobbyView) => void {
   return feed.current
 }
 
-/** The sources on the campus: the forge and anvils (when the Armory stands), the hearths. */
+/** The sources on the campus: the forge and anvils (when the Armory stands and a smith works), the hearths. */
 function sourcesFor(st: GameState): AmbSource[] {
   const out: AmbSource[] = []
   const sites = siteRooms(st)
+  // The forge rings while a smith is at the anvil (lane L: the ambience follows the heroes).
+  const hammering = Object.values(st.heroes).some((h) => h.alive && h.life?.job === 'blacksmith' && h.life.doing.kind === 'work' && !h.life.doing.stalled)
   for (const p of PROPS) {
     const x = (p.x + p.w / 2) * TILE
     const y = (p.y + 0.5) * TILE
-    if ((p.kind === 'forge' || p.kind === 'anvil') && !sites.has('armory')) out.push({ kind: 'forge', x, y })
+    if ((p.kind === 'forge' || p.kind === 'anvil') && !sites.has('armory') && hammering) out.push({ kind: 'forge', x, y })
     else if (p.kind === 'hearth' && !sites.has('kitchen')) out.push({ kind: 'hearth', x, y })
   }
   if ((st.estate?.decor?.hearth ?? 0) >= 1) {

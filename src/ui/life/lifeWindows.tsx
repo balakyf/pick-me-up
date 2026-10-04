@@ -35,6 +35,7 @@ import { ta } from '../text'
 import { BondList } from '../bond/BondBadge'
 import { BOUNTIES } from '../../engine/estate'
 import { EstateNotes } from './EstatePanels'
+import { MoralePips, MoraleBreakdown } from './MoralePips'
 
 const first = (n: string) => n.split(/\s+/)[0] ?? n
 
@@ -109,8 +110,31 @@ export function memoryLine(state: GameState, m: Memory): string {
     selfTaught: t('Taught themselves {skill}', { skill: t(SKILLS[m.detail ?? '']?.name ?? m.detail ?? '') }),
     comforted: t('Came back to the others, comforted'),
     burnout: t('Burnt out after too many floors'),
+    guilt: t('Never made peace with {name}', { name: other }),
+    consoled: t('{name} sat with them in their grief', { name: other }),
+    anniversary: t('Remembered {name}, a week on', { name: other }),
+    incident: incidentMemory(m.detail ?? '', other),
   }
   return `${day} · ${text[m.kind]}`
+}
+
+/** A camp incident as a hero remembers it (lane L). */
+function incidentMemory(detail: string, other: string): string {
+  const [kind, sign] = detail.split(':')
+  switch (kind) {
+    case 'brawl':
+      return sign === '+' ? t('Fought {name} — and cleared the air', { name: other }) : t('Came to blows with {name}', { name: other })
+    case 'sworn':
+      return t('Swore to watch {name}’s back', { name: other })
+    case 'night':
+      return t('Trained alone by moonlight')
+    case 'fire':
+      return t('Let a pot burn in the kitchen')
+    case 'homesick':
+      return sign === '+' ? t('The Master sat with them when they missed home') : t('Missed home')
+    default:
+      return t('Was very much themselves')
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -153,7 +177,7 @@ export function HeroTracker({
               <div key={h.id} className="tracker-row">
                 <img className="px" src={heroBustUrl(h)} width={28} height={28} alt="" />
                 <div className="tracker-main">
-                  <b>{h.name}</b> <span className="muted">{h.star}★ Lv{h.xp.level}</span>
+                  <b>{h.name}</b> <span className="muted">{h.star}★ Lv{h.xp.level}</span> <MoralePips state={state} heroId={h.id} />
                   {lifeOf(h).job && <span className="chip">{JOB_ICON[lifeOf(h).job!]} {t(JOB_NAME[lifeOf(h).job!])}</span>}
                   <div className="muted small">{statusLine(state, h)}</div>
                 </div>
@@ -272,6 +296,7 @@ export function HeroProfile({
               {t('Loves {food}', { food: t(p.food) })} · {t('Hobby: {h}', { h: t(p.hobby) })} · {t('Here since day {n}', { n: accountDay(state, life.arrivedDay) })}
             </div>
             <TraitBadge hero={hero} full />
+            <MoraleBreakdown state={state} heroId={hero.id} />
             <div className="profile-now">“{speak(state, hero, inParty, 'profile')}”</div>
             <div className="muted small">{statusLine(state, hero)}</div>
             <EstateNotes state={state} hero={hero} />
@@ -354,7 +379,7 @@ export function letterReady(state: GameState, nowWorld: number, minGapWorld = 2 
   return newsy
 }
 
-export function LetterWindow({ state, onClose }: { state: GameState; onClose: () => void }) {
+export function LetterWindow({ state, onClose, onGazette }: { state: GameState; onClose: () => void; onGazette?: () => void }) {
   const since = state.life.letterReadAt
   const entries = state.life.chronicle.filter((e) => e.at > since)
   const tl = state.life.tally
@@ -410,9 +435,22 @@ export function LetterWindow({ state, onClose }: { state: GameState; onClose: ()
           </div>
         ))}
         <p className="letter-sign">— {t('Isel, keeper of the waiting room')}</p>
-        <button className="btn primary" onClick={onClose}>
-          {t('Fold the letter')}
-        </button>
+        <div className="letter-actions">
+          <button className="btn primary" onClick={onClose}>
+            {t('Fold the letter')}
+          </button>
+          {onGazette && (
+            <button
+              className="btn"
+              onClick={() => {
+                onGazette()
+                onClose()
+              }}
+            >
+              📰 {t('Read the Gazette')}
+            </button>
+          )}
+        </div>
       </div>
     </PixelWindow>
   )

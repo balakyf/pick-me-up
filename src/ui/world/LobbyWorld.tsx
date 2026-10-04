@@ -8,7 +8,7 @@ import { loginClaimed } from '../../engine/shop'
 import { toWorldTime } from '../../engine/time'
 import { masterXpToNext } from '../../engine/master'
 import { TUNING } from '../../engine/tuning'
-import { activityOf, dayOfSlot, hourOfWorld, slotOf } from '../../engine/life'
+import { activityOf, dayOfSlot, gazetteSince, hourOfWorld, incidentFor, incidentsOf, slotOf } from '../../engine/life'
 import {
   BUILDINGS,
   MAP_H,
@@ -63,6 +63,16 @@ import { placeBubble, shelterRects, toCanvasRect, type Rect } from './overlayLay
 import { useLobbyAudio } from '../audio/useLobbyAudio'
 import { PxIcon } from '../bits'
 import { fmtInt } from '../text'
+import { GazetteWindow, gazetteBadge } from '../life/Gazette'
+import { IncidentWindow } from '../life/Incidents'
+import { CampSummaryWindow } from '../life/CampSummary'
+import { towerMark } from '../life/campSummary'
+import { MoralePips } from '../life/MoralePips'
+import { drawMood, moodFor } from './moodEmote'
+
+/** The tower as the lobby last saw it (lane L): coming home changes it, and the camp
+ *  summary greets the Master. Module state: it outlives the lobby's remounts. */
+let lastTowerMark: string | null = null
 
 /**
  * The waiting room as a walkable campus (Living Lobby spec §3). The Master walks with
@@ -482,6 +492,13 @@ export function LobbyWorld({
   const [following, setFollowing] = useState<string | null>(null)
   const [board, setBoard] = useState(false)
   const [adviceOpen, setAdviceOpen] = useState(false)
+  // Lane L: the Gazette, the camp's waiting incidents, and the word on coming home.
+  const [gazetteOpen, setGazetteOpen] = useState(false)
+  /** The Gazette's span when opened from the letter (null = the usual span). */
+  const [gazetteFrom, setGazetteSince] = useState<number | null>(null)
+  const [incidentsOpen, setIncidentsOpen] = useState(false)
+  const [campOpen, setCampOpen] = useState(false)
+  const campAfterLetter = useRef(false)
   const advice = useAdvice(state)
 
   // Live world state for the game loop (never React state: 60 fps mutation).
@@ -499,7 +516,7 @@ export function LobbyWorld({
   const stateRef = useRef(state)
   stateRef.current = state
   const modalRef = useRef(false)
-  modalRef.current = openPlace !== null || dialog !== null || profile !== null || tracker || letter || board || adviceOpen
+  modalRef.current = openPlace !== null || dialog !== null || profile !== null || tracker || letter || board || adviceOpen || gazetteOpen || incidentsOpen || campOpen
 
   // Pump the world clock (timers finish, heroes live, Sanity regenerates) while in the lobby.
   useEffect(() => {
@@ -526,7 +543,17 @@ export function LobbyWorld({
         actions: [{ label: t('To the crystal'), onClick: () => onNavigate('summon') }],
       })
       store.dispatch({ type: 'GUIDE_STEP', step: 'welcome' })
-    } else if (letterReady(st, toWorldTime(Date.now()))) setLetter(true)
+    } else {
+      // Home from the tower: a word on the camp (after Isel's letter, when there is one).
+      const home = lastTowerMark !== null && lastTowerMark !== towerMark(st)
+      if (letterReady(st, toWorldTime(Date.now()))) {
+        setLetter(true)
+        campAfterLetter.current = home
+      } else if (home) setCampOpen(true)
+    }
+    return () => {
+      lastTowerMark = towerMark(stateRef.current)
+    }
   }, [])
 
   // Keep one walker per living hero; a new hero appears at their spot.
@@ -593,7 +620,10 @@ export function LobbyWorld({
       speaker: h.name,
       bust: heroBustUrl(h),
       lines: [...conversation(st, h, inParty), `— ${statusLine(st, h)}`],
-      actions: [{ label: t('Profile'), onClick: () => setProfile(h.id) }],
+      actions: [
+        ...(incidentFor(st, h.id) ? [{ label: t('Deal with it'), onClick: () => setIncidentsOpen(true) }] : []),
+        { label: t('Profile'), onClick: () => setProfile(h.id) },
+      ],
     })
   }
 
@@ -963,6 +993,7 @@ export function LobbyWorld({
         const frame = sparring ? (((Math.floor(w.time * 5) % 2) + 1) as WalkFrame) : walkFrame(hw)
         const img = heroFrameCanvas(h, hw.lying ? 'down' : hw.dir, hw.lying ? 0 : frame)
         const emote = busy ? ACTIVITY_EMOTE[busy] : null
+        const mood = moodFor(st, h)
         const isFollowed = w.follow === hw.id
         list.push({
           y: hw.lying ? py + 14 : py,
@@ -983,7 +1014,12 @@ export function LobbyWorld({
               ctx.strokeRect(Math.round(px - 7 - camX) + 0.5, Math.round(py - 1 - camY) + 0.5, 14, 4)
             }
             if (hw.bubble) drawBubble(ctx, hw.bubble.text, px - camX, py - (hw.lying ? 20 : 36) - camY, hudRects, VW, VH)
-            else if (emote && Math.floor(w.time + hw.x) % 4 < 2) {
+            else if (mood && (mood === 'storm' || !emote || Math.floor(w.time + hw.x) % 4 >= 2)) {
+              // Lane L: a storm over a hero in a camp incident (steady), a tear for grief and
+              // a spark for the inspired (taking turns with the activity's mark).
+              const e = cachedCanvas(`mood|${mood}`, () => drawMood(mood))
+              if (e) ctx.drawImage(e, Math.round(px - 5 - camX), Math.round(py - (hw.lying ? 26 : 44) - camY))
+            } else if (emote && Math.floor(w.time + hw.x) % 4 < 2) {
               const e = cachedCanvas(`emote|${emote}`, () => drawEmote(emote))
               if (e) ctx.drawImage(e, Math.round(px - 5 - camX), Math.round(py - (hw.lying ? 26 : 44) - camY))
             }
@@ -1209,6 +1245,8 @@ export function LobbyWorld({
   const followedHero = following ? state.heroes[following as OwnedHero['id']] : null
   const buildable = buildableCount(state)
   const hasLetter = letterReady(state, clock, 20 * 60_000 * TUNING.time.worldTimeFactor)
+  const pendingIncidents = incidentsOf(state).length
+  const news = gazetteBadge(state)
 
   return (
     <div className="stage" ref={stageRef}>
@@ -1263,6 +1301,16 @@ export function LobbyWorld({
             ✉ {t('Letter')}
           </button>
         )}
+        {pendingIncidents > 0 && (
+          <button className="pbtn gem pulse inc-btn" onClick={() => setIncidentsOpen(true)} title={t('Something in the camp needs your word')} aria-label={t('Camp')}>
+            ⚑ <span className="hud-lbl">{t('Camp')}</span>
+            <span className="badge">{pendingIncidents}</span>
+          </button>
+        )}
+        <button className="pbtn gz-btn" onClick={() => setGazetteOpen(true)} title={t('The Camp Gazette: the news, the fallen, and how spirits stand')} aria-label={t('Gazette')}>
+          📰 <span className="hud-lbl">{t('Gazette')}</span>
+          {news > 0 && <span className="badge">{news > 99 ? '99+' : news}</span>}
+        </button>
         {!loginClaimed(state, toWorldTime(Date.now())) && (
           <button className="pbtn gem" onClick={() => told.dispatch({ type: 'CLAIM_LOGIN' }, Date.now())} title={t('Daily login reward')}>
             <PxIcon name="daily" /> {t('Daily')}
@@ -1302,7 +1350,7 @@ export function LobbyWorld({
         <div className="hud hud-follow">
           <img className="px" src={heroBustUrl(followedHero)} width={24} height={24} alt="" />
           <span>
-            <b>{followedHero.name.split(/\s+/)[0]}</b> · {statusLine(state, followedHero)}
+            <b>{followedHero.name.split(/\s+/)[0]}</b> <MoralePips state={state} heroId={followedHero.id} /> · {statusLine(state, followedHero)}
           </span>
           <button className="pbtn sm" onClick={() => talkTo(followedHero.id)}>
             💬
@@ -1361,6 +1409,50 @@ export function LobbyWorld({
           }}
         />
       )}
+      {gazetteOpen && (
+        <GazetteWindow
+          state={state}
+          store={told}
+          since={gazetteFrom ?? undefined}
+          onClose={() => {
+            setGazetteOpen(false)
+            setGazetteSince(null)
+          }}
+          onProfile={(id) => setProfile(id)}
+          onFind={(id) => {
+            setGazetteOpen(false)
+            findHero(id)
+          }}
+        />
+      )}
+      {incidentsOpen && (
+        <IncidentWindow
+          state={state}
+          store={told}
+          onClose={() => setIncidentsOpen(false)}
+          onFind={(id) => {
+            setIncidentsOpen(false)
+            findHero(id)
+          }}
+        />
+      )}
+      {campOpen && (
+        <CampSummaryWindow
+          state={state}
+          store={told}
+          onClose={() => setCampOpen(false)}
+          onProfile={(id) => setProfile(id)}
+          onGazette={() => {
+            setCampOpen(false)
+            setGazetteOpen(true)
+          }}
+          onPlace={(place) => {
+            setCampOpen(false)
+            setFollowing(null)
+            goTo({ kind: 'prop', prop: propForPlace(place) })
+          }}
+        />
+      )}
       {tracker && <HeroTracker state={state} onClose={() => setTracker(false)} onFind={findHero} onProfile={(id) => setProfile(id)} />}
       {profile && state.heroes[profile as OwnedHero['id']] && (
         <HeroProfile state={state} store={store} heroId={profile} onClose={() => setProfile(null)} onFind={findHero} />
@@ -1371,6 +1463,15 @@ export function LobbyWorld({
           onClose={() => {
             setLetter(false)
             store.dispatch({ type: 'READ_LETTER' }, Date.now())
+            if (campAfterLetter.current) {
+              campAfterLetter.current = false
+              setCampOpen(true)
+            }
+          }}
+          onGazette={() => {
+            // Freeze the Gazette's span before the letter is marked read.
+            setGazetteSince(gazetteSince(stateRef.current))
+            setGazetteOpen(true)
           }}
         />
       )}

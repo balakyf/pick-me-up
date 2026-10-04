@@ -30,7 +30,7 @@ import { challengeOf } from '../engine/challenge'
 import { GIFTS, giftDelta } from '../engine/favor'
 import { BOUNTIES, BOUNTY, benchHeroes, bountyRefusal, decorOptions, duelPurse, duelRefusal, estateBusy, refusesDeploy, statueCost, statueRefusal } from '../engine/estate'
 import { crystalChargeLeft } from '../engine/gacha'
-import { aptitude, jobHolders, jobOpen, jobSeats } from '../engine/life'
+import { aptitude, incidentsOf, jobHolders, jobOpen, jobSeats, moraleBroken, moraleOf } from '../engine/life'
 import { completeTraining, trainingOptions } from '../engine/training'
 import { transferCost, transferRefusal, transferredLevel } from '../engine/transfer'
 import { synthesisUnlocked } from '../engine/synthesis'
@@ -89,6 +89,9 @@ export interface Profile {
   forecast: boolean
   /** Orders 2.0 (lane G): Guard against a foe's wound-up move, Unleash on a boss's turn. */
   orders: boolean
+  /** Lane L: answer camp incidents (a casual player lets them settle themselves) and keep
+   *  an eye on morale (a feast when the top of the roster is shaken). */
+  camp: boolean
 }
 
 export const PROFILES: Record<ProfileId, Profile> = {
@@ -117,6 +120,7 @@ export const PROFILES: Record<ProfileId, Profile> = {
     duels: false,
     forecast: false,
     orders: false,
+    camp: false,
   },
   engaged: {
     id: 'engaged',
@@ -142,6 +146,7 @@ export const PROFILES: Record<ProfileId, Profile> = {
     duels: true,
     forecast: true,
     orders: true,
+    camp: true,
   },
   whale: {
     id: 'whale',
@@ -167,6 +172,7 @@ export const PROFILES: Record<ProfileId, Profile> = {
     duels: true,
     forecast: true,
     orders: true,
+    camp: true,
   },
 }
 
@@ -229,7 +235,7 @@ export interface SimResult {
 }
 
 /** Commands counted as levers when the engine accepts them. */
-const LEVERS = new Set<Command['type']>(['BANQUET', 'ASSIGN_JOB', 'TRAIN_SKILL', 'SYNTHESIZE', 'TRANSFER_SKILL', 'TOWER_RAID', 'WEEKLY_TRIAL', 'HOST_DUEL', 'POST_BOUNTY', 'BUY_DECOR', 'RAISE_STATUE', 'UPGRADE_FACILITY'])
+const LEVERS = new Set<Command['type']>(['BANQUET', 'RESOLVE_INCIDENT', 'ASSIGN_JOB', 'TRAIN_SKILL', 'SYNTHESIZE', 'TRANSFER_SKILL', 'TOWER_RAID', 'WEEKLY_TRIAL', 'HOST_DUEL', 'POST_BOUNTY', 'BUY_DECOR', 'RAISE_STATUE', 'UPGRADE_FACILITY'])
 
 const REAL_DAY_MS = 86_400_000
 /** Gold in hand before a bot builds a Living Lobby workplace (surplus, not summon money). */
@@ -357,6 +363,7 @@ class Bot {
     this.rescueCaptives()
     this.feast()
     this.estate()
+    if (this.p.camp) this.camp()
     if (this.p.jobs) this.jobs()
     this.setParty()
     if (this.p.dailies) this.dailies()
@@ -552,7 +559,21 @@ class Bot {
 
   private feast(): void {
     // The hall needs a day between feasts (B8): a person waits for it rather than knocking.
-    if (this.avgSanity() < 55 && banquetWouldHelp(this.s) && banquetReady(this.s) && this.s.gold >= TUNING.lobby.banquet.gold * 3) this.try({ type: 'BANQUET' })
+    // An attentive Master (lane L) also feasts when two of the top eight are shaken or worse.
+    const troubled = this.p.camp ? this.ranked().slice(0, 8).filter((h) => { const b = moraleOf(this.s, h.id).band; return b === 'shaken' || b === 'broken' }).length : 0
+    if ((this.avgSanity() < 55 || troubled >= 2) && banquetWouldHelp(this.s) && banquetReady(this.s) && this.s.gold >= TUNING.lobby.banquet.gold * 3) this.try({ type: 'BANQUET' })
+  }
+
+  /**
+   * Lane L: the Master's word on camp incidents — separate a brawl, sit with the homesick,
+   * let a rested night owl train (send a tired one to bed).
+   */
+  private camp(): void {
+    for (const inc of incidentsOf(this.s)) {
+      const h = this.s.heroes[inc.heroIds[0]!]
+      const choice = inc.kind === 'nightTraining' && h && (h.life?.needs.energy ?? 0) >= 60 ? 'let' : 'intervene'
+      this.try({ type: 'RESOLVE_INCIDENT', id: inc.id, choice })
+    }
   }
 
   /**
@@ -773,7 +794,7 @@ class Bot {
    */
   bestFive(): OwnedHero[] {
     const fit = living(this.s)
-      .filter((h) => available(h) && h.sanity >= this.p.restSanity && !refusesDeploy(this.s, h.id))
+      .filter((h) => available(h) && h.sanity >= this.p.restSanity && !refusesDeploy(this.s, h.id) && !moraleBroken(this.s, h.id))
       .sort((a, b) => heroCp(b, this.s) - heroCp(a, this.s))
     const need = this.immunities()
     const picked: OwnedHero[] = []

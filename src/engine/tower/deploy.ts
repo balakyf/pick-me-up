@@ -15,6 +15,7 @@
  *   burnout     — burnt out and still resting (the estate)
  *   exhausted   — Sanity 0: broken down, cannot deploy
  *   rebellion   — Wary and broken: refuses the Master's order (a seeded tower draw)
+ *   disheartened — morale broken (lane L, life/morale.ts): grief and despair keep them home
  *
  * The rebellion draw is the tower's own: it is keyed on the current floor and attempt
  * (rngFor(seed, 'rebel', floor, attemptIndex, heroId)) and gated on a positive chance, so
@@ -27,6 +28,7 @@ import { TUNING } from '../tuning'
 import type { CombatUnit, DeployReason, GameState, HeroId, Line, OwnedHero } from '../types'
 import { rebellionChance } from '../favor'
 import { estateRefusal } from '../estate/deploy'
+import { moraleBroken } from '../life/morale'
 import { chance, rngFor } from '../rng/rng'
 
 export type { DeployReason } from '../types'
@@ -39,7 +41,7 @@ export interface DeployOpts {
 }
 
 /** Reasons a hero refuses the order themselves (as opposed to being away or unable). */
-export const REFUSAL_REASONS: readonly DeployReason[] = ['rebellion', 'burnout', 'bounty']
+export const REFUSAL_REASONS: readonly DeployReason[] = ['rebellion', 'burnout', 'bounty', 'disheartened']
 
 const OK: DeployCheck = { ok: true }
 const no = (reason: DeployReason): DeployCheck => ({ ok: false, reason })
@@ -79,6 +81,7 @@ export function fitToDeploy(state: GameState, hero: OwnedHero | undefined, opts:
   const estate = estateRefusal(state, hero!.id)
   if (estate !== null) return no(estate)
   if (own === 'exhausted') return no(own)
+  if (moraleBroken(state, hero!.id)) return no('disheartened')
   if (opts.rebellion !== false && rebelsNow(state, hero!)) return no('rebellion')
   return OK
 }

@@ -26,12 +26,15 @@ import {
   type Voice,
 } from '../../engine/life'
 import { hashString } from '../pixel/rand'
+import { TUNING } from '../../engine/tuning'
 import { toWorldTime } from '../../engine/time'
 import { slotOf } from '../../engine/life'
 import { t } from '../i18n/i18n'
 import { ta } from '../text'
 import { bountyStatus, estatePair, estateTopics } from './speechEstate'
 import { BOUNTIES, traumaOf } from '../../engine/estate'
+import { TRAITS, traitOf, type TraitFamily, type TraitId } from '../../engine/content/traits'
+import { hourOfSlot, isSleepHour, moraleOf } from '../../engine/life'
 
 type Vars = Record<string, string | number>
 type ByVoice = Partial<Record<Voice, string[]>> & { any?: string[] }
@@ -307,6 +310,34 @@ const TOWER: ByVoice = {
   formal: ['Floor {floor} awaits your orders, Master.'],
 }
 
+/** Traits speak (lane J's seam, lane L): what a born trait sounds like — before a floor
+ *  (in the party), awake at night, or any time. */
+const TRAIT_TALK: Record<TraitFamily, { floor?: string[]; night?: string[]; any: string[] }> = {
+  courage: {
+    floor: ['Floor {floor}? Good. I was getting restless.', 'Put me at the front on {floor}. Someone has to go first.'],
+    any: ['Scared? Always. It has never stopped me yet.'],
+  },
+  temper: { floor: ['Floor {floor} had better hit back. I am in a mood.'], any: ['Do not look at me like that. I am calm. This is calm.'] },
+  steadfast: { floor: ['Floor {floor}. I will still be standing at the end of it.'], any: ['Storms pass. I stay.'] },
+  study: { any: ['I picked up a new stance yesterday. Watch.', 'Show me once. That is usually enough.'] },
+  luck: { any: ['Found a coin in my boot again. Third this week.', 'Things just go my way. Do not ask me why.'] },
+  healer: { any: ['Let me see that cut. No, really — let me see it.', 'Everyone here is hurt somewhere. I can at least mend the part you can see.'] },
+  leader: { floor: ['I have a plan for floor {floor}, Master. The others will follow it.'], any: ['Someone has to keep this lot together. Might as well be me.'] },
+  loner: { any: ['I fight better with nobody to watch out for.', 'Crowds. Ugh.'] },
+  night: {
+    night: ['The night is when I come alive, Master. Go to sleep — I have the watch.', 'Everyone sleeps. I do not mind. The dark is honest.'],
+    any: ['Daylight is too loud.'],
+  },
+  stomach: { any: ['Is that the supper bell? That is the supper bell.', 'I could eat a horse. I have, once.'] },
+}
+
+/** Morale at the ends speaks for itself (lane L). */
+const MORALE_TALK = {
+  inspired: ['Give me the next floor, Master. Today I could climb the whole tower.', 'I feel good. Really good. Let us not waste it.'],
+  shaken: ['I keep seeing the last floor when I close my eyes.', 'I am not sure I can go up there again, Master.', 'Give me a little time. Just a little.'],
+  broken: ['I cannot. Not today. Please do not ask me.', 'Send someone else. I have nothing left.'],
+}
+
 const GRIEF_HEAVY = ['I do not want to talk. Please.', 'Not today, Master.', 'Everyone keeps saying it gets easier.', 'I keep counting the empty bunks.', 'Give me a little time.']
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -496,6 +527,16 @@ function topicsFor(state: GameState, hero: OwnedHero, inParty: boolean): Topic[]
     const tier = jobTier(life.jobXp[life.job] ?? 0)
     if (tier >= 2) out.push({ weight: 15, say: () => t('{tier} {job}, at your service.', { tier: t(TIER_NAMES[tier]!), job: t(JOB_NAME[life.job!]) }) })
   }
+  // Traits speak (lane J's seam): a Brave hero before a floor, a Night-Fighter awake at night.
+  const fam = traitOf(hero).family
+  const talk = TRAIT_TALK[fam]
+  const night = isSleepHour(hourOfSlot(state.life.slot), p) && act.kind !== 'sleep'
+  if (inParty && talk.floor) out.push({ weight: 36, say: (s) => t(choose(talk.floor!, s), baseVars) })
+  if (night && talk.night) out.push({ weight: 48, say: (s) => t(choose(talk.night!, s), baseVars) })
+  out.push({ weight: 16, say: (s) => t(choose(talk.any, s), baseVars) })
+  // Morale at the ends (lane L).
+  const band = moraleOf(state, hero.id).band
+  if (band === 'inspired' || band === 'shaken' || band === 'broken') out.push({ weight: band === 'inspired' ? 30 : 55, say: (s) => t(choose(MORALE_TALK[band], s)) })
   out.push(...estate)
   return out
 }
@@ -763,7 +804,8 @@ export function chronicleLine(state: GameState, e: ChronicleEntry): string {
       return t('{a} forged a masterwork: {item}!', { a: A, item: e.detail ?? t('blade') })
     case 'jobTier': {
       const [job, tier] = (e.detail ?? 'cook:1').split(':')
-      return ta('{a} is now a {tier} {job}.', { a: A, tier: t(TIER_NAMES[Number(tier)] ?? 'Novice'), job: t(JOB_NAME[job as JobId] ?? job ?? '') })
+      // A job tier-up teaches the Master too (lane B's seam): the chronicle says so.
+      return `${ta('{a} is now a {tier} {job}.', { a: A, tier: t(TIER_NAMES[Number(tier)] ?? 'Novice'), job: t(JOB_NAME[job as JobId] ?? job ?? '') })} ${t('The Master learned from it (+{xp} XP).', { xp: TUNING.lobby.master.xpPerJobTier })}`
     }
     case 'death':
       return e.detail === 'synthesis'
@@ -803,6 +845,68 @@ export function chronicleLine(state: GameState, e: ChronicleEntry): string {
       return t('{a} taught themselves {skill} in the yard.', { a: A, skill: t(SKILLS[e.detail ?? '']?.name ?? e.detail ?? '') })
     case 'jealous':
       return t('{a} feels overlooked — the Master only has eyes for {b}.', { a: A, b: B })
+    case 'guilt':
+      return t('{a} can’t stop thinking about the last words with {b}. They were not kind ones.', { a: A, b: B })
+    case 'consoled':
+      return t('{b} sat with {a} through the worst of it.', { a: A, b: B })
+    case 'anniversary': {
+      const weeks = Number(e.detail ?? '1')
+      const list = e.heroIds.slice(1).map((id) => shortName(state, id)).join(', ')
+      return weeks === 1
+        ? t('A week since {a} fell. {list} went back to the grave.', { a: A, list })
+        : t('{n} weeks since {a} fell. {list} went back to the grave.', { n: weeks, a: A, list })
+    }
+    case 'incident':
+      return incidentLine(state, e)
+  }
+}
+
+/** A camp incident, as the chronicle tells it (lane L). */
+export function incidentLine(state: GameState, e: ChronicleEntry): string {
+  const [a, b] = e.heroIds
+  const A = a ? shortName(state, a) : ''
+  const B = b ? shortName(state, b) : ''
+  const [kind, how, where] = (e.detail ?? '').split(':')
+  const place = where ? placeName(where as LifePlace) : t('Great Hall')
+  switch (kind) {
+    case 'brawl':
+      return how === 'separated'
+        ? t('{a} and {b} came to blows at the {place}. You stepped in and made them talk.', { a: A, b: B, place })
+        : how === 'cleared'
+          ? t('{a} and {b} fought it out at the {place} — and shook hands after. It cleared the air.', { a: A, b: B, place })
+          : t('{b} and {a} fought at the {place}; {a} came off worse, and it settled nothing.', { a: A, b: B, place })
+    case 'sworn':
+      return t('{a} and {b} swore to watch each other’s backs on every floor.', { a: A, b: B })
+    case 'night':
+      return how === 'bed' ? t('{a} snuck out to train at night; you sent them to bed.', { a: A }) : t('{a} trained alone in the yard by moonlight.', { a: A })
+    case 'fire':
+      return t('A pot left on in the kitchen: {a} watched half the pantry burn.', { a: A })
+    case 'homesick':
+      return how === 'comforted' ? t('{a} was homesick. You sat with them a while.', { a: A }) : t('{a} was homesick, and spent the evening alone.', { a: A })
+    case 'trait':
+      return traitMomentLine(state, e, A, B, how ?? '')
+    default:
+      return t('Something happened in the camp.')
+  }
+}
+
+function traitMomentLine(state: GameState, e: ChronicleEntry, A: string, B: string, traitId: string): string {
+  const fam = TRAITS[traitId as TraitId]?.family
+  switch (fam) {
+    case 'courage':
+      return t('{a} gave the party a rousing word before the next floor.', { a: A })
+    case 'leader':
+      return e.heroIds.length > 1 ? t('{a} drilled everyone in the yard until they dropped.', { a: A }) : t('{a} ran a drill in the yard.', { a: A })
+    case 'luck':
+      return t('{a} found a forgotten purse behind the stables. Lucky, as ever.', { a: A })
+    case 'healer':
+      return B ? t('{a} sat up with {b} and tended to them.', { a: A, b: B }) : t('{a} tended to the sick.', { a: A })
+    case 'stomach':
+      return t('{a} raided the pantry. Nobody is surprised.', { a: A })
+    case 'night':
+      return B ? t('{a} kept the night watch with {b}.', { a: A, b: B }) : t('{a} kept the night watch alone.', { a: A })
+    default:
+      return t('{a} was very much themselves today.', { a: A })
   }
 }
 
@@ -833,7 +937,29 @@ export function groupedChronicle(state: GameState, entries: ChronicleEntry[]): s
   if (close.length) out.push(t('Now inseparable: {list}.', { list: close.join(', ') }))
   if (rivals.length) out.push(t('Bad blood between {list}.', { list: rivals.join(', ') }))
   if (arrivals.length > 1) out.push(t('{n} newcomers came through the crystal: {list}.', { n: arrivals.length, list: arrivals.join(', ') }))
-  const grouped = new Set(['friends', 'closeFriends', 'rivals', 'grudge', 'death', 'stalled', ...(arrivals.length > 1 ? ['arrival'] : [])])
+  // Lane L: comfort and job mastery read as one line each when there is more than one.
+  const consoled = entries.filter((e) => e.kind === 'consoled')
+  const comforters = [...new Set(consoled.map((e) => t('{b} for {a}', { a: shortName(state, e.heroIds[0]!), b: shortName(state, e.heroIds[1]!) })))]
+  if (consoled.length > 1) out.push(t('Comfort in grief: {list}.', { list: comforters.join(', ') }))
+  const tiers = entries.filter((e) => e.kind === 'jobTier')
+  if (tiers.length > 1) {
+    const list = tiers.map((e) => {
+      const [job, tier] = (e.detail ?? 'cook:1').split(':')
+      return `${shortName(state, e.heroIds[0]!)} (${t(TIER_NAMES[Number(tier)] ?? 'Novice')} ${t(JOB_NAME[job as JobId] ?? job ?? '')})`
+    })
+    out.push(t('Rising in their trades: {list} — each a lesson for the Master (+{xp} XP).', { list: list.join(', '), xp: tiers.length * TUNING.lobby.master.xpPerJobTier }))
+  }
+  const grouped = new Set([
+    'friends',
+    'closeFriends',
+    'rivals',
+    'grudge',
+    'death',
+    'stalled',
+    ...(arrivals.length > 1 ? ['arrival'] : []),
+    ...(consoled.length > 1 ? ['consoled'] : []),
+    ...(tiers.length > 1 ? ['jobTier'] : []),
+  ])
   // The same news twice (three shouting matches between the same pair) reads once, counted.
   const lines: string[] = []
   const count = new Map<string, number>()

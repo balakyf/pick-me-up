@@ -510,6 +510,11 @@ export type MemoryKind =
   | 'comforted'
   | 'burnout'
   | 'selfTaught'
+  // Lane L (morale, grief, incidents)
+  | 'guilt'
+  | 'consoled'
+  | 'anniversary'
+  | 'incident'
 
 export interface Memory {
   kind: MemoryKind
@@ -582,6 +587,11 @@ export type ChronicleKind =
   | 'bounty'
   | 'jealous'
   | 'selfTaught'
+  // Lane L: a rival's guilt, a friend's comfort, a week since a grave, a camp incident
+  | 'guilt'
+  | 'consoled'
+  | 'anniversary'
+  | 'incident'
 
 export interface ChronicleEntry {
   /** World-time ms. */
@@ -654,6 +664,26 @@ export interface LifeState {
   guide: { tutorialPull: boolean; done: string[] }
   /** The crystal's charge: Advanced pulls not yet recharged, as of world-day `day` (the last pull). */
   crystal: { day: number; advancedPulls: number }
+  /** Camp incidents waiting on the Master's word (lane L). Absent on older saves — read
+   *  through life/incidents.incidentsOf(). */
+  incidents?: CampIncident[]
+}
+
+/** Small things that happen in the camp (lane L): some wait on the Master's word. */
+export type IncidentKind = 'brawl' | 'sworn' | 'nightTraining' | 'kitchenFire' | 'homesick' | 'trait'
+
+/** An incident waiting on the Master: intervene, or let it be (it settles itself at `untilSlot`). */
+export interface CampIncident {
+  /** `i<slot>` — at most one incident is born per life slot. */
+  id: string
+  kind: IncidentKind
+  heroIds: HeroId[]
+  /** World-time it began. */
+  at: number
+  /** The life slot at which it settles itself ('let it be'). */
+  untilSlot: number
+  /** Free detail (a place). */
+  detail?: string
 }
 
 /** Where a captured hero is held and what it costs to get them back. */
@@ -1462,6 +1492,8 @@ export type DeployReason =
   | 'burnout'
   | 'exhausted'
   | 'rebellion'
+  /** Morale broken (lane L): grief, despair and fear have taken the fight out of them. */
+  | 'disheartened'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Content templates (authored data → built into Heroes / CombatUnits)
@@ -1659,3 +1691,5 @@ export type Command =
   | { type: 'HOST_DUEL'; a: HeroId; b: HeroId }
   /** The Master talked to a hero (attention; comfort for the withdrawn). */
   | { type: 'TALK_TO_HERO'; heroId: HeroId }
+  /** Lane L: answer a camp incident — step in, or let it be. */
+  | { type: 'RESOLVE_INCIDENT'; id: string; choice: 'intervene' | 'let' }

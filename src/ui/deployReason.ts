@@ -26,6 +26,8 @@ export function deployReasonText(reason: DeployReason | 'empty'): string {
       return t('has broken down (Sanity 0)')
     case 'rebellion':
       return t('refuses your order (Wary and broken)')
+    case 'disheartened':
+      return t('is disheartened (morale broken)')
     case 'empty':
       return t('empty slot')
   }
@@ -52,6 +54,8 @@ export function deployReasonFix(reason: DeployReason | 'empty'): string {
       return t('Let them rest, or hold a banquet.')
     case 'rebellion':
       return t('Win back their trust: rest, gifts, a banquet.')
+    case 'disheartened':
+      return t('Lift their spirits: rest, friends at the Tavern, the Memorial, a banquet.')
     case 'empty':
       return t('Put a hero in the slot.')
   }

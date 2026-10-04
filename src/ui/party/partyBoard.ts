@@ -7,11 +7,12 @@ import type { Element, GameState, HeroClass, HeroId, Line, OwnedHero, Star } fro
 import { canFight, heroCp } from '../../engine/scout'
 import { shownStar } from '../../engine/shop'
 import { estateBusy } from '../../engine/estate/deploy'
+import { moraleBroken } from '../../engine/life/morale'
 
 /** Below this Sanity the scout won't suggest a hero (mirrors suggestParty's default). */
 export const WEARY_BELOW = 40
 
-export type HeroStatus = 'ready' | 'weary' | 'broken' | 'training' | 'promoting' | 'away' | 'captive' | 'bounty' | 'burnout'
+export type HeroStatus = 'ready' | 'weary' | 'broken' | 'training' | 'promoting' | 'away' | 'captive' | 'bounty' | 'burnout' | 'disheartened'
 
 /** What a hero is up to, as the board shows it. Only 'ready' and 'weary' can fight. */
 export function heroStatus(h: OwnedHero, state?: GameState): HeroStatus {
@@ -23,6 +24,7 @@ export function heroStatus(h: OwnedHero, state?: GameState): HeroStatus {
   if (h.promotion !== null) return 'promoting'
   if (h.training !== null) return 'training'
   if (h.sanity <= 0) return 'broken'
+  if (state && h.alive && moraleBroken(state, h.id)) return 'disheartened'
   if (h.sanity < WEARY_BELOW) return 'weary'
   return 'ready'
 }

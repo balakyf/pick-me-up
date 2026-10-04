@@ -13,6 +13,7 @@ import type { CombatUnit, DerivedStats, EquipmentItem, GameState, Line, OwnedHer
 import { SKILLS } from '../content'
 import { moraleAdjust } from '../estate/deploy'
 import { buildCombatUnit } from './unit'
+import { moraleStatMult } from '../life/morale'
 
 /** The account context true CP reads (inventory for gear; the estate for withdrawal). */
 export type CpContext = Pick<GameState, 'inventory'> & Partial<Pick<GameState, 'estate'>>
@@ -30,15 +31,22 @@ export function heroUnitFull(ctx: CpContext, hero: OwnedHero, line: Line = 'fron
  * by CP every render (n·log n reads) and the lobby re-renders every second; building a
  * full combat unit per comparison made that a hitch on big rosters.
  */
-const CP_MEMO = new WeakMap<OwnedHero, { inventory: CpContext['inventory']; withdrawn: boolean; cp: number }>()
+const CP_MEMO = new WeakMap<OwnedHero, { inventory: CpContext['inventory']; withdrawn: boolean; morale: number; cp: number }>()
 
-/** True CP: gear, passives, engraving %, favor, the Sanity penalty and withdrawal included. */
+/** The morale multiplier a full context gives the hero (lane L; 1 for a partial context). */
+function moraleKey(ctx: CpContext, hero: OwnedHero): number {
+  const st = ctx as Partial<GameState>
+  return st.heroes?.[hero.id] && st.life && st.meta ? moraleStatMult(ctx as GameState, hero.id) : 1
+}
+
+/** True CP: gear, passives, engraving %, favor, the Sanity penalty, withdrawal and morale included. */
 export function heroCpFull(ctx: CpContext, hero: OwnedHero): number {
   const withdrawn = !!ctx.estate?.trauma?.[hero.id]?.withdrawn
+  const morale = ctx.estate ? moraleKey(ctx, hero) : 1
   const hit = CP_MEMO.get(hero)
-  if (hit !== undefined && hit.inventory === ctx.inventory && hit.withdrawn === withdrawn) return hit.cp
+  if (hit !== undefined && hit.inventory === ctx.inventory && hit.withdrawn === withdrawn && hit.morale === morale) return hit.cp
   const cp = heroUnitFull(ctx, hero).cp
-  CP_MEMO.set(hero, { inventory: ctx.inventory, withdrawn, cp })
+  CP_MEMO.set(hero, { inventory: ctx.inventory, withdrawn, morale, cp })
   return cp
 }
 
