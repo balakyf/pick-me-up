@@ -836,6 +836,9 @@ export function stepLife(state: GameState, nowWorld: number): GameState {
     if (born) pending = [...pending, born]
     gold = purse.gold
     pantry = purse.pantry
+    // Consoling and incidents move Sanity after step 3's clamp: clamp again before the next
+    // slot reads it, or an overshoot carries over in a long advance (and not in short ones).
+    for (const w of work) w.sanity = clamp(w.sanity, 0, TUNING.lobby.sanityMax)
   }
 
   // Prune the weakest pairs past the cap (the dead first: their bonds live on in memories).

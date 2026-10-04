@@ -499,6 +499,8 @@ export function LobbyWorld({
   const [incidentsOpen, setIncidentsOpen] = useState(false)
   const [campOpen, setCampOpen] = useState(false)
   const campAfterLetter = useRef(false)
+  /** The letter led to the Gazette: the camp report waits for the Gazette to close. */
+  const campAfterGazette = useRef(false)
   const advice = useAdvice(state)
 
   // Live world state for the game loop (never React state: 60 fps mutation).
@@ -1417,10 +1419,15 @@ export function LobbyWorld({
           onClose={() => {
             setGazetteOpen(false)
             setGazetteSince(null)
+            if (campAfterGazette.current) {
+              campAfterGazette.current = false
+              setCampOpen(true)
+            }
           }}
           onProfile={(id) => setProfile(id)}
           onFind={(id) => {
             setGazetteOpen(false)
+            campAfterGazette.current = false
             findHero(id)
           }}
         />
@@ -1471,6 +1478,9 @@ export function LobbyWorld({
           onGazette={() => {
             // Freeze the Gazette's span before the letter is marked read.
             setGazetteSince(gazetteSince(stateRef.current))
+            // The letter closes right after: hold the camp report until the Gazette is read.
+            campAfterGazette.current = campAfterLetter.current
+            campAfterLetter.current = false
             setGazetteOpen(true)
           }}
         />

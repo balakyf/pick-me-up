@@ -48,6 +48,22 @@ describe('camp incidents (lane L)', () => {
     }
   })
 
+  it('Sanity moved after the needs clamp (consoling, incidents) is clamped before the next slot', () => {
+    // Seed 22 over six days overshot 100 in a long advance only (review of lane L).
+    const s = roster(22)
+    const long = stepLife(s, 6 * DAY)
+    let short = s
+    for (let k = 1; k <= 6 * TUNING.life.slotsPerDay; k++) short = stepLife(short, k * SLOT)
+    expect(short).toEqual(long)
+  })
+
+  it('a fallen hero’s incident is gone at once, not at the next slot', () => {
+    const { s, inc, a } = brawling(55)
+    const fallen = { ...s, heroes: { ...s.heroes, [a]: { ...s.heroes[a]!, alive: false } } }
+    expect(incidentsOf(s).some((i) => i.id === inc.id)).toBe(true)
+    expect(incidentsOf(fallen)).toEqual([])
+  })
+
   it('an unanswered incident settles itself when its time is up — the same as letting it be', () => {
     const { s, inc } = brawling(54)
     const byClock = stepLife(s, (inc.untilSlot + 1) * SLOT)
@@ -81,7 +97,7 @@ describe('camp incidents (lane L)', () => {
     expect(() => reduce(s, { type: 'RESOLVE_INCIDENT', id: 'nope', choice: 'let' })).toThrow(/^resolveIncident: no such incident/)
     expect(() => reduce(s, { type: 'RESOLVE_INCIDENT', id: inc.id, choice: 'maybe' as 'let' })).toThrow(/^resolveIncident: unknown choice/)
     const dead = { ...s, heroes: { ...s.heroes, [a]: { ...s.heroes[a]!, alive: false } } }
-    expect(() => reduce(dead, { type: 'RESOLVE_INCIDENT', id: inc.id, choice: 'intervene' })).toThrow(/^resolveIncident: a hero involved has fallen/)
+    expect(() => reduce(dead, { type: 'RESOLVE_INCIDENT', id: inc.id, choice: 'intervene' })).toThrow(/^resolveIncident: no such incident/) // forgotten with its hero
     // …and the life clock forgets an incident whose hero fell.
     expect(incidentsOf(stepLife(dead, (s.life.slot + 1) * SLOT))).toHaveLength(0)
   })

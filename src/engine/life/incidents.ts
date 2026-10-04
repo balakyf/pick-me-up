@@ -28,9 +28,10 @@ import { INCIDENT as I } from './moraleTuning'
 
 const R = TUNING.life.relation
 
-/** The incidents waiting on the Master (none on older saves). */
+/** The incidents waiting on the Master (none on older saves). A fallen hero's incident is
+ *  forgotten at once, not at the next life slot. */
 export function incidentsOf(state: GameState): CampIncident[] {
-  return state.life.incidents ?? []
+  return (state.life.incidents ?? []).filter((i) => i.heroIds.every((id) => state.heroes[id]?.alive))
 }
 
 /** The pending incident a hero is caught up in, if any. */

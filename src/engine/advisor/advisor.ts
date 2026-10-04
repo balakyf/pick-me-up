@@ -6,7 +6,7 @@
  */
 import { TUNING } from '../tuning'
 import type { Command, EquipmentSlot, GameState, HeroId, JobId, OwnedHero } from '../types'
-import { JOBS, aptitude, jobFeeling, jobHolders, jobOpen, jobSeats, bondOf, relationsOf, lifeOf } from '../life'
+import { JOBS, aptitude, jobFeeling, jobHolders, jobOpen, jobSeats, bondOf, relationsOf, lifeOf, moraleOf } from '../life'
 import { canPromote, canAfford } from '../promotion'
 import { banquetRefusal, banquetWouldHelp } from '../kitchen'
 import { dailyUnlocked, dailyAttemptsLeft } from '../daily'
@@ -127,6 +127,8 @@ export function adviceSignature(state: GameState): string {
         h.skills.length,
         `${h.gift.last ?? ''}${h.gift.streak}`,
         refusesDeploy(state, h.id) ? 'r' : '',
+        // fitToDeploy reads morale (lane L): a hero leaving 'broken' must refresh the advice.
+        moraleOf(state, h.id).band,
       ].join(':'),
     )
   }
