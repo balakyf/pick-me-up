@@ -65,6 +65,8 @@ import { advanceTime, toWorldTime } from '../time'
 import { addMemory, assignJob, dayOfSlot, lifeOf, lifeReact, resolveIncident, slotOf, type IncidentOutcome } from '../life'
 import { afterFloor, resolveBonusRoom, runRaid, runWeeklyTrial } from '../challenge'
 import { buyDecor, estateReact, hostDuel, postBounty, raiseStatue, refocusDrill, talkToHero } from '../estate'
+import { newCycle, relive } from '../endgame'
+import type { ReliveDifficulty } from '../types'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Guards
@@ -121,6 +123,8 @@ export function reduce(state: GameState | null, cmd: Command, nowWorld: number =
   if (cmd.type === 'NEW_ACCOUNT') {
     return createAccount(cmd.seed, { now: cmd.now })
   }
+  // Lane O: a New Cycle is a fresh world — the old roster's reactions don't apply to it.
+  if (cmd.type === 'NEW_CYCLE') return reduceCore(state, cmd, nowWorld)
   // Quanton Life: the waiting room reacts to what changed (graves, grief, memories).
   if (cmd.type === 'ATTEMPT_FLOOR') {
     const current = advanceTime(requireState(state, cmd.type), nowWorld)
@@ -318,6 +322,13 @@ function reduceCore(state: GameState | null, cmd: Command, nowWorld: number): Ga
     case 'EQUIP_BEST':
       return equipBest(current, cmd.heroId)
 
+    // Lane O: the endgame.
+    case 'NEW_CYCLE':
+      return newCycle(current)
+
+    case 'RELIVE_FLOOR':
+      return relive(current, cmd.floor, cmd.difficulty, cmd.heroIds, nowWorld).state
+
     default: {
       // Exhaustiveness guard: a new Command variant must be handled here.
       const exhaustive: never = cmd
@@ -465,6 +476,17 @@ export function towerRaidWithResult(
 export function weeklyTrialWithResult(state: GameState | null, heroIds: HeroId[], nowReal = 0) {
   const nowWorld = toWorldTime(nowReal)
   return runWeeklyTrial(advanceTime(requireState(state, 'WEEKLY_TRIAL'), nowWorld), heroIds, nowWorld)
+}
+
+/**
+ * Lane O: like dispatching RELIVE_FLOOR, but also returning the memory's outcome (its battle,
+ * the truths recovered) for the UI. Runs the same catch-up and reactions `reduce` does.
+ */
+export function reliveWithResult(state: GameState | null, cmd: { floor: number; difficulty: ReliveDifficulty; heroIds: HeroId[] }, nowReal = 0) {
+  const nowWorld = toWorldTime(nowReal)
+  const full: Command = { type: 'RELIVE_FLOOR', ...cmd }
+  const r = relive(advanceTime(requireState(state, 'RELIVE_FLOOR'), nowWorld), cmd.floor, cmd.difficulty, cmd.heroIds, nowWorld)
+  return { state: estateReact(state, lifeReact(state, r.state, full, nowWorld), full, nowWorld), outcome: r.outcome }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

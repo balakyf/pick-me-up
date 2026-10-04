@@ -1057,6 +1057,9 @@ export interface GameState {
   challenge: ChallengeState
   /** Gold sinks once the buildings stand: statues, decorations, bounties (schema v11). */
   estate: EstateState
+  /** Lane O: the endgame — the F90 fate, Reliving, the New Cycle and its legends. Optional:
+   *  a save without it reads the defaults through `endgameOf` (no schema bump). */
+  endgame?: EndgameState
 }
 
 export interface SaveEnvelope {
@@ -1695,3 +1698,55 @@ export type Command =
   | { type: 'RESOLVE_INCIDENT'; id: string; choice: 'intervene' | 'let' }
   /** Lane N: put the best free gear on a hero, every slot at once (equipment/loadout). */
   | { type: 'EQUIP_BEST'; heroId: HeroId }
+  /** Lane O: begin a New Cycle on a harder world, once this world's fate is sealed at F90. */
+  | { type: 'NEW_CYCLE' }
+  /** Lane O: relive a cleared anchor (a memory: nobody dies) at a chosen difficulty, to
+   *  recover the truths missed there. */
+  | { type: 'RELIVE_FLOOR'; floor: number; difficulty: ReliveDifficulty; heroIds: HeroId[] }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Lane O · the endgame (optional on GameState; read through endgame/endgameOf)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** How the F90 decision went: the world ended (a plain clear) or was saved (Subvert). */
+export type WorldFate = 'ended' | 'saved'
+
+/** How hard a relived memory is: dimmer than it was, as it was, or more vivid. */
+export type ReliveDifficulty = 'faded' | 'true' | 'vivid'
+
+/** One world the Master finished, kept when a New Cycle begins. */
+export interface CycleRecord {
+  /** 0 = the first world. */
+  cycle: number
+  fate: WorldFate
+  /** World-day the fate was sealed. */
+  day: number
+  highestCleared: number
+  fallen: number
+  survivors: number
+  truths: number
+  masterLevel: number
+}
+
+/** A grave carried into a later world: one of the fallen of an earlier cycle. */
+export interface Legend extends FallenRecord {
+  /** The cycle they fell in. */
+  cycle: number
+  /** A statue stood for them in the Memorial. */
+  statue: boolean
+}
+
+export interface EndgameState {
+  /** The cycle this world is (0 = the first world). */
+  cycle: number
+  /** The worlds finished before this one, oldest first. */
+  history: CycleRecord[]
+  /** The fallen of earlier worlds, carried as legends. */
+  legends: Legend[]
+  /** This world's fate, as the F90 clear sealed it (absent before). */
+  fate?: { kind: WorldFate; day: number; truths: number }
+  /** Reliving this world-week: attempts spent. */
+  relive?: { week: number; used: number }
+  /** Truths recovered by reliving (ids; also in tower.hiddenFound). */
+  recovered?: string[]
+}

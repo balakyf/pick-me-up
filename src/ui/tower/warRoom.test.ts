@@ -130,9 +130,13 @@ describe('the war room’s words', () => {
     expect(st.need).toBe(TUNING.lifecycle.subvertTruths)
     expect(st.found).toBe(0)
     expect(st.missed).toBe(HIDDEN_OBJECTIVES.filter((h) => h.floor <= 30).length)
-    expect(st.reachable).toBe(HIDDEN_OBJECTIVES.filter((h) => h.floor > 30 && h.floor <= 90).length >= st.need)
+    // Lane O: a truth missed on a floor behind the Master can be relived (Memories of the
+    // Tower), so the refusal stays within reach until the fate is sealed.
+    expect(st.reachable).toBe(true)
     const late = { ...s, tower: { ...s.tower, currentFloor: 90, highestCleared: 89 } }
-    expect(truthStanding(late).reachable).toBe(false)
+    expect(truthStanding(late).reachable).toBe(true)
+    const sealed = { ...late, tower: { ...late.tower, worldEnded: true } }
+    expect(truthStanding(sealed).reachable).toBe(false)
     const all = { ...late, tower: { ...late.tower, hiddenFound: HIDDEN_OBJECTIVES.map((h) => h.id) } }
     expect(truthStanding(all).qualified).toBe(true)
   })
