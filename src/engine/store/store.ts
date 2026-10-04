@@ -57,7 +57,7 @@ import { playFloor } from '../tower'
 import { banquet } from '../kitchen'
 import { startPromotion, skipPromotion } from '../promotion'
 import { synthesize } from '../synthesis'
-import { craftEquipment, equipItem, unequipItem } from '../equipment'
+import { craftEquipment, equipBest, equipItem, unequipItem } from '../equipment'
 import { startUpgrade, skipFacility } from '../facilities'
 import { startTraining, skipTraining } from '../training'
 import { attemptDaily, type DailyResult } from '../daily'
@@ -313,6 +313,10 @@ function reduceCore(state: GameState | null, cmd: Command, nowWorld: number): Ga
     // Lane L: the Master's word on a camp incident.
     case 'RESOLVE_INCIDENT':
       return resolveIncident(current, cmd.id, cmd.choice, INCIDENT_HELPERS).state
+
+    // Lane N: the best free gear on a hero, every slot at once.
+    case 'EQUIP_BEST':
+      return equipBest(current, cmd.heroId)
 
     default: {
       // Exhaustiveness guard: a new Command variant must be handled here.

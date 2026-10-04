@@ -1693,3 +1693,5 @@ export type Command =
   | { type: 'TALK_TO_HERO'; heroId: HeroId }
   /** Lane L: answer a camp incident — step in, or let it be. */
   | { type: 'RESOLVE_INCIDENT'; id: string; choice: 'intervene' | 'let' }
+  /** Lane N: put the best free gear on a hero, every slot at once (equipment/loadout). */
+  | { type: 'EQUIP_BEST'; heroId: HeroId }

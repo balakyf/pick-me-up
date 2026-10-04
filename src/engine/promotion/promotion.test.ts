@@ -14,8 +14,8 @@ import {
 import { createAccount } from '../account'
 import { levelCapForStar } from '../stats'
 import { makeSeed } from '../rng'
-import { SKILLS } from '../content'
-import { isConditionalSkill, learnableSkillIds } from '../skills'
+import { CLASS_SKILL, SKILLS } from '../content'
+import { isConditionalSkill, promotionSkillPool } from '../skills'
 import { TUNING } from '../tuning'
 import type { GameState, OwnedHero, HeroId, Star, Element, MaterialId } from '../types'
 
@@ -201,12 +201,13 @@ describe('completePromotion', () => {
     expect(granted(done)).toEqual([{ id: 'power_strike', level: 1, xp: 0 }])
   })
 
-  it('grants a learnable skill once the class skill is known', () => {
+  it('grants a pool skill once the class skill is known — never another class’s signature (lane N)', () => {
     const hero = cappedHero({ skills: [{ id: 'power_strike', level: 1, xp: 0 }] })
     const done = completePromotion(hero, makeSeed(7))
     const extra = granted(done).filter((s) => s.id !== 'power_strike')
     expect(extra.length).toBe(1)
-    expect(learnableSkillIds()).toContain(extra[0]!.id)
+    expect(promotionSkillPool('warrior', new Set(['power_strike']))).toContain(extra[0]!.id)
+    expect(Object.values(CLASS_SKILL)).not.toContain(extra[0]!.id)
     expect(extra[0]).toMatchObject({ level: 1, xp: 0 })
   })
 
@@ -217,8 +218,8 @@ describe('completePromotion', () => {
     }
   })
 
-  it('no-ops the skill grant when the hero already knows every learnable skill', () => {
-    const all = learnableSkillIds().map((id) => ({ id, level: 2, xp: 1 }))
+  it('no-ops the skill grant when the hero already knows every skill in their pool', () => {
+    const all = ['power_strike', ...promotionSkillPool('warrior', new Set(['power_strike']))].map((id) => ({ id, level: 2, xp: 1 }))
     const done = completePromotion(cappedHero({ skills: all }), makeSeed(7))
     expect(granted(done)).toEqual(all)
   })

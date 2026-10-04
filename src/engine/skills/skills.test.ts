@@ -17,8 +17,9 @@ import {
   foldBattleSkills,
   promotionSkillPool,
   isPassive,
+  isConditionalSkill,
 } from './skills'
-import { SKILLS, SKILL_MERGES } from '../content'
+import { CLASS_SKILL, SKILLS, SKILL_MERGES } from '../content'
 import { TUNING } from '../tuning'
 import type { HeroId, HeroSkill } from '../types'
 
@@ -238,9 +239,27 @@ describe('achievements', () => {
 })
 
 describe('promotion skill pool', () => {
-  it('offers the class skill first, then the learnable pool', () => {
+  it('offers the class skill first, then a class-aware pool', () => {
     expect(promotionSkillPool('archer', new Set())).toEqual(['thunder_volley'])
     expect(promotionSkillPool('archer', new Set(['thunder_volley']))).not.toContain('thunder_volley')
-    expect(promotionSkillPool(null, new Set())).toEqual(learnableSkillIds())
+  })
+
+  it('never offers another class’s signature, a merge recipe or a level unlock (lane N)', () => {
+    const signatures = Object.values(CLASS_SKILL)
+    const merging = SKILL_MERGES.flatMap((m) => [...m.inputs, m.result])
+    for (const cls of ['warrior', 'spearman', 'thief', 'archer', 'mage', null] as const) {
+      const known = new Set(cls ? [CLASS_SKILL[cls]] : [])
+      const pool = promotionSkillPool(cls, known)
+      // Enough for the ceremony's three offers.
+      expect(pool.length).toBeGreaterThanOrEqual(TUNING.ceremony.skillOffers)
+      for (const id of pool) {
+        expect(signatures).not.toContain(id)
+        expect(merging).not.toContain(id)
+        expect(isConditionalSkill(id)).toBe(false)
+        expect(SKILLS[id]).toBeDefined()
+      }
+    }
+    // A classless hero is never handed a class's signature either.
+    expect(promotionSkillPool(null, new Set()).some((id) => signatures.includes(id))).toBe(false)
   })
 })

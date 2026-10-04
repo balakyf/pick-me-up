@@ -43,6 +43,7 @@ import { PendingReplayHost } from './tower/PendingReplayHost'
 import { clearPendingReplay } from './tower/pendingReplay'
 import { SceneTransition } from './transition/SceneTransition'
 import { SaveErrorNotice } from './qol/SaveErrorNotice'
+import { HeroSheetHost } from './hero/HeroSheetHost'
 
 type View = 'lobby' | WorldView
 
@@ -372,6 +373,8 @@ export function App() {
       {demoLog && <BattleScene log={demoLog} state={state} onDone={() => setDemoLog(null)} />}
       {/* A floor attempt the Master never saw the end of (a reload mid-battle) plays first (B14). */}
       <PendingReplayHost key={`${state.accountId}|${epoch}`} state={state} />
+      {/* Lane N: the one hero sheet (and the promotion planner), opened from anywhere. */}
+      <HeroSheetHost state={state} store={store} />
       {/* A promotion that completed plays its ceremony (lane J) — never over a climb. */}
       <PromotionCeremonyHost key={`pc|${state.accountId}|${epoch}`} state={state} hold={view === 'tower' || demoLog !== null} />
       {/* Lane K: a pixel curtain between scenes; the save-error notice (store.getSaveError). */}

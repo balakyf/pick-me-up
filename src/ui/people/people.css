@@ -26,7 +26,8 @@
 
 /* Party Board: the trait sits under the name in the list view. */
 .pb-row .trait-chip { margin-left: 6px; vertical-align: middle; }
-@media (max-width: 720px) { .pb-row .trait-chip { display: none; } }
+/* Phones keep the chip (lane N): the name row wraps it under the name instead of hiding it. */
+@media (max-width: 720px) { .pb-row .trait-chip { margin-left: 0; max-width: 100%; } }
 
 /* Registry filter bar */
 .roster-filters { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 0 0 12px; }

@@ -262,12 +262,26 @@ export function learnableSkillIds(registry: SkillRegistry = SKILLS): string[] {
 
 /**
  * The skills a promotion may grant this hero, in priority order: its class's signature
- * skill first (when it lacks it), else every learnable skill it lacks.
+ * skill first (when it lacks it). After that the pool is class-aware (lane N): never another
+ * class's signature (an archer is not offered Arcane Burst), so it holds any learnable skill
+ * that is no class's signature, then the trained skills anyone can learn — leaving out merge
+ * recipes (inputs and results stay the Training Center's) and the skills levels unlock on
+ * their own (a class's kit arrives with its levels). A classless hero draws from the same
+ * shared pool (its class, and its signature, come at 3★).
  */
 export function promotionSkillPool(heroClass: HeroClass | null, known: ReadonlySet<string>): string[] {
   const signature = heroClass !== null ? CLASS_SKILL[heroClass] : undefined
   if (signature !== undefined && !known.has(signature)) return [signature]
-  return learnableSkillIds().filter((id) => !known.has(id))
+  const signatures = new Set<string>(Object.values(CLASS_SKILL))
+  const merging = new Set<string>(SKILL_MERGES.flatMap((m) => [...m.inputs, m.result]))
+  const unlocked = new Set<string>(SKILL_UNLOCKS.map((u) => u.skillId))
+  const trained = Object.keys(SKILLS).filter((id) => SKILLS[id]!.trainable && !merging.has(id) && !unlocked.has(id))
+  const out: string[] = []
+  for (const id of [...learnableSkillIds(), ...trained]) {
+    if (known.has(id) || signatures.has(id) || out.includes(id)) continue
+    out.push(id)
+  }
+  return out
 }
 
 /** What the post-combat fold needs to know beyond the casts. */

@@ -17,6 +17,7 @@ import { t } from '../i18n/i18n'
 import { JOB_NAME, shortName, tradeName } from './speech'
 import { JOB_ICON } from './lifeWindows'
 import { ta } from '../text'
+import { openPromotionPlanner } from '../hero/sheetBus'
 
 const BUILDING: Record<string, string> = {
   forge: 'Forge',
@@ -65,7 +66,7 @@ export function phrase(state: GameState, a: Advice): Tip {
     case 'fillParty':
       return { advice: a, icon: '⚔', text: t('{n} party slots are empty, and rested heroes are waiting.', { n: a.open }), cta: t('Open the party board') }
     case 'promote':
-      return { advice: a, icon: '⬆', heroId: a.heroId, text: t('{name} has hit their level cap, and you have the materials to promote them.', { name: n(a.heroId) }), cta: t('Promote') }
+      return { advice: a, icon: '⬆', heroId: a.heroId, text: t('{name} has hit their level cap, and you have the materials to promote them.', { name: n(a.heroId) }), cta: t('Promote…') }
     case 'banquet':
       return {
         advice: a,
@@ -190,6 +191,11 @@ export function AdviceWindow({
     setErr(null)
     if (a.actions.length === 0) {
       if (a.place) onPlace(a.place)
+      return
+    }
+    // Lane N: a promotion is a ceremony with choices, so "Promote" opens the planner.
+    if (a.kind === 'promote') {
+      openPromotionPlanner(a.heroId)
       return
     }
     try {

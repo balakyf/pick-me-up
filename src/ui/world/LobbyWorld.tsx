@@ -39,7 +39,9 @@ import {
 import { iselLines } from './lines'
 import { activityKey, isOffsite, spotFor, type Spot } from './heroAgent'
 import { accountDay, conversation, pairLines, speak, statusLine } from '../life/speech'
-import { HeroProfile, HeroTracker, LetterWindow, letterReady } from '../life/lifeWindows'
+import { HeroTracker, LetterWindow, letterReady } from '../life/lifeWindows'
+import { HeroSheet } from '../hero/HeroSheet'
+import { closeHeroSheet, registerSheetFinder } from '../hero/sheetBus'
 import { FirstSteps } from '../life/FirstSteps'
 import { AdviceWindow, useAdvice } from '../life/Advisor'
 import { drawBuildingSign, drawZoneSign, ZONE_SIGN } from './roofSigns'
@@ -1237,8 +1239,11 @@ export function LobbyWorld({
   function findHero(id: string) {
     setTracker(false)
     setProfile(null)
+    closeHeroSheet()
     setFollowing(id)
   }
+  // A hero sheet opened from a facility picker can find its hero on the map too (lane N).
+  useEffect(() => registerSheetFinder((id) => findHero(id)), [])
 
   const ml = state.meta.masterLevel
   const xpPct = (state.meta.masterXp / masterXpToNext(ml)) * 100
@@ -1462,7 +1467,7 @@ export function LobbyWorld({
       )}
       {tracker && <HeroTracker state={state} onClose={() => setTracker(false)} onFind={findHero} onProfile={(id) => setProfile(id)} />}
       {profile && state.heroes[profile as OwnedHero['id']] && (
-        <HeroProfile state={state} store={store} heroId={profile} onClose={() => setProfile(null)} onFind={findHero} />
+        <HeroSheet state={state} store={store} heroId={profile} onClose={() => setProfile(null)} onFind={findHero} />
       )}
       {letter && (
         <LetterWindow

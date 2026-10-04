@@ -1,10 +1,10 @@
 import { useState } from 'react'
-import type { GameState, HeroId, OwnedHero } from '../../engine/types'
+import type { GameState, OwnedHero } from '../../engine/types'
 import type { Store } from '../../engine/store'
 import { traitOf } from '../../engine/content/traits'
 import { HeroCard } from '../HeroCard'
-import { HeroBond } from '../metaPanels'
 import { cpOf } from '../bits'
+import { openHeroSheet } from './sheetBus'
 import { t } from '../i18n/i18n'
 import { traitFilterOptions } from '../people/traitText'
 import '../people/people.css'
@@ -24,8 +24,7 @@ export function matchesTraitFilter(hero: OwnedHero, filter: TraitFilter): boolea
 }
 
 // ── Roster ───────────────────────────────────────────────────────────────────
-export function RosterScreen({ state, store }: { state: GameState; store?: Store }) {
-  const [sel, setSel] = useState<HeroId | null>(null)
+export function RosterScreen({ state }: { state: GameState; store?: Store }) {
   const [trait, setTrait] = useState<TraitFilter>('all')
   const everyone = roster(state).sort((a, b) => {
     if (a.alive !== b.alive) return a.alive ? -1 : 1
@@ -38,7 +37,7 @@ export function RosterScreen({ state, store }: { state: GameState; store?: Store
     <div className="screen">
       <h2>{t('Roster')}</h2>
       <p className="sub">
-        {everyone.length === 1 ? t('1 hero') : t('{n} heroes', { n: everyone.length })} · {t('{n} living · click a card for full stats.', { n: living })}
+        {everyone.length === 1 ? t('1 hero') : t('{n} heroes', { n: everyone.length })} · {t('{n} living · click a card for the hero sheet.', { n: living })}
       </p>
       <div className="roster-filters">
         <label>
@@ -65,21 +64,9 @@ export function RosterScreen({ state, store }: { state: GameState; store?: Store
       {heroes.length === 0 && <div className="empty muted">{t('No hero has this trait yet.')}</div>}
       <div className="grid cards">
         {heroes.map((h) => (
-          <HeroCard
-            key={h.id}
-            hero={h}
-            selected={sel === h.id}
-            showStats={sel === h.id}
-            masterLevel={state.meta.masterLevel}
-            onClick={() => setSel(sel === h.id ? null : h.id)}
-          />
+          <HeroCard key={h.id} hero={h} masterLevel={state.meta.masterLevel} onClick={() => openHeroSheet(h.id)} />
         ))}
       </div>
-      {sel && store && state.heroes[sel] && (
-        <div className="roster-bond">
-          <HeroBond hero={state.heroes[sel]!} state={state} store={store} />
-        </div>
-      )}
     </div>
   )
 }

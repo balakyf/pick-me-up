@@ -19,7 +19,7 @@ import { canPromote, canAfford, promotionPreview } from '../engine/promotion'
 import { canUpgrade } from '../engine/facilities'
 import { dailyUnlocked, dailyAttemptsLeft, worldDayIndex } from '../engine/daily'
 import { banquetReady, banquetWouldHelp } from '../engine/kitchen'
-import { boundElsewhere, canCraft, equippedItemIds } from '../engine/equipment'
+import { bestLoadout, canCraft } from '../engine/equipment'
 import { floorPower, buildEncounter, fitCount } from '../engine/tower'
 import { heroCpFull } from '../engine/unit/trueCp'
 import { forecastFloor } from '../engine/scout/forecast'
@@ -235,7 +235,7 @@ export interface SimResult {
 }
 
 /** Commands counted as levers when the engine accepts them. */
-const LEVERS = new Set<Command['type']>(['BANQUET', 'RESOLVE_INCIDENT', 'ASSIGN_JOB', 'TRAIN_SKILL', 'SYNTHESIZE', 'TRANSFER_SKILL', 'TOWER_RAID', 'WEEKLY_TRIAL', 'HOST_DUEL', 'POST_BOUNTY', 'BUY_DECOR', 'RAISE_STATUE', 'UPGRADE_FACILITY'])
+const LEVERS = new Set<Command['type']>(['EQUIP_BEST', 'BANQUET', 'RESOLVE_INCIDENT', 'ASSIGN_JOB', 'TRAIN_SKILL', 'SYNTHESIZE', 'TRANSFER_SKILL', 'TOWER_RAID', 'WEEKLY_TRIAL', 'HOST_DUEL', 'POST_BOUNTY', 'BUY_DECOR', 'RAISE_STATUE', 'UPGRADE_FACILITY'])
 
 const REAL_DAY_MS = 86_400_000
 /** Gold in hand before a bot builds a Living Lobby workplace (surplus, not summon money). */
@@ -515,22 +515,8 @@ class Bot {
     while (canCraft(this.s) && spareStones() && this.s.inventory.length < 15 && this.s.gold >= 20_000 && guard++ < 3) {
       this.try({ type: 'CRAFT_EQUIPMENT', slot: slots[this.s.inventory.length % 3]! })
     }
-    // Put the best free item of each slot on the strongest heroes.
-    const top = this.bestFive()
-    for (const slot of slots) {
-      for (const h of top) {
-        const worn = equippedItemIds(this.s)
-        const cur = this.s.heroes[h.id]!.equipment[slot]
-        const curGrade = cur ? (this.s.inventory.find((i) => i.id === cur)?.grade ?? 'E') : null
-        const free = this.s.inventory
-          .filter((i) => i.slot === slot && !worn.has(i.id) && !boundElsewhere(this.s, i, h.id))
-          .sort((a, b) => gradeRank(b.grade) - gradeRank(a.grade))[0]
-        if (free && (curGrade === null || gradeRank(free.grade) > gradeRank(curGrade))) {
-          if (cur) this.try({ type: 'UNEQUIP_ITEM', heroId: h.id, slot })
-          this.try({ type: 'EQUIP_ITEM', heroId: h.id, itemId: free.id })
-        }
-      }
-    }
+    // Put the best free gear on the strongest heroes (lane N: one EQUIP_BEST per hero).
+    for (const h of this.bestFive()) if (bestLoadout(this.s, h.id).length > 0) this.try({ type: 'EQUIP_BEST', heroId: h.id })
   }
 
   private gifts(): void {
@@ -1109,11 +1095,6 @@ export function retreatTick(log: CombatLog): number | null {
     if (e.kind === 'death' && maxHp.has(e.unitId)) return e.tick + 1
   }
   return null
-}
-
-const GRADES = ['E', 'D', 'C', 'B', 'A', 'S', 'SS', 'SSS']
-function gradeRank(g: string): number {
-  return GRADES.indexOf(g)
 }
 
 /** Called with the state just before each floor attempt and what the attempt did (for analysis tools). */
