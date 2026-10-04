@@ -68,23 +68,35 @@ export function storyBeats(log: CombatLog, byId: Record<string, CombatUnitInit>)
     out.set(i, line)
     return true
   }
+  /** Put a line on the first free beat from `i` on (several speakers can share a cue). */
+  const putFrom = (i: number, line: StoryLine | null): boolean => {
+    if (!line) return false
+    let at = Math.min(i, log.events.length - 1)
+    while (out.has(at) && at < log.events.length - 1) at++
+    return put(at, line)
+  }
+  const defeated = new Set<string>()
   // Entrances and defeats ride lane I's shows. The entrance comes as the title card lifts
   // (the beat after it): the card names the boss, then the boss speaks — and on a phone the
   // box never covers the card.
   for (const [i, show] of bossShows(log, byId)) {
     if (show.kind === 'intro') {
+      // Every speaker of the show gets its entrance, one beat after another.
       for (const id of show.units) {
         const u = byId[id]
-        if (u && BOSS_LINES[u.templateId ?? '']) {
-          put(Math.min(i + 1, log.events.length - 1), bossLine('entrance', u, BOSS_LINES[u.templateId!]!.entrance))
-          break
-        }
+        if (u && BOSS_LINES[u.templateId ?? '']) putFrom(i + 1, bossLine('entrance', u, BOSS_LINES[u.templateId!]!.entrance))
       }
     } else if (show.kind === 'finisher') {
       const u = byId[show.unitId]
-      if (u) put(i, bossLine('defeat', u, BOSS_LINES[u.templateId ?? '']?.defeat))
+      if (u && put(i, bossLine('defeat', u, BOSS_LINES[u.templateId ?? '']?.defeat))) defeated.add(u.id)
     }
   }
+  // A lieutenant or a beast has no finisher show: its defeat line rides its death.
+  log.events.forEach((e: CombatEvent, i) => {
+    if (e.kind !== 'death' || defeated.has(e.unitId)) return
+    const u = byId[e.unitId]
+    if (u && putFrom(i, bossLine('defeat', u, BOSS_LINES[u.templateId ?? '']?.defeat))) defeated.add(u.id)
+  })
   const told = new Map<string, number>()
   let firstAct = -1
   log.events.forEach((e: CombatEvent, i) => {

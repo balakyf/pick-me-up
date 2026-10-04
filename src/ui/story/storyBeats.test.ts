@@ -58,6 +58,33 @@ function f20(outcome: CombatLog['outcome'] = 'win'): CombatLog {
 }
 
 describe('boss lines in battle (lane M)', () => {
+  it('every speaker of one arrival gets its entrance, and a lieutenant or a beast its defeat (review of lane M)', () => {
+    const log: CombatLog = {
+      seed: 35,
+      floor: 35,
+      encounterContext: 'tower',
+      unitsInit: [unit('h1', 'hero'), unit('jg', 'enemy', tpl('jewel_guardian')), unit('kr', 'enemy', tpl('kraken'))],
+      events: [
+        { seq: 0, tick: 0, kind: 'battle-start', heroIds: ['h1'], enemyIds: ['jg', 'kr'] },
+        { seq: 1, tick: 1, kind: 'act', actorId: 'h1', skillId: 'basic', targetId: 'kr' },
+        { seq: 2, tick: 1, kind: 'hit', actorId: 'h1', targetId: 'kr', amount: 1000, crit: false, hpAfter: 0 },
+        { seq: 3, tick: 1, kind: 'death', unitId: 'kr' },
+        { seq: 4, tick: 2, kind: 'act', actorId: 'h1', skillId: 'basic', targetId: 'jg' },
+        { seq: 5, tick: 2, kind: 'hit', actorId: 'h1', targetId: 'jg', amount: 1000, crit: false, hpAfter: 0 },
+        { seq: 6, tick: 2, kind: 'death', unitId: 'jg' },
+        { seq: 7, tick: 3, kind: 'end', outcome: 'win' },
+      ],
+      outcome: 'win',
+      rngDraws: 0,
+    }
+    const lines = [...storyBeats(log, byIdOf(log)).values()]
+    const said = (kind: string, id: string) => lines.some((l) => l.kind === kind && l.unitId === id)
+    expect(said('defeat', 'kr')).toBe(true)
+    expect(said('defeat', 'jg')).toBe(true)
+    // Both arrive in one show: neither entrance is dropped.
+    expect(lines.filter((l) => l.kind === 'entrance').map((l) => l.unitId).sort()).toEqual(['jg', 'kr'])
+  })
+
   it('Halgiraf speaks as he arrives, as he winds up (the first few), as he takes flight, and as he falls', () => {
     const log = f20()
     const lines = storyBeats(log, byIdOf(log))

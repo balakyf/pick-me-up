@@ -377,7 +377,7 @@ export function TowerScreen({ state: live, store }: { state: GameState; store: S
       <SceneTransition channel="tower" scene={combat ? 'battle' : showResult && pending ? 'results' : 'tower'} />
       {outcome && !replay && <EventOutcomeCard outcome={outcome} onReplay={setReplay} onClose={() => setOutcome(null)} />}
       {replay && <BattleScene log={replay} state={live} onDone={() => setReplay(null)} />}
-      {actCard && !combat && <ActCard key={actCard.id} act={actCard} story={actCard.story} calm={reduced} onClose={() => setActCard(null)} />}
+      {actCard && !(combat || showResult || confirm || aiming || outcome || replay) && <ActCard key={actCard.id} act={actCard} story={actCard.story} calm={reduced} onClose={() => setActCard(null)} />}
     </div>
   )
 }
