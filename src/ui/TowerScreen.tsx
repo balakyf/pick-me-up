@@ -31,6 +31,12 @@ import { useReducedMotion } from './motion'
 import { AnchorBriefing } from './story/AnchorBriefing'
 import { ActCard } from './story/ActCard'
 import { actCardDue, actKey, storyStep } from './story/storyText'
+import { FillerBriefing } from './tower/FillerBriefing'
+import { missionName } from './tower/missionBrief'
+import { CoachCard } from './qol/CoachTip'
+import { battleLesson, coachStep, coachTip, type Lesson } from './qol/coach'
+import { coachTipsOn } from './qol/settings'
+import type { LessonId } from '../engine/content/missions'
 import './tower/tower.css'
 
 const MAX_FLOOR = TUNING.tower.sliceTopFloor
@@ -80,6 +86,9 @@ export function TowerScreen({ state: live, store }: { state: GameState; store: S
   const [aiming, setAiming] = useState<{ subvert?: boolean } | null>(null)
   const [orders, setOrders] = useState<BattleOrders | null>(null)
   const [confirm, setConfirm] = useState<Confirm | null>(null)
+  // Lane P: the lesson a battle may teach as it happens, and the ones it showed (latched after).
+  const [battleCoach, setBattleCoach] = useState<Lesson | null>(null)
+  const coachShown = useRef<LessonId[]>([])
   // The tower as it stood when the party went in (until the results are dismissed).
   const [frozen, setFrozen] = useState<GameState | null>(null)
   const state = frozen ?? live
@@ -125,7 +134,7 @@ export function TowerScreen({ state: live, store }: { state: GameState; store: S
     const out: Record<string, string> = {}
     for (const u of [...(preview?.waves.flatMap((w) => w.units) ?? []), ...(preview?.allies ?? [])]) {
       out[u.id] = t(u.name)
-      if (u.targetTag !== undefined && out[u.targetTag] === undefined) out[u.targetTag] = t(u.name)
+      if (u.targetTag !== undefined && out[u.targetTag] === undefined) out[u.targetTag] = missionName(u.targetTag, t(u.name))
     }
     return out
   }, [preview])
@@ -165,7 +174,14 @@ export function TowerScreen({ state: live, store }: { state: GameState; store: S
   function fight(ballista: number | undefined, subvert?: boolean) {
     setAiming(null)
     setErr(null)
+    // Lane P: the coach's tip on the board is read as the party goes in (latched once), and a
+    // lesson whose moment comes in battle rides along (latched when the fight is over).
+    const before = store.getState()!
+    const tip = coachTip({ state: before, floor: current, encounter: preview }, coachTipsOn())
+    if (tip !== null) store.dispatch({ type: 'GUIDE_STEP', step: coachStep(tip.id) })
     const pre = store.getState()!
+    setBattleCoach(battleLesson(pre, coachTipsOn()))
+    coachShown.current = []
     // An opening Focus is one of the battle's orders; only aim it at someone on this floor.
     const initial = openingOrders.filter((o) => o.kind !== 'focus' || names[o.enemyId] !== undefined)
     const first = initial.length > 0 ? initial : undefined
@@ -234,6 +250,8 @@ export function TowerScreen({ state: live, store }: { state: GameState; store: S
   }
 
   function combatDone() {
+    for (const id of coachShown.current) store.dispatch({ type: 'GUIDE_STEP', step: coachStep(id) })
+    coachShown.current = []
     setCombat(null)
     setShowResult(true)
   }
@@ -334,6 +352,9 @@ export function TowerScreen({ state: live, store }: { state: GameState; store: S
           )}
           {/* Lane M: before an anchor, who is up there, why it matters, and Isel's word. */}
           {!hasEvent && <AnchorBriefing state={state} />}
+          {/* Lane P: a filler floor's briefing (the mission, what wins, what loses), and Isel's tip. */}
+          {!hasEvent && <FillerBriefing state={state} encounter={preview} names={names} />}
+          {!hasEvent && !combat && !showResult && <CoachCard state={live} store={store} floor={current} encounter={preview} />}
         </CommandPanel>
 
         <section className="war-floors" ref={listRef} aria-label={t('Floors')}>
@@ -371,7 +392,15 @@ export function TowerScreen({ state: live, store }: { state: GameState; store: S
           onCancel={() => setAiming(null)}
         />
       )}
-      {combat && <BattleScene log={combat} state={live} onDone={combatDone} orders={orders ?? undefined} />}
+      {combat && (
+        <BattleScene
+          log={combat}
+          state={live}
+          onDone={combatDone}
+          orders={orders ?? undefined}
+          coach={{ lesson: battleCoach, onSeen: (id) => coachShown.current.push(id) }}
+        />
+      )}
       {showResult && pending && <ResultsScreen result={pending} state={live} onContinue={resultDone} />}
       {/* Lane K: an iris into the battle and into its results. */}
       <SceneTransition channel="tower" scene={combat ? 'battle' : showResult && pending ? 'results' : 'tower'} />

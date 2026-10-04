@@ -3,6 +3,7 @@ import { PROFILES, simulate } from './sim'
 import { forecastFloor } from '../engine/scout/forecast'
 import { ANCHORS } from '../engine/content'
 import { TUNING } from '../engine/tuning'
+import { missionDirective } from './missionSense'
 
 /** The war room taught to the bots (lane C): the engaged and the whale read the crystal. */
 describe('forecast-reading bots', () => {
@@ -19,6 +20,8 @@ describe('forecast-reading bots', () => {
       const f = forecastFloor(before, {
         ballista: ANCHORS[floor]?.minigame === 'ballista' ? 0.6 : undefined,
         subvert: floor === 90 && before.tower.hiddenFound.length >= TUNING.lifecycle.subvertTruths ? true : undefined,
+        // Lane P: the bot reads the forecast for its plan, the mission's free mark and protect included.
+        focus: missionDirective(before),
       })!
       if (f.winPct < 70 || f.expectedDeaths >= 1.5) grim++
     })

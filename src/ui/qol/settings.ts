@@ -28,6 +28,8 @@ export interface Settings {
   uiScale: number
   /** 'auto' follows the OS preference; 'on' / 'off' override it. */
   reducedMotion: MotionPref
+  /** Isel's coach tips (lane P: the teaching curve) in the war room and in battle. */
+  coachTips: boolean
 }
 
 export const SETTINGS_KEY = 'pmu.settings'
@@ -50,6 +52,7 @@ export const DEFAULT_SETTINGS: Readonly<Settings> = Object.freeze({
   textSpeed: 'normal',
   uiScale: 1,
   reducedMotion: 'auto',
+  coachTips: true,
 })
 
 function storage(): Storage | null {
@@ -79,6 +82,7 @@ export function sanitizeSettings(raw: unknown): Settings {
     textSpeed: oneOf(r.textSpeed, TEXT_SPEEDS, d.textSpeed),
     uiScale: oneOf(r.uiScale, UI_SCALES as readonly number[], d.uiScale),
     reducedMotion: oneOf(r.reducedMotion, MOTION_PREFS, d.reducedMotion),
+    coachTips: bool(r.coachTips, d.coachTips),
   }
 }
 
@@ -148,6 +152,11 @@ export function charsPerTick(speed: TextSpeed): number {
 /** The screen shake / camera punch toggle, for the battle juice. */
 export function screenShakeOn(): boolean {
   return current.screenShake
+}
+
+/** Isel's coach tips (the teaching curve), for the coach's cards. */
+export function coachTipsOn(): boolean {
+  return current.coachTips
 }
 
 /** Full-screen and skill flashes (lightning in the lobby, the skill flare, the wave flash). */

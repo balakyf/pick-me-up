@@ -184,7 +184,7 @@ describe('the war room', () => {
     const sheet = container.querySelector('.enter-sheet.world')!
     expect(sheet).not.toBeNull()
     expect(sheet.textContent).toContain('ends the world beneath the tower')
-    expect(sheet.textContent).toContain('You know 7 of the tower’s 10 truths.')
+    expect(sheet.textContent).toContain(`You know 7 of the tower’s ${HIDDEN_OBJECTIVES.length} truths.`)
     expect(button('Subvert ✦')).toBeDefined()
     expect(button('Clear it — end the world')).toBeDefined()
     // The Subvert it offers comes with its own odds (the Herald without her aegis).

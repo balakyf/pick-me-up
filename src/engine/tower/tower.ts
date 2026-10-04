@@ -38,9 +38,10 @@ import type {
   SkillProgress,
   DeployReason,
 } from '../types'
-import { buildCombatUnit, buildEnemyUnit, buildAllyUnit } from '../unit'
+import { buildCombatUnit, buildEnemyUnit, buildAllyUnit, resolveSkills } from '../unit'
 import { runBattle } from '../combat'
 import { ENEMY_TEMPLATES, ALLY_TEMPLATES, ANCHORS, SKILLS, HIDDEN_OBJECTIVES, actForFloor } from '../content'
+import { fillerMissionPlan, escortTemplateFor, fillerSurviveTicks, MISSION_LABEL, MISSION_TAGS, MISSION_TUNING, type FillerMissionPlan } from '../content/missions'
 import { applyXp, xpToNext } from '../stats'
 import { clampSanity } from '../kitchen'
 import { releaseGear } from '../equipment'
@@ -336,7 +337,12 @@ export function buildFillerEncounter(
   worldMult: number,
   rng: Rng,
   extraLevels = 0,
-): { waves: EnemyWave[]; mission: Mission } {
+  seed?: Seed,
+): { waves: EnemyWave[]; mission: Mission; allies?: CombatUnit[] } {
+  // Lane P: a floor with a mission table draws its mission there (content/missions.ts); the
+  // loop, the Wall and the floors past it keep the mix below.
+  const plan = seed !== undefined ? fillerMissionPlan(seed, floor) : null
+  if (plan !== null) return buildMissionFiller(floor, worldMult, rng, extraLevels, plan)
   const pool = fillerPoolForFloor(floor)
   const budget = floorPower(floor, worldMult)
   const lowerBound = budget * (1 - T.budgetTolerance)
@@ -437,6 +443,156 @@ function fillWave(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Filler missions (lane P): the act's mission table, built on the same budget fill
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** One budget-filled wave (elite when the unit cap is hit short of budget), ids `e${floor}_w${w}_${i}`. */
+function fillMissionWave(
+  pool: EnemyTemplate[],
+  budget: number,
+  level: number,
+  floor: number,
+  wave: number,
+  rng: Rng,
+): { units: CombatUnit[]; mult: number; rng: Rng } {
+  const lowerBound = budget * (1 - T.budgetTolerance)
+  let mult = 1
+  let fill = fillWave(pool, budget, lowerBound, level, floor, rng, mult)
+  for (let i = 0; i < 400 && fill.units.length >= T.fillerMaxUnits && fill.totalCp < lowerBound; i++) {
+    mult *= T.elitePowerStep
+    fill = fillWave(pool, budget, lowerBound, level, floor, rng, mult)
+  }
+  const units = wave === 0 ? fill.units : fill.units.map((u, i) => ({ ...u, id: `e${floor}_w${wave}_${i}` }))
+  return { units, mult, rng: fill.rng }
+}
+
+/** The strongest unit of a wave (the first on a tie): a hunt's leader, a vault's keeper. */
+function strongestIndex(units: readonly CombatUnit[]): number {
+  let best = 0
+  for (let i = 1; i < units.length; i++) if (units[i]!.cp > units[best]!.cp) best = i
+  return best
+}
+
+/**
+ * A filler floor with a mission from its act's table (content/missions.ts). The enemies are
+ * the same budget fill as ever (the 'floor' stream); the mission shapes it:
+ *  - Subjugation: annihilate · Survival: outlast the act's bell · Escape: reach the exit;
+ *  - Defense: hold MISSION_TUNING.defenseWaves waves, each a share of the budget;
+ *  - Hunt: the strongest foe is the marked leader (a few levels up, one wound-up move);
+ *  - Escort: a hero-side NPC to keep alive while the party walks it out (a lighter fill);
+ *  - Seizure: the last foe carries the cache (on F47, the strongest keeps Priasis's vault).
+ * A teaching floor may be gentle (a lighter fill), set its first foe, and give one foe a
+ * big move. PURE.
+ */
+function buildMissionFiller(
+  floor: number,
+  worldMult: number,
+  rng: Rng,
+  extraLevels: number,
+  plan: FillerMissionPlan,
+): { waves: EnemyWave[]; mission: Mission; allies?: CombatUnit[] } {
+  const MT = MISSION_TUNING
+  const teach = plan.teaching
+  const pool = fillerPoolForFloor(floor)
+  const level = mobLevel(floor, worldMult) + extraLevels
+  const share = (teach?.gentle ? MT.teachingBudget : 1) * (plan.kind === 'escort' ? MT.escortBudget : 1)
+  const waveCount = plan.kind === 'defense' ? MT.defenseWaves : 1
+  const waveShare = plan.kind === 'defense' ? MT.defenseWaveShare : 1
+  const budget = floorPower(floor, worldMult) * share * waveShare
+
+  let r = rng
+  const waves: EnemyWave[] = []
+  let leadMult = 1
+  for (let w = 0; w < waveCount; w++) {
+    const fill = fillMissionWave(pool, budget, level, floor, w, r)
+    r = fill.rng
+    if (w === 0) leadMult = fill.mult
+    waves.push({ units: fill.units })
+  }
+  const first = waves[0]!.units
+  type More = { levelBonus?: number; targetTag?: string; line?: Line }
+  const opts = (more: More = {}) => ({ ...(leadMult !== 1 ? { powerMult: leadMult } : {}), ...more })
+  /** Rebuild unit `i` of the first wave from `templateId` (same id), with extra options. */
+  const rebuild = (i: number, templateId: string, more: More = {}) => {
+    const template = ENEMY_TEMPLATES[templateId]
+    if (template === undefined || first[i] === undefined) return
+    first[i] = buildEnemyUnit(template, level, first[i]!.id, opts(more))
+  }
+  const giveMove = (i: number, skillId: string) => {
+    const u = first[i]
+    if (u === undefined || u.skills.some((s) => s.id === skillId)) return
+    first[i] = { ...u, skills: [...u.skills, ...resolveSkills([skillId], SKILLS)] }
+  }
+
+  // A teaching floor's lead stands at the back of the first wave (it lives long enough to
+  // show what it does): the big move's carrier, the hunt's leader, the stunning soldier.
+  const leadAt = first.length - 1
+  if (teach?.lead !== undefined) rebuild(leadAt, teach.lead, { line: 'back', ...(teach.bigMove !== undefined && teach.levelBonus !== undefined ? { levelBonus: teach.levelBonus } : {}) })
+
+  const label = MISSION_LABEL[plan.kind]
+  let mission: Mission
+  let allies: CombatUnit[] | undefined
+  switch (plan.kind) {
+    case 'subjugation':
+      mission = { type: label, objectives: [{ kind: 'annihilate' }], timer: null }
+      break
+    case 'survival': {
+      const ticks = fillerSurviveTicks(floor)
+      mission = { type: label, objectives: [{ kind: 'survive', ticks }], timer: ticks }
+      break
+    }
+    case 'escape':
+      mission = { type: label, objectives: [{ kind: 'reach', distance: T.escapeDistance }], timer: null }
+      break
+    case 'defense':
+      mission = { type: label, objectives: [{ kind: 'defend', waves: waves.length }], timer: null }
+      break
+    case 'hunt': {
+      // The leader hangs back behind its own (a mark reaches it from the first blow).
+      const i = teach?.lead !== undefined ? leadAt : strongestIndex(first)
+      rebuild(i, first[i]!.templateId!, { levelBonus: teach?.levelBonus ?? MT.huntLevelBonus, targetTag: MISSION_TAGS.leader, line: 'back' })
+      giveMove(i, MT.leaderMove)
+      mission = { type: label, objectives: [{ kind: 'defeat', targetTag: MISSION_TAGS.leader }], timer: null }
+      break
+    }
+    case 'seizure': {
+      const tag = teach?.tag ?? MISSION_TAGS.cache
+      if (tag === MISSION_TAGS.cache) {
+        const i = first.length - 1
+        first[i] = { ...first[i]!, targetTag: tag }
+      } else {
+        const i = strongestIndex(first)
+        rebuild(i, first[i]!.templateId!, { levelBonus: teach?.levelBonus ?? 0, targetTag: tag })
+      }
+      mission = { type: label, objectives: [{ kind: 'acquire', targetTag: tag }], timer: null }
+      break
+    }
+    case 'escort': {
+      // The NPC stands at the floor's base level (a scarred loop or an elite fill doesn't
+      // make it sturdier), at the back.
+      const escort = buildAllyUnit(escortTemplateFor(floor), mobLevel(floor, worldMult), `a${floor}_0`, {
+        line: 'back',
+        targetTag: MISSION_TAGS.escort,
+        levelBonus: MT.escortLevelBonus,
+      })
+      allies = [escort]
+      mission = {
+        type: label,
+        objectives: [
+          { kind: 'reach', distance: MT.escortDistance },
+          { kind: 'protect', targetTag: MISSION_TAGS.escort },
+        ],
+        timer: null,
+      }
+      break
+    }
+  }
+  if (teach?.bigMove !== undefined) giveMove(teach.lead !== undefined ? leadAt : strongestIndex(first), teach.bigMove)
+
+  return { waves, mission, ...(allies !== undefined ? { allies } : {}) }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Encounter (public)
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -459,7 +615,7 @@ export function buildEncounter(state: GameState, floor: number, focus?: FocusDir
   const built: { waves: EnemyWave[]; mission: Mission; allies?: CombatUnit[]; reserves?: Record<string, CombatUnit[]> } =
     anchor !== undefined
       ? buildScaledAnchor(anchor, floor, worldMult, scar)
-      : buildFillerEncounter(floor, worldMult, rng, scar)
+      : buildFillerEncounter(floor, worldMult, rng, scar, seed)
 
   const enc: Encounter = {
     floor,

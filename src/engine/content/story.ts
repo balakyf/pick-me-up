@@ -33,6 +33,8 @@
  * where the UI fills them.
  */
 
+import type { FillerMissionKind } from './missions'
+
 // ── Act cards ───────────────────────────────────────────────────────────────
 
 export interface ActStory {
@@ -268,6 +270,125 @@ export const ANCHOR_STORY: Record<number, AnchorStory> = {
     why: 'She made the game and its law. She will call back every anchor you ever beat.',
     isel: 'I was made to keep your waiting room, Master, not to see this. Go and end it.',
     aftermath: 'Tell falls. The pen that wrote the tower lies still.',
+  },
+}
+
+// ── Filler floors (lane P) ──────────────────────────────────────────────────
+
+/**
+ * The floors between the anchors: a one-line briefing per act and mission (the war room
+ * shows it over the objective), a few lines of flavour to pick from, and Isel's word through
+ * the crystal as some of those fights begin. The UI picks a line per floor from the account
+ * seed, so every Master's stair reads a little differently.
+ */
+export interface FillerStory {
+  /** A briefing line by mission (the kinds in the act's mission table). */
+  missions: Readonly<Partial<Record<FillerMissionKind, string>>>
+  /** Flavour: what the party finds on the stair. */
+  lines: readonly string[]
+  /** Isel through the crystal as a fight begins (not every floor). */
+  events: readonly string[]
+}
+
+/** One per act with a mission table, keyed by act id. */
+export const FILLER_STORY: Record<string, FillerStory> = {
+  prairie: {
+    missions: {
+      subjugation: 'Goblins and wolves on the stair. Clear them out and keep climbing.',
+      survival: 'A goblin warband is coming up the stair. Hold until it breaks on you.',
+      hunt: 'A raider chief drives the goblins. Drop him and the rest scatter.',
+    },
+    lines: [
+      'The grass grows right up the steps here. Something has been grazing on it.',
+      'Wolf tracks, goblin tracks, and one set of boots that stops halfway.',
+      'A burnt fence post marks where a farm used to be. The tower kept the fence.',
+    ],
+    events: ['They are only goblins, Master. That is how it always starts.', 'Watch the front line. The wolves always go for it first.'],
+  },
+  ruins: {
+    missions: {
+      subjugation: 'Skeletons and soldiers of a fallen kingdom still hold this hall.',
+      survival: 'Assassins in the dark. Keep your backs together until the bell.',
+      escort: 'A refugee is hiding in the rubble. Walk them out; the soldiers want no witnesses.',
+      hunt: 'A captain of the dead kingdom gives the orders here. Cut him down.',
+    },
+    lines: [
+      'A throne room with no throne. The banners are still hanging.',
+      'Someone scratched a tally of days into the wall. It stops at forty.',
+      'The bells here ring on their own. Nobody alive pulls the ropes.',
+    ],
+    events: ['Somebody is still hiding up here, Master. Listen.', 'These soldiers are still guarding a king who died a long time ago.'],
+  },
+  swamp: {
+    missions: {
+      subjugation: 'Lizardmen in the reeds, and something heavy moving under the water.',
+      survival: 'The reeds are full of eyes. Hold out until they lose interest.',
+      escape: 'The floor is sinking into the mire. Reach the far side before it swallows you.',
+      hunt: 'A lizard war-chief with a painted crest leads this pack. Take the crest.',
+      escort: 'A refugee lost in the reeds. Get them across before the shamans find them.',
+    },
+    lines: [
+      'Green water to the knee, and warm. Nothing in a tower should be warm.',
+      'Half a cart sticks out of the mud. Priasis’s escort came this way.',
+      'The stone underfoot is carved. It used to be a road.',
+    ],
+    events: ['Keep moving, Master. The ground here does not like to be stood on.', 'Their shamans spit poison. Do not let it settle.'],
+  },
+  coast: {
+    missions: {
+      subjugation: 'Mermen on the rocks, and sharks in every pool.',
+      seizure: 'Someone carries a sea-chest of temple gold. Take it and the floor opens behind it.',
+      escort: 'A pearl diver is cornered on the reef. Bring them back to shore.',
+    },
+    lines: [
+      'Offerings to the water god wash up on every step: coins, shells, a child’s shoe.',
+      'The tide comes in through the windows of this floor.',
+      'A shrine to Kthat, freshly painted. Somebody still believes.',
+    ],
+    events: ['The temple gold is cursed, Master. Take it anyway.', 'Mind the water. Things in it are listening.'],
+  },
+  order: {
+    missions: {
+      subjugation: 'An Order company holds this landing. Break it.',
+      survival: 'The Order is throwing everything at this floor. Outlast it.',
+      defense: 'The Order is storming this landing. Hold the waves and the stair is yours.',
+      hunt: 'An Order officer leads this company. Fell the officer and the rest break.',
+      escape: 'The Order has fired the hall behind you. Get out before the roof comes down.',
+      escort: 'A deserter wants out of the Order. Their old comrades want them dead first.',
+    },
+    lines: [
+      'Order banners, burnt at the edges. Someone fought here before you.',
+      'A field hospital, abandoned in a hurry. The kettles are still warm.',
+      'Marching songs carry up the stairwell from a floor you already cleared.',
+    ],
+    events: ['The Order fights in ranks, Master. Break the officer and the ranks follow.', 'Priasis rode through here. I can feel it.'],
+  },
+  inflection: {
+    missions: {
+      subjugation: 'Wraiths and dark knights, and no reason to any of it.',
+      survival: 'Chimeras without end. Nothing here can be cleared, only outlasted.',
+      defense: 'They come in waves from the floor above. Hold, and hold again.',
+      hunt: 'One chimera leads this brood. Kill it and the others lose their nerve.',
+      escape: 'The floor is coming apart. Run for the far stair.',
+    },
+    lines: [
+      'The walls breathe here. Slowly, but they breathe.',
+      'Names of other Masters’ heroes, carved and crossed out, cover a whole wall.',
+      'The light comes from nowhere and casts no shadows.',
+    ],
+    events: ['Count your heroes, Master. Every floor now.', 'This is where most Rankers stopped. Do not stop.'],
+  },
+}
+
+/** A filler floor that is a story beat or a lesson's first floor: its own briefing line. */
+export const FILLER_FLOOR_STORY: Record<number, { title?: string; line: string }> = {
+  6: { line: 'One goblin is bigger than the rest, and it swings like it means it. Watch for the wind-up.' },
+  8: { line: 'Goblin raiders, and the chief who leads them. Mark him and the others scatter.' },
+  12: { line: 'A refugee from the ruined city, and soldiers who would rather leave no one to tell.' },
+  13: { line: 'Soldiers with heavy shields. A bash from one leaves a hero seeing stars.' },
+  47: {
+    title: 'The Vault of Al Ragna',
+    line: 'The lock the key turned: Priasis’s vault, and the Order already inside it. Take back the seal.',
   },
 }
 
@@ -530,6 +651,21 @@ export const PRIASIS_ARC: readonly PriasisBeat[] = [
     id: 'key',
     after: 45,
     lobby: 'The key went to the one who waited. I asked whose it was. They said: it was hers.',
+  },
+  // Lane P · the key's payoff: the lock it turned was Priasis's vault (F47), and inside it
+  // she had left a letter for whoever carried her key.
+  {
+    id: 'vault',
+    after: 47,
+    letter: {
+      from: 'priasis',
+      lines: [
+        'If my key found you, then I am gone, and you are the one who carried it. Good.',
+        'The crown in the vault was never ours. Neither was the sky with two suns.',
+        'We came down from a world that ended, Master. Do not let yours.',
+      ],
+    },
+    lobby: 'Her vault held a crown, a map of a sky with two suns, and a letter for you. The Al Ragna remembered a world that ended.',
   },
   {
     id: 'wall',

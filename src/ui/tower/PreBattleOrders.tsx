@@ -68,6 +68,8 @@ export function PreBattleOrders({
   const label = (f: { name: string; wave: number }) => (waves > 1 ? t('{name} (wave {w})', { name: t(f.name), w: f.wave }) : t(f.name))
   const heroes = deployReport(state).filter((r) => r.heroId && r.fit)
   const set = (next: FocusDirective) => onChange(next.focusEnemyId === undefined && (next.overlookedAllyIds ?? []).length === 0 ? undefined : next)
+  // Lane P: an escort can be protected too (foes look past it while anyone else stands).
+  const escorts = encounter?.allies ?? []
   const toggle = (id: HeroId) => {
     const has = protects.includes(id)
     if (!has && protects.length >= slots) return
@@ -119,6 +121,22 @@ export function PreBattleOrders({
                 title={t('Foes look past {name} while anyone else stands; a big move lands on them softened', { name: hero.name })}
               >
                 {pickerName(state, hero)}
+              </button>
+            )
+          })}
+          {escorts.map((a) => {
+            const on = protects.includes(a.id as HeroId)
+            return (
+              <button
+                key={a.id}
+                type="button"
+                className={`pb-chip escort ${on ? 'on' : ''}`}
+                aria-pressed={on}
+                disabled={!on && protects.length >= slots}
+                onClick={() => toggle(a.id as HeroId)}
+                title={t('Foes look past {name} while anyone else stands; a big move lands on them softened', { name: t(a.name) })}
+              >
+                👑 {t(a.name)}
               </button>
             )
           })}

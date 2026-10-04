@@ -74,15 +74,23 @@ describe('acts and bands', () => {
     }
   })
 
-  it('late filler mixes Subjugation, Survival and Escape; the coast has Seizure', () => {
-    const late = new Set<string>()
+  // Lane P: the filler floors draw from their act's mission table (content/missions.ts); the
+  // loop (F36–39) and the floors past the Wall keep the legacy mix.
+  it('filler floors draw from their act’s mission table; the loop and the void keep the legacy mix', () => {
+    const order = new Set<string>()
     const coast = new Set<string>()
+    const loop = new Set<string>()
+    const voidF = new Set<string>()
     for (let seed = 1; seed <= 60; seed++) {
-      late.add(buildEncounter(onFloor(47, {}, seed), 47).mission.type)
+      order.add(buildEncounter(onFloor(48, {}, seed), 48).mission.type)
       coast.add(buildEncounter(onFloor(33, {}, seed), 33).mission.type)
+      loop.add(buildEncounter(onFloor(37, {}, seed), 37).mission.type)
+      voidF.add(buildEncounter(onFloor(97, {}, seed), 97).mission.type)
     }
-    expect(late).toEqual(new Set(['Subjugation', 'Survival', 'Escape']))
-    expect(coast).toEqual(new Set(['Subjugation', 'Seizure']))
+    expect(order).toEqual(new Set(['Subjugation', 'Survival', 'Escape', 'Defense', 'Hunt', 'Escort']))
+    expect(coast).toEqual(new Set(['Subjugation', 'Seizure', 'Escort']))
+    expect(loop).toEqual(new Set(['Subjugation', 'Survival', 'Escape']))
+    expect(voidF).toEqual(new Set(['Subjugation', 'Survival', 'Escape']))
   })
 
   it('never fields more than the unit cap; late enemies grow elite instead', () => {

@@ -366,6 +366,17 @@ const defs: SkillDef[] = [
     cooldown: 5,
     charge: { turns: 1, line: '{name} raises the pen that wrote the tower…' },
   }),
+
+  // ── Lane P · the filler floors' marked leaders (and the first floor that teaches Guard) ──
+  e('e_haymaker', 'Haymaker', {
+    grade: 'D',
+    damageType: 'physical',
+    target: 'single',
+    spCost: 15,
+    baseMult: 1.6,
+    cooldown: 4,
+    charge: { turns: 1, line: '{name} winds up a huge swing at {target}…' },
+  }),
 ]
 
 export const ENEMY_SKILLS: SkillRegistry = Object.fromEntries(defs.map((d) => [d.id, d]))

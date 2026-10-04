@@ -4,6 +4,7 @@
  */
 import { iselLook, keyBearerLook, lookForHero, lookForMaster, priasisLook, type HeroLook, type LookSource } from './look'
 import { drawReliquary } from './enemySprite'
+import { MISSION_ALLY_LOOKS } from './missionLooks'
 import type { Bitmap } from './bitmap'
 import { drawHeroBust, drawHeroFrame, drawHeroPose, KO_H, KO_W, FRAME_H, FRAME_W, type Dir, type HeroPose, type WalkFrame } from './heroSprite'
 import { cachedCanvas, cachedDataUrl } from './render'
@@ -66,7 +67,7 @@ export function iselBustUrl(): string {
 
 // ── mission NPC allies ───────────────────────────────────────────────────────
 
-const ALLY_LOOKS: Record<string, () => HeroLook> = { 'Princess Priasis': priasisLook, 'Key Bearer': keyBearerLook }
+const ALLY_LOOKS: Record<string, () => HeroLook> = { 'Princess Priasis': priasisLook, 'Key Bearer': keyBearerLook, ...MISSION_ALLY_LOOKS }
 
 /** Mission NPCs that aren't people (the F50 Sealed Object) draw as a bespoke bitmap. */
 const ALLY_OBJECTS: Record<string, () => Bitmap> = { 'Sealed Object': drawReliquary }

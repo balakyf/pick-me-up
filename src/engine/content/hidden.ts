@@ -63,6 +63,16 @@ export const HIDDEN_OBJECTIVES: readonly HiddenObjective[] = [
     reward: { gems: 30 },
     lore: 'The loop is not a trap. It is the world trying to hold the Master back.',
   },
+  // Lane P · the F45 key's payoff: the lock it turned is Priasis's vault, two floors up.
+  {
+    id: 'her_key',
+    floor: 47,
+    name: 'Her Key',
+    hint: 'Open the door the key unlocked.',
+    condition: { kind: 'defeat', targetTag: 'ragna_vault' },
+    reward: { gems: 30, materials: { promotionStone: 2 } },
+    lore: 'The Al Ragna came down from a world that ended when its Master cleared the ninetieth floor. Taonier was built by survivors.',
+  },
   {
     id: 'the_egg_unhatched',
     floor: 50,
