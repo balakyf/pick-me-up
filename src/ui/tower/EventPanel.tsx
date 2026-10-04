@@ -14,7 +14,10 @@ import { eventWhere } from './towerText'
 const EV = TUNING.events
 
 /** One-line description of an event option (what the Master is choosing). */
-export function optionBlurb(option: string, floor: number): string {
+export function optionBlurb(option: string, floor: number, kind?: TowerEvent['kind']): string {
+  // At a camp after a heavy loss, the choices are part of the story (lane K).
+  if (kind === 'recovery' && option === 'rest') return t('Tend the wounded by the fire: every living hero recovers {n} Sanity.', { n: EV.restSanity })
+  if (kind === 'recovery' && option === 'reinforcement') return t('A stranger at the camp asks to join: a free Normal summon.')
   switch (option) {
     case 'rest':
       return t('Every living hero recovers {n} Sanity.', { n: EV.restSanity })
@@ -41,7 +44,7 @@ export function optionBlurb(option: string, floor: number): string {
   }
 }
 
-export const EVENT_TITLE = { bonus: 'Event Floor', recovery: 'Recovery', tournament: 'Tournament' } as const
+export const EVENT_TITLE = { bonus: 'Event Floor', recovery: 'Camp', tournament: 'Tournament' } as const
 
 /** What waits behind the open event (the queue lane B keeps). */
 export function queuedLine(queue: readonly TowerEvent[] | undefined): string | null {
@@ -71,14 +74,14 @@ export function EventPanel({
         {ev.kind === 'tournament'
           ? t('Masters from other worlds gather between the floors. Pick a format — no one dies here.')
           : ev.kind === 'recovery'
-            ? t('The main team is gone. The tower offers a breather before the next floor.')
+            ? t('The party has made camp on the stair. Tend the wounded, or take in a stranger, before the next floor.')
             : t('A quiet floor between the fights. Choose how to spend it.')}
       </p>
       <div className="event-options">
         {ev.options.map((o) => (
           <button key={o} className="event-option" onClick={() => onResolve(o)} disabled={o === 'merchant' && state.gold < merchantPrice()}>
             <span className="eo-name">{t(EVENT_OPTION_LABEL[o] ?? o)}</span>
-            <span className="eo-blurb">{optionBlurb(o, ev.floor)}</span>
+            <span className="eo-blurb">{optionBlurb(o, ev.floor, ev.kind)}</span>
           </button>
         ))}
       </div>

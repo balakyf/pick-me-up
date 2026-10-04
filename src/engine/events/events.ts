@@ -231,7 +231,11 @@ export function resolveEvent(state: GameState, option: string): { state: GameSta
     case 'rest':
       next = addSanity(next, 'all', E.restSanity)
       outcome.sanity = E.restSanity
-      outcome.note = 'The heroes rest by a quiet fire. Nerves settle.'
+      // After a heavy loss the rest is a camp on the stair, not a penalty (lane K).
+      outcome.note =
+        ev.kind === 'recovery'
+          ? 'The survivors make camp on the stair. Wounds are dressed, and the fallen are named by the fire.'
+          : 'The heroes rest by a quiet fire. Nerves settle.'
       break
     case 'treasure':
       outcome.gold = treasureGold(floor)
@@ -267,7 +271,7 @@ export function resolveEvent(state: GameState, option: string): { state: GameSta
       const pulled = summon({ ...next, gold: next.gold + cost })
       next = { ...pulled.state, gold: next.gold }
       outcome.recruit = pulled.hero
-      outcome.note = 'A new hero answers the call.'
+      outcome.note = ev.kind === 'recovery' ? 'A stranger finds the camp and asks to climb with you.' : 'A new hero answers the call.'
       break
     }
     default: {
