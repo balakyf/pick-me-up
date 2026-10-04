@@ -45,6 +45,8 @@ import { SceneTransition } from './transition/SceneTransition'
 import { SaveErrorNotice } from './qol/SaveErrorNotice'
 import { HeroSheetHost } from './hero/HeroSheetHost'
 import { EndingHost } from './ending/EndingHost'
+import { PvpStageHost } from './pvp/PvpStageHost'
+import { InvasionAlarm } from './pvp/InvasionAlarm'
 import { openEnding } from './ending/endingBus'
 import { fateOf } from '../engine/endgame'
 
@@ -400,6 +402,9 @@ export function App() {
           setEpoch((e) => e + 1)
         }}
       />
+      {/* Lane Q: PvP on stage (a rival's banner, then the battle); an unseen invasion's alarm. */}
+      {view === 'lobby' && !menuOpen && panel === null && <InvasionAlarm key={`ia|${state.accountId}|${epoch}`} state={state} />}
+      <PvpStageHost state={state} />
       {/* Lane K: a pixel curtain between scenes; the save-error notice (store.getSaveError). */}
       <SceneTransition scene={view} />
       <SaveErrorNotice store={store} onExport={() => setPanel('save')} />

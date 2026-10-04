@@ -1,0 +1,179 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   Lane Q · PvP on stage: the rival's title card, the raid sheet, the captive board, the
+   guild raid and server war, the lobby's invasion alarm. (Own file — never ui.css.)
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── The rival's title card ─────────────────────────────────────────────── */
+.overlay.pvp-card-overlay {
+  z-index: 95; align-items: center; justify-content: center; cursor: pointer;
+  background: radial-gradient(ellipse at 50% 45%, color-mix(in srgb, var(--g-m) 45%, #06030e) 0%, #06030ef4 68%);
+}
+.pvp-card {
+  position: relative; display: flex; align-items: center; gap: 28px; padding: 22px 34px;
+  max-width: min(760px, 94vw);
+  border-top: 3px solid var(--g-l); border-bottom: 3px solid var(--g-d);
+  background: linear-gradient(90deg, transparent, #0a0714e8 12%, #0a0714e8 88%, transparent);
+  animation: pvpCardIn 0.42s steps(6) both;
+}
+@keyframes pvpCardIn { from { transform: translateX(-60px); opacity: 0; } to { transform: none; opacity: 1; } }
+.pvp-card-crest { position: relative; flex: none; animation: pvpSwing 0.9s steps(4) both; transform-origin: 50% 0; }
+@keyframes pvpSwing { 0% { transform: rotate(-14deg) translateY(-30px); opacity: 0; } 40% { transform: rotate(7deg); opacity: 1; } 70% { transform: rotate(-3deg); } 100% { transform: none; } }
+.pvp-crest-alt { position: absolute; inset: 0; animation: pvpFold 0.8s steps(1) infinite; }
+@keyframes pvpFold { 0% { opacity: 0; } 50% { opacity: 1; } }
+.pvp-card-text { min-width: 0; }
+.pvp-kicker { color: var(--g-ink); letter-spacing: 4px; text-transform: uppercase; font-size: 15px; }
+.pvp-name {
+  font-size: clamp(30px, 6vw, 54px); font-weight: 600; letter-spacing: 3px; line-height: 1.05; color: var(--ink);
+  text-shadow: 3px 3px 0 var(--g-d), -1px -1px 0 var(--rim-dark); overflow-wrap: anywhere;
+  animation: pvpSlam 0.3s steps(3) 0.25s both;
+}
+@keyframes pvpSlam { from { transform: scale(1.6); opacity: 0; } to { transform: none; opacity: 1; } }
+.pvp-facts { color: var(--ink-dim); font-size: 16px; margin-top: 4px; }
+.pvp-whale, .today-tag.pvp-whale { color: var(--bad); letter-spacing: 2px; }
+.pvp-line { margin-top: 10px; font-size: 15px; color: var(--g-ink); }
+.pvp-card-skip { position: absolute; right: 8px; bottom: -34px; }
+.pvp-card-overlay.calm .pvp-card, .pvp-card-overlay.calm .pvp-card-crest, .pvp-card-overlay.calm .pvp-name { animation: pvpFade 0.25s steps(3) both; }
+.pvp-card-overlay.calm .pvp-crest-alt { display: none; }
+@keyframes pvpFade { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+  .pvp-card, .pvp-card-crest, .pvp-name { animation: pvpFade 0.25s steps(3) both; }
+  .pvp-crest-alt { display: none; }
+}
+@media (max-width: 640px) {
+  .pvp-card { flex-direction: column; gap: 10px; padding: 16px 12px; text-align: center; }
+  .pvp-card-crest img { width: 66px; height: 96px; }
+  .pvp-card-skip { position: static; }
+}
+.pvp-shield { display: inline-block; width: 24px; height: 26px; flex: none; image-rendering: pixelated; }
+.pvp-crest { image-rendering: pixelated; display: block; }
+.pvp-crest-fallback { display: inline-block; width: 22px; height: 32px; background: var(--line); }
+.drill-row.pvp-rival, .drill-row.pvp-log { grid-template-columns: 26px 1fr auto auto; align-items: center; }
+
+/* ── The raid sheet ─────────────────────────────────────────────────────── */
+.raid-sheet { display: flex; flex-direction: column; gap: 10px; }
+.rs-head { display: flex; gap: 14px; align-items: center; }
+.rs-name { font-size: 24px; letter-spacing: 1px; }
+.rs-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.rs-box { border: 1px solid var(--line); background: #120e2c88; padding: 6px 10px; }
+.rs-box .panel-sub { margin-top: 0; }
+.rs-odds { font-size: 15px; }
+.rs-odds.good { color: var(--good); }
+.rs-odds.even { color: var(--gold); }
+.rs-odds.hard { color: var(--bad); }
+.rs-list { margin: 0 0 4px; padding-left: 18px; font-size: 14px; }
+.rs-team { display: flex; flex-wrap: wrap; gap: 6px; min-height: 34px; align-items: center; }
+.rs-member {
+  display: inline-flex; align-items: center; gap: 6px; padding: 2px 8px 2px 2px; font: inherit; font-size: 14px;
+  color: var(--ink); background: var(--panel-2); border: 1px solid var(--gold-deep); cursor: pointer;
+}
+.rs-member:hover { border-color: var(--bad); }
+.rs-x { color: var(--ink-faint); font-size: 11px; }
+.rs-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 4px; }
+.rs-actions .spacer { flex: 1; }
+.rs-why { color: var(--warn); }
+.raid-sheet .hp-list { max-height: 260px; }
+@media (max-width: 640px) {
+  .rs-grid { grid-template-columns: 1fr; }
+  .rs-name { font-size: 20px; }
+}
+
+/* ── The captive board ──────────────────────────────────────────────────── */
+.captive-board { display: flex; flex-direction: column; gap: 6px; }
+.cb-chain { display: flex; flex-wrap: wrap; gap: 4px; margin: 4px 0; padding: 0; list-style: none; counter-reset: cb; font-size: 12px; }
+.cb-chain li { counter-increment: cb; padding: 2px 8px; background: #120e2c; border: 1px solid var(--line); color: var(--ink-dim); }
+.cb-chain li::before { content: counter(cb) '. '; color: var(--gold); }
+.cb-chain li:not(:last-child)::after { content: ' ▸'; color: var(--ink-faint); }
+.cb-chain li.bad { color: var(--bad); border-color: #7a2a34; }
+.cb-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 8px; }
+.cb-card { border: 2px solid var(--line); background: linear-gradient(#1c1640, #120e2c); padding: 8px; display: flex; flex-direction: column; gap: 6px; }
+.cb-card.held { border-color: #7a5a2a; }
+.cb-card.held.urgent { border-color: var(--bad); box-shadow: 0 0 0 1px #3a0a14, 0 0 12px #ef5d6b55; }
+.cb-top { display: flex; gap: 8px; align-items: center; }
+.cb-bust { border: 1px solid var(--rim-dark); background: #0a0714; filter: grayscale(0.4); flex: none; }
+.cb-who { min-width: 0; }
+.cb-holder { display: flex; align-items: center; gap: 6px; font-size: 14px; color: var(--warn); margin-top: 2px; }
+.cb-holder img { width: 11px; height: 16px; }
+.cb-clock { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.cb-bar { flex: 1; height: 8px; background: #2a2440; border: 1px solid var(--rim-dark); position: relative; }
+.cb-bar > span { position: absolute; left: 0; top: 0; bottom: 0; background: linear-gradient(90deg, var(--warn), var(--bad)); }
+.cb-left { white-space: nowrap; color: var(--ink-dim); }
+.cb-left.urgent { color: var(--bad); animation: blink 1s steps(2) infinite; }
+.cb-price { font-size: 14px; }
+.cb-price b.short { color: var(--bad); }
+.cb-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.cb-cell { font-size: 26px; width: 48px; text-align: center; color: var(--ink-faint); }
+.cb-synth { display: flex; flex-direction: column; gap: 6px; border-top: 1px dashed var(--line); padding-top: 6px; }
+.cb-synth .hp-list { max-height: 200px; }
+@media (prefers-reduced-motion: reduce) { .cb-left.urgent { animation: none; } }
+
+/* ── The guild hall, the raid, the war ──────────────────────────────────── */
+.gh-head { display: flex; gap: 12px; align-items: center; margin-bottom: 4px; }
+.gh-name { font-size: 20px; color: var(--gold); }
+.gh-actions { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 8px; }
+.gh-actions .spacer { flex: 1; }
+.gr-mates { display: flex; flex-wrap: wrap; gap: 6px; }
+.gr-mate { display: inline-flex; align-items: center; gap: 4px; padding: 1px 8px; background: #120e2c; border: 1px solid var(--line); font-size: 14px; }
+.gr-mate img { width: 11px; height: 16px; }
+.gr-mate.hero { border-color: var(--gold-deep); }
+.guild-raid { display: flex; flex-direction: column; gap: 8px; }
+.gr-boss { display: flex; gap: 14px; align-items: flex-end; }
+.gr-sprite { width: 136px; height: auto; image-rendering: pixelated; flex: none; filter: drop-shadow(0 4px 0 #0008); }
+.gr-boss-info { display: flex; flex-direction: column; gap: 6px; min-width: 0; flex: 1; }
+.gr-bar { position: static; width: 100%; }
+.gr-bar .hp-fill { display: block; height: 100%; background: linear-gradient(#ff6a5a, #c83a3a); }
+@media (max-width: 640px) { .gr-boss { flex-direction: column; align-items: center; } .gr-sprite { width: 104px; } }
+
+.guild-results { display: flex; flex-direction: column; gap: 10px; cursor: pointer; }
+.guild-results.done { cursor: default; }
+.gres-banner { text-align: center; font-size: clamp(26px, 5vw, 40px); letter-spacing: 3px; text-shadow: 2px 2px 0 var(--rim-dark); }
+.gres-banner.win { color: var(--gold); }
+.gres-banner.lose { color: var(--accent-2); }
+.gres-banner.waiting { visibility: hidden; }
+.gres-banner.running { animation: pop 0.4s steps(4) both; }
+.gres-hp { position: relative; height: 22px; background: #2a1a24; border: 2px solid var(--rim-dark); box-shadow: 0 0 0 1px var(--line); display: flex; }
+.gres-seg { height: 100%; }
+.gres-seg.party { background: linear-gradient(#ffe08a, #f2a630); }
+.gres-seg.mates { background: linear-gradient(#9ab8ff, #4a6ad0); }
+.gres-hp-text { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 12px; text-shadow: 1px 1px 0 #000, -1px -1px 0 #000; }
+.gres-loot { display: flex; gap: 14px; justify-content: center; align-items: baseline; flex-wrap: wrap; font-size: 22px; }
+.gres-gold { color: var(--gold); }
+.gres-drop { color: var(--gem); }
+.gres-drop.legendary { color: var(--gold); text-shadow: 0 0 8px #f2c75c88; }
+.gres-loot .waiting, .gres-board.waiting { visibility: hidden; }
+.gres-board.running { animation: pvpFade 0.3s steps(3) both; }
+.gres-rows { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 3px; max-height: 300px; overflow-y: auto; }
+.gres-row { display: grid; grid-template-columns: minmax(150px, 1.1fr) 2fr auto; gap: 8px; align-items: center; font-size: 14px; }
+.gres-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gres-tag { font-size: 10px; padding: 0 4px; border: 1px solid #4a6ad0; color: #9ab8ff; vertical-align: 1px; }
+.gres-tag.you { border-color: var(--gold-deep); color: var(--gold); }
+.gres-bar { height: 8px; background: #120e2c; border: 1px solid var(--rim-dark); }
+.gres-bar > span { display: block; height: 100%; }
+.gres-row.hero .gres-bar > span { background: linear-gradient(#ffe08a, #f2a630); }
+.gres-row.mate .gres-bar > span { background: linear-gradient(#9ab8ff, #4a6ad0); }
+.gres-num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+@media (max-width: 640px) { .gres-row { grid-template-columns: minmax(0, 1fr) 70px auto; } }
+
+.server-war { display: flex; flex-direction: column; gap: 8px; }
+.sw-head { display: flex; gap: 12px; align-items: center; }
+.sw-head .gres-banner { text-align: left; font-size: 26px; }
+.sw-rows { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 4px; }
+.sw-row { display: grid; grid-template-columns: 90px 1fr auto auto; gap: 8px; align-items: center; padding: 4px 8px; border: 1px solid var(--line); background: #120e2c; }
+.sw-row.win { border-color: #3a7a4a; }
+.sw-row.win .sw-res { color: var(--good); }
+.sw-row.lose .sw-res { color: var(--bad); }
+
+/* ── The lobby's invasion alarm ─────────────────────────────────────────── */
+.invasion-alarm {
+  position: fixed; left: 50%; top: 58px; transform: translateX(-50%); z-index: 70;
+  display: flex; align-items: center; gap: 10px; padding: 8px 12px; max-width: min(640px, calc(100vw - 16px));
+  background: linear-gradient(#2a1424, #160a18); border: 2px solid var(--bad); box-shadow: 0 0 0 2px var(--rim-dark), 0 6px 0 #0006;
+  animation: pvpAlarm 0.3s steps(3) both;
+}
+.invasion-alarm.held { border-color: var(--good); background: linear-gradient(#142a1e, #0a1810); }
+.invasion-alarm img { width: 22px; height: 32px; flex: none; }
+.ia-text { display: flex; flex-direction: column; min-width: 0; font-size: 14px; }
+.ia-text b { color: var(--bad); }
+.invasion-alarm.held .ia-text b { color: var(--good); }
+@keyframes pvpAlarm { from { transform: translate(-50%, -20px); opacity: 0; } to { transform: translateX(-50%); opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .invasion-alarm { animation: none; } }
+@media (max-width: 640px) { .invasion-alarm { top: auto; bottom: 150px; flex-wrap: wrap; } }

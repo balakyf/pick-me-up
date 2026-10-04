@@ -103,9 +103,11 @@ export function allyBustUrl(name: string): string {
 
 // ── enemies ──────────────────────────────────────────────────────────────────
 
-const templateByName = new Map<string, string>(
-  Object.values(ENEMY_TEMPLATES).map((t) => [t.name, t.id] as [string, string]),
-)
+const templateByName = new Map<string, string>([
+  ...Object.values(ENEMY_TEMPLATES).map((t) => [t.name, t.id] as [string, string]),
+  // Lane Q: renamed stand-ins keep their template's art (the guild's weekly boss).
+  ['Guild Colossus', 'fragment_colossus'],
+])
 
 /** Battle-log units only carry a display name; map it back to the template art. */
 export function enemyTemplateIdForName(name: string): string {

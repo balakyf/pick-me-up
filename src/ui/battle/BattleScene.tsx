@@ -49,7 +49,7 @@ import { aimable, clickOrder, guardUp, holdGiven, ordersInHand, swappedPositions
 import { anyCharge } from './bossCaptions'
 import { Telegraphs } from './Telegraph'
 import { PhaseCinematic } from './PhaseCinematic'
-import { DeathCard, DeathVeil, ResultBanner } from './ResultBanner'
+import { DeathCard, DeathVeil, ResultBanner, type BannerWords } from './ResultBanner'
 import { resumeCursor } from './orderResume'
 import { objectiveView } from './objectives'
 import { ObjectiveHud } from './ObjectiveHud'
@@ -94,6 +94,7 @@ export function BattleScene({
   orders,
   nonLethal = false,
   coach,
+  banner,
 }: {
   log: CombatLog
   state: GameState | null
@@ -103,6 +104,8 @@ export function BattleScene({
   nonLethal?: boolean
   /** Lane P: the coach's lesson this battle may teach as it happens (the tower passes it). */
   coach?: { lesson: Lesson | null; onSeen: (id: LessonId) => void; seen?: (id: LessonId) => boolean }
+  /** Lane Q: the closing words for a non-lethal fight that is not a trial (PvP, the guild raid). */
+  banner?: BannerWords
 }) {
   const [log, setLog] = useState(initialLog)
   const [aim, setAim] = useState<Aim>(null)
@@ -630,7 +633,7 @@ export function BattleScene({
 
             {fallen && <DeathVeil />}
 
-            {atEnd && <ResultBanner outcome={outcome} nonLethal={nonLethal} />}
+            {atEnd && <ResultBanner outcome={outcome} nonLethal={nonLethal} words={banner} />}
             {card && <DeathCard key={card.unit.id} unit={card.unit} words={card.words} fading={card.fading} bust={heroBustUrl(heroSrc(card.unit))} />}
           </div>
 
