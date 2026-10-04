@@ -123,8 +123,13 @@ export function reduce(state: GameState | null, cmd: Command, nowWorld: number =
   if (cmd.type === 'NEW_ACCOUNT') {
     return createAccount(cmd.seed, { now: cmd.now })
   }
-  // Lane O: a New Cycle is a fresh world — the old roster's reactions don't apply to it.
-  if (cmd.type === 'NEW_CYCLE') return reduceCore(state, cmd, nowWorld)
+  // Lane O: a New Cycle is a fresh world — the old roster's reactions don't apply to it. The
+  // old world's clock still catches up first, and whoever it costs (a captive's deadline)
+  // is mourned there, so they reach the Memorial, the legends and the cycle's record.
+  if (cmd.type === 'NEW_CYCLE') {
+    const caught = lifeReact(state, reduceCore(state, { type: 'TICK' }, nowWorld), { type: 'TICK' }, nowWorld)
+    return reduceCore(caught, cmd, nowWorld)
+  }
   // Quanton Life: the waiting room reacts to what changed (graves, grief, memories).
   if (cmd.type === 'ATTEMPT_FLOOR') {
     const current = advanceTime(requireState(state, cmd.type), nowWorld)

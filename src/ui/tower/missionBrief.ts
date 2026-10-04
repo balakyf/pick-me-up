@@ -8,6 +8,7 @@
 import type { Encounter, GameState, Mission } from '../../engine/types'
 import { ACT_STORY, FILLER_FLOOR_STORY, FILLER_STORY } from '../../engine/content/story'
 import { ANCHORS, actForFloor } from '../../engine/content'
+import { isPostWallFloor } from '../../engine/endgame'
 import { FILLER_MISSION_KINDS, MISSION_LABEL, MISSION_TAGS, type FillerMissionKind } from '../../engine/content/missions'
 import { t } from '../i18n/i18n'
 import { hashString } from '../pixel/rand'
@@ -71,7 +72,8 @@ function pickFor(seed: number, floor: number, salt: string, list: readonly strin
 
 /** The briefing for a filler floor (null on an anchor; anchors have lane M's). Translated. */
 export function fillerBrief(state: GameState, floor: number, enc: Encounter | null, names: Record<string, string>): FillerBrief | null {
-  if (ANCHORS[floor] !== undefined || enc === null) return null
+  // Floors behind the Wall carry lane O's own briefing (EndgameBriefing).
+  if (ANCHORS[floor] !== undefined || enc === null || isPostWallFloor(floor)) return null
   const act = actForFloor(floor)
   const kind = missionKindOf(enc.mission.type)
   const story = FILLER_STORY[act.id]

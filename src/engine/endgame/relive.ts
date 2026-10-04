@@ -28,7 +28,7 @@ import { applyPartyBonuses } from '../challenge/bonds'
 import { distinct, lineFor } from '../challenge/challenge'
 import { worldWeekOf } from '../challenge/raid'
 import { canEnterTrial } from '../challenge/weekly'
-import { endgameOf, scaleWaves } from './endgame'
+import { cycleMult, endgameOf, scaleWaves } from './endgame'
 import { ENDGAME } from './tuning'
 
 const R = ENDGAME.relive
@@ -139,7 +139,8 @@ export function relive(
   const res = runBattle(units, enc, hash(state.seed, 'relive', floor, cur.week, cur.used))
   const won = res.outcome === 'win'
 
-  const worldMult = TUNING.tower.worldMult[state.worldGrade]
+  // The floor's own pay: the world's grade and its cycle (as playFloor reckons it).
+  const worldMult = TUNING.tower.worldMult[state.worldGrade] * cycleMult(state)
   const gold0 = won ? Math.round(TUNING.economy.goldPerFloor * floor * worldMult * diff.gold) : 0
   const found = won && diff.truths ? hiddenObjectivesMet(floor, res, state.tower.hiddenFound) : []
   let gold = gold0

@@ -68,7 +68,9 @@ export function newCycle(state: GameState): GameState {
   const fresh = createAccount(hash(state.seed, 'cycle', cycle), { accountId: state.accountId, worldGrade: state.worldGrade })
   const legends = [...eg.legends, ...legendsOf(state, eg.cycle)].slice(-ENDGAME.cycle.legendsMax)
   const life = defaultLifeState(nowWorld)
-  const steps = (state.life?.guide?.done ?? []).filter((k) => k.startsWith('step:'))
+  // Onboarding and the coach stay learned (First Steps, Isel's welcome, the tips); only the
+  // story's once-per-world beats (act cards, letters) play again in the new world.
+  const steps = (state.life?.guide?.done ?? []).filter((k) => !k.startsWith('story:'))
   return {
     ...fresh,
     createdAt: state.createdAt,
@@ -83,7 +85,17 @@ export function newCycle(state: GameState): GameState {
       wallet: state.meta.wallet,
       skill: state.meta.skill,
     },
-    pvp: { ...fresh.pvp, rating: state.pvp.rating, guild: state.pvp.guild },
+    // The guild comes along with its claim records, so this week's aid, raid and war are not
+    // claimed a second time in the new world.
+    pvp: {
+      ...fresh.pvp,
+      rating: state.pvp.rating,
+      guild: state.pvp.guild,
+      guildAidDay: state.pvp.guildAidDay,
+      guildRaidWeek: state.pvp.guildRaidWeek,
+      warWeek: state.pvp.warWeek,
+      raidWeek: state.pvp.raidWeek,
+    },
     life: { ...life, guide: { ...life.guide, done: steps } },
     codex: state.codex,
     endgame: { cycle, history: [...eg.history, cycleRecord(state)], legends },

@@ -300,9 +300,10 @@ describe('the New Cycle', () => {
       gems: 777,
       gold: 999_999,
       meta: { ...s.meta, masterLevel: 31, masterXp: 123 },
-      life: { ...s.life, memorial: [grave('h_a', 20, 1), grave('h_b', 70, 9), grave('h_c', 44, 4)], guide: { tutorialPull: true, done: ['step:summon', 'story:act:wall'] } },
+      life: { ...s.life, memorial: [grave('h_a', 20, 1), grave('h_b', 70, 9), grave('h_c', 44, 4)], guide: { tutorialPull: true, done: ['step:summon', 'coach:elements', 'dismissed', 'welcome', 'story:act:wall'] } },
       estate: { ...s.estate, statues: ['h_c' as HeroId] },
       codex: { entries: { goblin: { seen: 9, defeated: 9, studied: true, floors: [1, 2] } } },
+      pvp: { ...s.pvp, guildAidDay: 41, guildRaidWeek: 6, warWeek: 6, raidWeek: 6 },
     }
   }
 
@@ -323,7 +324,10 @@ describe('the New Cycle', () => {
     expect(n.codex).toEqual(s.codex)
     expect(n.meta.wallet).toEqual(s.meta.wallet)
     expect(n.accountId).toBe(s.accountId)
-    expect(n.life.guide.done).toEqual(['step:summon'])
+    // What the Master learned stays learned (the coach, First Steps); only the story replays.
+    expect(n.life.guide.done).toEqual(['step:summon', 'coach:elements', 'dismissed', 'welcome'])
+    // The guild's claims this week stay claimed.
+    expect([n.pvp.guildAidDay, n.pvp.guildRaidWeek, n.pvp.warWeek, n.pvp.raidWeek]).toEqual([41, 6, 6, 6])
     expect(eg.cycle).toBe(1)
     expect(eg.history).toEqual([{ cycle: 0, fate: 'ended', day: 0, highestCleared: 90, fallen: 3, survivors: Object.keys(s.heroes).length, truths: 0, masterLevel: 31 }])
     // The legends: the statue first, then the deepest.
