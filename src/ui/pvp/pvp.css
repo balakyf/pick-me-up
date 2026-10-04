@@ -151,7 +151,12 @@
 .gres-row.hero .gres-bar > span { background: linear-gradient(#ffe08a, #f2a630); }
 .gres-row.mate .gres-bar > span { background: linear-gradient(#9ab8ff, #4a6ad0); }
 .gres-num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
-@media (max-width: 640px) { .gres-row { grid-template-columns: minmax(0, 1fr) 70px auto; } }
+@media (max-width: 640px) {
+  .gres-row { grid-template-columns: minmax(0, 1fr) auto; row-gap: 1px; }
+  .gres-row .gres-bar { grid-column: 1 / -1; order: 3; height: 6px; }
+  .gres-hp { height: auto; min-height: 26px; }
+  .gres-hp-text { position: absolute; font-size: 10px; text-align: center; }
+}
 
 .server-war { display: flex; flex-direction: column; gap: 8px; }
 .sw-head { display: flex; gap: 12px; align-items: center; }
@@ -176,6 +181,9 @@
 .invasion-alarm.held .ia-text b { color: var(--good); }
 @keyframes pvpAlarm { from { transform: translate(-50%, -20px); opacity: 0; } to { transform: translateX(-50%); opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .invasion-alarm { animation: none; } }
-@media (max-width: 640px) { .invasion-alarm { top: auto; bottom: 150px; flex-wrap: wrap; } }
+@media (max-width: 640px) {
+  .invasion-alarm { top: 132px; left: 8px; right: 8px; transform: none; max-width: none; flex-wrap: wrap; animation: pvpFade 0.25s steps(3) both; }
+  .ia-text { flex: 1 1 220px; }
+}
 .invasion-alarm .pbtn { white-space: nowrap; flex: none; }
 .drill-row.pvp-log .drill-name { white-space: normal; overflow: visible; }

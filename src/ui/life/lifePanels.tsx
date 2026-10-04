@@ -205,7 +205,7 @@ export function LegendsShelf({ state }: { state: GameState }) {
                     <b>{l.name}</b> {l.statue && <span className="legend-statue">🗿</span>}
                     <span className="muted small">
                       {' '}
-                      {l.star}★ Lv{l.level} · {l.cause === 'synthesis' ? t('lost to the Synthesis Chamber') : l.cause === 'captor' ? t('never ransomed') : t('fell on floor {n}', { n: l.floor })} · {t('best floor {n}', { n: l.bestFloor })}
+                      {l.star}★ Lv{l.level} · {l.cause === 'synthesis' ? t('lost to the Synthesis Chamber') : l.cause === 'captor' ? t('never ransomed') : t('fell on floor {n}', { n: l.floor })}{l.bestFloor > 0 && ` · ${t('best floor {n}', { n: l.bestFloor })}`}
                     </span>
                   </span>
                 </div>
