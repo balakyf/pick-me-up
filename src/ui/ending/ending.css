@@ -1,0 +1,110 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   The endgame (lane O): the epilogue and its credits, the new world's card, the
+   war room's fate banner and post-Wall briefing, Memories of the Tower, and the
+   lobby's tint once the world's fate is sealed.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── The epilogue ───────────────────────────────────────────────────────── */
+.ending {
+  position: fixed; inset: 0; z-index: 1300; display: flex; align-items: center; justify-content: center;
+  padding: 16px; background: #05030c; color: var(--ink); outline: none; overflow: hidden;
+  animation: endingFade 0.8s linear both;
+}
+@keyframes endingFade { from { opacity: 0; } to { opacity: 1; } }
+.ending-bg {
+  position: absolute; inset: 0; background-size: cover; background-position: center bottom;
+  image-rendering: pixelated; opacity: 0.85; animation: endingPan 9s linear both, endingFade 1.2s linear both;
+}
+@keyframes endingPan { from { transform: scale(1.14) translateY(2%); } to { transform: scale(1.02); } }
+.ending.fate-ended .ending-bg { filter: grayscale(0.85) brightness(0.75); }
+.ending.fate-saved .ending-bg { filter: sepia(0.25) saturate(1.1); }
+.ending.ph-credits .ending-bg, .ending.ph-finale .ending-bg, .ending.ph-confirm .ending-bg { opacity: 0.25; animation: none; }
+.ending-veil { position: absolute; inset: 0; background: linear-gradient(180deg, #05030c40 0%, #05030ca0 55%, #05030cf0 100%); pointer-events: none; }
+.ending-still {
+  position: relative; z-index: 1; display: flex; flex-direction: column; align-items: center; gap: 12px;
+  width: min(680px, 100%); margin-top: auto; margin-bottom: 72px; text-align: center;
+  animation: endingLine 1.2s ease-out both;
+}
+@keyframes endingLine { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+.ending-kicker { color: var(--gold); font-size: 13px; letter-spacing: 3px; text-transform: uppercase; text-shadow: 1px 1px 0 #000; }
+.ending-line { margin: 0; font-size: 20px; line-height: 1.45; text-shadow: 2px 2px 0 #000; }
+.ending-line.small { font-size: 15px; color: var(--ink-dim); }
+.ending-title { margin: 0; font-size: 28px; color: var(--ink); text-shadow: 2px 2px 0 #000; letter-spacing: 1px; }
+.ending-isel img { image-rendering: pixelated; border: 2px solid var(--rim); background: #0008; }
+.ending-finale, .ending-confirm { margin: auto; padding: 22px 20px; background: #0b0818e8; border: 2px solid var(--rim); box-shadow: 0 0 0 2px var(--rim-dark); }
+.ending-actions { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-top: 6px; }
+.ending-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; width: 100%; text-align: left; }
+.ending-cols h4 { margin: 0 0 6px; color: var(--gold); font-size: 13px; letter-spacing: 1px; text-transform: uppercase; }
+.ending-cols ul { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 5px; font-size: 14px; }
+.ending-controls { position: absolute; z-index: 2; right: 12px; bottom: 12px; display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+
+/* ── The credits roll ───────────────────────────────────────────────────── */
+.ending-roll { position: relative; z-index: 1; width: min(640px, 100%); height: 100%; overflow: hidden; mask-image: linear-gradient(180deg, #0000 0%, #000 12%, #000 88%, #0000 100%); }
+.ending-roll-inner {
+  display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center; padding: 0 4px;
+  animation: endingRoll var(--roll-s, 60s) linear both;
+}
+@keyframes endingRoll { from { transform: translateY(100vh); } to { transform: translateY(-100%); } }
+.ending-roll.calm { overflow-y: auto; mask-image: none; padding: 24px 0 56px; }
+.ending-roll.calm .ending-roll-inner { animation: none; }
+.ending-h { margin: 22px 0 4px; color: var(--gold); font-size: 15px; letter-spacing: 3px; text-transform: uppercase; }
+.ending-fallen { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 18px; width: 100%; }
+.ending-grave { display: flex; flex-direction: column; gap: 3px; }
+.ending-name { font-size: 20px; color: var(--ink); text-shadow: 1px 1px 0 #000; }
+.ending-meta { font-size: 12px; color: var(--ink-dim); letter-spacing: 0.5px; }
+.ending-words { font-style: italic; color: #e9d9b8; font-size: 15px; }
+.ending-eulogy { font-size: 13px; color: var(--ink-dim); line-height: 1.4; max-width: 520px; margin: 0 auto; }
+.ending-eulogy b { color: var(--gold); margin-right: 4px; }
+.ending-fallen.legends .ending-name { color: #d8e4ff; }
+.ending-survivors { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 4px 14px; width: 100%; }
+.ending-sname { color: var(--ink); }
+.ending-stats { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; font-size: 15px; }
+.ending-last { margin-top: 28px; }
+
+/* ── Reduced motion: still pictures, a list to read ─────────────────────── */
+.ending.calm, .ending.calm .ending-bg, .ending.calm .ending-still { animation: none; }
+@media (prefers-reduced-motion: reduce) {
+  .ending, .ending-bg, .ending-still { animation: none; }
+  .ending-roll-inner { animation: none; }
+  .ending-roll { overflow-y: auto; mask-image: none; }
+}
+
+/* ── The new world's card ───────────────────────────────────────────────── */
+.ending-newworld { position: fixed; inset: 0; z-index: 1300; display: flex; align-items: center; justify-content: center; padding: 16px; background: #05030cd8; cursor: pointer; animation: endingFade 0.6s linear both; }
+.ending-newworld-card { display: flex; flex-direction: column; align-items: center; gap: 10px; width: min(520px, 100%); padding: 26px 20px; text-align: center; background: #0b0818f0; border: 2px solid var(--rim); box-shadow: 0 0 0 2px var(--rim-dark), 0 8px 0 #000a; }
+
+/* ── The war room: the fate, the cycle, a post-Wall floor's briefing ────── */
+.endgame-fate { display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px; }
+.endgame-fate b { color: var(--gold); letter-spacing: 1px; }
+.endgame-fate.ended { border-color: #8e869a; }
+.endgame-fate.saved { border-color: var(--gold); }
+.endgame-fate ul { margin: 0; padding-left: 18px; font-size: 13px; color: var(--ink-dim); }
+.endgame-cycle { font-size: 12px; color: #d8e4ff; letter-spacing: 1px; margin-bottom: 6px; }
+.endgame-replay { margin-left: 6px; }
+
+/* ── Memories of the Tower ──────────────────────────────────────────────── */
+.memories { display: flex; flex-direction: column; gap: 10px; }
+.memories-list { display: flex; flex-direction: column; gap: 6px; max-height: 260px; overflow-y: auto; padding-right: 4px; }
+.memory-row { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 6px 8px; text-align: left; background: #0006; border: 1px solid var(--line); color: var(--ink); cursor: pointer; font: inherit; }
+.memory-row.sel { border-color: var(--gold); background: #2a204a; }
+.memory-row .mr-title { font-size: 14px; }
+.memory-row .mr-truth { font-size: 12px; color: var(--warn, #f2c75c); }
+.memory-row .mr-truth.found { color: var(--good); }
+.memory-diffs { display: flex; flex-wrap: wrap; gap: 6px; }
+.memory-diff.sel { outline: 2px solid var(--gold); }
+.memory-result { display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; }
+
+/* ── The lobby once the fate is sealed (a tint on the world's canvas) ───── */
+.fate-tint-ended .world-canvas { filter: grayscale(0.55) brightness(0.92); }
+.fate-tint-saved .world-canvas { filter: sepia(0.12) saturate(1.08); }
+
+/* ── Phones ─────────────────────────────────────────────────────────────── */
+@media (max-width: 560px) {
+  .ending { padding: 10px; }
+  .ending-line { font-size: 16px; }
+  .ending-title { font-size: 22px; }
+  .ending-still { margin-bottom: 96px; }
+  .ending-cols { grid-template-columns: 1fr; }
+  .ending-controls { left: 8px; right: 8px; bottom: 8px; justify-content: center; }
+  .ending-name { font-size: 17px; }
+}

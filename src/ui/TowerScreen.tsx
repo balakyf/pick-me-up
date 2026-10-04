@@ -31,6 +31,9 @@ import { useReducedMotion } from './motion'
 import { AnchorBriefing } from './story/AnchorBriefing'
 import { ActCard } from './story/ActCard'
 import { actCardDue, actKey, storyStep } from './story/storyText'
+import { EndgameBriefing } from './ending/EndgameBriefing'
+import { afterActDue } from './ending/endingText'
+import { openEnding } from './ending/endingBus'
 import './tower/tower.css'
 
 const MAX_FLOOR = TUNING.tower.sliceTopFloor
@@ -238,6 +241,8 @@ export function TowerScreen({ state: live, store }: { state: GameState; store: S
     setShowResult(true)
   }
   function resultDone() {
+    // Lane O: the ninetieth floor decided the world's fate — the epilogue plays next.
+    if (pending?.worldEnded || pending?.worldSaved) openEnding({ start: 'epilogue' })
     setShowResult(false)
     setPending(null)
     setFrozen(null)
@@ -256,14 +261,16 @@ export function TowerScreen({ state: live, store }: { state: GameState; store: S
   // Lane M: a new act's title card, once per save, when nothing else holds the screen. It is
   // latched as it shows, and lifts on its own.
   const reduced = useReducedMotion()
-  const actDue = combat || showResult || confirm || aiming || outcome || replay ? null : actCardDue(live)
+  // (Lane O: Act VIII's card comes back once the world's fate is sealed, latched apart.)
+  const actDue = combat || showResult || confirm || aiming || outcome || replay ? null : (actCardDue(live) ?? afterActDue(live))
+  const actLatch = actDue ? ((actDue as { latch?: string }).latch ?? actKey(actDue)) : null
   const [actCard, setActCard] = useState<ReturnType<typeof actCardDue>>(null)
   useEffect(() => {
-    if (!actDue) return
+    if (!actDue || !actLatch) return
     setActCard(actDue)
-    store.dispatch({ type: 'GUIDE_STEP', step: storyStep(actKey(actDue)) })
+    store.dispatch({ type: 'GUIDE_STEP', step: storyStep(actLatch) })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [actDue?.id])
+  }, [actLatch])
 
   return (
     <div className="screen war-room">
@@ -334,6 +341,8 @@ export function TowerScreen({ state: live, store }: { state: GameState; store: S
           )}
           {/* Lane M: before an anchor, who is up there, why it matters, and Isel's word. */}
           {!hasEvent && <AnchorBriefing state={state} />}
+          {/* Lane O: the fate, the cycle, a floor behind the Wall, the ninetieth floor's stakes. */}
+          {!hasEvent && <EndgameBriefing state={state} />}
         </CommandPanel>
 
         <section className="war-floors" ref={listRef} aria-label={t('Floors')}>

@@ -72,6 +72,7 @@ import { CampSummaryWindow } from '../life/CampSummary'
 import { towerMark } from '../life/campSummary'
 import { MoralePips } from '../life/MoralePips'
 import { drawMood, moodFor } from './moodEmote'
+import { fateTint } from '../ending/endingText'
 
 /** The tower as the lobby last saw it (lane L): coming home changes it, and the camp
  *  summary greets the Master. Module state: it outlives the lobby's remounts. */
@@ -1257,7 +1258,7 @@ export function LobbyWorld({
   const news = gazetteBadge(state)
 
   return (
-    <div className="stage" ref={stageRef}>
+    <div className={`stage ${fateTint(state)}`} ref={stageRef}>
       <canvas
         ref={canvasRef}
         className="px world-canvas"
