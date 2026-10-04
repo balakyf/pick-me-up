@@ -10,7 +10,7 @@ import { timeLeft } from '../facilities/shared'
 import { t } from '../i18n/i18n'
 import { withToasts } from '../qol/toastStore'
 import { allSites, type Site, type SiteStatus } from './sites'
-import { PLACE_ICON } from './LobbyWorld'
+import { PlaceIcon } from '../late/PlaceIcon'
 import type { PlaceId } from './lobbyMap'
 import { BoardTabs, DecorateTab } from '../life/EstatePanels'
 
@@ -67,7 +67,9 @@ export function ConstructionBoard({
 
   const row = (s: Site) => (
     <li key={s.facility} className={`cb-row cb-${s.status}`}>
-      <span className="cb-icon">{PLACE_ICON[s.place]}</span>
+      <span className="cb-icon">
+        <PlaceIcon place={s.place} size={20} />
+      </span>
       <span className="cb-name">
         <b>{t(s.label)}</b>
         <span className="cb-status">{status(s)}</span>

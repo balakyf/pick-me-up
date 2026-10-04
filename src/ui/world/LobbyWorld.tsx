@@ -46,12 +46,14 @@ import { closeHeroSheet, registerSheetFinder } from '../hero/sheetBus'
 import { FirstSteps } from '../life/FirstSteps'
 import { AdviceWindow, useAdvice } from '../life/Advisor'
 import { drawBuildingSign, drawZoneSign, ZONE_SIGN } from './roofSigns'
+import { PlaceIcon } from '../late/PlaceIcon'
+import { ROOF_SPIRE, buildingLevel, drawArchitecture, drawRoofLights } from '../pixel/architecture'
 import { PlacePanel, type PanelPlace } from '../facilityPanels'
 import { DialogBox, Gauge, PixelWindow, type DialogScript } from '../kit'
 import { canvasAvailable, cachedCanvas } from '../pixel/render'
 import { renderLobbyBase, drawSummonCircle } from '../pixel/tiles'
 import { PROP_FRAMES, drawEmote, drawProp, type EmoteKind } from '../pixel/props'
-import { ROOF_LIFT, blanket, drawRoof, smoke } from '../pixel/campusProps'
+import { ROOF_LIFT, blanket, smoke } from '../pixel/campusProps'
 import { drawLot, drawSign, drawSiteFrame, drawSiteMarker, type SiteMarker } from '../pixel/siteArt'
 import { gatedRooms, siteRooms, buildableCount } from './sites'
 import { ConstructionBoard } from './ConstructionBoard'
@@ -1056,15 +1058,18 @@ export function LobbyWorld({
         if (!onScreen(rx, ry, b.rect.w * TILE)) continue
         const site = sites.get(b.id)
         const building = site?.status === 'building'
+        // Lane Q: each building's own architecture, its upgrade level on show (ui/pixel/architecture).
+        const lvl = buildingLevel(st, b.id)
         const roof = site
           ? cachedCanvas(`site|frame|${b.id}|${building}`, () => drawSiteFrame(b, building))
-          : cachedCanvas(`roof|${b.id}`, () => drawRoof(b, 0))
+          : cachedCanvas(`arch|${b.id}|${lvl}`, () => drawArchitecture(b, lvl))
+        const lift = site ? 0 : ROOF_SPIRE
         list.push({
           y: (b.rect.y + b.rect.h - 1) * TILE + 1,
           draw: () => {
             if (!roof) return
             ctx.globalAlpha = next
-            ctx.drawImage(roof, rx - camX, ry - camY)
+            ctx.drawImage(roof, rx - camX, ry - camY - lift)
             if (b.chimney && !site) {
               const sm = cachedCanvas(`smoke|${roofFrame % 15}`, () => smoke(roofFrame % 15))
               if (sm) ctx.drawImage(sm, rx + Math.round(b.rect.w * TILE * 0.78) - 2 - camX, ry - 18 - camY)
@@ -1136,16 +1141,17 @@ export function LobbyWorld({
           ctx.fillStyle = g
           ctx.fillRect(cx - L.r * 1.1, cy - L.r * 1.1, L.r * 2.2, L.r * 2.2)
         }
-        // lit windows on the roofs
+        // lit windows on the roofs (lane Q: each building's own windows, dormers, cupolas, vents)
         for (const b of BUILDINGS) {
           if (b === inside || sites.has(b.id)) continue
-          const cx = (b.rect.x + b.rect.w / 2) * TILE - camX
-          const cy = b.rect.y * TILE - ROOF_LIFT + Math.round(((b.rect.h - 1) * TILE + ROOF_LIFT) * 0.36) + 9 - camY
-          const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, 14)
-          g.addColorStop(0, `rgba(255,200,110,${0.7 * dark})`)
-          g.addColorStop(1, 'rgba(255,200,110,0)')
-          ctx.fillStyle = g
-          ctx.fillRect(cx - 16, cy - 16, 32, 32)
+          const alpha = w.roofAlpha.get(b.id) ?? 1
+          if (alpha < 0.5) continue
+          const lvl = buildingLevel(st, b.id)
+          const lit = cachedCanvas(`archLit|${b.id}|${lvl}`, () => drawRoofLights(b, lvl))
+          if (!lit) continue
+          ctx.globalAlpha = Math.min(1, dark * 1.6) * alpha
+          ctx.drawImage(lit, b.rect.x * TILE - camX, b.rect.y * TILE - ROOF_LIFT - ROOF_SPIRE - camY)
+          ctx.globalAlpha = 1
         }
         ctx.globalCompositeOperation = 'source-over'
       }
@@ -1386,7 +1392,7 @@ export function LobbyWorld({
       </div>
 
       {openPlace && (
-        <PixelWindow title={tr(PLACE_LABEL[openPlace])} icon={PLACE_ICON[openPlace]} onClose={() => setOpenPlace(null)}>
+        <PixelWindow title={tr(PLACE_LABEL[openPlace])} icon={<PlaceIcon place={openPlace} size={18} />} onClose={() => setOpenPlace(null)}>
           <PlacePanel place={openPlace} state={state} store={store} onFindHero={findHero} onProfile={(id) => setProfile(id)} />
         </PixelWindow>
       )}
