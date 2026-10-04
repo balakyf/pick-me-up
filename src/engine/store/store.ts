@@ -237,13 +237,13 @@ function reduceCore(state: GameState | null, cmd: Command, nowWorld: number): Ga
       return setDefense(current, cmd.slots)
 
     case 'RAID_RIVAL':
-      return raidRival(current, cmd.rivalId, nowWorld).state
+      return raidRival(current, cmd.rivalId, nowWorld, cmd.heroIds).state
 
     case 'RANSOM_HERO':
       return ransomHero(current, cmd.heroId)
 
     case 'COUNTER_RAID':
-      return counterRaid(current, cmd.heroId, nowWorld).state
+      return counterRaid(current, cmd.heroId, nowWorld, cmd.heroIds).state
 
     case 'RELEASE_CAPTIVE':
       return releaseCaptive(current, cmd.captiveId)
@@ -408,9 +408,15 @@ export function attemptFloorWithResult(
 }
 
 /** Like RAID_RIVAL, but also returns the raid's outcome (loot, captive, battle log). */
-export function raidWithResult(state: GameState | null, rivalId: string, nowReal = 0) {
+export function raidWithResult(state: GameState | null, rivalId: string, nowReal = 0, heroIds?: HeroId[]) {
   const nowWorld = toWorldTime(nowReal)
-  return raidRival(advanceTime(requireState(state, 'RAID_RIVAL'), nowWorld), rivalId, nowWorld)
+  return raidRival(advanceTime(requireState(state, 'RAID_RIVAL'), nowWorld), rivalId, nowWorld, heroIds)
+}
+
+/** Lane Q: like COUNTER_RAID, but also returns the battle (and the captor) for the stage. */
+export function counterRaidWithResult(state: GameState | null, heroId: HeroId, nowReal = 0, heroIds?: HeroId[]) {
+  const nowWorld = toWorldTime(nowReal)
+  return counterRaid(advanceTime(requireState(state, 'COUNTER_RAID'), nowWorld), heroId, nowWorld, heroIds)
 }
 
 /** Like GUILD_RAID / SERVER_WAR, but also returns the outcome for the UI. */

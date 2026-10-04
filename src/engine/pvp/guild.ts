@@ -7,7 +7,7 @@
  * PURE and DETERMINISTIC.
  */
 
-import type { CombatUnit, GameState } from '../types'
+import type { CombatLog, CombatUnit, GameState } from '../types'
 import { TUNING } from '../tuning'
 import { ENEMY_TEMPLATES, SKILLS } from '../content'
 import { buildCombatUnit, buildEnemyUnit } from '../unit'
@@ -15,8 +15,9 @@ import { recordBattle } from '../codex'
 import { runBattle } from '../combat'
 import { rivalSquad } from '../events'
 import { worldDayIndex } from '../daily'
-import { rngFor, hash, chance, nextFloat } from '../rng'
-import { GUILDS, guildById } from './rivals'
+import { rngFor, hash, chance, nextFloat, nextInt } from '../rng'
+import { GUILDS, guildById, sectorRivals } from './rivals'
+import { PVP_STAGE } from './tuning'
 import { pvpReady, worldWeek } from './pvp'
 import { addMasterXp } from '../master'
 
@@ -72,6 +73,67 @@ export interface GuildRaidOutcome {
   book: boolean
   gold: number
   gems: number
+  /** Lane Q: the party's battle against the boss (for the stage). */
+  log: CombatLog
+  /** Lane Q: each guildmate's share of `mates` (the simulated rivals), largest first; sums to `mates`. */
+  roster: GuildmateShare[]
+}
+
+/** Lane Q: one simulated guildmate's damage in the weekly guild raid. */
+export interface GuildmateShare {
+  id: string
+  name: string
+  dealt: number
+}
+
+/**
+ * Lane Q: who of your sector stands in your guild this week (the simulated rivals whose guild
+ * is yours), up to `PVP_STAGE.guildmates`, strongest rating first. A guild with too few in
+ * your sector borrows Masters from the next sectors down. PURE.
+ */
+export function guildmates(state: GameState): { id: string; name: string; rating: number }[] {
+  const g = state.pvp.guild
+  if (g === null) return []
+  const out: { id: string; name: string; rating: number }[] = []
+  const seen = new Set<string>()
+  const highest = state.tower.highestCleared
+  for (let back = 0; back < 10 && out.length < PVP_STAGE.guildmates; back++) {
+    const floor = highest - back * TUNING.pvp.sectorFloors
+    if (floor < 0 && back > 0) break
+    const rivals = sectorRivals({ ...state, tower: { ...state.tower, highestCleared: Math.max(0, floor) } })
+    for (const r of [...rivals].sort((a, b) => b.rating - a.rating || a.id.localeCompare(b.id))) {
+      if (r.guildId !== g || seen.has(r.name)) continue
+      seen.add(r.name)
+      out.push({ id: r.id, name: r.name, rating: r.rating })
+      if (out.length >= PVP_STAGE.guildmates) break
+    }
+  }
+  return out
+}
+
+/**
+ * Lane Q: split the guildmates' damage between them (a stream of its own, so nothing the raid
+ * already drew moves). Integer shares that sum exactly to `mates`, largest first.
+ */
+export function mateShares(state: GameState, week: number, mates: number): GuildmateShare[] {
+  const who = guildmates(state)
+  if (who.length === 0 || mates <= 0) return who.map((m) => ({ id: m.id, name: m.name, dealt: 0 }))
+  let r = rngFor(state.seed, 'guildmateShares', week)
+  const [lo, hi] = PVP_STAGE.mateWeight as readonly [number, number]
+  const weights: number[] = []
+  for (let i = 0; i < who.length; i++) {
+    const w = nextInt(r, lo, hi)
+    r = w.rng
+    weights.push(w.value)
+  }
+  const total = weights.reduce((a, b) => a + b, 0)
+  let given = 0
+  const shares = who.map((m, i) => {
+    const dealt = i === who.length - 1 ? mates - given : Math.floor((mates * weights[i]!) / total)
+    given += dealt
+    return { id: m.id, name: m.name, dealt }
+  })
+  return shares.sort((a, b) => b.dealt - a.dealt || a.id.localeCompare(b.id))
 }
 
 /** The weekly co-op guild raid: your damage + your guildmates' against the guild boss. */
@@ -110,7 +172,7 @@ export function guildRaid(state: GameState, nowWorld: number): { state: GameStat
   const materials = { ...state.materials }
   if (book) materials.bookOfReverseHeaven = (materials.bookOfReverseHeaven ?? 0) + 1
   return {
-    outcome: { dealt, mates, bossHp, felled, book, gold, gems },
+    outcome: { dealt, mates, bossHp, felled, book, gold, gems, log: res.log, roster: mateShares(state, week, mates) },
     state: {
       ...state,
       gold: state.gold + gold,
@@ -124,8 +186,19 @@ export function guildRaid(state: GameState, nowWorld: number): { state: GameStat
   }
 }
 
+/** Lane Q: one battle of a server war (for the stage). */
+export interface WarBattle {
+  log: CombatLog
+  won: boolean
+  /** The rival squad's CP as a multiple of the party's. */
+  ratio: number
+}
+
 /** The weekly server war: three squads from a rival guild; wins pay gems and rating. */
-export function serverWar(state: GameState, nowWorld: number): { state: GameState; wins: number; enemyGuild: string } {
+export function serverWar(
+  state: GameState,
+  nowWorld: number,
+): { state: GameState; wins: number; enemyGuild: string; enemyGuildId: string; battles: WarBattle[] } {
   if (state.pvp.guild === null) throw new Error('serverWar: join a guild first')
   const week = worldWeek(nowWorld)
   if (state.pvp.warWeek === week) throw new Error('serverWar: this week’s war is over')
@@ -138,6 +211,7 @@ export function serverWar(state: GameState, nowWorld: number): { state: GameStat
   r = nextFloat(r).rng
   const enemy = foes[pickG]!
   let wins = 0
+  const battles: WarBattle[] = []
   for (const [i, ratio] of G.warRatios.entries()) {
     const sq = rivalSquad(r, units.length, cp * ratio * (enemy.whale ? P.whaleCpMult : 1), `war${week}_${i}`)
     r = sq.rng
@@ -148,11 +222,14 @@ export function serverWar(state: GameState, nowWorld: number): { state: GameStat
       hash(state.seed, 'war', week, i),
     )
     if (res.outcome === 'win') wins++
+    battles.push({ log: res.log, won: res.outcome === 'win', ratio })
   }
   const won = wins >= 2
   return {
     wins,
     enemyGuild: enemy.name,
+    enemyGuildId: enemy.id,
+    battles,
     state: {
       ...state,
       gems: state.gems + G.warGems[wins]!,

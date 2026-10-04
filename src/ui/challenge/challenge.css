@@ -87,3 +87,5 @@
 }
 .tower-omen { max-width: 128px; margin: 4px auto 0; font-size: 11px; text-align: center; color: #d8a0a0; }
 .tower-omen.dead { color: #9a969c; }
+.raid-roster-picker .hp-list { max-height: 260px; }
+.raid-roster-picker { margin-top: 4px; }

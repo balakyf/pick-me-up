@@ -193,6 +193,8 @@ export function unitSpan(pos: Record<string, { x: number; y: number }>, halfWidt
 export interface FrameOpts {
   /** A trial (the weekly echo): heroes who drop are out, not dead. */
   nonLethal?: boolean
+  /** Lane Q: a non-lethal fight that is not a trial (PvP, the guild raid) says "fight". */
+  fight?: boolean
 }
 
 /** The events that throw a number (or a word) over a unit. */
@@ -368,7 +370,9 @@ function step(cur: Snap, e: CombatEvent, byId: Record<string, CombatUnitInit>, n
       next.dead[e.unitId] = true
       next.caption =
         opts.nonLethal && byId[e.unitId]?.side === 'hero'
-          ? t('{name} is out of the trial.', { name: nameOf(e.unitId) })
+          ? opts.fight
+            ? t('{name} is out of the fight.', { name: nameOf(e.unitId) })
+            : t('{name} is out of the trial.', { name: nameOf(e.unitId) })
           : t('{name} falls!', { name: nameOf(e.unitId) })
       break
     case 'mission':
@@ -380,7 +384,9 @@ function step(cur: Snap, e: CombatEvent, byId: Record<string, CombatUnitInit>, n
     case 'end':
       next.caption =
         opts.nonLethal && e.outcome !== 'win'
-          ? t('The trial ends. Nobody dies here.')
+          ? opts.fight
+            ? t('The fight is over. Nobody dies here.')
+            : t('The trial ends. Nobody dies here.')
           : e.outcome === 'win'
           ? t('Victory!')
           : e.outcome === 'wipe'

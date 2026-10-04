@@ -741,3 +741,6 @@ export function drawLazenca(f: IdleFrame): Bitmap {
   set(b, 36, 19 + br, WHITE)
   return outline(b, INK)
 }
+
+/** Lane Q: the shared limbs and materials, for the late bosses drawn in lateBosses.ts. */
+export { head, blade, cape, plateLeg, pauldron, kite, sprinkle, far, dy, P, FAIR, PALE, SILVER, BLACK_CLOTH, BLOOD_CAPE, ROYAL, RED_EYE, WHITE, WOOD_DARK }

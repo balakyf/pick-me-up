@@ -1,8 +1,23 @@
 import type { CombatLog, CombatUnitInit } from '../../engine/types'
 import { t } from '../i18n/i18n'
 
+/** Lane Q: the closing words of a non-lethal fight that is not a trial (already translated). */
+export interface BannerWords {
+  win: string
+  lose: string
+  sub?: string
+}
+
 /** The word that lands on the stage when the replay ends. */
-export function ResultBanner({ outcome, nonLethal = false }: { outcome: CombatLog['outcome']; nonLethal?: boolean }) {
+export function ResultBanner({ outcome, nonLethal = false, words }: { outcome: CombatLog['outcome']; nonLethal?: boolean; words?: BannerWords }) {
+  if (words) {
+    return (
+      <div className={`battle-banner ${outcome === 'win' ? 'win' : 'trial-end'}`}>
+        {outcome === 'win' ? words.win : words.lose}
+        {words.sub && <span className="banner-sub">{words.sub}</span>}
+      </div>
+    )
+  }
   // A trial is only an echo: it ends, nobody is defeated and nobody dies.
   if (nonLethal) {
     return (

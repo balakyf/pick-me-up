@@ -42,6 +42,7 @@ import {
   type IdleFrame,
 } from './bossSprite'
 import { idleFrame } from './shape'
+import { LATE_BOSSES } from './lateBosses'
 
 export type { IdleFrame } from './bossSprite'
 
@@ -555,13 +556,11 @@ const DRAWERS: Record<string, (f: IdleFrame) => Bitmap> = {
   lizardman: () => lizard({ outfit: 'warrior', cloth: ramp('#3a2e1e', '#5a4a2e', '#7a6644'), weapon: 'sword', shield: true }),
   lizard_shaman: () => lizard({ outfit: 'mage', cloth: ramp('#1e3a4a', '#2e5a6e', '#4a8aa0'), weapon: 'staff', headgear: 'hood' }),
   lizard_rider: () => lizard({ outfit: 'spearman', cloth: ramp('#4a2e1a', '#7a4a2a', '#a8703e'), weapon: 'spear' }),
-  lizard_chief: () =>
-    lizard({ outfit: 'warrior', cloth: ramp('#5a1414', '#8a2424', '#c04040'), weapon: 'club', headgear: 'helm', cape: GOLD, trim: true }),
+  lizard_chief: LATE_BOSSES.lizard_chief!,
   mud_golem: () => golem(ramp('#3a2a1a', '#5e4a30', '#8a6e4a'), hex('#c8a04a'), 'small'),
   mage_golem: () => golem(ramp('#2a2a3a', '#4a4a64', '#7a7a9a'), hex('#7af0ff'), 'small'),
-  kurushahr: () =>
-    humanoid(baseLook({ skin: PALE, eyes: hex('#7af0ff'), outfit: 'mage', cloth: ramp('#1e1a3a', '#34306a', '#5a54a0'), headgear: 'hood', weapon: 'staff', trim: true, accent: GOLD })),
-  stone_statue: () => golem(ramp('#5a5a5a', '#8a8a86', '#b8b8b0'), hex('#ff5a3a'), 'huge'),
+  kurushahr: LATE_BOSSES.kurushahr!,
+  stone_statue: LATE_BOSSES.stone_statue!,
   crystal_core: () => fragmentShardTinted(ramp('#6a5a1e', '#c8b04a', '#fff0a0')),
 
   // Act IV — the Drowned Coast
@@ -569,7 +568,7 @@ const DRAWERS: Record<string, (f: IdleFrame) => Bitmap> = {
   merman: () =>
     humanoid(baseLook({ skin: SEA_SKIN, hair: ramp('#0e2a3a', '#1e4a5a', '#3a7a8a'), eyes: hex('#ffd24a'), outfit: 'spearman', cloth: ramp('#1e3a4a', '#2e5a6e', '#4a8aa0'), weapon: 'spear' })),
   kraken_spawn: () => kraken(false),
-  kraken: () => kraken(true),
+  kraken: LATE_BOSSES.kraken!,
   guardian_golem: () => golem(ramp('#2a3a4a', '#4a6a7a', '#7a9aaa'), hex('#4aa3ff'), 'big'),
   jewel_guardian: () => golem(ramp('#1e2a4a', '#34487a', '#5a74b0'), hex('#3a6aff'), 'big'),
   kthat: (f) => dragon(ramp('#0e2a3a', '#1e5a6e', '#3a8aa0'), ramp('#6a8a8a', '#9ac0c0', '#cce8e8'), ramp('#0e1e2a', '#1e3a4a', '#3a6a7a'), f),
@@ -591,11 +590,9 @@ const DRAWERS: Record<string, (f: IdleFrame) => Bitmap> = {
   darkan: drawDarkan,
   egg_brood: brood,
   the_egg: egg,
-  order_inquisitor: () =>
-    humanoid(baseLook({ skin: FAIR, eyes: INK, outfit: 'mage', cloth: ramp('#5a4a14', '#a8903a', '#e0c870'), headgear: 'hood', weapon: 'staff', trim: true, accent: GOLD })),
+  order_inquisitor: LATE_BOSSES.order_inquisitor!,
   el_cid: drawElCid,
-  order_saint: () =>
-    humanoid(baseLook({ skin: FAIR, hair: GOLD, hairStyle: 'long', eyes: hex('#2a6ab8'), outfit: 'mage', cloth: ramp('#a8a0b8', '#ece6f4', '#ffffff'), headgear: 'circlet', weapon: 'staff', trim: true, accent: GOLD })),
+  order_saint: LATE_BOSSES.order_saint!,
 
   // Act VI — the Inflection
   chimera,
@@ -609,7 +606,7 @@ const DRAWERS: Record<string, (f: IdleFrame) => Bitmap> = {
   fragment_warden: () =>
     humanoid(baseLook({ skin: ramp('#140e24', '#3a2a6a', '#8a7ae0'), hair: VOID_CLOTH, eyes: hex('#c8b8ff'), outfit: 'mage', cloth: ramp('#140e24', '#2a1e4a', '#5a4a9a'), headgear: 'hood', weapon: 'staff' })),
   pryos: drawPryos,
-  fragment_colossus: () => golem(ramp('#0e0a1a', '#2a1e4a', '#5a4a9a'), hex('#c8b8ff'), 'huge'),
+  fragment_colossus: LATE_BOSSES.fragment_colossus!,
 
   // Act VIII — the Unfinished Floors
   void_spawn: voidSpawn,
@@ -688,6 +685,8 @@ export function drawReliquary(): Bitmap {
 
 /** Drawers that author their own second idle frame (the bosses, the dragons, the echoes). */
 const ANIMATED = new Set([
+  // Lane Q: the late bosses author their own second frame too.
+  ...Object.keys(LATE_BOSSES),
   'black_priest', 'lv999_creature', 'halgiraf', 'kthat', 'rodvick', 'lazenca', 'valention', 'versace', 'darkan', 'el_cid',
   'chimera_matriarch', 'pryos', 'herald_of_end', 'tell', 'echo_halgiraf', 'echo_el_cid', 'echo_valention', 'echo_pryos', 'echo_herald',
 ])
@@ -698,6 +697,8 @@ const HOVER = new Set(['harpy', 'wraith', 'fragment_shard', 'crystal_core', 'voi
 export const BOSS_SPRITES: readonly string[] = [
   'black_priest', 'halgiraf', 'kthat', 'rodvick', 'lazenca', 'valention', 'versace', 'darkan', 'el_cid', 'chimera_matriarch', 'pryos',
   'herald_of_end', 'tell', 'lv999_creature',
+  // Lane Q: the last seven.
+  ...Object.keys(LATE_BOSSES),
 ]
 
 const cache = new Map<string, Bitmap>()

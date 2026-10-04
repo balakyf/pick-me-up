@@ -14,7 +14,7 @@
  * Every rival is a seeded ghost Master (see rivals.ts). PURE and DETERMINISTIC.
  */
 
-import type { Captive, CombatUnit, Encounter, GameState, GrowthGrades, HeroId, InvasionRecord, OwnedHero, Star } from '../types'
+import type { Captive, CombatLog, CombatUnit, Encounter, GameState, GrowthGrades, HeroId, InvasionRecord, Line, OwnedHero, PvpReplay, Star } from '../types'
 import { TUNING } from '../tuning'
 import { SKILLS } from '../content'
 import { buildCombatUnit } from '../unit'
@@ -28,7 +28,9 @@ import { clampSanity } from '../kitchen'
 import { releaseGear } from '../equipment'
 import { withFavor } from '../favor'
 import { rngFor, hash, chance, nextFloat, pick } from '../rng'
+import { lineFor } from '../challenge/challenge'
 import { findRival, raidTargets, sectorRivals, guildById, type RivalMaster } from './rivals'
+import { PVP_STAGE } from './tuning'
 
 const P = TUNING.pvp
 const WORLD_DAY_MS = 24 * 3_600_000
@@ -50,6 +52,36 @@ function unitsFor(state: GameState, slots: readonly (HeroId | null)[], lines = s
   return { units, ids }
 }
 
+/**
+ * Lane Q: the slots and lines a raiding team fights in. Without `heroIds` the party goes as
+ * it stands; with them, the picked heroes go in that order, each on the line the party gives
+ * them (or their class's natural line when they are not on the board).
+ */
+export function teamSlots(state: GameState, heroIds?: readonly HeroId[]): { slots: (HeroId | null)[]; lines: Line[] } {
+  if (heroIds === undefined) return { slots: state.party.slots, lines: state.party.lines }
+  const size = TUNING.account.partySize
+  const slots: (HeroId | null)[] = []
+  const lines: Line[] = []
+  for (let i = 0; i < size; i++) {
+    const id = heroIds[i] ?? null
+    slots.push(id)
+    const at = id === null ? -1 : state.party.slots.indexOf(id)
+    const h = id === null ? undefined : state.heroes[id]
+    lines.push(at >= 0 ? state.party.lines[at] ?? 'front' : h ? lineFor(h) : 'front')
+  }
+  return { slots, lines }
+}
+
+/** Why this hand-picked team can't go, or null (the party itself is checked by the deploy rails). */
+export function teamRefusal(state: GameState, heroIds?: readonly HeroId[]): string | null {
+  if (heroIds === undefined) return null
+  if (heroIds.length === 0) return 'Pick at least one hero.'
+  if (heroIds.length > PVP_STAGE.teamMax) return 'A raiding team is at most five heroes.'
+  if (new Set(heroIds).size !== heroIds.length) return 'A hero can only go once.'
+  for (const id of heroIds) if (!pvpReady(state, state.heroes[id])) return 'Someone on the team cannot go right now.'
+  return null
+}
+
 /** The defense roster: the preset slots, or the party where they are empty. */
 export function defenseSlots(state: GameState): (HeroId | null)[] {
   const preset = state.pvp.defense
@@ -64,8 +96,30 @@ function encounterOf(units: CombatUnit[], floor: number): Encounter {
   return { floor, mission: { type: 'PvP', objectives: [{ kind: 'annihilate' }], timer: null }, waves: [{ units }], encounterContext: 'tower', label: 'pvp' }
 }
 
+/** Prepend a log line; only the newest few lines keep their replay (save size). */
 function pushLog(state: GameState, rec: InvasionRecord): GameState['pvp'] {
-  return { ...state.pvp, log: [rec, ...state.pvp.log].slice(0, 12) }
+  return { ...state.pvp, log: trimReplays([rec, ...state.pvp.log].slice(0, 12)) }
+}
+
+function trimReplays(log: InvasionRecord[]): InvasionRecord[] {
+  let kept = 0
+  return log.map((r) => {
+    if (!r.replay) return r
+    if (kept < PVP_STAGE.replaysKept) {
+      kept++
+      return r
+    }
+    const { replay: _drop, ...rest } = r
+    return rest
+  })
+}
+
+/**
+ * Lane Q: fight a recorded invasion again, for the stage. The battle is a pure function of
+ * what the record kept (seed, floor, both sides), so it plays exactly as it was resolved.
+ */
+export function pvpReplayLog(rep: PvpReplay): CombatLog {
+  return runBattle(rep.heroes, encounterOf(rep.foes, rep.floor), rep.seed).log
 }
 
 /** A rival's defense (or raid) squad, sized to `size`, at `cp`; whales are brittle. */
@@ -90,23 +144,27 @@ export interface RaidOutcome {
 }
 
 /** Why this raid can't happen now, or null. */
-export function raidRefusal(state: GameState, rivalId: string, nowWorld: number): string | null {
+export function raidRefusal(state: GameState, rivalId: string, nowWorld: number, heroIds?: readonly HeroId[]): string | null {
   if (!state.meta.crackOpen) return 'The Crack of Time and Space is closed.'
   const week = worldWeek(nowWorld)
   const rival = raidTargets(state, week).find((r) => r.id === rivalId)
   if (!rival) return 'That Master is not in reach this week.'
   if (state.pvp.raidWeek === week && state.pvp.raided.includes(rivalId)) return 'You already raided them this week.'
-  if (unitsFor(state, state.party.slots).units.length === 0) return 'No one in the party can go.'
+  const team = teamRefusal(state, heroIds)
+  if (team !== null) return team
+  const { slots, lines } = teamSlots(state, heroIds)
+  if (unitsFor(state, slots, lines).units.length === 0) return 'No one in the party can go.'
   return null
 }
 
 /** Raid a sector rival's lobby with the party. Non-lethal. Throws when refused. PURE. */
-export function raidRival(state: GameState, rivalId: string, nowWorld: number): { state: GameState; outcome: RaidOutcome } {
-  const refusal = raidRefusal(state, rivalId, nowWorld)
+export function raidRival(state: GameState, rivalId: string, nowWorld: number, heroIds?: readonly HeroId[]): { state: GameState; outcome: RaidOutcome } {
+  const refusal = raidRefusal(state, rivalId, nowWorld, heroIds)
   if (refusal !== null) throw new Error(`raidRival: ${refusal}`)
   const week = worldWeek(nowWorld)
   const rival = raidTargets(state, week).find((r) => r.id === rivalId)!
-  const { units, ids } = unitsFor(state, state.party.slots)
+  const team = teamSlots(state, heroIds)
+  const { units, ids } = unitsFor(state, team.slots, team.lines)
   const defense = ghostParty(state, rival, units.length, cpOf(units) * rival.cpRatio * (rival.whale ? P.whaleCpMult : 1), `def${week}`)
   const seed = hash(state.seed, 'raid', rivalId, week)
   const res = runBattle(units, encounterOf(defense, rival.floor), seed)
@@ -154,6 +212,8 @@ export function raidRival(state: GameState, rivalId: string, nowWorld: number): 
     won,
     goldDelta: gold,
     note: won ? (captive ? `raided them and took ${captive.name} captive` : 'raided their storeroom') : 'were driven back',
+    rivalId: rival.id,
+    guildId: rival.guildId,
   }
   return {
     outcome: { rival, won, gold, stones, captive, logSeed: seed, log: res.log },
@@ -234,9 +294,16 @@ function invasion(state: GameState, day: number, nowWorld: number): GameState {
   // nothing: resolveInvasions skips a day only when it starts before shieldUntil).
   const shieldUntil = now + WORLD_DAY_MS + P.shieldMs
 
-  const res = defense.length > 0 ? runBattle(defense, encounterOf(attackers, raider.floor), hash(state.seed, 'invasion', day)) : null
+  const seed = hash(state.seed, 'invasion', day)
+  const res = defense.length > 0 ? runBattle(defense, encounterOf(attackers, raider.floor), seed) : null
+  // Lane Q: the record keeps the battle, so the Master can watch it on stage.
+  const stage: Pick<InvasionRecord, 'rivalId' | 'guildId' | 'replay'> = {
+    rivalId: raider.id,
+    guildId: raider.guildId,
+    ...(res !== null ? { replay: { seed, floor: raider.floor, heroes: defense, foes: attackers } } : {}),
+  }
   if (res !== null && res.outcome === 'win') {
-    const rec: InvasionRecord = { worldDay: day, direction: 'in', rival: raider.name, won: true, goldDelta: 0, note: 'raided you — the defense held' }
+    const rec: InvasionRecord = { worldDay: day, direction: 'in', rival: raider.name, won: true, goldDelta: 0, note: 'raided you — the defense held', ...stage }
     return { ...state, pvp: { ...pushLog(state, rec), shieldUntil, rating: state.pvp.rating + P.ratingWin } }
   }
 
@@ -276,6 +343,7 @@ function invasion(state: GameState, day: number, nowWorld: number): GameState {
     won: false,
     goldDelta: -goldLoss,
     note: taken.length > 0 ? `raided you and carried off ${taken.join(', ')}` : 'raided you and looted the storeroom',
+    ...stage,
   }
   const next: GameState = { ...state, heroes, materials, gold: state.gold - goldLoss }
   return { ...next, pvp: { ...pushLog(next, rec), shieldUntil, rating: state.pvp.rating - P.ratingLoss } }
@@ -305,7 +373,7 @@ export function resolveInvasions(state: GameState, nowWorld: number): GameState 
     if (h.alive && h.captiveOf && h.captiveOf.deadlineWorld <= nowWorld) {
       heroes = { ...heroes, [h.id]: releaseGear({ ...h, alive: false, captiveOf: null }) }
       log = [
-        { worldDay: today, direction: 'in' as const, rival: h.captiveOf.master, won: false, goldDelta: 0, note: `synthesized ${h.name}` },
+        { worldDay: today, direction: 'in' as const, rival: h.captiveOf.master, won: false, goldDelta: 0, note: `synthesized ${h.name}`, rivalId: h.captiveOf.rivalId },
         ...log,
       ].slice(0, 12)
     }
@@ -331,17 +399,40 @@ export function ransomHero(state: GameState, heroId: HeroId): GameState {
   }
 }
 
-/** Counter-raid the captor's lobby with the party to free a captured hero. */
-export function counterRaid(state: GameState, heroId: HeroId, nowWorld: number): { state: GameState; won: boolean } {
+/** Why a counter-raid for this held hero can't go now, or null (lane Q: for the captive screen). */
+export function counterRaidRefusal(state: GameState, heroId: HeroId, heroIds?: readonly HeroId[]): string | null {
   const h = state.heroes[heroId]
-  const hold = h?.captiveOf
-  if (!h || !h.alive || !hold) throw new Error('counterRaid: that hero is not held')
-  if (!state.meta.crackOpen) throw new Error('counterRaid: the crack is closed')
-  const { units, ids } = unitsFor(state, state.party.slots)
-  if (units.length === 0) throw new Error('counterRaid: no one in the party can go')
-  const captor = findRival(state, hold.rivalId) ?? { id: hold.rivalId, name: hold.master, guildId: '', whale: false, floor: state.tower.highestCleared, cpRatio: 1, rating: 1000 }
+  if (!h || !h.alive || !h.captiveOf) return 'that hero is not held'
+  if (!state.meta.crackOpen) return 'the crack is closed'
+  const team = teamRefusal(state, heroIds)
+  if (team !== null) return team
+  const { slots, lines } = teamSlots(state, heroIds)
+  if (unitsFor(state, slots, lines).units.length === 0) return 'no one in the party can go'
+  return null
+}
+
+/** The captor of a held hero, as a rival (their sector may have moved on: a stand-in then). */
+export function captorOf(state: GameState, hold: NonNullable<OwnedHero['captiveOf']>): RivalMaster {
+  return findRival(state, hold.rivalId) ?? { id: hold.rivalId, name: hold.master, guildId: '', whale: false, floor: state.tower.highestCleared, cpRatio: 1, rating: 1000 }
+}
+
+/** Counter-raid the captor's lobby with the party (or a picked team) to free a captured hero. */
+export function counterRaid(
+  state: GameState,
+  heroId: HeroId,
+  nowWorld: number,
+  heroIds?: readonly HeroId[],
+): { state: GameState; won: boolean; log: CombatLog; captor: RivalMaster } {
+  const why = counterRaidRefusal(state, heroId, heroIds)
+  if (why !== null) throw new Error(`counterRaid: ${why}`)
+  const h = state.heroes[heroId]!
+  const hold = h.captiveOf!
+  const team = teamSlots(state, heroIds)
+  const { units, ids } = unitsFor(state, team.slots, team.lines)
+  const captor = captorOf(state, hold)
   const defense = ghostParty(state, captor, units.length, cpOf(units) * P.counterCpMult * (captor.whale ? P.whaleCpMult : 1), `counter${hold.deadlineWorld}`)
-  const won = runBattle(units, encounterOf(defense, captor.floor), hash(state.seed, 'counter', heroId, hold.deadlineWorld)).outcome === 'win'
+  const res = runBattle(units, encounterOf(defense, captor.floor), hash(state.seed, 'counter', heroId, hold.deadlineWorld))
+  const won = res.outcome === 'win'
   const heroes = { ...state.heroes }
   for (const id of ids) heroes[id] = { ...heroes[id]!, sanity: clampSanity(heroes[id]!.sanity - P.raidSanity) }
   if (won) heroes[heroId] = { ...heroes[heroId]!, captiveOf: null }
@@ -352,9 +443,11 @@ export function counterRaid(state: GameState, heroId: HeroId, nowWorld: number):
     won,
     goldDelta: 0,
     note: won ? `stormed their lobby and freed ${h.name}` : `failed to free ${h.name}`,
+    rivalId: captor.id,
+    ...(captor.guildId ? { guildId: captor.guildId } : {}),
   }
   const next: GameState = { ...state, heroes, meta: won ? addMasterXp(state.meta, TUNING.lobby.master.xpPerPvpWin) : state.meta }
-  return { won, state: { ...next, pvp: { ...pushLog(next, rec), rating: state.pvp.rating + (won ? P.ratingWin : -P.ratingLoss) } } }
+  return { won, log: res.log, captor, state: { ...next, pvp: { ...pushLog(next, rec), rating: state.pvp.rating + (won ? P.ratingWin : -P.ratingLoss) } } }
 }
 
 /** Set the preset defense roster (length 5; living heroes only). */

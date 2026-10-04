@@ -49,7 +49,8 @@ import { aimable, clickOrder, guardUp, holdGiven, ordersInHand, swappedPositions
 import { anyCharge } from './bossCaptions'
 import { Telegraphs } from './Telegraph'
 import { PhaseCinematic } from './PhaseCinematic'
-import { DeathCard, DeathVeil, ResultBanner } from './ResultBanner'
+import { DeathCard, DeathVeil, ResultBanner, type BannerWords } from './ResultBanner'
+import { foeColumnVars } from '../layout/foeColumn'
 import { resumeCursor } from './orderResume'
 import { objectiveView } from './objectives'
 import { ObjectiveHud } from './ObjectiveHud'
@@ -94,6 +95,7 @@ export function BattleScene({
   orders,
   nonLethal = false,
   coach,
+  banner,
 }: {
   log: CombatLog
   state: GameState | null
@@ -103,6 +105,8 @@ export function BattleScene({
   nonLethal?: boolean
   /** Lane P: the coach's lesson this battle may teach as it happens (the tower passes it). */
   coach?: { lesson: Lesson | null; onSeen: (id: LessonId) => void; seen?: (id: LessonId) => boolean }
+  /** Lane Q: the closing words for a non-lethal fight that is not a trial (PvP, the guild raid). */
+  banner?: BannerWords
 }) {
   const [log, setLog] = useState(initialLog)
   const [aim, setAim] = useState<Aim>(null)
@@ -116,7 +120,7 @@ export function BattleScene({
   }
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  const frames = useMemo<Snap[]>(() => buildFrames(log, byId, nameOf, { nonLethal }), [log])
+  const frames = useMemo<Snap[]>(() => buildFrames(log, byId, nameOf, { nonLethal, fight: !!banner }), [log])
 
   const [cursor, setCursor] = useState(0)
   // Toasts wait while the fight plays.
@@ -357,7 +361,7 @@ export function BattleScene({
     // The new log replays the old one exactly up to the order's tick, so the replay goes on
     // from the frame on screen: the rest of this tick still plays, then the order (B16).
     const nextById = Object.fromEntries(next.unitsInit.map((u) => [u.id, u]))
-    const nextFrames = buildFrames(next, nextById, nameOf, { nonLethal })
+    const nextFrames = buildFrames(next, nextById, nameOf, { nonLethal, fight: !!banner })
     setCursor(frameAtEvents(nextFrames, resumeCursor(log, next, applied)))
     setLog(next)
     setPlaying(true)
@@ -467,6 +471,8 @@ export function BattleScene({
   }, [])
 
   const kbd = (k: string) => <kbd className="bkey">{t(k)}</kbd>
+  // Lane Q: the foe column is as wide as the longest foe name needs (ui/layout).
+  const foeCols = useMemo(() => foeColumnVars(log.unitsInit.filter((u) => u.side === 'enemy').map((u) => `${t(u.name)}`)), [log])
   const card = mourning ?? (fallen ? { unit: fallen, words: '', seq: -1, fading: false } : null)
   const stagePxW = Math.round(stageW * zoom)
   const cutIn =
@@ -489,7 +495,7 @@ export function BattleScene({
   return (
     <div
       className={`battle ${reduced ? 'calm' : ''} ${beside ? 'beside' : ''} ${docked ? 'narrow' : ''} ${nonLethal ? 'trial' : ''}`}
-      style={{ ['--spd' as string]: speed, ['--pop-spd' as string]: Math.min(speed, 2), ['--zoom' as string]: zoom }}
+      style={{ ['--spd' as string]: speed, ['--pop-spd' as string]: Math.min(speed, 2), ['--zoom' as string]: zoom, ...foeCols }}
     >
       <div className="battle-main" ref={mainRef}>
         {docked && objective}
@@ -630,7 +636,7 @@ export function BattleScene({
 
             {fallen && <DeathVeil />}
 
-            {atEnd && <ResultBanner outcome={outcome} nonLethal={nonLethal} />}
+            {atEnd && <ResultBanner outcome={outcome} nonLethal={nonLethal} words={banner} />}
             {card && <DeathCard key={card.unit.id} unit={card.unit} words={card.words} fading={card.fading} bust={heroBustUrl(heroSrc(card.unit))} />}
           </div>
 

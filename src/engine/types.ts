@@ -718,6 +718,21 @@ export interface InvasionRecord {
   won: boolean
   goldDelta: number
   note: string
+  /** Lane Q: the rival's id and guild (for the banner on stage). Absent on older records. */
+  rivalId?: string
+  guildId?: string
+  /** Lane Q: an incoming invasion's battle, kept so it can play on stage (newest few only). */
+  replay?: PvpReplay
+}
+
+/** Lane Q: everything an invasion's battle needs to be fought again, identically, on stage. */
+export interface PvpReplay {
+  seed: number
+  floor: number
+  /** The defenders as they stood (the Tactical Center's bonus already in their stats). */
+  heroes: CombatUnit[]
+  /** The raiders. */
+  foes: CombatUnit[]
 }
 
 /** Everything PvP and social (Layer 4; schema v9). */
@@ -1649,9 +1664,10 @@ export type Command =
   | { type: 'DISPATCH_RUINS'; heroIds: HeroId[] }
   /** PvP (Layer 4): the preset defense roster. */
   | { type: 'SET_DEFENSE'; slots: (HeroId | null)[] }
-  | { type: 'RAID_RIVAL'; rivalId: string }
+  /** Lane Q: `heroIds` (1–5) picks the raiding team; without it the party goes. */
+  | { type: 'RAID_RIVAL'; rivalId: string; heroIds?: HeroId[] }
   | { type: 'RANSOM_HERO'; heroId: HeroId }
-  | { type: 'COUNTER_RAID'; heroId: HeroId }
+  | { type: 'COUNTER_RAID'; heroId: HeroId; heroIds?: HeroId[] }
   | { type: 'RELEASE_CAPTIVE'; captiveId: string }
   | { type: 'SYNTHESIZE_CAPTIVE'; captiveId: string; survivorId: HeroId }
   | { type: 'JOIN_GUILD'; guildId: string }

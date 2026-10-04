@@ -1,13 +1,19 @@
+/**
+ * PvP and the guild (Layer 4), with lane Q's stage: every fight now plays as a battle behind
+ * the rival's banner (ui/pvp/*). The panels stay the place to choose: whom to raid (a
+ * pre-battle sheet with the shared hero picker), who defends, the captive chain on one
+ * board, the log (each invasion watchable), and the guild hall.
+ */
 import { useState } from 'react'
-import type { CombatLog, Command, GameState, HeroId, OwnedHero } from '../engine/types'
+import type { Command, GameState, OwnedHero } from '../engine/types'
 import type { Store } from '../engine/store'
-import { raidWithResult, guildRaidWithResult, serverWarWithResult } from '../engine/store'
 import { TUNING } from '../engine/tuning'
 import { toWorldTime } from '../engine/time'
 import {
   GUILDS,
   defenseSlots,
   guildById,
+  guildmates,
   joinRefusal,
   raidRefusal,
   raidTargets,
@@ -15,11 +21,21 @@ import {
   sectorRank,
   serverRank,
   worldWeek,
+  type RivalMaster,
 } from '../engine/pvp'
-import { BattleScene } from './battle/BattleScene'
-import { Portrait } from './bits'
+import { cachedDataUrl } from './pixel/render'
+import { crestShield } from './pixel/crests'
+import { HeroPicker } from './hero/HeroPicker'
 import { t } from './i18n/i18n'
-import { HeroTag, pickerName } from './hero/heroLabel'
+import { accountDay } from './life/speech'
+import { RaidSheet } from './pvp/RaidSheet'
+import { CaptiveBoard } from './pvp/CaptiveBoard'
+import { CrestImg } from './pvp/RivalCardView'
+import { GuildRaidScreen, ServerWarScreen } from './pvp/GuildScreens'
+import { watchInvasion } from './pvp/InvasionAlarm'
+import { guildLook, pvpRefusal } from './pvp/pvpModel'
+import { logNote, timeLeftText } from './pvp/pvpText'
+import './pvp/pvp.css'
 
 const P = TUNING.pvp
 
@@ -40,68 +56,44 @@ function useRunner(store: Store) {
         return false
       }
     },
-    fail(e: unknown) {
-      setErr(t(e instanceof Error ? e.message.replace(/^\w+: /, '') : 'That failed'))
-    },
   }
 }
 
-function worldTimeLeft(ms: number): string {
-  if (ms <= 0) return t('any moment')
-  const h = Math.ceil(ms / 3_600_000)
-  if (h < 24) return t('{n} world-h', { n: h })
-  const d = Math.floor(h / 24)
-  return d === 1 ? t('1 world-day') : t('{n} world-days', { n: d })
-}
-
-/** The engine writes invasion-log notes in English; render them through the dictionary. */
-const NOTE_PATTERNS: [RegExp, string][] = [
-  [/^raided them and took (.+) captive$/, 'raided them and took {name} captive'],
-  [/^raided you and carried off (.+)$/, 'raided you and carried off {name}'],
-  [/^synthesized (.+)$/, 'synthesized {name}'],
-  [/^stormed their lobby and freed (.+)$/, 'stormed their lobby and freed {name}'],
-  [/^failed to free (.+)$/, 'failed to free {name}'],
-]
-function logNote(note: string): string {
-  for (const [re, key] of NOTE_PATTERNS) {
-    const m = re.exec(note)
-    if (m) return t(key, { name: m[1]! })
-  }
-  return t(note)
+/** A guild's little shield (rows and chips). */
+export function CrestShield({ guildId }: { guildId: string | null }) {
+  const url = cachedDataUrl(`crestS|${guildId ?? 'lone'}`, () => crestShield(guildLook(guildId)))
+  return url ? <img className="px pvp-shield" src={url} width={28} height={30} alt="" /> : <span className="pvp-shield" aria-hidden="true" />
 }
 
 /** The PvP side of the open crack: raid, defend, captives, the invasion log (Layer 4). */
 export function PvpPanel({ state, store }: { state: GameState; store: Store }) {
-  const [tab, setTab] = useState<'raid' | 'defense' | 'captives' | 'log'>('raid')
-  const [replay, setReplay] = useState<CombatLog | null>(null)
+  const [tab, setTab] = useState<'raid' | 'defense' | 'captives' | 'log'>(() =>
+    (Object.values(state.heroes) as OwnedHero[]).some((h) => h.alive && h.captiveOf) ? 'captives' : 'raid',
+  )
+  const [sheet, setSheet] = useState<RivalMaster | null>(null)
   const r = useRunner(store)
   const nowWorld = toWorldTime(Date.now())
   const week = worldWeek(nowWorld)
-  const living = (Object.values(state.heroes) as OwnedHero[]).filter((h) => h.alive)
-  const heldOurs = living.filter((h) => h.captiveOf)
-
-  function raid(id: string) {
-    r.setNote(null)
-    try {
-      const out = raidWithResult(store.getState(), id, Date.now())
-      store.dispatch({ type: 'RAID_RIVAL', rivalId: id }, Date.now())
-      r.setNote(
-        out.outcome.won
-          ? t('You raided {rival}: +{gold} gold, +{stones} stones', {
-              rival: out.outcome.rival.name,
-              gold: out.outcome.gold.toLocaleString(),
-              stones: out.outcome.stones,
-            }) + (out.outcome.captive ? t(', and took {name} captive.', { name: out.outcome.captive.name }) : '.')
-          : t("{rival}'s defense drove you back.", { rival: out.outcome.rival.name }),
-      )
-      setReplay(out.outcome.log)
-    } catch (e) {
-      r.fail(e)
-    }
-  }
-
+  const heldOurs = (Object.values(state.heroes) as OwnedHero[]).filter((h) => h.alive && h.captiveOf)
   const defense = defenseSlots(state)
   const shielded = state.pvp.shieldUntil > nowWorld
+
+  const toggleDefense = (id: OwnedHero['id']) => {
+    const cur = [...state.pvp.defense]
+    const i = cur.indexOf(id)
+    if (i >= 0) cur[i] = null
+    else {
+      // The first pick starts from the party (the roster it falls back to), so nobody vanishes.
+      const base = cur.every((x) => x === null) ? [...state.party.slots] : cur
+      if (base.includes(id)) return
+      const free = base.indexOf(null)
+      if (free < 0) return
+      base[free] = id
+      r.run({ type: 'SET_DEFENSE', slots: base })
+      return
+    }
+    r.run({ type: 'SET_DEFENSE', slots: cur })
+  }
 
   return (
     <div className="lr-action pvp-panel">
@@ -113,11 +105,11 @@ export function PvpPanel({ state, store }: { state: GameState; store: Store }) {
       </div>
       <div className="ta-row">
         <span>{t('Protection shield')}</span>
-        <span className="ta-val">{shielded ? worldTimeLeft(state.pvp.shieldUntil - nowWorld) : t('down — raiders can come')}</span>
+        <span className="ta-val">{shielded ? timeLeftText(state.pvp.shieldUntil - nowWorld) : t('down — raiders can come')}</span>
       </div>
-      <div className="syn-modes">
+      <div className="syn-modes" role="tablist">
         {(['raid', 'defense', 'captives', 'log'] as const).map((tb) => (
-          <button key={tb} className={`btn sm ${tab === tb ? 'primary' : ''}`} onClick={() => setTab(tb)}>
+          <button key={tb} role="tab" aria-selected={tab === tb} className={`btn sm ${tab === tb ? 'primary' : ''}`} onClick={() => setTab(tb)}>
             {tb === 'raid'
               ? `⚔ ${t('Raid')}`
               : tb === 'defense'
@@ -137,16 +129,26 @@ export function PvpPanel({ state, store }: { state: GameState; store: Store }) {
           {raidTargets(state, week).map((rv) => {
             const why = raidRefusal(state, rv.id, nowWorld)
             const g = guildById(rv.guildId)
+            const done = state.pvp.raidWeek === week && state.pvp.raided.includes(rv.id)
             return (
-              <div key={rv.id} className={`drill-row ${why ? 'off' : ''}`} title={why ? t(why) : undefined}>
-                <span className="skill-grade">{rv.whale ? '🐋' : 'F'}</span>
+              <div key={rv.id} className={`drill-row pvp-rival ${done ? 'off' : ''}`}>
+                <CrestShield guildId={rv.guildId} />
                 <span className="drill-name">
-                  {rv.name} · F{rv.floor} · {g ? t(g.name) : '—'} · {t('defense')} ×{rv.cpRatio.toFixed(2)}
+                  <b>{rv.name}</b> · F{rv.floor} · {g ? t(g.name) : '—'}
                   {rv.whale && <b className="today-tag"> {t('WHALE')}</b>}
+                  <span className="muted small"> · {t('defense')} ×{rv.cpRatio.toFixed(2)}</span>
                 </span>
                 <span className="muted">{rv.rating}</span>
-                <button className="btn sm" disabled={why !== null} onClick={() => raid(rv.id)}>
-                  {t('Raid')}
+                <button
+                  className="btn sm"
+                  disabled={done || !state.meta.crackOpen}
+                  title={why ? t(why) : undefined}
+                  onClick={() => {
+                    r.setNote(null)
+                    setSheet(rv)
+                  }}
+                >
+                  {done ? t('Raided') : `${t('Raid')}…`}
                 </button>
               </div>
             )
@@ -159,85 +161,39 @@ export function PvpPanel({ state, store }: { state: GameState; store: Store }) {
           <div className="muted" style={{ fontSize: 13 }}>
             {t('While you are away, this roster defends the lobby. Below Lv{n} a fallen defender is scarred; at Lv{n}+ they can be carried off.', { n: P.protectionLevel })}
           </div>
-          <div className="syn-row">
-            {living
-              .filter((h) => !h.captiveOf)
-              .map((h) => {
-                const on = defense.includes(h.id)
-                return (
-                  <button
-                    key={h.id}
-                    type="button"
-                    className={`syn-chip ${on ? 'sel' : ''}`}
-                    onClick={() => {
-                      const cur = [...state.pvp.defense]
-                      const i = cur.indexOf(h.id)
-                      if (i >= 0) cur[i] = null
-                      else {
-                        const free = cur.indexOf(null)
-                        if (free < 0) return
-                        cur[free] = h.id
-                      }
-                      r.run({ type: 'SET_DEFENSE', slots: cur })
-                    }}
-                  >
-                    <Portrait hero={h} size="sm" />
-                    <span className="syn-chip-name">
-                      {pickerName(state, h)} <HeroTag hero={h} />
-                    </span>
-                  </button>
-                )
-              })}
-          </div>
           {state.pvp.defense.every((d) => d === null) && <div className="muted" style={{ fontSize: 13 }}>{t('No preset — your party defends.')}</div>}
+          <HeroPicker
+            state={state}
+            selected={defense.filter((x): x is OwnedHero['id'] => x !== null)}
+            onPick={toggleDefense}
+            refusal={(h) => (h.captiveOf ? 'Held by a rival Master.' : defense.includes(h.id) ? null : defense.filter(Boolean).length >= 5 ? 'The defense is full.' : null)}
+            note={(h) => (defense.includes(h.id) ? (pvpRefusal(state, h) ? t('defends, but cannot fight now') : t('defends')) : null)}
+            label={t('The defense roster')}
+          />
         </div>
       )}
 
-      {tab === 'captives' && (
-        <div className="drill-list">
-          <h4 className="panel-sub">{t('Your heroes, held by raiders')}</h4>
-          {heldOurs.length === 0 && <div className="lr-empty">{t('No one has been taken.')}</div>}
-          {heldOurs.map((h) => {
-            const hold = h.captiveOf!
-            return (
-              <div key={h.id} className="drill-row">
-                <span className="skill-grade">⛓</span>
-                <span className="drill-name">
-                  {t('{name} · held by {master} · synthesized in {n}', { name: h.name, master: hold.master, n: worldTimeLeft(hold.deadlineWorld - nowWorld) })}
-                </span>
-                <button
-                  className="btn sm"
-                  disabled={state.gold < hold.ransomGold || state.gems < hold.ransomGems}
-                  onClick={() => r.run({ type: 'RANSOM_HERO', heroId: h.id })}
-                >
-                  {t('Ransom {ransomGold} ◆ {ransomGems} ♦', { ransomGold: hold.ransomGold.toLocaleString(), ransomGems: hold.ransomGems })}
-                </button>
-                <button className="btn sm" onClick={() => r.run({ type: 'COUNTER_RAID', heroId: h.id })}>
-                  {t('Counter-raid')}
-                </button>
-              </div>
-            )
-          })}
-          <h4 className="panel-sub">{t('Heroes you took')}</h4>
-          {state.pvp.captives.length === 0 && <div className="lr-empty">{t('Your cells are empty.')}</div>}
-          {state.pvp.captives.map((c) => (
-            <CaptiveRow key={c.id} captive={c} state={state} run={r.run} />
-          ))}
-        </div>
-      )}
+      {tab === 'captives' && <CaptiveBoard state={state} store={store} run={r.run} onNote={r.setNote} />}
 
       {tab === 'log' && (
         <div className="drill-list">
           {state.pvp.log.length === 0 && <div className="lr-empty">{t('Quiet so far.')}</div>}
           {state.pvp.log.map((l, i) => (
-            <div key={i} className={`drill-row ${l.won ? '' : 'off'}`}>
-              <span className="skill-grade">{l.direction === 'in' ? '⇠' : '⇢'}</span>
+            <div key={i} className={`drill-row pvp-log ${l.won ? '' : 'off'}`}>
+              <CrestShield guildId={l.guildId ?? null} />
               <span className="drill-name">
                 {l.direction === 'in'
-                  ? t('Day {d}: {rival} {note}', { d: l.worldDay, rival: l.rival, note: logNote(l.note) })
-                  : t('Day {d}: you {note} ({rival})', { d: l.worldDay, rival: l.rival, note: logNote(l.note) })}
+                  ? t('Day {d}: {rival} {note}', { d: accountDay(state, l.worldDay), rival: l.rival, note: logNote(l.note) })
+                  : t('Day {d}: you {note} ({rival})', { d: accountDay(state, l.worldDay), rival: l.rival, note: logNote(l.note) })}
               </span>
               <span className="muted">{l.goldDelta !== 0 ? `${l.goldDelta > 0 ? '+' : ''}${l.goldDelta.toLocaleString()} ◆` : ''}</span>
+              {l.replay ? (
+                <button className="btn sm" onClick={() => watchInvasion(state, l)}>
+                  ▸ {t('Watch')}
+                </button>
+              ) : (
+                <span />
+              )}
             </div>
           ))}
         </div>
@@ -245,47 +201,7 @@ export function PvpPanel({ state, store }: { state: GameState; store: Store }) {
 
       {r.note && <div className="lr-action-note">{r.note}</div>}
       {r.err && <div className="lr-action-note" style={{ color: 'var(--bad)' }}>{r.err}</div>}
-      {replay && <BattleScene log={replay} state={state} onDone={() => setReplay(null)} />}
-    </div>
-  )
-}
-
-function CaptiveRow({
-  captive,
-  state,
-  run,
-}: {
-  captive: GameState['pvp']['captives'][number]
-  state: GameState
-  run: (cmd: Command) => boolean
-}) {
-  const [into, setInto] = useState<HeroId | null>(null)
-  const living = (Object.values(state.heroes) as OwnedHero[]).filter((h) => h.alive && !h.captiveOf)
-  return (
-    <div className="drill-row captive-row">
-      <span className="skill-grade">{captive.star}★</span>
-      <span className="drill-name">
-        {t('{name} · Lv{level}', { name: captive.name, level: captive.level })}
-      </span>
-      <button className="btn sm" onClick={() => run({ type: 'RELEASE_CAPTIVE', captiveId: captive.id })}>
-        {t('Ransom back +{ransomGold} ◆', { ransomGold: captive.ransomGold.toLocaleString() })}
-      </button>
-      <select className="captive-select" value={into ?? ''} onChange={(e) => setInto((e.target.value || null) as HeroId | null)}>
-        <option value="">{t('synthesize into…')}</option>
-        {living.map((h) => (
-          <option key={h.id} value={h.id}>
-            {h.name}
-          </option>
-        ))}
-      </select>
-      <button
-        className="btn sm syn-destroy"
-        disabled={into === null}
-        onClick={() => into && run({ type: 'SYNTHESIZE_CAPTIVE', captiveId: captive.id, survivorId: into })}
-        title={t('Your heroes will know what you did.')}
-      >
-        {t('Synthesize')}
-      </button>
+      {sheet && <RaidSheet state={state} store={store} rival={sheet} onClose={() => setSheet(null)} onResult={r.setNote} />}
     </div>
   )
 }
@@ -293,60 +209,45 @@ function CaptiveRow({
 /** The guild hall: membership, aid, the weekly raid and server war (Layer 4 §4). */
 export function GuildPanel({ state, store }: { state: GameState; store: Store }) {
   const r = useRunner(store)
+  const [open, setOpen] = useState<'raid' | 'war' | null>(null)
   const g = guildById(state.pvp.guild)
-  function weekly(kind: 'raid' | 'war') {
-    r.setNote(null)
-    try {
-      if (kind === 'raid') {
-        const out = guildRaidWithResult(store.getState(), Date.now())
-        store.dispatch({ type: 'GUILD_RAID' }, Date.now())
-        const o = out.outcome
-        r.setNote(
-          o.felled
-            ? t('The Guild Colossus falls! +{gold} gold, +{gems} gems', { gold: o.gold.toLocaleString(), gems: o.gems }) +
-                (o.book ? t(' — and a Book of Reverse Heaven!') : '.')
-            : t('You dealt {dealt} and your guildmates {mates} of {hp} — it survives. +{gold} gold.', {
-                dealt: o.dealt.toLocaleString(),
-                mates: o.mates.toLocaleString(),
-                hp: o.bossHp.toLocaleString(),
-                gold: o.gold,
-              }),
-        )
-      } else {
-        const out = serverWarWithResult(store.getState(), Date.now())
-        store.dispatch({ type: 'SERVER_WAR' }, Date.now())
-        r.setNote(t('Server war against {guild}: {wins}/3 battles won.', { guild: t(out.enemyGuild), wins: out.wins }))
-      }
-    } catch (e) {
-      r.fail(e)
-    }
-  }
+  const week = worldWeek(toWorldTime(Date.now()))
   return (
     <div className="lr-action guild-panel">
-      <div className="ta-row">
-        <span>{t('Guild')}</span>
-        <span className="ta-val">{g ? t(g.name) : t('none')}</span>
-      </div>
-      <div className="ta-row">
-        <span>{t('Server wars')}</span>
-        <span className="ta-val">
-          {state.pvp.war.wins}W · {state.pvp.war.losses}L
-        </span>
-      </div>
       {g ? (
         <>
-          <div className="muted" style={{ fontSize: 13 }}>{t(g.blurb)}</div>
-          <div className="syn-modes">
-            <button className="btn sm" onClick={() => r.run({ type: 'CLAIM_GUILD_AID' })}>
+          <div className="gh-head">
+            <CrestImg guildId={g.id} scale={2} />
+            <div>
+              <div className="gh-name">{t(g.name)}</div>
+              <div className="muted small">{t(g.blurb)}</div>
+              <div className="muted small">
+                {t('Server wars')}: {state.pvp.war.wins}W · {state.pvp.war.losses}L
+              </div>
+            </div>
+          </div>
+          <h4 className="panel-sub">{t('Guildmates in your sector')}</h4>
+          <div className="gr-mates">
+            {guildmates(state).map((m) => (
+              <span key={m.id} className="gr-mate">
+                {m.name} <span className="muted small">{m.rating}</span>
+              </span>
+            ))}
+          </div>
+          <div className="gh-actions">
+            <button className="pbtn" onClick={() => r.run({ type: 'CLAIM_GUILD_AID' })}>
               {t('Claim aid (+{aidStones} stones)', { aidStones: TUNING.guild.aidStones })}
             </button>
-            <button className="btn sm" onClick={() => weekly('raid')}>
-              {t('Guild raid')}
+            <button className="pbtn danger" onClick={() => setOpen('raid')}>
+              ⚔ {t('Guild raid')}
+              {state.pvp.guildRaidWeek === week && <span className="muted small"> ✓</span>}
             </button>
-            <button className="btn sm" onClick={() => weekly('war')}>
-              {t('Server war')}
+            <button className="pbtn danger" onClick={() => setOpen('war')}>
+              ⚑ {t('Server war')}
+              {state.pvp.warWeek === week && <span className="muted small"> ✓</span>}
             </button>
-            <button className="btn sm ghost" onClick={() => r.run({ type: 'LEAVE_GUILD' })}>
+            <span className="spacer" />
+            <button className="pbtn sm ghost" onClick={() => r.run({ type: 'LEAVE_GUILD' })}>
               {t('Leave')}
             </button>
           </div>
@@ -357,7 +258,7 @@ export function GuildPanel({ state, store }: { state: GameState; store: Store })
             const why = joinRefusal(state, x.id)
             return (
               <div key={x.id} className={`drill-row ${why ? 'off' : ''}`} title={why ? t(why) : undefined}>
-                <span className="skill-grade">{x.whale ? '🐋' : '⚑'}</span>
+                <CrestShield guildId={x.id} />
                 <span className="drill-name">
                   {t(x.name)} — <span className="muted">{t(x.blurb)}</span>
                 </span>
@@ -372,6 +273,8 @@ export function GuildPanel({ state, store }: { state: GameState; store: Store })
       )}
       {r.note && <div className="lr-action-note">{r.note}</div>}
       {r.err && <div className="lr-action-note" style={{ color: 'var(--bad)' }}>{r.err}</div>}
+      {open === 'raid' && <GuildRaidScreen state={state} store={store} onClose={() => setOpen(null)} />}
+      {open === 'war' && <ServerWarScreen state={state} store={store} onClose={() => setOpen(null)} />}
     </div>
   )
 }

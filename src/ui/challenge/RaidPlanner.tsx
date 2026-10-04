@@ -21,6 +21,8 @@ import { TimingGame } from '../metaPanels'
 import { cpOf } from '../bits'
 import { t } from '../i18n/i18n'
 import { HeroChip, lootLine } from './common'
+import { HeroPicker } from '../hero/HeroPicker'
+import { pvpRefusal } from '../pvp/pvpModel'
 import { tn } from '../text'
 
 const RD = CHALLENGE.raids
@@ -75,7 +77,6 @@ export function RaidPlanner({ state, store, onClose }: { state: GameState; store
   const brk = ballistaBreak(crew, state.meta.skill.ballista)
   const parties = rows.slice(0, 3).filter((r) => r.length > 0)
   const why = raidRefusal(state, floor, parties, rows[3]!)
-  const fit = (Object.values(state.heroes) as OwnedHero[]).filter((h) => fitToFight(h, state)).sort((a, b) => cpOf(b, state) - cpOf(a, state))
 
   function toggle(id: HeroId) {
     setRows((cur) => {
@@ -171,17 +172,17 @@ export function RaidPlanner({ state, store, onClose }: { state: GameState; store
                 {brk.altar && <> · ✨ {t("the Goddess' altar is held")}</>}
                 <span className="muted small"> · {t('ballista skill {p}%', { p: Math.round(state.meta.skill.ballista * 100) })}</span>
               </div>
-              <div className="raid-roster">
-                {fit.map((h) => (
-                  <HeroChip
-                    state={state}
-                    key={h.id}
-                    hero={h}
-                    selected={placed.has(h.id)}
-                    tag={placed.has(h.id) ? (placed.get(h.id)! < 3 ? ROMAN[placed.get(h.id)!] : '🎯') : undefined}
-                    onClick={() => toggle(h.id)}
-                  />
-                ))}
+              {/* Lane Q: the shared hero picker (lane N) — search, sorts, filters, the reason a hero cannot go. */}
+              <div className="raid-roster-picker">
+                <HeroPicker
+                  state={state}
+                  selected={[...placed.keys()]}
+                  onPick={toggle}
+                  refusal={(h) => pvpRefusal(state, h)}
+                  note={(h) => (placed.has(h.id) ? (placed.get(h.id)! < 3 ? t('Party {n}', { n: ROMAN[placed.get(h.id)!]! }) : t('Ballista crew')) : null)}
+                  label={active < 3 ? t('Heroes for party {n}', { n: ROMAN[active]! }) : t('Heroes for the ballista crew')}
+                  filter={{ availableOnly: true }}
+                />
               </div>
               <div className="raid-actions">
                 <button className="pbtn" onClick={() => setRows(autoFill(state))}>

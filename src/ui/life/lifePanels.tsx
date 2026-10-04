@@ -1,16 +1,15 @@
 /**
  * Living Lobby building panels: who is here right now, who works here (and who else
- * could), the Forge's standing order, and the Memorial's graves. Each building's rules
+ * could), and the Memorial's graves (and, lane Q, the legends of earlier worlds). Each building's rules
  * live in the engine; these only read state and dispatch Commands.
  */
 import { useState } from 'react'
-import type { ForgeOrder, GameState, JobId, LifePlace, OwnedHero } from '../../engine/types'
+import type { GameState, JobId, LifePlace, OwnedHero } from '../../engine/types'
 import type { Store } from '../../engine/store'
 import { TUNING } from '../../engine/tuning'
 import {
   TIER_NAMES,
   aptitude,
-  autoForgeSlot,
   bedCount,
   jobFeeling,
   jobHolders,
@@ -20,11 +19,14 @@ import {
   lifeOf,
   personalityOf,
 } from '../../engine/life'
-import { forgeCost, forgeGrade, heirlooms, smithyUnlocked } from '../../engine/equipment'
+import { heirlooms } from '../../engine/equipment'
+import { endgameOf } from '../../engine/endgame'
 import { heroBustUrl } from '../pixel/sprites'
 import { JOB_NAME, accountDay, lastWords, shortName, statusLine, tradeName } from './speech'
 import { JOB_BLURB, JOB_ICON } from './lifeWindows'
+import { HeroPicker } from '../hero/HeroPicker'
 import { t } from '../i18n/i18n'
+import '../late/late.css'
 
 const first = (n: string) => n.split(/\s+/)[0] ?? n
 
@@ -49,7 +51,7 @@ export function HereNow({ state, place, onProfile, empty }: { state: GameState; 
 /** The seats at one job: holders, their skill, and who else could take a seat. */
 export function StaffSection({ state, store, job, onProfile }: { state: GameState; store: Store; job: JobId; onProfile?: (id: string) => void }) {
   const [err, setErr] = useState<string | null>(null)
-  const [pick, setPick] = useState('')
+  const [picking, setPicking] = useState(false)
   const open = jobOpen(state, job)
   const seats = jobSeats(state, job)
   const holders = jobHolders(state, job)
@@ -57,7 +59,7 @@ export function StaffSection({ state, store, job, onProfile }: { state: GameStat
     setErr(null)
     try {
       store.dispatch({ type: 'ASSIGN_JOB', heroId, job: j }, Date.now())
-      setPick('')
+      setPicking(false)
     } catch (e) {
       setErr(t(e instanceof Error ? e.message.replace(/^\w+: /, '') : 'That failed'))
     }
@@ -112,72 +114,26 @@ export function StaffSection({ state, store, job, onProfile }: { state: GameStat
         </div>
       )}
       {open && holders.length < seats && (
-        <div className="staff-assign">
-          <select className="pinput" value={pick} onChange={(e) => setPick(e.target.value)}>
-            <option value="">{t('Choose a hero…')}</option>
-            {candidates.map((h) => {
-              const feel = jobFeeling(h, job)
-              const cur = lifeOf(h).job
-              return (
-                <option key={h.id} value={h.id}>
-                  {`${h.name} · ${aptitude(h, job).toFixed(2)}${feel === 'likes' ? ' ♥' : feel === 'dislikes' ? ' ✗' : ''}${cur ? ` (${t(JOB_NAME[cur])})` : ''}`}
-                </option>
-              )
-            })}
-          </select>
-          <button className="pbtn sm" disabled={!pick} onClick={() => dispatch(pick as OwnedHero['id'], job)}>
-            {t('Assign')}
-          </button>
-        </div>
+        // Lane Q: the shared hero picker (lane N) instead of a native dropdown.
+        <details className="staff-assign" open={picking} onToggle={(e) => setPicking((e.target as HTMLDetailsElement).open)}>
+          <summary className="pbtn sm">{t('Choose a hero…')}</summary>
+          {picking && (
+            <HeroPicker
+              state={state}
+              heroes={candidates}
+              onPick={(id) => dispatch(id, job)}
+              refusal={(h) => (h.captiveOf ? 'Held by a rival Master.' : null)}
+              note={(h) => {
+                const feel = jobFeeling(h, job)
+                const cur = lifeOf(h).job
+                return `${t('aptitude {a}', { a: aptitude(h, job).toFixed(2) })}${feel === 'likes' ? ' ♥' : feel === 'dislikes' ? ' ✗' : ''}${cur ? ` · ${t(JOB_NAME[cur])}` : ''}`
+              }}
+              label={t('Who takes a seat')}
+            />
+          )}
+        </details>
       )}
       {err && <div className="err">{err}</div>}
-    </div>
-  )
-}
-
-const ORDERS: { id: ForgeOrder | null; label: string }[] = [
-  { id: null, label: 'Stand down' },
-  { id: 'auto', label: 'Whatever the party needs' },
-  { id: 'weapon', label: 'Weapons' },
-  { id: 'armor', label: 'Armor' },
-  { id: 'accessory', label: 'Accessories' },
-]
-
-/** The Forge's standing work order for its smiths. */
-export function ForgeOrderSection({ state, store }: { state: GameState; store: Store }) {
-  if (!smithyUnlocked(state)) return null
-  const order = state.life.forge.order
-  const wip = state.life.forge.wip
-  const grade = forgeGrade(state.meta.masterLevel)
-  const cost = forgeCost(grade)
-  const need = wip ? TUNING.life.jobs.forgeWork[wip.grade] ?? 20 : 0
-  const auto = order === 'auto' ? autoForgeSlot(state) : null
-  return (
-    <div className="forge-order">
-      <h4 className="panel-sub">{t('Work order')}</h4>
-      <div className="order-row">
-        {ORDERS.map((o) => (
-          <button
-            key={String(o.id)}
-            className={`pbtn sm ${order === o.id ? 'on' : ''}`}
-            onClick={() => store.dispatch({ type: 'SET_FORGE_ORDER', order: o.id }, Date.now())}
-          >
-            {t(o.label)}
-          </button>
-        ))}
-      </div>
-      <div className="muted small">
-        {t('Each piece: {grade}-grade · {gold} ◆ + {stones} Promotion Stones.', { grade, gold: cost.gold.toLocaleString(), stones: cost.promotionStone })}
-        {order === 'auto' && (auto ? ` ${t('Next: {slot}.', { slot: t(auto) })}` : ` ${t('The party is fully equipped — the smiths rest.')}`)}
-      </div>
-      {wip && (
-        <div className="wip">
-          ⚒ {t('On the anvil: {grade} {slot}', { grade: wip.grade, slot: t(wip.slot) })}
-          <span className="wip-bar">
-            <span style={{ width: `${Math.min(100, (wip.progress / need) * 100)}%` }} />
-          </span>
-        </div>
-      )}
     </div>
   )
 }
@@ -185,7 +141,14 @@ export function ForgeOrderSection({ state, store }: { state: GameState; store: S
 /** The Memorial: every grave, with the words each hero left behind. */
 export function MemorialPanel({ state }: { state: GameState }) {
   const graves = [...state.life.memorial].reverse()
-  if (graves.length === 0) return <div className="lr-empty">{t('The lawn is empty. Keep it that way, Master.')}</div>
+  const legends = <LegendsShelf state={state} />
+  if (graves.length === 0)
+    return (
+      <>
+        <div className="lr-empty">{t('The lawn is empty. Keep it that way, Master.')}</div>
+        {legends}
+      </>
+    )
   const cause = (c: string, floor: number) =>
     c === 'synthesis' ? t('lost to the Synthesis Chamber') : c === 'captor' ? t('never ransomed') : t('fell on floor {n}', { n: floor })
   const level = state.facilities.memorial?.level ?? 1
@@ -212,7 +175,45 @@ export function MemorialPanel({ state }: { state: GameState }) {
           ))}
         </div>
       ))}
+      {legends}
     </div>
+  )
+}
+
+/**
+ * Lane Q: the legends — the fallen of earlier worlds, carried into this one by a New Cycle
+ * (lane O). Their names stand on a shelf of their own, newest world first, a statue marked.
+ */
+export function LegendsShelf({ state }: { state: GameState }) {
+  const legends = endgameOf(state).legends
+  if (legends.length === 0) return null
+  const worlds = [...new Set(legends.map((l) => l.cycle))].sort((a, b) => b - a)
+  return (
+    <section className="legends-shelf" aria-label={t('Legends of earlier worlds')}>
+      <h4 className="panel-sub">✦ {t('Legends of earlier worlds')}</h4>
+      <p className="muted small">{t('They fell in a world that is gone. Their names came with you.')}</p>
+      {worlds.map((w) => (
+        <div key={w} className="legend-world">
+          <div className="legend-world-name">{t('World {n}', { n: w + 1 })}</div>
+          <div className="legend-row">
+            {legends
+              .filter((l) => l.cycle === w)
+              .map((l) => (
+                <div key={`${l.cycle}|${l.heroId}`} className={`legend ${l.statue ? 'statue' : ''}`} title={l.statue ? t('A statue stood for them') : undefined}>
+                  <img className="px" src={heroBustUrl({ id: l.heroId, name: l.name, star: l.star, heroClass: l.heroClass, element: l.element, portraitToken: l.portraitToken })} width={32} height={32} alt="" />
+                  <span>
+                    <b>{l.name}</b> {l.statue && <span className="legend-statue">🗿</span>}
+                    <span className="muted small">
+                      {' '}
+                      {l.star}★ Lv{l.level} · {l.cause === 'synthesis' ? t('lost to the Synthesis Chamber') : l.cause === 'captor' ? t('never ransomed') : t('fell on floor {n}', { n: l.floor })}{l.bestFloor > 0 && ` · ${t('best floor {n}', { n: l.bestFloor })}`}
+                    </span>
+                  </span>
+                </div>
+              ))}
+          </div>
+        </div>
+      ))}
+    </section>
   )
 }
 

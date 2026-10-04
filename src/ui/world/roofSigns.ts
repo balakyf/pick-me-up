@@ -9,6 +9,27 @@ import { BUILDING_ICON, type Building, type RoomId, type Zone, type ZoneId } fro
 import { ROOF_LIFT } from '../pixel/campusProps'
 import { t } from '../i18n/i18n'
 import { breakLigatures, canvasFont, plainText } from '../canvasText'
+import type { BuildingId, PlaceId } from './lobbyMap'
+import { cachedCanvas } from '../pixel/render'
+import { placeIconBitmap } from '../pixel/placeIcons'
+
+/** Lane Q: the pixel icon each sign carries (the emoji is the fallback). */
+const BUILDING_PLACE: Record<BuildingId, PlaceId> = {
+  dormitory: 'dormitory',
+  tacticalCenter: 'tacticalCenter',
+  promotionChamber: 'promotionChamber',
+  transfer: 'transferStation',
+  watchtower: 'watchtower',
+  kitchen: 'kitchen',
+  tavern: 'tavern',
+  hall: 'summon',
+  library: 'library',
+  magic: 'hallOfMagic',
+  armory: 'armory',
+  synthesis: 'synthesis',
+  infirmary: 'infirmary',
+}
+const ZONE_PLACE: Partial<Record<ZoneId, PlaceId>> = { yard: 'trainingCenter', market: 'market', garden: 'garden', memorial: 'memorial', daily: 'daily' }
 
 export type SignState = 'built' | 'site' | 'building'
 
@@ -21,7 +42,7 @@ export function drawBuildingSign(ctx: CanvasRenderingContext2D, b: Building, x: 
   const w = b.rect.w * TILE
   const body = (b.rect.h - 1) * TILE + ROOF_LIFT
   const ridge = Math.round(body * 0.36)
-  drawSign(ctx, x + w / 2, y + ridge + (body - ridge) * 0.5, w - 4, t(b.label), BUILDING_ICON[b.id], zoom, state)
+  drawSign(ctx, x + w / 2, y + ridge + (body - ridge) * 0.5, w - 4, t(b.label), BUILDING_ICON[b.id], zoom, state, BUILDING_PLACE[b.id])
 }
 
 /** The open-air places (yard, market, garden, memorial, the daily rift) and their emblems. */
@@ -38,7 +59,7 @@ export function drawZoneSign(ctx: CanvasRenderingContext2D, zone: Zone, camX: nu
   const info = ZONE_SIGN[zone.id]
   if (!info) return
   const w = zone.rect.w * TILE
-  drawSign(ctx, zone.rect.x * TILE + w / 2 - camX, zone.rect.y * TILE + TILE * 1.4 - camY, w - 4, t(info.label), info.icon, zoom, state)
+  drawSign(ctx, zone.rect.x * TILE + w / 2 - camX, zone.rect.y * TILE + TILE * 1.4 - camY, w - 4, t(info.label), info.icon, zoom, state, ZONE_PLACE[zone.id])
 }
 
 function drawSign(
@@ -50,6 +71,7 @@ function drawSign(
   icon: string,
   zoom: number,
   state: SignState,
+  place?: PlaceId,
 ): void {
   const k = 1 / Math.max(0.5, zoom)
   const namePx = Math.max(7, NAME_PX * k)
@@ -80,10 +102,20 @@ function drawSign(
   ctx.strokeRect(bx + lw / 2, by + lw / 2, boxW - lw, boxH - lw)
   // Emblem, name, and (for a lot) its status.
   let ly = by + pad + iconPx / 2
-  ctx.font = `${iconPx}px 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji', sans-serif`
-  ctx.globalAlpha *= state === 'built' ? 1 : 0.7
-  ctx.fillText(state === 'built' ? icon : '🔨', cx, ly)
-  ctx.globalAlpha /= state === 'built' ? 1 : 0.7
+  const px = state === 'built' && place ? cachedCanvas(`placeicon|${place}`, () => placeIconBitmap(place)) : null
+  if (px) {
+    // The pixel icon, at a whole multiple of its size (crisp at every zoom).
+    const s = Math.max(k, Math.round(iconPx / px.width / k) * k) * px.width
+    const smooth = ctx.imageSmoothingEnabled
+    ctx.imageSmoothingEnabled = false
+    ctx.drawImage(px, Math.round(cx - s / 2), Math.round(ly - s / 2), s, s)
+    ctx.imageSmoothingEnabled = smooth
+  } else {
+    ctx.font = `${iconPx}px 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji', sans-serif`
+    ctx.globalAlpha *= state === 'built' ? 1 : 0.7
+    ctx.fillText(state === 'built' ? icon : '🔨', cx, ly)
+    ctx.globalAlpha /= state === 'built' ? 1 : 0.7
+  }
   ly += iconPx / 2 + lineGap + namePx / 2
   ctx.font = canvasFont(namePx, 600)
   ctx.fillStyle = state === 'built' ? '#f6e6b8' : '#c8c2d8'

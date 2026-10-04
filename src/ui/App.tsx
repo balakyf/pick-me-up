@@ -11,7 +11,7 @@ import { PartyScreen } from './party/PartyScreen'
 import { TowerScreen } from './TowerScreen'
 import { BattleScene } from './battle/BattleScene'
 import { DevGallery } from './DevGallery'
-import { LobbyWorld, MENU_PLACES, PLACE_ICON, type WorldView } from './world/LobbyWorld'
+import { LobbyWorld, MENU_PLACES, type WorldView } from './world/LobbyWorld'
 import { PLACE_LABEL, type PlaceId } from './world/lobbyMap'
 import { PixelWindow } from './kit'
 import { attemptFloorWithResult } from '../engine/store'
@@ -45,8 +45,13 @@ import { SceneTransition } from './transition/SceneTransition'
 import { SaveErrorNotice } from './qol/SaveErrorNotice'
 import { HeroSheetHost } from './hero/HeroSheetHost'
 import { EndingHost } from './ending/EndingHost'
+import { PvpStageHost } from './pvp/PvpStageHost'
+import { PlaceIcon } from './late/PlaceIcon'
+import { InvasionAlarm } from './pvp/InvasionAlarm'
 import { openEnding } from './ending/endingBus'
 import { fateOf } from '../engine/endgame'
+// Lane Q: big-screen layouts (after every scene's own CSS).
+import './layout/bigScreen.css'
 
 type View = 'lobby' | WorldView
 
@@ -140,7 +145,9 @@ function GameMenu({
       <div className="menu-grid">
         {MENU_PLACES.map((p) => (
           <button key={p} className="menu-item" onClick={() => onGo(p)}>
-            <span className="menu-icon">{PLACE_ICON[p]}</span>
+            <span className="menu-icon">
+              <PlaceIcon place={p} size={22} />
+            </span>
             {t(PLACE_LABEL[p])}
           </button>
         ))}
@@ -400,6 +407,9 @@ export function App() {
           setEpoch((e) => e + 1)
         }}
       />
+      {/* Lane Q: PvP on stage (a rival's banner, then the battle); an unseen invasion's alarm. */}
+      {view === 'lobby' && !menuOpen && panel === null && <InvasionAlarm key={`ia|${state.accountId}|${epoch}`} state={state} />}
+      <PvpStageHost state={state} />
       {/* Lane K: a pixel curtain between scenes; the save-error notice (store.getSaveError). */}
       <SceneTransition scene={view} />
       <SaveErrorNotice store={store} onExport={() => setPanel('save')} />
