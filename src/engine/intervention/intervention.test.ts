@@ -3,7 +3,7 @@ import { intervene, interventionRefusal, nextUnrevealedHidden, interventionCost 
 import { createAccount } from '../account'
 import { summon } from '../gacha'
 import { buildCombatUnit } from '../unit'
-import { SKILLS } from '../content'
+import { HIDDEN_OBJECTIVES, SKILLS } from '../content'
 import type { GameState, HeroId } from '../types'
 
 function devoted(ip = 10): { state: GameState; id: HeroId } {
@@ -18,6 +18,13 @@ describe('Intervention Points', () => {
     expect(interventionRefusal(state, id, 'peek')).toMatch(/Intervention Points/)
     const neutral = { ...state, heroes: { [id]: { ...state.heroes[id]!, favor: 35, ip: 10 } } }
     expect(interventionRefusal(neutral, id, 'peek')).toMatch(/Devoted/)
+  })
+
+  it('reveal prefers a truth on a floor still ahead over one already passed (review of lane P)', () => {
+    const { state } = devoted()
+    const passed = { ...state, tower: { ...state.tower, highestCleared: 50, hiddenFound: [] } }
+    const id = nextUnrevealedHidden(passed)!
+    expect(HIDDEN_OBJECTIVES.find((h) => h.id === id)!.floor).toBeGreaterThan(50)
   })
 
   it('reveal marks the next hidden objective; peek marks the current floor', () => {

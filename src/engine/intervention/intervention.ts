@@ -32,10 +32,13 @@ export function interventionCost(action: InterventionId): number {
   return IV.cost[action]!
 }
 
-/** The next hidden objective neither found nor already revealed (tower order). */
+/** The next hidden objective neither found nor already revealed (tower order), one on a
+ *  floor still ahead first: a truth whose floor is behind (an older save past a truth added
+ *  later) is revealed only when nothing ahead is left. */
 export function nextUnrevealedHidden(state: GameState): string | null {
   const found = new Set([...state.tower.hiddenFound, ...state.meta.revealedHidden])
-  return HIDDEN_OBJECTIVES.find((h) => !found.has(h.id))?.id ?? null
+  const open = HIDDEN_OBJECTIVES.filter((h) => !found.has(h.id))
+  return (open.find((h) => h.floor > state.tower.highestCleared) ?? open[0])?.id ?? null
 }
 
 /** Why a hero can't intervene this way now, or null when it can. */

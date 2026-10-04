@@ -59,6 +59,7 @@ export function CoachBattleTip({
   beat,
   byId,
   onSeen,
+  seen,
   docked = false,
   hidden = false,
 }: {
@@ -66,12 +67,15 @@ export function CoachBattleTip({
   beat: readonly CombatEvent[]
   byId: Readonly<Record<string, CombatUnitInit>>
   onSeen: (id: LessonId) => void
+  /** Already shown this battle: a remount (the layout changing on a rotated phone) must
+   *  not show it again. */
+  seen?: (id: LessonId) => boolean
   docked?: boolean
   /** Step aside (a death moment, another card). */
   hidden?: boolean
 }) {
   const [settings, update] = useSettings()
-  const [phase, setPhase] = useState<'wait' | 'on' | 'done'>('wait')
+  const [phase, setPhase] = useState<'wait' | 'on' | 'done'>(() => (lesson && seen?.(lesson.id) ? 'done' : 'wait'))
   useEffect(() => {
     if (phase === 'wait' && settings.coachTips && happensIn(lesson, beat, byId)) {
       setPhase('on')

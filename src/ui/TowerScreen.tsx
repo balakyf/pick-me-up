@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { GameState, FloorResult, CombatLog, BattleOrder, FocusDirective } from '../engine/types'
+import type { GameState, FloorResult, CombatLog, BattleOrder, FocusDirective, Command } from '../engine/types'
 import { scoutFloor, suggestParty, enterConcerns, type EnterConcern, type Forecast, type ForecastAlternative } from '../engine/scout'
 import { fitCount, ordersAllowed } from '../engine/tower'
 import type { Store } from '../engine/store'
-import { attemptFloorWithResult, resolveEventWithResult } from '../engine/store'
+import { attemptFloorWithResult, reduce, resolveEventWithResult } from '../engine/store'
+import { toWorldTime } from '../engine/time'
 import { buildEncounter } from '../engine/tower'
 import { ANCHORS, actForFloor } from '../engine/content'
 import { TUNING } from '../engine/tuning'
@@ -176,10 +177,11 @@ export function TowerScreen({ state: live, store }: { state: GameState; store: S
     setErr(null)
     // Lane P: the coach's tip on the board is read as the party goes in (latched once), and a
     // lesson whose moment comes in battle rides along (latched when the fight is over).
+    // (The latch is dispatched only once the attempt is known to go ahead.)
     const before = store.getState()!
     const tip = coachTip({ state: before, floor: current, encounter: preview }, coachTipsOn())
-    if (tip !== null) store.dispatch({ type: 'GUIDE_STEP', step: coachStep(tip.id) })
-    const pre = store.getState()!
+    const latch: Command | null = tip !== null ? { type: 'GUIDE_STEP', step: coachStep(tip.id) } : null
+    const pre = latch !== null ? reduce(before, latch, toWorldTime(0)) : before
     setBattleCoach(battleLesson(pre, coachTipsOn()))
     coachShown.current = []
     // An opening Focus is one of the battle's orders; only aim it at someone on this floor.
@@ -196,6 +198,7 @@ export function TowerScreen({ state: live, store }: { state: GameState; store: S
     }
     // B14: the attempt is decided now; keep its replay until the results are seen, so a
     // reload shows the fight instead of applying it in silence.
+    if (latch !== null) store.dispatch(latch) // the store now holds `pre` (deterministic)
     savePendingReplay(attempt.state, attempt.result)
     setFrozen(pre)
     store.dispatch({ type: 'ATTEMPT_FLOOR', focus, ballista, subvert: subvert || undefined, orders: first }) // advance the store identically (deterministic)
@@ -398,7 +401,7 @@ export function TowerScreen({ state: live, store }: { state: GameState; store: S
           state={live}
           onDone={combatDone}
           orders={orders ?? undefined}
-          coach={{ lesson: battleCoach, onSeen: (id) => coachShown.current.push(id) }}
+          coach={{ lesson: battleCoach, onSeen: (id) => coachShown.current.push(id), seen: (id) => coachShown.current.includes(id) }}
         />
       )}
       {showResult && pending && <ResultsScreen result={pending} state={live} onContinue={resultDone} />}

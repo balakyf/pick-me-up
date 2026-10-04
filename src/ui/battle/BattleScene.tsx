@@ -102,7 +102,7 @@ export function BattleScene({
   /** A trial (the weekly echo): nobody dies, so no death moment and no DEFEAT. */
   nonLethal?: boolean
   /** Lane P: the coach's lesson this battle may teach as it happens (the tower passes it). */
-  coach?: { lesson: Lesson | null; onSeen: (id: LessonId) => void }
+  coach?: { lesson: Lesson | null; onSeen: (id: LessonId) => void; seen?: (id: LessonId) => boolean }
 }) {
   const [log, setLog] = useState(initialLog)
   const [aim, setAim] = useState<Aim>(null)
@@ -482,7 +482,7 @@ export function BattleScene({
   const hintCard = (
     <>
       {elementsCard}
-      {coach && <CoachBattleTip lesson={coach.lesson} beat={beat} byId={byId} onSeen={coach.onSeen} docked={docked || beside} hidden={!!card || !!fallen || elementsCard !== null} />}
+      {coach && <CoachBattleTip lesson={coach.lesson} beat={beat} byId={byId} onSeen={coach.onSeen} seen={coach.seen} docked={docked || beside} hidden={!!card || !!fallen || elementsCard !== null} />}
     </>
   )
 
