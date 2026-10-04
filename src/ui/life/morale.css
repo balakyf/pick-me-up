@@ -1,0 +1,92 @@
+/* Lane L · morale pips, the Gazette, camp incidents and the camp summary. */
+:root {
+  --mo-inspired: #f2c75c;
+  --mo-high: #6ad07a;
+  --mo-steady: #8fb4e8;
+  --mo-low: #f2a65a;
+  --mo-shaken: #ef5d6b;
+  --mo-broken: #8a3a4a;
+}
+
+.mo-pips { display: inline-flex; align-items: center; gap: 2px; vertical-align: middle; }
+.mo-pip { width: 6px; height: 6px; background: #2a2450; box-shadow: 0 0 0 1px var(--rim-dark); transform: rotate(45deg); margin: 0 1px; }
+.mo-label { margin-left: 6px; font-size: 12px; }
+.mo-inspired .mo-pip:not([style]) { background: #3a3060; }
+.mo-inspired .mo-label { color: var(--mo-inspired); }
+.mo-shaken .mo-label, .mo-broken .mo-label { color: var(--mo-shaken); }
+.mo-broken .mo-pip { background: #3a1a26; }
+@media (prefers-reduced-motion: no-preference) {
+  .mo-inspired .mo-pip[style] { animation: mo-glint 2.4s ease-in-out infinite; }
+}
+@keyframes mo-glint { 50% { filter: brightness(1.35); } }
+
+.mo-breakdown { margin: 6px 0; }
+.mo-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.mo-factors, .mo-help { list-style: none; margin: 4px 0 0; padding: 0; }
+.mo-factors li { font-size: 13px; line-height: 1.35; }
+.mo-factors .mo-val { display: inline-block; min-width: 2.4em; text-align: right; font-variant-numeric: tabular-nums; }
+.mo-factors li.up .mo-val { color: var(--good); }
+.mo-factors li.down .mo-val { color: var(--bad); }
+.mo-help li { color: var(--ink-dim); }
+.mo-help li::before { content: '› '; color: var(--accent-2); }
+
+/* The tracker and the party strip. */
+.tracker-row .mo-pips { margin-left: 6px; }
+.ps-slot .mo-pips { margin-top: 2px; }
+.pb-slot .mo-pips { margin-top: 2px; }
+
+/* The Gazette. */
+.gz { display: flex; flex-direction: column; gap: 10px; }
+.gz-mast { text-align: center; border-bottom: 2px solid var(--line); padding-bottom: 6px; }
+.gz-mast h3 { margin: 0; letter-spacing: 2px; font-size: 22px; color: var(--gold); }
+.gz-mast .muted { font-size: 12px; }
+.gz-headline { font-size: 17px; line-height: 1.35; padding: 8px 10px; background: var(--panel-2); border-left: 3px solid var(--gold); }
+.gz-cols { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 16px; }
+.gz-sec h4 { margin: 0 0 4px; font-size: 13px; text-transform: uppercase; letter-spacing: 1px; color: var(--accent-2); }
+.gz-sec ul { list-style: none; margin: 0; padding: 0; }
+.gz-sec li { font-size: 13px; line-height: 1.35; padding: 2px 0; border-bottom: 1px dotted #2e2860; }
+.gz-sec.fallen h4 { color: var(--bad); }
+.gz-outlook { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.gz-outlook .chip { display: inline-flex; gap: 4px; align-items: center; }
+.gz-dot { width: 8px; height: 8px; display: inline-block; transform: rotate(45deg); }
+.gz-empty { text-align: center; color: var(--ink-dim); }
+@media (max-width: 640px) {
+  .gz-cols { grid-template-columns: 1fr; }
+  .gz-headline { font-size: 15px; }
+}
+
+/* Camp incidents. */
+.inc-list { display: flex; flex-direction: column; gap: 8px; }
+.inc-card { display: flex; gap: 10px; align-items: flex-start; padding: 8px; background: var(--panel-2); border: 1px solid var(--line); }
+.inc-card .px { flex: none; }
+.inc-body { flex: 1; min-width: 0; }
+.inc-body p { margin: 0 0 6px; }
+.inc-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.inc-when { font-size: 11px; color: var(--ink-faint); }
+.inc-done { color: var(--good); font-size: 13px; }
+
+/* The camp summary (back from the tower). */
+.camp { display: flex; flex-direction: column; gap: 10px; }
+.camp-row { display: flex; gap: 8px; align-items: flex-start; }
+.camp-row .camp-tag { flex: none; min-width: 84px; font-size: 12px; text-transform: uppercase; letter-spacing: 1px; padding-top: 4px; }
+.camp-row.tired .camp-tag { color: var(--warn); }
+.camp-row.grieving .camp-tag { color: #a99af0; }
+.camp-row.troubled .camp-tag { color: var(--bad); }
+.camp-row.ready .camp-tag { color: var(--good); }
+.camp-heroes { display: flex; flex-wrap: wrap; gap: 6px; }
+.camp-hero { display: inline-flex; align-items: center; gap: 4px; padding: 2px 6px 2px 2px; background: var(--panel-2); border: 1px solid var(--line); cursor: pointer; color: inherit; font: inherit; font-size: 13px; }
+.camp-hero:hover, .camp-hero:focus-visible { border-color: var(--accent-2); }
+.camp-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.camp-note { font-size: 12px; color: var(--ink-dim); }
+@media (max-width: 640px) {
+  .camp-row { flex-direction: column; gap: 4px; }
+}
+
+/* HUD: the Gazette and the camp's pending incidents. */
+.hud .pbtn.gz-btn .badge, .hud .pbtn.inc-btn .badge { margin-left: 4px; }
+
+/* Isel's letter: fold it, or read the Gazette beside it. */
+.letter-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+
+/* The Party Board's chip for a hero whose morale broke. */
+.pb-status.st-disheartened { color: var(--mo-shaken); }

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react'
 import { TraitChip } from '../people/TraitBadge'
+import { MoralePips } from '../life/MoralePips'
 import { traitOf } from '../../engine/content/traits'
 import type { Element, GameState, HeroClass, HeroId, Line, OwnedHero } from '../../engine/types'
 import type { Store } from '../../engine/store'
@@ -88,6 +89,7 @@ const STATUS_LABEL: Record<HeroStatus, string> = {
   captive: 'Captive',
   bounty: 'Bounty',
   burnout: 'Burnt out',
+  disheartened: 'Disheartened',
 }
 const STATUS_HINT: Record<HeroStatus, string> = {
   ready: 'Rested and fit to fight.',
@@ -99,6 +101,7 @@ const STATUS_HINT: Record<HeroStatus, string> = {
   captive: 'Held by a rival Master — cannot fight.',
   bounty: 'Out on a bounty — cannot fight until they return.',
   burnout: 'Burnt out — resting, refuses the tower for now.',
+  disheartened: 'Morale broken — will not deploy until their spirits lift.',
 }
 
 function StatusChip({ hero, state }: { hero: OwnedHero; state: GameState }) {
@@ -346,6 +349,7 @@ export function PartyScreen({ state, store }: { state: GameState; store: Store }
                             <span style={{ color: STAR_COLOR[shownStarOf(h, state)] }}>{shownStarOf(h, state)}★</span>
                             <span className="cp">{heroCp(h, state).toLocaleString()}</span>
                           </span>
+                          <MoralePips state={state} heroId={h.id} />
                           {!deployable(h, state) && <StatusChip hero={h} state={state} />}
                         </>
                       ) : (
@@ -490,6 +494,7 @@ export function PartyScreen({ state, store }: { state: GameState; store: Store }
                   <span className="c-name">
                     <span className="pb-name">{h.name}</span>
                     <TraitChip def={traitOf(h)} compact />
+                    <MoralePips state={state} heroId={h.id} />
                     {st !== 'ready' && <StatusChip hero={h} state={state} />}
                   </span>
                   <span className="c-star" style={{ color: STAR_COLOR[star] }}>

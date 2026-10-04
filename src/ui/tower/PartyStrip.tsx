@@ -10,6 +10,7 @@ import { sanityColor } from '../facilities/shared'
 import { t } from '../i18n/i18n'
 import { deployReasonText } from '../deployReason'
 import { pickerName } from '../hero/heroLabel'
+import { MoralePips } from '../life/MoralePips'
 
 const PIPS = 5
 /** A glyph for why a hero stays home (the tooltip says it in words). */
@@ -23,6 +24,7 @@ const REASON_GLYPH: Record<DeployReason, string> = {
   burnout: '💤',
   exhausted: '💤',
   rebellion: '✋',
+  disheartened: '☁',
 }
 /** A word for it, short enough for the strip. */
 const REASON_SHORT: Record<DeployReason, string> = {
@@ -35,6 +37,7 @@ const REASON_SHORT: Record<DeployReason, string> = {
   burnout: 'burnt out',
   exhausted: 'broken',
   rebellion: 'refuses',
+  disheartened: 'disheartened',
 }
 const LINE_LABEL = { front: 'front', mid: 'mid', back: 'back' } as const
 
@@ -72,6 +75,7 @@ export function PartyStrip({ state }: { state: GameState }) {
                 <span key={i} className="ps-pip" style={i < lit ? { background: sanityColor(r.sanity) } : undefined} />
               ))}
             </span>
+            {hero.alive && <MoralePips state={state} heroId={hero.id} />}
             <span className="ps-line muted small">{r.fit ? t(LINE_LABEL[r.line]) : r.reason && r.reason !== 'empty' ? (
                   <>
                     {REASON_GLYPH[r.reason]} <span className="ps-why">{t(REASON_SHORT[r.reason])}</span>
