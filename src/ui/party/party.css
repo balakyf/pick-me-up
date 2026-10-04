@@ -144,3 +144,22 @@
   .pb-row > .c-lv { grid-area: lv; font-size: 12px; }
   .pb-row > .c-slot { grid-area: slot; text-align: right; }
 }
+
+/* Lane N: the sheet button on a row, the swap button on a slot, the swap window. */
+.pb-info { flex: none; background: none; border: 1px solid transparent; color: var(--ink-faint); font: inherit; font-size: 13px; line-height: 1; padding: 1px 3px; cursor: pointer; }
+.pb-info:hover, .pb-info:focus-visible { color: var(--gold); border-color: var(--line); }
+.pb-slot-swap {
+  position: absolute; bottom: 2px; right: 2px; background: #120e2c; border: 1px solid var(--line); color: var(--ink-dim);
+  font: inherit; font-size: 12px; line-height: 1; padding: 2px 4px; cursor: pointer;
+}
+.pb-slot-swap:hover, .pb-slot-swap:focus-visible { color: var(--gold); border-color: var(--gold); }
+.pb-swap-now { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+@media (max-width: 720px) {
+  /* The trait chip stays on phones: the name row wraps it under the name. */
+  .pb-row > .c-name { flex-wrap: wrap; row-gap: 2px; }
+  .pb-row .pb-name { max-width: 100%; }
+}
+@media (max-width: 640px) {
+  /* Room under the pips for the swap button. */
+  .pb-slot.filled { padding-bottom: 22px; }
+}

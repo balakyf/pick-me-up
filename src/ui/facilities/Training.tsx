@@ -9,7 +9,9 @@ import { lifeOf } from '../../engine/life'
 import { Portrait, SkillList } from '../bits'
 import { skillBlurb } from '../skillText'
 import { t } from '../i18n/i18n'
-import { HeroChip, timeLeft } from './shared'
+import { timeLeft } from './shared'
+import { HeroPicker } from '../hero/HeroPicker'
+import { busyRefusal } from '../hero/refusals'
 import { HeroTag, pickerName } from '../hero/heroLabel'
 
 const TRAIN = TUNING.skills.training
@@ -78,11 +80,15 @@ export function TrainingAction({ state, store }: { state: GameState; store: Stor
       {free.length === 0 ? (
         <div className="lr-empty">{t('Every hero is busy.')}</div>
       ) : (
-        <div className="syn-row">
-          {free.map((h) => (
-            <HeroChip key={h.id} state={state} hero={h} selected={selected?.id === h.id} onClick={() => setHeroId(selected?.id === h.id ? null : h.id)} />
-          ))}
-        </div>
+        <HeroPicker
+          state={state}
+          heroes={living}
+          label={t('New drill')}
+          selected={selected ? [selected.id] : []}
+          refusal={(h) => busyRefusal(state, h)}
+          onPick={(id) => setHeroId(selected?.id === id ? null : id)}
+          filter={{ availableOnly: true }}
+        />
       )}
       {selected && (
         <div className="drill-list">

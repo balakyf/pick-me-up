@@ -4,10 +4,10 @@ import { t } from './i18n/i18n'
 import { CodexButton } from './codex/CodexWindow'
 import { HallOfMagicInfo, RiftPanel, ShopPanel } from './metaPanels'
 import { GuildPanel } from './pvpPanels'
-import { DormitoryInfo, ForgeOrderSection, HereNow, KitchenPantry, LibraryInfo, MemorialPanel, StaffSection, WatchtowerInfo } from './life/lifePanels'
+import { DormitoryInfo, HereNow, KitchenPantry, LibraryInfo, MemorialPanel, StaffSection, WatchtowerInfo } from './life/lifePanels'
 import { WeeklyTrialLauncher } from './challenge/WeeklyTrial'
 import { EstateSection } from './life/EstatePanels'
-import { Occupants, UpgradeControl, roomFor } from './facilities/shared'
+import { UpgradeControl, roomFor } from './facilities/shared'
 import { BanquetAction } from './facilities/Kitchen'
 import { PromotionAction } from './facilities/Promotion'
 import { TacticalAction } from './facilities/Tactical'
@@ -16,6 +16,8 @@ import { SynthesisChamber } from './facilities/Synthesis'
 import { Armory } from './facilities/Armory'
 import { TrainingAction } from './facilities/Training'
 import { TransferAction } from './facilities/Transfer'
+import { ForgeOrders } from './facilities/Forge'
+import { HeroPicker } from './hero/HeroPicker'
 
 /**
  * Facility panels — the rules-facing half of the Lobby. The walkable world
@@ -88,7 +90,7 @@ export function PlacePanel({
 }) {
   const living = (Object.values(state.heroes) as OwnedHero[]).filter((h) => h.alive)
   const partyIds = new Set(state.party.slots.filter(Boolean) as string[])
-  const here = (room: 'promotionChamber' | 'tacticalCenter') => living.filter((h) => roomFor(h, partyIds) === room)
+  const here = (room: 'tacticalCenter') => living.filter((h) => roomFor(h, partyIds) === room)
   const lifeFacility: FacilityId | null =
     place === 'dormitory' ||
     place === 'tavern' ||
@@ -125,6 +127,8 @@ export function PlacePanel({
         <>
           <BanquetAction state={state} store={store} />
           <KitchenPantry state={state} />
+          <h4 className="panel-sub">{t('Who needs the kitchen')}</h4>
+          <HeroPicker state={state} heroes={living} label={t('Heroes by morale, the lowest first')} sort="morale" flip />
           <UpgradeControl state={state} store={store} facility="kitchen" />
           <StaffSection state={state} store={store} job="cook" onProfile={onProfile} />
           <h4 className="panel-sub">{t('Here now')}</h4>
@@ -136,15 +140,13 @@ export function PlacePanel({
           <TacticalAction state={state} />
           <UpgradeControl state={state} store={store} facility="tacticalCenter" />
           <h4 className="panel-sub">{t('On duty')}</h4>
-          <Occupants state={state} heroes={here('tacticalCenter')} empty="No party assigned — use the party board." />
+          <HeroPicker state={state} heroes={here('tacticalCenter')} label={t('The party on duty')} empty="No party assigned — use the party board." />
         </>
       )}
       {place === 'promotionChamber' && (
         <>
           <PromotionAction state={state} store={store} />
           <UpgradeControl state={state} store={store} facility="promotionChamber" />
-          <h4 className="panel-sub">{t('Waiting at the cap')}</h4>
-          <Occupants state={state} heroes={here('promotionChamber')} empty="No one is waiting here." />
         </>
       )}
       {place === 'trainingCenter' && (
@@ -176,7 +178,7 @@ export function PlacePanel({
       {place === 'armory' && (
         <>
           <Armory state={state} store={store} />
-          <ForgeOrderSection state={state} store={store} />
+          <ForgeOrders state={state} store={store} />
           <UpgradeControl state={state} store={store} facility="forge" />
           <StaffSection state={state} store={store} job="blacksmith" onProfile={onProfile} />
         </>

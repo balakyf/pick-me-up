@@ -5,7 +5,9 @@ import { TUNING } from '../../engine/tuning'
 import { canSynthesize, rescueOptions, synthesisPreview, synthesisUnlocked, type SynthesisInput } from '../../engine/synthesis'
 import { SKILLS } from '../../engine/content'
 import { t } from '../i18n/i18n'
-import { HeroChip, matLabel } from './shared'
+import { matLabel } from './shared'
+import { HeroPicker } from '../hero/HeroPicker'
+import { awayReason, sacrificeRefusal } from '../hero/refusals'
 import { attrLabel, gradeDeltaLine, rescueLabel } from './facilityText'
 import { tn } from '../text'
 
@@ -66,8 +68,6 @@ export function SynthesisChamber({ state, store }: { state: GameState; store: St
     }
   }
 
-  const sacrificeable = living.filter((h) => h.id !== survivorId && h.promotion === null)
-
   return (
     <div className="lobby-portal synth-portal">
       <div className="lp-head">
@@ -89,20 +89,28 @@ export function SynthesisChamber({ state, store }: { state: GameState; store: St
         <div className="syn-label">
           {mode === 'transfer' ? t('Survivor (required)') : t('Rescue onto (optional)')}
         </div>
-        <div className="syn-row">
-          {living.map((h) => (
-            <HeroChip key={h.id} state={state} hero={h} selected={survivorId === h.id} onClick={() => chooseSurvivor(h.id)} />
-          ))}
-        </div>
+        <HeroPicker
+          state={state}
+          heroes={living}
+          label={mode === 'transfer' ? t('Survivor (required)') : t('Rescue onto (optional)')}
+          selected={survivorId ? [survivorId] : []}
+          refusal={(h) => awayReason(state, h)}
+          onPick={chooseSurvivor}
+        />
       </div>
 
       <div className="syn-section">
         <div className="syn-label">{t('Sacrifices (permanently destroyed)')}</div>
-        <div className="syn-row">
-          {sacrificeable.map((h) => (
-            <HeroChip key={h.id} state={state} hero={h} selected={sacrificeIds.includes(h.id)} onClick={() => toggleSac(h.id)} />
-          ))}
-        </div>
+        <HeroPicker
+          state={state}
+          heroes={living}
+          label={t('Sacrifices (permanently destroyed)')}
+          selected={sacrificeIds}
+          refusal={(h) => sacrificeRefusal(state, h, survivorId)}
+          onPick={toggleSac}
+          sort="cp"
+          flip
+        />
       </div>
 
       {rescueChoices.length > 0 && (

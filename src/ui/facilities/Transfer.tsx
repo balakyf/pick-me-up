@@ -6,7 +6,8 @@ import { SKILLS } from '../../engine/content'
 import { fuseOptions, maxTransferGrade, transferCost, transferRefusal, transferredLevel } from '../../engine/transfer'
 import { SkillList } from '../bits'
 import { t } from '../i18n/i18n'
-import { HeroChip } from './shared'
+import { HeroPicker } from '../hero/HeroPicker'
+import { busyRefusal } from '../hero/refusals'
 
 const TRANSFER = TUNING.skills.transfer
 
@@ -39,14 +40,16 @@ export function TransferAction({ state, store }: { state: GameState; store: Stor
     return <div className="lr-action-note">{t('Build the Transfer Station to move and fuse skills.')}</div>
   }
 
-  const chips = (selected: OwnedHero | null, pick: (id: HeroId | null) => void, exclude?: HeroId | null) => (
-    <div className="syn-row">
-      {free
-        .filter((h) => h.id !== exclude)
-        .map((h) => (
-          <HeroChip key={h.id} state={state} hero={h} selected={selected?.id === h.id} onClick={() => pick(selected?.id === h.id ? null : h.id)} />
-        ))}
-    </div>
+  const living = (Object.values(state.heroes) as OwnedHero[]).filter((h) => h.alive)
+  const chips = (label: string, selected: OwnedHero | null, pick: (id: HeroId | null) => void, exclude?: HeroId | null, other?: string) => (
+    <HeroPicker
+      state={state}
+      heroes={living}
+      label={label}
+      selected={selected ? [selected.id] : []}
+      refusal={(h) => (h.id === exclude && other ? other : busyRefusal(state, h))}
+      onPick={(id) => pick(selected?.id === id ? null : id)}
+    />
   )
 
   return (
@@ -64,9 +67,9 @@ export function TransferAction({ state, store }: { state: GameState; store: Stor
       {tab === 'transfer' ? (
         <>
           <div className="syn-label">{t('Donor (forgets the skill)')}</div>
-          {chips(donor, (id) => { setDonorId(id); setErr(null) }, recipientId)}
+          {chips(t('Donor (forgets the skill)'), donor, (id) => { setDonorId(id); setErr(null) }, recipientId, 'Already the recipient.')}
           <div className="syn-label">{t('Recipient')}</div>
-          {chips(recipient, (id) => { setRecipientId(id); setErr(null) }, donorId)}
+          {chips(t('Recipient'), recipient, (id) => { setRecipientId(id); setErr(null) }, donorId, 'Already the donor.')}
           {donor && recipient && (
             <div className="drill-list">
               {donor.skills.map((sk) => {
@@ -97,7 +100,7 @@ export function TransferAction({ state, store }: { state: GameState; store: Stor
       ) : (
         <>
           <div className="syn-label">{t('Hero')}</div>
-          {chips(fuser, (id) => { setFuserId(id); setErr(null) })}
+          {chips(t('Hero'), fuser, (id) => { setFuserId(id); setErr(null) })}
           {fuser && (
             <div className="drill-list">
               <SkillList hero={fuser} />

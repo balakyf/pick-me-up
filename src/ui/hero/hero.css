@@ -2,3 +2,147 @@
 .hero-tag { color: var(--ink-dim); font-size: 12px; font-weight: 400; white-space: nowrap; }
 .syn-chip .hero-tag, .hero-chip .hero-tag { margin-left: 2px; }
 .class-trade { color: var(--ink-dim); font-weight: 400; }
+
+/* ── The shared hero picker (hero/HeroPicker.tsx, lane N) ─────────────────────── */
+.hp { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.hp-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.hp-bar select.pinput { padding: 3px 4px; max-width: 170px; }
+.hp-search { width: 160px; }
+.hp-field { display: inline-flex; align-items: center; gap: 4px; }
+.hp-check { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; color: var(--ink-dim); cursor: pointer; }
+.hp-check input { accent-color: var(--accent); }
+.hp-count { display: flex; gap: 8px; align-items: baseline; }
+.hp-list { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 4px; max-height: 340px; overflow-y: auto; }
+.hp-row { display: flex; align-items: stretch; min-width: 0; background: #16112e; border: 2px solid #2c2460; }
+.hp-row:hover { border-color: #6a5cb0; }
+.hp-row.sel { border-color: var(--gold); background: #2a2258; }
+.hp-row.off { opacity: 0.6; }
+.hp-row.dead { filter: grayscale(0.8); }
+.hp-pick {
+  flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 6px; padding: 3px 4px;
+  background: none; border: none; color: var(--ink); font: inherit; text-align: left; cursor: pointer;
+}
+.hp-pick:disabled { cursor: not-allowed; }
+.hp-pick:focus-visible, .hp-info:focus-visible { outline: 2px solid var(--gold); outline-offset: -2px; }
+.hp-main { display: flex; flex-direction: column; min-width: 0; gap: 1px; }
+.hp-name { font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hp-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 5px; font-size: 12px; color: var(--ink-dim); }
+.hp-meta .cp { font-size: 12px; }
+.hp-note { color: var(--gold); white-space: nowrap; }
+.hp-why { font-size: 11px; color: var(--warn); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hp-dead { color: var(--bad); }
+.hp-info { flex: none; align-self: center; margin-right: 3px; }
+@media (max-width: 640px) {
+  .hp-search { width: 100%; }
+  .hp-bar select.pinput { max-width: none; flex: 1 1 40%; min-width: 0; }
+  .hp-list { grid-template-columns: 1fr; max-height: 46vh; }
+}
+
+/* ── The hero sheet (hero/HeroSheet.tsx, lane N) ──────────────────────────────── */
+.hs { display: flex; flex-direction: column; gap: 10px; }
+.hs-head { display: flex; gap: 12px; align-items: flex-start; flex-wrap: wrap; }
+.hs-bust { width: 72px; height: 72px; flex: none; border: 3px solid var(--line); background: linear-gradient(180deg, #2a2258, #120e2c); }
+.hs.dead .hs-bust { filter: grayscale(1); }
+.hs-id { flex: 1 1 180px; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.hs-line { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.hs-fallen { color: var(--bad); font-weight: 700; }
+.hs-actions { display: flex; flex-direction: column; gap: 6px; align-items: flex-end; }
+.hs-tabs { display: flex; gap: 2px; border-bottom: 2px solid var(--line); overflow-x: auto; }
+.hs-tab {
+  background: none; border: 2px solid transparent; border-bottom: none; color: var(--ink-dim);
+  font: inherit; font-size: 14px; padding: 4px 12px; cursor: pointer; white-space: nowrap;
+}
+.hs-tab:hover { color: var(--ink); }
+.hs-tab.on { color: var(--gold); border-color: var(--line); background: var(--panel-2); }
+.hs-tab:focus-visible { outline: 2px solid var(--gold); outline-offset: -2px; }
+.hs-panel { min-height: 240px; }
+@media (min-width: 721px) and (min-height: 700px) {
+  /* Tabs of different lengths do not make the centred window jump. */
+  .hs-panel { min-height: 430px; }
+}
+.hs-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.hs-more { margin-top: 8px; }
+.hs-more > summary { cursor: pointer; color: var(--accent-2); font-size: 14px; }
+.hs-xp { display: grid; grid-template-columns: auto 1fr auto; gap: 8px; align-items: center; font-size: 14px; }
+.hs-bar { display: block; height: 8px; background: #120e2c; border: 1px solid var(--line); }
+.hs-bar > span { display: block; height: 100%; background: var(--accent); }
+.hs-cp { display: flex; flex-direction: column; gap: 2px; }
+.hs-cp .cp { font-size: 22px; }
+.hs-table { border-collapse: collapse; font-size: 14px; width: 100%; }
+.hs-table th { text-align: left; color: var(--ink-dim); font-weight: 400; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; padding: 2px 6px; border-bottom: 1px solid var(--line); }
+.hs-table td { padding: 2px 6px; border-bottom: 1px solid #2c2460; }
+.hs-table td.up { color: var(--good); }
+.hs-grade { font-weight: 700; color: var(--gold); }
+.hs-skill-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.hs-skill { padding: 6px 8px; background: #16112e; border: 2px solid #2c2460; display: flex; flex-direction: column; gap: 3px; }
+.hs-skill-top { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.hs-merge { font-size: 14px; margin: 3px 0; color: var(--ink-dim); }
+.hs-merge.ready { color: var(--ink); }
+.hs-merge.ready b { color: var(--good); }
+.hs-grave { padding: 6px 10px; border: 2px solid #4a3e8e; background: #120e2c; margin-bottom: 8px; }
+@media (max-width: 640px) {
+  .hs-cols { grid-template-columns: 1fr; gap: 6px; }
+  .hs-actions { flex-direction: row; align-items: center; flex-wrap: wrap; }
+  .hs-tab { padding: 4px 8px; font-size: 13px; }
+  .hs-xp { grid-template-columns: 1fr; gap: 2px; }
+}
+
+/* ── Gear (hero/GearPanel.tsx, facilities/Armory.tsx, lane N) ─────────────────── */
+.gear-panel { display: flex; flex-direction: column; gap: 8px; }
+.gear-best { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.gear-slots { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.gear-slot { padding: 6px 8px; background: #16112e; border: 2px solid #2c2460; display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.gear-slot.on { border-color: var(--gold); }
+.gear-slot-head { display: flex; align-items: center; gap: 6px; }
+.gear-glyph { font-size: 16px; }
+.gear-slot-actions { display: flex; flex-wrap: wrap; gap: 4px; margin-top: auto; padding-top: 4px; }
+.gear-name { font-size: 14px; font-weight: 600; min-width: 0; overflow-wrap: anywhere; }
+.gear-grade { display: inline-block; min-width: 18px; text-align: center; font-size: 12px; padding: 0 3px; border: 1px solid currentColor; color: var(--ink-dim); }
+.gear-grade.g-C { color: #6ad07a; }
+.gear-grade.g-B { color: #4aa3ff; }
+.gear-grade.g-A { color: #b07adb; }
+.gear-grade.g-S, .gear-grade.g-SS, .gear-grade.g-SSS { color: var(--gold); }
+.gear-tag { align-self: flex-start; display: inline-block; font-size: 11px; font-weight: 400; padding: 0 4px; margin-left: 4px; border: 1px solid var(--line); color: var(--ink-dim); white-space: nowrap; }
+.gear-tag.heirloom { color: #c9b8ff; border-color: #6a5cb0; }
+.gear-tag.bound { color: var(--gold); border-color: var(--gold-deep); }
+.gear-tag.worn { color: var(--gem); }
+.gear-compare { display: flex; flex-direction: column; gap: 4px; padding: 6px; border: 2px dashed #4a3e8e; }
+.gear-cmp-row { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1.5fr) auto; gap: 8px; align-items: center; padding: 3px 4px; background: #16112e; }
+.gear-cmp-row.off { opacity: 0.6; }
+.gear-deltas { display: flex; flex-wrap: wrap; gap: 4px 8px; font-size: 13px; }
+.gear-deltas .up, .gear-cp.up { color: var(--good); }
+.gear-deltas .down, .gear-cp.down { color: var(--bad); }
+.gear-cp { font-weight: 600; }
+@media (max-width: 640px) {
+  .gear-slots { grid-template-columns: 1fr; }
+  .gear-cmp-row { grid-template-columns: 1fr auto; }
+  .gear-cmp-row .gear-deltas { grid-column: 1 / -1; grid-row: 2; }
+}
+
+/* ── The Armory (facilities/Armory.tsx, lane N) ───────────────────────────────── */
+.arm-filters { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 4px; }
+.arm-filters select.pinput { padding: 3px 4px; }
+.arm-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 4px; max-height: 300px; overflow-y: auto; }
+.arm-cell { display: flex; flex-direction: column; gap: 2px; padding: 4px 6px; background: #16112e; border: 2px solid #2c2460; font: inherit; color: var(--ink); text-align: left; cursor: pointer; }
+.arm-cell:hover { border-color: #6a5cb0; }
+.arm-cell.sel { border-color: var(--gold); background: #2a2258; }
+.arm-cell.worn { border-left-color: var(--gem); }
+.arm-who { font-size: 12px; color: var(--ink-dim); }
+.arm-side { display: grid; grid-template-columns: 1fr auto 1fr; gap: 8px; align-items: stretch; margin-top: 6px; }
+.arm-side > .gear-slot { min-height: 0; }
+.arm-vs { align-self: center; color: var(--gold); font-weight: 700; }
+.arm-side-deltas { grid-column: 1 / -1; }
+.forge-orders { display: flex; flex-direction: column; gap: 6px; }
+.forge-now { display: grid; grid-template-columns: auto 1fr auto; gap: 8px; align-items: center; }
+.forge-now .hs-bar { height: 10px; }
+.forge-recent { list-style: none; margin: 0; padding: 0; font-size: 13px; color: var(--ink-dim); }
+.forge-state { font-size: 13px; }
+.forge-state.stalled { color: var(--warn); }
+@media (max-width: 640px) {
+  .arm-grid { grid-template-columns: 1fr 1fr; }
+  .arm-side { grid-template-columns: 1fr; }
+  .arm-vs { justify-self: center; }
+}
+
+/* The promotion planner's own window (hero/HeroSheetHost.tsx). */
+.promo-window { display: flex; flex-direction: column; gap: 8px; }

@@ -27,6 +27,9 @@ import {
   type HeroStatus,
   type SortKey,
 } from './partyBoard'
+import { HeroPicker } from '../hero/HeroPicker'
+import { openHeroSheet } from '../hero/sheetBus'
+import { PixelWindow } from '../kit'
 import './party.css'
 
 /**
@@ -149,6 +152,8 @@ export function PartyScreen({ state, store }: { state: GameState; store: Store }
   const [focusId, setFocusId] = useState<HeroId | null>(null)
   const [drag, setDrag] = useState<DragState | null>(null)
   const justDragged = useRef(false)
+  // Lane N: the shared hero picker, choosing who stands in a slot.
+  const [swapAt, setSwapAt] = useState<number | null>(null)
 
   const setPrefs = (p: Partial<Prefs>) => {
     const next = { ...prefs, ...p }
@@ -334,10 +339,10 @@ export function PartyScreen({ state, store }: { state: GameState; store: Store }
                       tabIndex={0}
                       className={`pb-slot ${h ? 'filled' : ''} ${over ? 'over' : ''} ${lifted ? 'lifted' : ''} ${h && !deployable(h, state) ? 'benched' : ''}`}
                       onPointerDown={h ? (e) => startDrag(e, { kind: 'slot', index: i, id: h.id }) : undefined}
-                      onClick={clickGuard(() => h && (setNote(null), commit(removeAt(draft, i))))}
+                      onClick={clickGuard(() => (h ? (setNote(null), commit(removeAt(draft, i))) : setSwapAt(i)))}
                       onKeyDown={(e) => slotKeys(e, i)}
                       aria-label={h ? t('Slot {n}: {name} — press Delete to remove', { n: i + 1, name: h.name }) : t('Slot {n}: empty', { n: i + 1 })}
-                      title={h ? t('Drag to move · click to remove') : t('Drop a hero here')}
+                      title={h ? t('Drag to move · click to remove') : t('Drop a hero here, or click to choose one')}
                     >
                       <span className="pb-slot-n">{i + 1}</span>
                       {h ? (
@@ -351,6 +356,16 @@ export function PartyScreen({ state, store }: { state: GameState; store: Store }
                           </span>
                           <MoralePips state={state} heroId={h.id} />
                           {!deployable(h, state) && <StatusChip hero={h} state={state} />}
+                          <button
+                            type="button"
+                            className="pb-slot-swap"
+                            onPointerDown={(e) => e.stopPropagation()}
+                            onClick={(e) => (e.stopPropagation(), setSwapAt(i))}
+                            title={t('Swap: choose who stands here')}
+                            aria-label={t('Swap slot {n}', { n: i + 1 })}
+                          >
+                            ⇄
+                          </button>
                         </>
                       ) : (
                         <span className="pb-slot-empty">{t('+ empty')}</span>
@@ -493,6 +508,17 @@ export function PartyScreen({ state, store }: { state: GameState; store: Store }
                   <Bust hero={h} size={32} />
                   <span className="c-name">
                     <span className="pb-name">{h.name}</span>
+                    <button
+                      type="button"
+                      className="pb-info"
+                      onPointerDown={(e) => e.stopPropagation()}
+                      onClick={(e) => (e.stopPropagation(), openHeroSheet(h.id))}
+                      onKeyDown={(e) => e.stopPropagation()}
+                      title={t('Open the hero sheet')}
+                      aria-label={t('Open {name}’s sheet', { name: h.name })}
+                    >
+                      ⓘ
+                    </button>
                     <TraitChip def={traitOf(h)} compact />
                     <MoralePips state={state} heroId={h.id} />
                     {st !== 'ready' && <StatusChip hero={h} state={state} />}
@@ -536,6 +562,41 @@ export function PartyScreen({ state, store }: { state: GameState; store: Store }
           </div>
         )}
       </div>
+
+      {swapAt !== null && (
+        <PixelWindow title={t('Who stands in slot {n}?', { n: swapAt + 1 })} icon="⇄" onClose={() => setSwapAt(null)} wide>
+          {draft[swapAt] && state.heroes[draft[swapAt]!] && (
+            <div className="pb-swap-now">
+              <span className="muted">{t('Now: {name}', { name: state.heroes[draft[swapAt]!]!.name })}</span>
+              <button
+                type="button"
+                className="pbtn sm ghost"
+                onClick={() => {
+                  commit(removeAt(draft, swapAt))
+                  setSwapAt(null)
+                }}
+              >
+                {t('Take them off the board')}
+              </button>
+            </div>
+          )}
+          <HeroPicker
+            state={state}
+            label={t('Heroes for slot {n}', { n: swapAt + 1 })}
+            selected={draft[swapAt] ? [draft[swapAt]!] : []}
+            refusal={(h) => (deployable(h, state) ? null : STATUS_HINT[heroStatus(h, state)])}
+            note={(h) => {
+              const at = draft.indexOf(h.id)
+              return at === -1 ? null : t('in slot {n}', { n: at + 1 })
+            }}
+            onPick={(id) => {
+              setNote(null)
+              commit(placeHero(draft, id, swapAt))
+              setSwapAt(null)
+            }}
+          />
+        </PixelWindow>
+      )}
 
       {drag && dragHero && (
         <div className="pb-ghost" style={{ left: drag.x, top: drag.y }} aria-hidden>

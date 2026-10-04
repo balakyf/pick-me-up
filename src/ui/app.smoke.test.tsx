@@ -291,7 +291,7 @@ describe('App smoke — the summon reveal', () => {
       expect(container.textContent).toContain('A new hero answers the call')
       clickButton('Hero Registry')
       expect(container.querySelector('.sr')).toBeNull()
-      expect(container.textContent).toContain('click a card for full stats')
+      expect(container.textContent).toContain('click a card for the hero sheet')
     } finally {
       vi.useRealTimers()
     }

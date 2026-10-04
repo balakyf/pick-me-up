@@ -1,12 +1,12 @@
 /**
- * Quanton Life windows: the hero tracker ("where is everyone?"), a hero's profile (who
- * they are, what they want, who they love and hate, what they remember, their job), and
- * Isel's letter — the canon login report of what the heroes did while the Master was away.
+ * Quanton Life windows: the hero tracker ("where is everyone?"), the pieces of a hero's
+ * life the hero sheet shows (memories, the job picker; the sheet itself is hero/HeroSheet,
+ * lane N), and Isel's letter — the canon login report of what the heroes did while the
+ * Master was away.
  */
-import { TraitBadge } from '../people/TraitBadge'
 import { SKILLS } from '../../engine/content'
 import { useState } from 'react'
-import type { GameState, HeroId, JobId, Memory, OwnedHero } from '../../engine/types'
+import type { GameState, JobId, Memory, OwnedHero } from '../../engine/types'
 import type { Store } from '../../engine/store'
 import { TUNING } from '../../engine/tuning'
 import {
@@ -14,7 +14,6 @@ import {
   JOB_FACILITY,
   TIER_NAMES,
   aptitude,
-  bondOf,
   dayOfSlot,
   jobFeeling,
   jobHolders,
@@ -23,30 +22,19 @@ import {
   jobTier,
   lifeOf,
   personalityOf,
-  relationsOf,
   salientMemories,
   slotOf,
 } from '../../engine/life'
-import { PixelWindow, Gauge } from '../kit'
+import { PixelWindow } from '../kit'
 import { heroBustUrl } from '../pixel/sprites'
-import { JOB_NAME, accountDay, chronicleLine, diaryLine, groupedChronicle, placeName, shortName, speak, statusLine, tradeName } from './speech'
+import { JOB_NAME, accountDay, chronicleLine, diaryLine, groupedChronicle, placeName, shortName, statusLine } from './speech'
 import { t } from '../i18n/i18n'
 import { ta } from '../text'
-import { BondList } from '../bond/BondBadge'
 import { BOUNTIES } from '../../engine/estate'
-import { EstateNotes } from './EstatePanels'
-import { MoralePips, MoraleBreakdown } from './MoralePips'
+import { MoralePips } from './MoralePips'
 
-const first = (n: string) => n.split(/\s+/)[0] ?? n
-
-const BOND_LABEL: Record<string, string> = {
-  closeFriend: 'Close friend',
-  friend: 'Friend',
-  rival: 'Rival',
-  grudge: 'Grudge',
-}
-
-const TRAITS: [keyof ReturnType<typeof personalityOf>, string][] = [
+/** The temperament gauges (the hero sheet's Story tab). */
+export const PERSONALITY_TRAITS: [keyof ReturnType<typeof personalityOf>, string][] = [
   ['diligence', 'Diligence'],
   ['sociability', 'Sociability'],
   ['warmth', 'Warmth'],
@@ -257,113 +245,7 @@ const JOB_PLACE_OF: Record<JobId, Parameters<typeof placeName>[0]> = {
 }
 void JOB_FACILITY
 
-export function HeroProfile({
-  state,
-  store,
-  heroId,
-  onClose,
-  onFind,
-}: {
-  state: GameState
-  store: Store
-  heroId: string
-  onClose: () => void
-  onFind: (id: string) => void
-}) {
-  const hero = state.heroes[heroId as HeroId]!
-  const p = personalityOf(hero)
-  const life = lifeOf(hero)
-  const today = dayOfSlot(state.life.slot)
-  const rels = relationsOf(state, hero.id).filter(([o, r]) => bondOf(r.affinity) && (state.heroes[o]?.alive ?? false)).slice(0, 8)
-  const job = life.job
-  const tier = job ? jobTier(life.jobXp[job] ?? 0) : 0
-  const inParty = state.party.slots.includes(hero.id)
-  return (
-    <PixelWindow title={hero.name} icon="✦" onClose={onClose} wide>
-      <div className="profile">
-        <div className="profile-top">
-          <img className="px profile-bust" src={heroBustUrl(hero)} width={72} height={72} alt="" />
-          <div>
-            <div>
-              {hero.star}★ · {t(hero.heroClass ? hero.heroClass[0]!.toUpperCase() + hero.heroClass.slice(1) : 'Untrained')} · Lv{hero.xp.level} ·{' '}
-              {t('Sanity')} {Math.round(hero.sanity)}
-            </div>
-            <div className="muted">
-              {t('Before the summon: {trade}', { trade: tradeName(p.background) })} · {t('Voice: {v}', { v: t(p.voice) })} ·{' '}
-              {t(p.chronotype === 'owl' ? 'Night owl' : p.chronotype === 'early' ? 'Early riser' : 'Keeps normal hours')}
-            </div>
-            <div className="muted">
-              {t('Loves {food}', { food: t(p.food) })} · {t('Hobby: {h}', { h: t(p.hobby) })} · {t('Here since day {n}', { n: accountDay(state, life.arrivedDay) })}
-            </div>
-            <TraitBadge hero={hero} full />
-            <MoraleBreakdown state={state} heroId={hero.id} />
-            <div className="profile-now">“{speak(state, hero, inParty, 'profile')}”</div>
-            <div className="muted small">{statusLine(state, hero)}</div>
-            <EstateNotes state={state} hero={hero} />
-          </div>
-        </div>
-
-        <div className="profile-cols">
-          <div>
-            <h4 className="panel-sub">{t('Temperament')}</h4>
-            {TRAITS.map(([k, label]) => (
-              <div key={k} className="trait-row">
-                <span>{t(label)}</span>
-                <Gauge pct={(p[k] as number) * 100} color="var(--accent-2)" />
-              </div>
-            ))}
-            <h4 className="panel-sub">{t('Needs')}</h4>
-            {(['energy', 'hunger', 'social', 'fun'] as const).map((k) => (
-              <div key={k} className="trait-row">
-                <span>{t(k === 'hunger' ? 'Fed' : k[0]!.toUpperCase() + k.slice(1))}</span>
-                <Gauge pct={life.needs[k]} color={life.needs[k] < 25 ? 'var(--bad)' : life.needs[k] < 55 ? 'var(--warn)' : 'var(--good)'} />
-              </div>
-            ))}
-            {life.grief > 0 && (
-              <div className="trait-row">
-                <span>{t('Grief')}</span>
-                <Gauge pct={life.grief} color="#8a7ad8" />
-              </div>
-            )}
-          </div>
-          <div>
-            <h4 className="panel-sub">{t('People')}</h4>
-            {rels.length === 0 && <div className="muted">{t('Keeps to themselves, so far.')}</div>}
-            {rels.map(([o, r]) => (
-              <div key={o} className="rel-row">
-                <button className="linkish" onClick={() => onFind(o)}>
-                  {shortName(state, o)}
-                </button>
-                <span className={`chip bond-${bondOf(r.affinity)}`}>{t(BOND_LABEL[bondOf(r.affinity)!]!)}</span>
-                {r.shared > 0 && <span className="muted small">{t('{n} floors together', { n: r.shared })}</span>}
-              </div>
-            ))}
-            <BondList state={state} hero={hero} onFind={onFind} />
-            <h4 className="panel-sub">{t('Memories')}</h4>
-            {salientMemories(life, today)
-              .slice(0, 8)
-              .map((m, i) => (
-                <div key={i} className="mem-row small">
-                  {memoryLine(state, m)}
-                </div>
-              ))}
-          </div>
-        </div>
-
-        <h4 className="panel-sub">
-          {t('Job')}
-          {job && ` · ${t(TIER_NAMES[tier]!)} ${t(JOB_NAME[job])}`}
-        </h4>
-        <JobPicker state={state} store={store} hero={hero} />
-        <div className="profile-foot">
-          <button className="pbtn" onClick={() => onFind(hero.id)}>
-            👁 {t('Find on the map')}
-          </button>
-        </div>
-      </div>
-    </PixelWindow>
-  )
-}
+// The hero's profile is the hero sheet now (lane N: hero/HeroSheet, every tab of it).
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Isel's letter

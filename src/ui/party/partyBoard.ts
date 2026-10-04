@@ -6,6 +6,7 @@
 import type { Element, GameState, HeroClass, HeroId, Line, OwnedHero, Star } from '../../engine/types'
 import { canFight, heroCp } from '../../engine/scout'
 import { shownStar } from '../../engine/shop'
+import { pickHeroes, type PickFilter } from '../hero/heroPicker'
 import { estateBusy } from '../../engine/estate/deploy'
 import { moraleBroken } from '../../engine/life/morale'
 
@@ -49,18 +50,11 @@ export interface BoardFilter {
 
 export const NO_FILTER: BoardFilter = { query: '', element: 'all', heroClass: 'all', minStar: 0, hideUnavailable: false }
 
-const ELEMENT_ORDER: Element[] = ['fire', 'water', 'wind', 'earth', 'light', 'dark', 'physical']
-const CLASS_ORDER: (HeroClass | null)[] = ['warrior', 'spearman', 'thief', 'archer', 'mage', null]
-
-/** Fold accents and case so "elo" finds "Élodie". */
-function fold(s: string): string {
-  return s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
-}
-
 /**
  * The living heroes the board lists, filtered and sorted. Numbers sort high → low,
  * words A → Z; `desc` flips that. Ties fall back to CP (strongest first), then id,
  * so the order is stable. Stars are the SHOWN stars (the whale-bait lie holds here too).
+ * The rules are the shared hero picker's (hero/heroPicker), so the two never drift.
  */
 export function boardHeroes(
   state: GameState,
@@ -68,43 +62,15 @@ export function boardHeroes(
   filter: BoardFilter,
   opts: { flip?: boolean } = {},
 ): OwnedHero[] {
-  const ml = state.meta.masterLevel
-  const q = fold(filter.query.trim())
-  const list = (Object.values(state.heroes) as OwnedHero[]).filter((h) => {
-    if (!h.alive) return false
-    if (q && !fold(h.name).includes(q)) return false
-    if (filter.element !== 'all' && h.element !== filter.element) return false
-    if (filter.heroClass !== 'all' && (h.heroClass ?? 'none') !== filter.heroClass) return false
-    if (filter.minStar > 0 && shownStar(h, ml) < filter.minStar) return false
-    if (filter.hideUnavailable && !deployable(h, state)) return false
-    return true
-  })
-  const cp = new Map(list.map((h) => [h.id, heroCp(h, state)]))
-  const key = (h: OwnedHero): number | string => {
-    switch (sort) {
-      case 'cp':
-        return -cp.get(h.id)!
-      case 'level':
-        return -h.xp.level
-      case 'stars':
-        return -shownStar(h, ml)
-      case 'name':
-        return fold(h.name)
-      case 'element':
-        return ELEMENT_ORDER.indexOf(h.element)
-      case 'class':
-        return CLASS_ORDER.indexOf(h.heroClass)
-    }
+  const pick: PickFilter = {
+    query: filter.query,
+    element: filter.element,
+    heroClass: filter.heroClass,
+    minStar: filter.minStar,
+    availableOnly: filter.hideUnavailable,
+    alive: 'living',
   }
-  const sign = opts.flip ? -1 : 1
-  return list.sort((a, b) => {
-    const ka = key(a)
-    const kb = key(b)
-    if (ka !== kb) return (ka < kb ? -1 : 1) * sign
-    const d = cp.get(b.id)! - cp.get(a.id)!
-    if (d !== 0) return d
-    return a.id < b.id ? -1 : a.id > b.id ? 1 : 0
-  })
+  return pickHeroes(state, { sort, flip: opts.flip, filter: pick, available: (h) => deployable(h, state) })
 }
 
 export type Draft = (HeroId | null)[]
