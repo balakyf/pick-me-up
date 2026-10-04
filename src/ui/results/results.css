@@ -1,0 +1,116 @@
+/* The results ceremony (lane K). Steps wait hidden (keeping their room), then step in. */
+.overlay.results { overflow-y: auto; cursor: pointer; }
+.overlay.results.settled { cursor: default; }
+/* When someone fell, the world behind goes grey. */
+.overlay.results.grey { backdrop-filter: grayscale(1) brightness(0.75); -webkit-backdrop-filter: grayscale(1) brightness(0.75); background: rgba(8, 8, 12, 0.82); }
+
+.result-card.rc { position: relative; max-width: 600px; margin: 5vh auto 24px; cursor: default; }
+/* A beat still to come takes no room (the card grows as the ceremony plays); the gold and
+   XP keep theirs side by side so the counter does not jump, and so does the stamp. */
+.rc-step.waiting { display: none; }
+.reward-row .rc-step.waiting, .rc-stamp.waiting { display: block; visibility: hidden; }
+.rc-step.running, .rc-step.done { animation: rcIn 0.32s steps(4) both; }
+@keyframes rcIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+/* 1 · the banner */
+.rc-banner { position: relative; }
+.rc-banner .big-outcome.win { color: var(--gold); }
+.rc-banner .big-outcome.lose { color: var(--bad); }
+.rc-kicker { color: var(--accent-2); font-size: 13px; letter-spacing: 3px; text-transform: uppercase; margin-bottom: 2px; }
+.overlay.results.anchor .rc-banner .big-outcome { font-size: clamp(36px, 8vw, 52px); }
+.overlay.results.anchor.mood-triumph .result-card.rc { border-color: var(--gold); box-shadow: 0 0 0 2px var(--gold-deep), 0 0 24px rgba(242, 199, 92, 0.35); }
+.rc-boss { color: var(--boss, var(--gold)); font-weight: 600; letter-spacing: 1px; text-transform: uppercase; font-size: 15px; margin: 2px 0 4px; text-shadow: 2px 2px 0 var(--rim-dark); }
+.rc-boss-fell { color: var(--ink-dim); text-transform: none; letter-spacing: 0; font-weight: 400; }
+/* A victory with losses: the gold is tarnished. */
+.overlay.results.mood-bittersweet .rc-banner .big-outcome.win { color: #c8b890; text-shadow: 3px 3px 0 var(--rim-dark); }
+.overlay.results.mood-bittersweet .rc-rewards .n, .overlay.results.mood-bittersweet .rc-drop { filter: saturate(0.45); }
+
+/* The first-clear stamp slams onto the card's corner. */
+.rc-stamp {
+  position: absolute; right: -10px; top: -14px; transform: rotate(9deg);
+  padding: 4px 10px; font-weight: 600; font-size: 15px; letter-spacing: 2px;
+  color: #ffe9b0; background: #8a1e2e; border: 3px solid #f2c75c; box-shadow: 3px 3px 0 var(--rim-dark);
+}
+.rc-stamp.running, .rc-stamp.done { animation: rcStamp 0.4s steps(4) both; }
+@keyframes rcStamp { 0% { opacity: 0; transform: rotate(9deg) scale(2.4); } 60% { opacity: 1; transform: rotate(9deg) scale(0.92); } 100% { opacity: 1; transform: rotate(9deg) scale(1); } }
+
+/* 2 · the memorial band */
+.rc-memorial { margin: 16px 0 8px; padding: 10px; background: #16141c; border: 2px solid #3a3644; text-align: left; }
+.rc-mem-head { color: #c8c0d0; font-weight: 600; letter-spacing: 1px; margin-bottom: 6px; }
+.rc-band { display: flex; gap: 10px; align-items: flex-start; padding: 8px 4px; border-top: 1px solid #2a2834; }
+.rc-band:first-of-type { border-top: 0; }
+.rc-band-bust { filter: grayscale(1) brightness(0.9); background: #22202a; border: 2px solid #4a4656; flex: none; image-rendering: pixelated; }
+.rc-band-body { flex: 1; min-width: 0; }
+.rc-band-name b { color: #e8e4ee; }
+.rc-last-words { color: #e8e0f0; font-style: italic; margin: 4px 0; }
+.rc-isel { display: flex; gap: 6px; align-items: flex-start; color: #b8d8e8; font-size: 14px; }
+.rc-isel img { flex: none; image-rendering: pixelated; margin-top: 1px; }
+.rc-isel-close { display: flex; gap: 8px; align-items: center; margin-top: 8px; padding-top: 8px; border-top: 1px dashed #3a3644; color: #d0e4f0; }
+.rc-isel-close img { image-rendering: pixelated; flex: none; }
+.rc-band.running, .rc-band.done { animation: rcBand 0.6s steps(6) both; }
+@keyframes rcBand { from { opacity: 0; filter: brightness(2); } to { opacity: 1; filter: none; } }
+
+/* 3 · the rewards */
+.rc-rewards { margin: 14px 0 10px; }
+.rc-gold { color: var(--gold); position: relative; }
+.rc-xp { color: var(--accent-2); }
+.rc-pop { position: absolute; left: 50%; top: -4px; transform: translateX(-50%); font-size: 15px; color: #ffe9a0; pointer-events: none; animation: rcPop 0.9s steps(6) both; text-shadow: 2px 2px 0 var(--rim-dark); }
+@keyframes rcPop { from { opacity: 1; transform: translate(-50%, 0); } to { opacity: 0; transform: translate(-50%, -26px); } }
+.rc-drops { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin: 6px 0 10px; }
+.rc-drop { padding: 3px 8px; background: #1a1636; border: 2px solid #3e3478; font-size: 14px; }
+.rc-drop.running, .rc-drop.done { animation: rcDrop 0.38s steps(4) both; }
+@keyframes rcDrop { 0% { opacity: 0; transform: scale(0.4); } 70% { opacity: 1; transform: scale(1.12); } 100% { transform: scale(1); } }
+.rc-drop.rarity-uncommon { border-color: #4a9a5a; box-shadow: 0 0 6px rgba(106, 208, 122, 0.45); }
+.rc-drop.rarity-rare { border-color: #4a8ad8; box-shadow: 0 0 8px rgba(106, 168, 255, 0.6); }
+.rc-drop.rarity-legendary { border-color: var(--gold); color: #ffe9b0; box-shadow: 0 0 12px rgba(242, 199, 92, 0.75); }
+.rc-drop.rarity-legendary.done { animation: rcDrop 0.38s steps(4) both, rcGlow 1.6s steps(4) 0.4s infinite alternate; }
+@keyframes rcGlow { from { box-shadow: 0 0 8px rgba(242, 199, 92, 0.5); } to { box-shadow: 0 0 16px rgba(242, 199, 92, 0.95); } }
+.skill-progress .sp-row.achievement { color: var(--gem); }
+
+/* 4 · the report */
+.rc-report { text-align: left; }
+.rc-camp { display: flex; gap: 12px; align-items: center; margin: 12px 0; padding: 10px 12px; background: #1c1630; border: 2px solid #4a3a6a; }
+.rc-camp.kind-recovery { background: #221a14; border-color: #6a4a2a; }
+.rc-camp-title { font-weight: 600; color: var(--ink); }
+.rc-camp.kind-recovery .rc-camp-title { color: #ffd69a; }
+.rc-camp-icon { font-size: 26px; flex: none; }
+.rc-camp-then { margin-top: 3px; }
+.rc-fire { position: relative; flex: none; width: 32px; height: 40px; }
+.rc-fire img { position: absolute; left: 0; top: 0; image-rendering: pixelated; }
+.rc-fire .f1 { animation: rcFlicker 0.5s steps(1) infinite; }
+@keyframes rcFlicker { 0% { opacity: 0; } 50% { opacity: 1; } }
+
+.rc-stats { margin-top: 10px; border-top: 2px solid var(--line); padding-top: 6px; }
+.rc-stats-head { all: unset; cursor: pointer; display: block; width: 100%; font-weight: 600; color: var(--ink); padding: 4px 0; }
+.rc-stats-head:focus-visible { outline: 2px solid var(--gold); }
+.rc-stat { display: grid; grid-template-columns: 150px 1fr; gap: 8px; align-items: center; padding: 4px 0; border-top: 1px solid #2a2452; }
+.rc-stat-who { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.rc-stat-who img { image-rendering: pixelated; flex: none; }
+.rc-stat-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rc-stat.fell { opacity: 0.75; }
+.rc-stat.fell img { filter: grayscale(1); }
+.rc-stat.mvp .rc-stat-name { color: var(--gold); }
+.rc-mvp { flex: none; font-size: 11px; font-weight: 600; letter-spacing: 1px; padding: 0 4px; color: var(--rim-dark); background: var(--gold); border: 1px solid var(--gold-deep); }
+.rc-stat-chips { display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: 13px; color: var(--ink-dim); }
+.rc-chip b { color: var(--ink); font-weight: 600; }
+.rc-chip.k-dealt b { color: #ffb08a; }
+.rc-chip.k-healed b { color: var(--good); }
+.rc-chip.k-shielded b { color: var(--gem); }
+.rc-chip.k-broke b { color: var(--gold); }
+.rc-chip.k-why { color: var(--gold); font-style: italic; }
+
+.rc-actions { display: flex; gap: 10px; justify-content: center; align-items: center; flex-wrap: wrap; margin-top: 14px; }
+
+@media (max-width: 600px) {
+  .result-card.rc { margin-top: 2vh; padding: 18px 12px; }
+  .overlay.results { padding: 10px; }
+  .rc-stamp { right: -4px; top: -10px; font-size: 13px; }
+  .rc-stat { grid-template-columns: 1fr; gap: 2px; }
+  .reward-row.rc-rewards { gap: 18px; }
+}
+
+/* Reduced motion: no entrances, no pops, no glow pulse; the steps simply appear. */
+html[data-motion='reduce'] .overlay.results *, html[data-motion='reduce'] .overlay.results { animation: none !important; }
+@media (prefers-reduced-motion: reduce) {
+  .overlay.results * { animation: none !important; }
+}

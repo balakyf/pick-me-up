@@ -58,6 +58,16 @@ describe('event floors', () => {
     expect(() => resolveEvent(s, 'treasure')).toThrow(/not offered/)
     expect(() => resolveEvent(createAccount(1), 'rest')).toThrow(/no event/)
   })
+
+  it('after a heavy loss the rest is a camp on the stair (same Sanity as any rest)', () => {
+    const recovery: TowerEvent = { kind: 'recovery', floor: 12, options: ['reinforcement', 'rest'] }
+    const camp = resolveEvent(withEvent(recovery), 'rest').outcome
+    const quiet = resolveEvent(withEvent(bonus), 'rest').outcome
+    expect(camp.note).toMatch(/make camp on the stair/)
+    expect(quiet.note).toMatch(/quiet fire/)
+    expect(camp.sanity).toBe(quiet.sanity)
+    expect(resolveEvent(withEvent(recovery), 'reinforcement').outcome.note).toMatch(/finds the camp/)
+  })
 })
 
 describe('the tournament (F41/42)', () => {
