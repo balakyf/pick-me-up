@@ -368,7 +368,7 @@ export function App() {
       )}
       {panel === 'keys' && <KeyboardHelp onClose={() => setPanel(null)} />}
       {panel === 'settings' && <SettingsWindow onClose={() => setPanel(null)} />}
-      {view === 'lobby' && !menuOpen && panel === null && <BackupReminder state={state} onExport={() => setPanel('save')} />}
+      {view === 'lobby' && !menuOpen && panel === null && store.getSaveError() === null && <BackupReminder state={state} onExport={() => setPanel('save')} />}
       {demoLog && <BattleScene log={demoLog} state={state} onDone={() => setDemoLog(null)} />}
       {/* A floor attempt the Master never saw the end of (a reload mid-battle) plays first (B14). */}
       <PendingReplayHost key={`${state.accountId}|${epoch}`} state={state} />

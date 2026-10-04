@@ -82,7 +82,6 @@ export default {
   'The tower at night, seen from the waiting room’s yard': 'La tour de nuit, vue de la cour de la salle d’attente',
 
   // ── The save-error notice ──────────────────────────────────────────────────
-  'The game could not be saved in this browser.': 'La partie n’a pas pu être sauvegardée dans ce navigateur.',
   'This browser’s storage is full: your progress is not being saved.': 'Le stockage de ce navigateur est plein : votre progression n’est pas sauvegardée.',
   'This browser refused the save: your progress is not being saved.': 'Ce navigateur a refusé la sauvegarde : votre progression n’est pas sauvegardée.',
   'Export a copy to keep it safe.': 'Exportez-en une copie pour la mettre à l’abri.',

@@ -125,6 +125,8 @@ export function battleStats(log: CombatLog): BattleStats {
       }
       case 'dot': {
         const real = lost(e.unitId, e.amount, e.hpAfter)
+        // A bleed the unit put on itself (Berserk) is a price paid, like hp-cost: not a blow taken.
+        if (e.sourceId === e.unitId) break
         lastBlow.set(e.unitId, e.sourceId)
         const by = stat.get(e.sourceId)
         if (by && enemy(e.unitId)) by.dealt += real

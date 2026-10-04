@@ -109,8 +109,8 @@
   .reward-row.rc-rewards { gap: 18px; }
 }
 
-/* Reduced motion: no entrances, no pops, no glow pulse; the steps simply appear. */
+/* Reduced motion: no entrances, no pops, no glow pulse; the steps simply appear. Only the
+   Master's setting decides (data-motion mirrors it, 'auto' following the OS): an OS media
+   rule here would strip the pops' fade while the ceremony still renders them. */
 html[data-motion='reduce'] .overlay.results *, html[data-motion='reduce'] .overlay.results { animation: none !important; }
-@media (prefers-reduced-motion: reduce) {
-  .overlay.results * { animation: none !important; }
-}
+

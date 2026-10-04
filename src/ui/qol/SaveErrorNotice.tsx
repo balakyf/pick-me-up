@@ -1,13 +1,12 @@
 /**
  * When the browser refuses to save (storage full or blocked), say so and offer the export
- * (lane B's `store.getSaveError()` seam, picked up by lane K): a warning toast once, and a
+ * (lane B's `store.getSaveError()` seam, picked up by lane K): a
  * bar with the export button that stays until a save succeeds again or it is dismissed.
  */
 import { useEffect, useState } from 'react'
 import type { Store } from '../../engine/store'
 import { t } from '../i18n/i18n'
 import { PxIcon } from '../bits'
-import { toast } from './toastBus'
 import { saveErrorChange, storageFull } from './saveError'
 import './qol.css'
 
@@ -23,7 +22,6 @@ export function SaveErrorNotice({ store, onExport }: { store: Store; onExport: (
         showing = true
         setDismissed(false)
         setError(err)
-        toast(t('The game could not be saved in this browser.'), { tone: 'warn', icon: '⚠', ms: 6000 })
       } else if (change === 'clear') {
         showing = false
         setError(null)

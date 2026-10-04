@@ -55,6 +55,17 @@ describe('battleStats', () => {
     expect(s.heroes[0]).toMatchObject({ dealt: 50, kills: 1 })
   })
 
+  it('a bleed a hero put on itself (Berserk) is not a blow taken', () => {
+    const s = battleStats(
+      log(UNITS, [
+        { kind: 'status', unitId: 'a', status: 'bleed', sourceId: 'a', ticks: 2, value: 5 },
+        { kind: 'dot', unitId: 'a', status: 'bleed', amount: 5, hpAfter: 95, sourceId: 'a' },
+        { kind: 'hit', actorId: 'y', targetId: 'a', amount: 10, crit: false, hpAfter: 85 },
+      ]),
+    )
+    expect(s.heroes[0]).toMatchObject({ taken: 10, dealt: 0 })
+  })
+
   it('credits heals to the healer (lifesteal to the striker) up to the HP restored, and shield soak to the shield’s caster', () => {
     const s = battleStats(
       log(UNITS, [

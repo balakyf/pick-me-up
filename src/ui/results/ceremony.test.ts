@@ -67,6 +67,12 @@ describe('ceremonyPlan', () => {
     expect(gain(bitter, 'coins')).toBeLessThan(gain(party, 'coins'))
     expect(gain(bitter, 'confirm')).toBeLessThan(gain(party, 'confirm'))
   })
+
+  it('a lost fight shows what its survivors learned, with no fanfare', () => {
+    const p = ceremonyPlan({ ...BASE, won: false, gold: 0, xp: 0, skills: ['level-up', 'merge'], fallen: 1 }, FULL)
+    expect(p.steps.filter((s) => s.kind === 'skill')).toHaveLength(2)
+    expect(p.cues.filter((c) => c.cue === 'levelup' || c.cue === 'legend')).toEqual([])
+  })
 })
 
 describe('the clock', () => {

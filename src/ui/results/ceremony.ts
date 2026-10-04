@@ -129,7 +129,8 @@ export function ceremonyPlan(input: CeremonyInput, opts: CeremonyOpts): Ceremony
   const rare = new Set(input.rareDrops ?? [])
   for (let i = 0; i < input.drops; i++) push(`drop:${i}`, 'drop', M.drop, rare.has(i) ? 'rare' : 'flip', mourning ? 0.5 : 0.8)
   for (let i = 0; i < input.hidden; i++) push(`hidden:${i}`, 'hidden', M.hidden, 'rare', mourning ? 0.5 : 0.9)
-  input.skills.forEach((k, i) => push(`skill:${i}`, 'skill', M.skill, k === 'merge' || k === 'achievement' ? 'legend' : 'levelup', mourning ? 0.5 : 0.8))
+  // A defeat's survivors still learn, but no fanfare plays over a lost fight.
+  input.skills.forEach((k, i) => push(`skill:${i}`, 'skill', M.skill, !input.won ? undefined : k === 'merge' || k === 'achievement' ? 'legend' : 'levelup', mourning ? 0.5 : 0.8))
   push('report', 'report', M.report)
   const total = Math.max(0, at - Math.round(M.gap / speed))
 
