@@ -44,6 +44,8 @@ import { practiceFocus, practise } from '../training/training'
 import { traitLife } from '../content/traits'
 import { activityNudge, estateLifeMods, estateLive, instructorMult, type EstateLifeMods } from '../estate/lifeHooks'
 import { weatherAt, type Weather } from '../estate/weather'
+import { incidentsOf, rollIncident, settleIncident, type IncidentWorld } from './incidents'
+import { GRIEF } from './moraleTuning'
 
 const L = TUNING.life
 const R = L.relation
@@ -485,6 +487,29 @@ export function stepLife(state: GameState, nowWorld: number): GameState {
   /** Job tier-ups this catch-up (each teaches the Master — B21). */
   let tierUps = 0
   const mods = estateLifeMods(state)
+  // Camp incidents waiting on the Master (lane L); the fallen's are forgotten.
+  let pending = incidentsOf(state).filter((i) => i.heroIds.every((id) => byId.has(id)))
+  const purse = { gold: 0, pantry: 0 }
+  const incidentWorld = (slot: number, day: number, atWorld: number, hour: number): IncidentWorld => {
+    purse.gold = gold
+    purse.pantry = pantry
+    return {
+      seed,
+      slot,
+      day,
+      at: atWorld,
+      isNight: (h) => isSleepHour(hour, personalityOf(h.hero)),
+      get: (id) => byId.get(id) ?? null,
+      living: work,
+      relations,
+      chronicle,
+      purse,
+      partyIds: state.party.slots,
+      highestCleared: state.tower.highestCleared,
+      kitchenLevel: state.facilities.kitchen.level,
+      addMemory,
+    }
+  }
 
   for (let slot = from + 1; slot <= target; slot++) {
     const hour = hourOfSlot(slot)
@@ -497,6 +522,17 @@ export function stepLife(state: GameState, nowWorld: number): GameState {
     const forgeHasWork = smithyUnlocked(state) && forge.order !== null && orderSlot !== null
     const crowd = new Map<LifePlace, number>()
     const ctx: Ctx = { state: forgeState, slot, hour, forgeHasWork, crowd, mods, weather: weatherAt(seed, atWorld) }
+
+    // 0. The camp remembers: incidents nobody answered settle themselves, and a week
+    //    after a death (every week, for a while) the friends left behind remember.
+    if (pending.some((i) => i.untilSlot <= slot)) {
+      const iw = incidentWorld(slot, day, atWorld, hour)
+      for (const inc of pending.filter((i) => i.untilSlot <= slot)) settleIncident(iw, inc, 'let')
+      pending = pending.filter((i) => i.untilSlot > slot)
+      gold = purse.gold
+      pantry = purse.pantry
+    }
+    if (slot % L.slotsPerDay === 0) remembrance(state, byId, day, atWorld, chronicle)
 
     // 1. Decide.
     for (const w of work) {
@@ -780,6 +816,10 @@ export function stepLife(state: GameState, nowWorld: number): GameState {
         }
         const after = clamp(Math.round((before + delta) * 10) / 10, -100, 100)
         relations[key] = { ...rel, affinity: after }
+        if (after >= R.friend) {
+          console_(a, b, day, atWorld, chronicle)
+          console_(b, a, day, atWorld, chronicle)
+        }
         a.life.needs.social = clamp(a.life.needs.social + L.refill.socialAmbient)
         b.life.needs.social = clamp(b.life.needs.social + L.refill.socialAmbient)
         if (social) {
@@ -789,6 +829,13 @@ export function stepLife(state: GameState, nowWorld: number): GameState {
         crossThresholds(a, b, before, after, day, atWorld, chronicle)
       }
     }
+
+    // 5. Perhaps something happens in the camp (lane L).
+    const iw = incidentWorld(slot, day, atWorld, hour)
+    const born = rollIncident(iw, pending)
+    if (born) pending = [...pending, born]
+    gold = purse.gold
+    pantry = purse.pantry
   }
 
   // Prune the weakest pairs past the cap (the dead first: their bonds live on in memories).
@@ -805,8 +852,10 @@ export function stepLife(state: GameState, nowWorld: number): GameState {
 
   const heroes = { ...state.heroes }
   for (const w of work) {
-    heroes[w.hero.id] = { ...w.hero, sanity: Math.round(w.sanity * 100) / 100, xp: w.xp, life: w.life }
+    heroes[w.hero.id] = { ...w.hero, sanity: Math.round(clamp(w.sanity, 0, TUNING.lobby.sanityMax) * 100) / 100, xp: w.xp, life: w.life }
   }
+  // The field exists only while something waits (so a long advance equals many short ones).
+  const { incidents: _settled, ...lifeRest } = state.life
   return {
     ...state,
     gold,
@@ -814,7 +863,53 @@ export function stepLife(state: GameState, nowWorld: number): GameState {
     inventory,
     heroes,
     meta: addMasterXp({ ...state.meta, pi, peekedFloors: peeked }, tierUps * TUNING.lobby.master.xpPerJobTier),
-    life: { ...state.life, slot: target, relations, chronicle, pantry: Math.round(pantry * 100) / 100, forge, research, guardPower, tally },
+    life: {
+      ...lifeRest,
+      slot: target,
+      relations,
+      chronicle,
+      pantry: Math.round(pantry * 100) / 100,
+      forge,
+      research,
+      guardPower,
+      tally,
+      ...(pending.length > 0 ? { incidents: pending } : {}),
+    },
+  }
+}
+
+/**
+ * A friend's company eases grief (lane L): a little per shared slot, and a line in the
+ * chronicle the first time on a day when the grief is still heavy.
+ */
+function console_(griever: Working, friend: Working, day: number, at: number, chronicle: ChronicleEntry[]): void {
+  if (griever.life.grief < 1) return
+  const heavy = griever.life.grief >= GRIEF.consoleNewsAt
+  griever.life.grief = clamp(griever.life.grief - GRIEF.console)
+  griever.sanity += GRIEF.consoleSanity
+  if (heavy && !griever.life.memories.some((m) => m.kind === 'consoled' && m.day === day)) {
+    addMemory(griever.life, { kind: 'consoled', day, other: friend.hero.id, weight: 30 })
+    pushChronicle(chronicle, { at, kind: 'consoled', heroIds: [griever.hero.id, friend.hero.id] })
+  }
+}
+
+/**
+ * The weekly remembrance (lane L): every `GRIEF.anniversaryEvery` world-days after a death,
+ * for a few weeks, the friends left behind feel it again and go back to the grave.
+ */
+function remembrance(state: GameState, byId: Map<string, Working>, day: number, at: number, chronicle: ChronicleEntry[]): void {
+  for (const rec of state.life.memorial) {
+    const since = day - rec.day
+    if (since <= 0 || since % GRIEF.anniversaryEvery !== 0 || since / GRIEF.anniversaryEvery > GRIEF.anniversaryWeeks) continue
+    const here: HeroId[] = []
+    for (const id of rec.mourners) {
+      const w = byId.get(id)
+      if (!w) continue
+      w.life.grief = clamp(w.life.grief + GRIEF.anniversaryGrief)
+      addMemory(w.life, { kind: 'anniversary', day, other: rec.heroId, weight: 40 })
+      here.push(w.hero.id)
+    }
+    if (here.length > 0) pushChronicle(chronicle, { at, kind: 'anniversary', heroIds: [rec.heroId, ...here], detail: String(since / GRIEF.anniversaryEvery) })
   }
 }
 

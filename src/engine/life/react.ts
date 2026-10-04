@@ -16,6 +16,7 @@ import { addMemory, dayOfSlot, lifeOf, relationKey, slotOf, newHeroLife } from '
 import { personalityOf } from './personality'
 import { bondGriefMult } from '../challenge/bonds'
 import { carriedGear } from '../equipment'
+import { GRIEF } from './moraleTuning'
 
 const R = TUNING.life.relation
 const G = TUNING.life.grief
@@ -118,6 +119,12 @@ export function lifeReact(before: GameState | null, after: GameState, cmd: Comma
         l.grief = Math.min(100, l.grief + (G.base + aff * G.perAffinity) * bm)
         addMemory(l, { kind: 'friendDied', day, other: id, floor: rec.floor, weight: 90 })
         sanityDelta.set(o, (sanityDelta.get(o) ?? 0) - (G.sanityBase + aff * G.sanityPerAffinity) * bm * (1 - p.courage * 0.4))
+      } else if (aff <= R.rival) {
+        // A rival's guilt (lane L): the words that can no longer be taken back.
+        const l = lifeFor(o)
+        l.grief = Math.min(100, l.grief + GRIEF.guilt)
+        addMemory(l, { kind: 'guilt', day, other: id, floor: rec.floor, weight: 55 })
+        push({ at, kind: 'guilt', heroIds: [o, id] })
       } else if (deployed.includes(o)) {
         addMemory(lifeFor(o), { kind: 'comradeDied', day, other: id, floor: rec.floor, weight: 60 })
       }

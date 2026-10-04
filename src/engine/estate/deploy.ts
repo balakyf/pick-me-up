@@ -5,6 +5,7 @@
  */
 import type { CombatUnit, DerivedStats, GameState, HeroId } from '../types'
 import { TRAUMA } from './constants'
+import { applyMorale } from '../life/morale'
 
 /** The estate's reason to keep a hero off the field right now: out on a bounty, or burnt
  *  out and still resting (null = free). The one source of truth for both checks below and
@@ -29,8 +30,13 @@ export function estateBusy(state: GameState, heroId: HeroId): string | null {
 
 const SCALED: (keyof DerivedStats)[] = ['maxHP', 'pAtk', 'mAtk', 'pDef', 'mDef', 'spd']
 
-/** A withdrawn hero's unit, dulled (every combat stat × TRAUMA.withdrawnStat). */
+/** A withdrawn hero's unit, dulled (every combat stat × TRAUMA.withdrawnStat); then the
+ *  hero's morale at the ends (lane L: inspired a little better, shaken a little worse). */
 export function moraleAdjust(state: GameState, unit: CombatUnit): CombatUnit {
+  return applyMorale(state, withdrawnAdjust(state, unit))
+}
+
+function withdrawnAdjust(state: GameState, unit: CombatUnit): CombatUnit {
   const id = unit.sourceHeroId
   if (!id || !state.estate?.trauma?.[id]?.withdrawn) return unit
   const k = TRAUMA.withdrawnStat

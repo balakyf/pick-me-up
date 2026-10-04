@@ -3,6 +3,8 @@ import { createAccount } from '../account'
 import { reduce } from '../store'
 import { TUNING } from '../tuning'
 import type { GameState, HeroId, OwnedHero } from '../types'
+import { TRAITS, type TraitId } from '../content/traits'
+import { INCIDENT } from './moraleTuning'
 import {
   aptitude,
   assignJob,
@@ -187,7 +189,10 @@ describe('jobs', () => {
     s = reduce(s, { type: 'ASSIGN_JOB', heroId: living(s)[3]!.id, job: 'gardener' })
     const later = stepLife({ ...s, gold: 0 }, 3 * DAY)
     expect(later.gold).toBeGreaterThan(0)
-    expect(later.life.tally.jobGold).toBe(later.gold)
+    // Every coin is the garden's — but for a Lucky hero's found purse (a camp incident, lane L).
+    const purses = later.life.chronicle.filter((e) => e.kind === 'incident' && e.detail?.startsWith('trait:') && TRAITS[e.detail.slice(6) as TraitId]?.family === 'luck').length
+    const purse = INCIDENT.trait.purseBase + INCIDENT.trait.purseFloor * s.tower.highestCleared
+    expect(later.life.tally.jobGold).toBe(later.gold - purses * purse)
   })
 })
 
