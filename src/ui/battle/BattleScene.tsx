@@ -57,6 +57,9 @@ import { upcomingTurns } from './turnOrder'
 import { TurnStrip } from './TurnStrip'
 import { SkillCutIn, WaveBanner, WaveCleared } from './StageBanners'
 import { ElementsHint } from './ElementsHint'
+import { CoachBattleTip } from '../qol/CoachTip'
+import type { Lesson } from '../qol/coach'
+import type { LessonId } from '../../engine/content/missions'
 import { elementsHintSeen, markElementsHintSeen } from './elementsHint'
 import './battle.css'
 import './battleRead.css'
@@ -90,6 +93,7 @@ export function BattleScene({
   onDone,
   orders,
   nonLethal = false,
+  coach,
 }: {
   log: CombatLog
   state: GameState | null
@@ -97,6 +101,8 @@ export function BattleScene({
   orders?: BattleOrders
   /** A trial (the weekly echo): nobody dies, so no death moment and no DEFEAT. */
   nonLethal?: boolean
+  /** Lane P: the coach's lesson this battle may teach as it happens (the tower passes it). */
+  coach?: { lesson: Lesson | null; onSeen: (id: LessonId) => void }
 }) {
   const [log, setLog] = useState(initialLog)
   const [aim, setAim] = useState<Aim>(null)
@@ -471,7 +477,14 @@ export function BattleScene({
   const objective = view ? <ObjectiveHud view={view} snap={snap} byId={byId} nameOf={nameOf} bustOf={bustOf} docked={docked || beside} /> : null
   const turns = <TurnStrip now={turnNow} next={upcoming} byId={byId} iconOf={iconOf} nameOf={nameOf} docked={docked || beside} />
   // The hint steps aside for a death moment and the fallen hero's last words.
-  const hintCard = hint === 'on' && !card && !fallen ? <ElementsHint onClose={closeHint} docked={docked || beside} /> : null
+  const elementsCard = hint === 'on' && !card && !fallen ? <ElementsHint onClose={closeHint} docked={docked || beside} /> : null
+  // Lane P: the coach's tip, the first time its lesson happens (it waits behind the hint).
+  const hintCard = (
+    <>
+      {elementsCard}
+      {coach && <CoachBattleTip lesson={coach.lesson} beat={beat} byId={byId} onSeen={coach.onSeen} docked={docked || beside} hidden={!!card || !!fallen || elementsCard !== null} />}
+    </>
+  )
 
   return (
     <div

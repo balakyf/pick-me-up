@@ -1,0 +1,30 @@
+/* Lane P · the coach: Isel's tips (war room card, battle note). */
+.coach-card {
+  display: flex; gap: 10px; align-items: flex-start; padding: 8px 10px; margin: 0 0 10px;
+  border-left: 3px solid var(--gold);
+}
+.coach-face { flex: none; image-rendering: pixelated; width: 32px; height: 32px; }
+.coach-text { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.coach-kicker { font-size: 12px; color: var(--gold); letter-spacing: 0.5px; }
+.coach-kicker b { color: var(--ink, #f4ecd8); }
+.coach-tip { margin: 0; font-size: 13px; line-height: 1.35; }
+.coach-actions { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.coach-off { font-size: 12px; color: var(--ink-dim); }
+
+/* In battle: a note in the sky under the caption (a phone: under the stage, over the windows). */
+.coach-battle {
+  position: absolute; left: 50%; top: 52px; transform: translateX(-50%); z-index: 1120;
+  width: max-content; max-width: min(460px, 82%); display: flex; gap: 8px; align-items: flex-start;
+  padding: 6px 10px; background: #120e2cf2; font-size: 13px;
+}
+.coach-battle.docked {
+  top: 100%; left: 0; right: 0; transform: none; width: auto; max-width: none; margin-top: 4px; z-index: 1200;
+  box-shadow: 0 6px 0 #0008;
+}
+.battle.beside .coach-battle.docked { position: static; margin: 0; box-shadow: none; }
+.coach-battle .coach-tip { font-size: 12px; }
+
+@media (max-width: 600px) {
+  .coach-card { padding: 6px 8px; gap: 8px; }
+  .coach-tip { font-size: 12px; }
+}

@@ -1,0 +1,16 @@
+/* Lane P · the filler floor's briefing (on top of lane M's .story-brief). */
+.mission-brief { font-size: 13px; }
+.mission-flavour { font-style: italic; margin-top: 2px; }
+.mission-terms { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.mission-wins, .mission-fails { display: flex; flex-direction: column; gap: 2px; padding: 4px 6px; background: #0004; }
+.mission-wins { border-left: 2px solid var(--good); }
+.mission-fails { border-left: 2px solid var(--bad); }
+.mission-term { font-size: 11px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--ink-faint); }
+@media (max-width: 600px) {
+  .mission-terms { grid-template-columns: 1fr; gap: 4px; }
+}
+/* A phone: the sticky Enter panel takes the bottom of the screen, so the card stays short. */
+@media (max-width: 600px) {
+  .mission-flavour { display: none; }
+  .mission-wins, .mission-fails { padding: 2px 6px; }
+}

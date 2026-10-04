@@ -91,6 +91,14 @@ export function SettingsWindow({ onClose }: { onClose: () => void }) {
             onChange={(v) => update({ textSpeed: v })}
           />
           <TextPreview speed={s.textSpeed} />
+          <Toggle
+            label={t('Isel’s tips')}
+            hint={t('A short tip the first time each part of the climb matters.')}
+            on={s.coachTips}
+            onChange={(on) => update({ coachTips: on })}
+            onText={t('On')}
+            offText={t('Off')}
+          />
           <Choice
             label={t('Language')}
             value={locale}

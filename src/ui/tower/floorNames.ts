@@ -73,6 +73,7 @@ export const MISSION_ICON: Record<string, string> = {
   Complex: '✶',
   Raid: '☠',
   Domination: '👁',
+  Hunt: '🎯',
 }
 
 export function missionIcon(type: string): string {
