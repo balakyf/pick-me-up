@@ -1,0 +1,53 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   Lane Q · big-screen layouts. A laptop gets a foe column wide enough for its foes'
+   names; at ≥1600 px (a 1920×1080 monitor) the war room, the battle HUD and the lobby
+   HUD use the room instead of a phone layout stretched. 1280×800 and 390×844 keep their
+   layouts (only the foe column's minimum moves at 1280). Own file — never ui.css.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── The battle: a foe column as wide as its longest name (BattleScene sets the vars) ── */
+@media (min-width: 1001px) {
+  .battle:not(.beside) .battle-hud {
+    grid-template-columns: minmax(var(--foe-col, 190px), 1fr) minmax(330px, 1.7fr) auto;
+  }
+  .battle:not(.beside) .battle-hud:has(.battle-foes.many) {
+    grid-template-columns: minmax(var(--foe-col-many, 190px), 1.2fr) minmax(330px, 1.6fr) auto;
+  }
+}
+
+@media (min-width: 1600px) and (min-height: 800px) {
+  /* The HUD spans the stage's width, with room for every name and number. */
+  .battle:not(.beside) .battle-hud {
+    width: min(1680px, calc(100vw - 40px)); gap: 12px;
+    grid-template-columns: minmax(var(--foe-col-wide, 300px), 1fr) minmax(480px, 1.5fr) minmax(360px, auto);
+  }
+  .battle:not(.beside) .battle-hud:has(.battle-foes.many) {
+    grid-template-columns: minmax(var(--foe-col-wide-many, 300px), 1.3fr) minmax(460px, 1.4fr) minmax(360px, auto);
+  }
+  .battle .battle-foes { font-size: 18px; padding: 8px 14px; }
+  .battle .battle-foes.many { font-size: 15px; max-height: 190px; }
+  .battle .foe-hp { width: 96px; }
+  .battle .battle-foes.many .foe-hp { width: 56px; }
+  .battle .party-row { grid-template-columns: 32px minmax(0, 1fr) auto 210px; font-size: 18px; }
+  .battle .party-bust { width: 28px; height: 28px; }
+  .battle .party-hpnum { font-size: 15px; min-width: 84px; }
+  .battle .battle-caption { font-size: 20px; min-width: 620px; }
+  .battle .pbtn { font-size: 17px; }
+}
+
+/* ── The war room: a wider command column and floor list ── */
+@media (min-width: 1600px) and (min-height: 800px) {
+  .screen.war-room { max-width: 1860px; }
+  .war-grid { grid-template-columns: auto minmax(560px, 780px) minmax(480px, 1fr); gap: 22px; }
+  /* The floor list's rows carry their mods and foes on one line each. */
+  .war-floors .floor .fdesc .fs { font-size: 15px; }
+  .war-command { font-size: 17px; }
+}
+
+/* ── The lobby HUD: the corner cards grow with the screen ── */
+@media (min-width: 1600px) and (min-height: 900px) {
+  .hud.hud-tl, .hud.hud-tr, .hud.hud-zoom, .hud.hud-follow { zoom: 1.2; }
+  .hud.hud-help { font-size: 15px; }
+  .menu-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .pwin:has(.menu-grid) { width: min(760px, 100%); }
+}
