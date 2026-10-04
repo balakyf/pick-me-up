@@ -15,10 +15,11 @@
  */
 import type { CombatEvent, CombatLog, CombatUnitInit } from '../../engine/types'
 import { ANCHORS } from '../../engine/content/anchors'
-import { ANCHOR_STORY, BOSS_LINES, type StorySpeaker } from '../../engine/content/story'
+import { ANCHOR_STORY, BOSS_LINES, POST_WALL_STORY, type StorySpeaker } from '../../engine/content/story'
+import { POST_WALL } from '../../engine/endgame/wall'
 import { bossShows, introOf } from '../battle/bossIntro'
 
-export type StoryKind = 'entrance' | 'phase' | 'telegraph' | 'defeat' | 'opening' | 'victory'
+export type StoryKind = 'entrance' | 'phase' | 'telegraph' | 'defeat' | 'opening' | 'victory' | 'wave'
 
 /** How long each kind of line holds the text box at 1× (ms). A victory line stays until
  *  the Master leaves the battle (0 = no timer). */
@@ -29,6 +30,8 @@ export const STORY_MS: Record<StoryKind, number> = {
   defeat: 2400,
   opening: 2600,
   victory: 0,
+  // Lane O: a siege stage as its wave comes on.
+  wave: 2800,
 }
 
 /** A boss speaks over the first few wind-ups of each big move; after that the ring and the
@@ -58,6 +61,12 @@ function bossLine(kind: StoryKind, u: CombatUnitInit, text: string | undefined):
 function anchorFight(log: CombatLog): boolean {
   const def = ANCHORS[log.floor]
   return def !== undefined && log.mission?.type === def.missionType
+}
+
+/** Lane O: is this log a post-Wall floor's own fight (F81–89, its own mission)? */
+function postWallFight(log: CombatLog): boolean {
+  const def = POST_WALL[log.floor]
+  return def !== undefined && ANCHORS[log.floor] === undefined && log.mission?.type === def.missionType
 }
 
 /** Every story line of a replay, keyed by event index. */
@@ -112,9 +121,14 @@ export function storyBeats(log: CombatLog, byId: Record<string, CombatUnitInit>)
       const n = told.get(key) ?? 0
       if (n < TELEGRAPH_LINES_PER_MOVE && put(i, bossLine('telegraph', u, line))) told.set(key, n + 1)
     } else if (e.kind === 'act' && firstAct < 0) firstAct = i
+    // Lane O: a stage of the siege (an anchor's wave line) as its wave comes on.
+    else if (e.kind === 'wave-spawn' && anchorFight(log)) {
+      const w = ANCHOR_STORY[log.floor]?.waves?.[e.wave]
+      if (w) put(i, { kind: 'wave', text: w.line, speaker: w.speaker, narrated: w.speaker === 'narrator' })
+    }
   })
   // The opening: on the first action, unless a boss already speaks there.
-  const opening = anchorFight(log) ? ANCHOR_STORY[log.floor]?.opening : undefined
+  const opening = anchorFight(log) ? ANCHOR_STORY[log.floor]?.opening : postWallFight(log) ? POST_WALL_STORY[log.floor]?.opening : undefined
   if (opening && firstAct >= 0) {
     let at = firstAct
     while (out.has(at) && at < log.events.length - 1) at++

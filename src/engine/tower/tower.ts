@@ -58,6 +58,10 @@ import { floorModifiersFor, withBonds } from '../depth'
 import { recordBattle } from '../codex'
 import { applyPartyBonuses } from '../challenge/bonds'
 import { hash, rngFor, nextInt, nextFloat, chance, pick, makeSeed, type Rng } from '../rng/rng'
+import { cycleMult, fateGoldMult, scaleWaves, sealFate } from '../endgame/endgame'
+import { endgameFloor } from '../endgame/floors'
+import { ENDGAME } from '../endgame/tuning'
+import { worldDayIndex } from '../daily/daily'
 import type { HiddenObjective, LoopState, TowerEvent, TowerState, BattleResult } from '../types'
 
 const T = TUNING.tower
@@ -176,7 +180,8 @@ export function rollMaterialDrops(
 
 /** worldMult for a state's worldGrade. */
 function worldMultFor(state: GameState): number {
-  return T.worldMult[state.worldGrade]
+  // Lane O: a New Cycle's world is harder (× 1 in the first world).
+  return T.worldMult[state.worldGrade] * cycleMult(state)
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -297,7 +302,8 @@ function buildScaledAnchor(
   let built = buildAnchorEncounter(anchor, floor, worldMult, extraLevels)
   if (floor <= 20) return built
   // The Wailing Wall itself (F80's anchor) stands far above its floor's budget: the gate holds.
-  const wall = floor === T.wallFloor ? T.wallPowerMult : 1
+  // Lane O: the siege's four stages carry a budget of their own on top of the Wall's.
+  const wall = floor === T.wallFloor ? T.wallPowerMult * ENDGAME.siege.budgetMult : 1
   // The Herald, the collapse and the summit take a smaller step than the floors around them.
   const set = floor >= T.worldEndFloor ? T.heraldPowerMult / T.postWallPowerMult : 1
   const target = floorPower(floor, worldMult) * T.anchorBudgetMult * wall * set
@@ -307,6 +313,8 @@ function buildScaledAnchor(
     mult *= T.elitePowerStep
     built = buildAnchorEncounter(anchor, floor, worldMult, extraLevels, mult)
   }
+  // Lane O: the siege stands on its budget exactly (the elite steps are 8% apart).
+  if (floor === T.wallFloor) return scaleWaves(built, target / cpOf(built))
   return built
 }
 
@@ -612,10 +620,13 @@ export function buildEncounter(state: GameState, floor: number, focus?: FocusDir
   const scar = loopScarLevels(floor, state.tower.loop)
 
   const anchor = ANCHORS[floor]
-  const built: { waves: EnemyWave[]; mission: Mission; allies?: CombatUnit[]; reserves?: Record<string, CombatUnit[]> } =
+  const raw: { waves: EnemyWave[]; mission: Mission; allies?: CombatUnit[]; reserves?: Record<string, CombatUnit[]> } =
     anchor !== undefined
       ? buildScaledAnchor(anchor, floor, worldMult, scar)
       : buildFillerEncounter(floor, worldMult, rng, scar, seed)
+  // Lane O: the floors behind the Wall carry missions of their own; past F90 the world's fate
+  // shapes every floor. Everywhere else `raw` comes back as it is.
+  const built = endgameFloor(state, floor, raw, { anchor: anchor !== undefined, allyLevel: mobLevel(floor, worldMult) })
 
   const enc: Encounter = {
     floor,
@@ -800,7 +811,7 @@ export function playFloor(
   const cleared = res.outcome === 'win'
   const firstClear = cleared && floor > state.tower.highestCleared
   const goldAwarded = cleared
-    ? Math.round(ECON.goldPerFloor * floor * worldMult) * (firstClear ? ECON.firstClearMult : 1)
+    ? Math.round(ECON.goldPerFloor * floor * worldMult * fateGoldMult(state, floor)) * (firstClear ? ECON.firstClearMult : 1)
     : 0
   const xpAwarded = cleared ? floorXp(floor) : 0
 
@@ -913,7 +924,7 @@ export function playFloor(
   let nextMeta = masterXpGain > 0 ? addMasterXp(meta, masterXpGain) : meta
   if (cleared) nextMeta = addPi(nextMeta, PI.perClear + (firstClear ? PI.perFirstClear : 0))
 
-  const nextState: GameState = {
+  let nextState: GameState = {
     ...state,
     gold,
     gems,
@@ -924,6 +935,8 @@ export function playFloor(
     // The Enemy Codex remembers who was met here (a scouted floor's enemies are studied).
     codex: recordBattle(state.codex, res.log, { studied: state.meta.peekedFloors.includes(floor) }),
   }
+  // Lane O: the fate is sealed in the endgame slice (a spared world pays its tribute).
+  if (worldEnded || worldSaved) nextState = sealFate(nextState, worldSaved ? 'saved' : 'ended', worldDayIndex(state.meta.lastSeenAtWorld))
 
   const result: FloorResult = {
     floor,

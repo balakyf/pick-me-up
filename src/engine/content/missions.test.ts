@@ -49,8 +49,9 @@ describe('the mission table', () => {
     for (const f of Object.keys(ANCHORS).map(Number)) expect(fillerMissionPlan(seed, f)).toBeNull()
     for (let f = 36; f <= 39; f++) expect(fillerMissionPlan(seed, f)).toBeNull()
     for (let f = 80; f <= 100; f++) expect(fillerMissionPlan(seed, f)).toBeNull()
-    // A legacy floor is exactly what the old mix built.
-    for (const f of [37, 83, 97]) {
+    // A legacy floor is exactly what the old mix built. (F81–89 carry lane O's endgame
+    // missions, built on top of the same filler; endgame/wall tests cover them.)
+    for (const f of [37, 97]) {
       const s = onFloor(f, 3)
       const legacy = buildFillerEncounter(f, TUNING.tower.worldMult.C, rngFor(f >= 80 && f <= 89 ? makeSeed(TUNING.tower.wallSeed) : s.seed, 'floor', f))
       const enc = buildEncounter(s, f)

@@ -48,7 +48,7 @@ export function Chronicle({ state }: { state: GameState }) {
                 <b>{t(h.name)}</b> — <i>{t(h.lore)}</i>
               </span>
             ) : missed ? (
-              <span className="muted">{t('??? — missed: the floor is behind you.')}</span>
+              <span className="muted">{done ? t('??? — missed: the floor is behind you.') : t('??? — missed: relive the floor to find it (Memories of the Tower).')}</span>
             ) : (
               <span className="muted">{masterSight || revealed.has(h.id) ? `??? — ${t(h.hint)}` : t('??? (a hidden objective)')}</span>
             )}

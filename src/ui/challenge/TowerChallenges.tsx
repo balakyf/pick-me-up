@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { createPortal } from 'react-dom'
 import type { CombatLog, GameState } from '../../engine/types'
 import type { Store } from '../../engine/store'
 import { bonusRoomWithResult } from '../../engine/store'
@@ -10,6 +11,8 @@ import { tn } from '../text'
 import { BonusRoomPanel, RoomOutcomeCard } from './BonusRoom'
 import { RaidPlanner } from './RaidPlanner'
 import { WeeklyTrial, ruleName } from './WeeklyTrial'
+import { Memories, memoriesLabel } from '../ending/Memories'
+import { relivableFloors } from '../../engine/endgame'
 import './challenge.css'
 
 /**
@@ -20,7 +23,7 @@ export function TowerChallenges({ state, store }: { state: GameState; store: Sto
   const [outcome, setOutcome] = useState<RoomOutcome | null>(null)
   const [replay, setReplay] = useState<CombatLog | null>(null)
   const [err, setErr] = useState<string | null>(null)
-  const [win, setWin] = useState<'raid' | 'weekly' | null>(null)
+  const [win, setWin] = useState<'raid' | 'weekly' | 'memories' | null>(null)
   const nowWorld = toWorldTime(Date.now())
 
   function choose(choice: string) {
@@ -67,9 +70,17 @@ export function TowerChallenges({ state, store }: { state: GameState; store: Sto
               : t('(clear F{n})', { n: CHALLENGE.weekly.unlockFloor })}
           </span>
         </button>
+        {/* Lane O: relive a cleared anchor to find the truths missed there. */}
+        <button className="pbtn" onClick={() => setWin('memories')} disabled={relivableFloors(state).length === 0}>
+          ✧ {t('Memories')}
+          <span className="muted small"> {relivableFloors(state).length === 0 ? t('(clear F{n})', { n: 5 }) : memoriesLabel(state, nowWorld)}</span>
+        </button>
       </div>
-      {win === 'raid' && <RaidPlanner state={state} store={store} onClose={() => setWin(null)} />}
-      {win === 'weekly' && <WeeklyTrial state={state} store={store} onClose={() => setWin(null)} />}
+      {/* (Lane O: the windows open over the whole page — inside the sticky command panel the
+          floor list's column painted over them.) */}
+      {win === 'raid' && createPortal(<RaidPlanner state={state} store={store} onClose={() => setWin(null)} />, document.body)}
+      {win === 'weekly' && createPortal(<WeeklyTrial state={state} store={store} onClose={() => setWin(null)} />, document.body)}
+      {win === 'memories' && createPortal(<Memories state={state} store={store} onClose={() => setWin(null)} />, document.body)}
       {outcome && !replay && <RoomOutcomeCard outcome={outcome} onReplay={setReplay} onClose={() => setOutcome(null)} />}
       {replay && <BattleScene log={replay} state={state} onDone={() => setReplay(null)} />}
     </>

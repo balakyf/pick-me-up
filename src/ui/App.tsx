@@ -44,6 +44,9 @@ import { clearPendingReplay } from './tower/pendingReplay'
 import { SceneTransition } from './transition/SceneTransition'
 import { SaveErrorNotice } from './qol/SaveErrorNotice'
 import { HeroSheetHost } from './hero/HeroSheetHost'
+import { EndingHost } from './ending/EndingHost'
+import { openEnding } from './ending/endingBus'
+import { fateOf } from '../engine/endgame'
 
 type View = 'lobby' | WorldView
 
@@ -117,6 +120,7 @@ function GameMenu({
   onSave,
   onKeys,
   onSettings,
+  onEnding,
 }: {
   store: Store
   onGo: (p: PlaceId) => void
@@ -124,6 +128,8 @@ function GameMenu({
   onSave: () => void
   onKeys: () => void
   onSettings: () => void
+  /** Lane O: replay the epilogue and the credits (once the world's fate is sealed). */
+  onEnding?: () => void
 }) {
   // In-page confirmation (browser confirm() dialogs are blocked in embedded viewers).
   const [confirmReset, setConfirmReset] = useState(false)
@@ -151,6 +157,11 @@ function GameMenu({
         <button className="pbtn ghost" onClick={onSettings} title={t('Sound, comfort, speed and language')}>
           <PxIcon name="settings" /> {t('Settings')} <kbd>O</kbd>
         </button>
+        {onEnding && (
+          <button className="pbtn ghost" onClick={onEnding} title={t('Replay the epilogue and the credits')}>
+            ✦ {t('Epilogue')}
+          </button>
+        )}
       </div>
       <div className="menu-foot">
         <button
@@ -354,6 +365,7 @@ export function App() {
           onSave={() => (setMenuOpen(false), setPanel('save'))}
           onKeys={() => (setMenuOpen(false), setPanel('keys'))}
           onSettings={() => (setMenuOpen(false), setPanel('settings'))}
+          onEnding={fateOf(state) !== null ? () => (setMenuOpen(false), openEnding({ start: 'epilogue' })) : undefined}
         />
       )}
       {panel === 'save' && (
@@ -377,6 +389,17 @@ export function App() {
       <HeroSheetHost state={state} store={store} />
       {/* A promotion that completed plays its ceremony (lane J) — never over a climb. */}
       <PromotionCeremonyHost key={`pc|${state.accountId}|${epoch}`} state={state} hold={view === 'tower' || demoLog !== null} />
+      {/* Lane O: the epilogue and the credits after the F90 decision, and the New Cycle. */}
+      <EndingHost
+        state={state}
+        store={store}
+        hold={view !== 'lobby' || menuOpen || panel !== null || demoLog !== null}
+        onNewCycle={() => {
+          clearPendingReplay()
+          setView('lobby')
+          setEpoch((e) => e + 1)
+        }}
+      />
       {/* Lane K: a pixel curtain between scenes; the save-error notice (store.getSaveError). */}
       <SceneTransition scene={view} />
       <SaveErrorNotice store={store} onExport={() => setPanel('save')} />

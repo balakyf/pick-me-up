@@ -51,6 +51,7 @@ import {
   weeklyUnlocked,
   worldWeekOf,
 } from '../engine/challenge'
+import { fateOf, missedTruths, newCycleRefusal, reliveAttemptsLeft, reliveRefusal } from '../engine/endgame'
 
 export type ProfileId = 'casual' | 'engaged' | 'whale'
 
@@ -95,6 +96,10 @@ export interface Profile {
   /** Lane L: answer camp incidents (a casual player lets them settle themselves) and keep
    *  an eye on morale (a feast when the top of the roster is shaken). */
   camp: boolean
+  /** Lane O: relive cleared anchors to recover missed truths (Memories of the Tower), and
+   *  begin a New Cycle once the summit is behind a sealed fate. */
+  relive: boolean
+  newCycle: boolean
 }
 
 export const PROFILES: Record<ProfileId, Profile> = {
@@ -125,6 +130,8 @@ export const PROFILES: Record<ProfileId, Profile> = {
     orders: false,
     missions: false,
     camp: false,
+    relive: false,
+    newCycle: false,
   },
   engaged: {
     id: 'engaged',
@@ -152,6 +159,8 @@ export const PROFILES: Record<ProfileId, Profile> = {
     orders: true,
     missions: true,
     camp: true,
+    relive: true,
+    newCycle: true,
   },
   whale: {
     id: 'whale',
@@ -179,6 +188,8 @@ export const PROFILES: Record<ProfileId, Profile> = {
     orders: true,
     missions: true,
     camp: true,
+    relive: true,
+    newCycle: true,
   },
 }
 
@@ -238,10 +249,12 @@ export interface SimResult {
    *  first healer or tank, lane F; PROMOTE_CLASS / PROMOTE_SKILL — a ceremony choice that
    *  overruled the chamber, lane J). */
   levers: Record<string, number>
+  /** Lane O: New Cycles begun (absent = none). */
+  cycles?: number
 }
 
 /** Commands counted as levers when the engine accepts them. */
-const LEVERS = new Set<Command['type']>(['EQUIP_BEST', 'BANQUET', 'RESOLVE_INCIDENT', 'ASSIGN_JOB', 'TRAIN_SKILL', 'SYNTHESIZE', 'TRANSFER_SKILL', 'TOWER_RAID', 'WEEKLY_TRIAL', 'HOST_DUEL', 'POST_BOUNTY', 'BUY_DECOR', 'RAISE_STATUE', 'UPGRADE_FACILITY'])
+const LEVERS = new Set<Command['type']>(['EQUIP_BEST', 'BANQUET', 'RESOLVE_INCIDENT', 'ASSIGN_JOB', 'TRAIN_SKILL', 'SYNTHESIZE', 'TRANSFER_SKILL', 'TOWER_RAID', 'WEEKLY_TRIAL', 'HOST_DUEL', 'POST_BOUNTY', 'BUY_DECOR', 'RAISE_STATUE', 'UPGRADE_FACILITY', 'RELIVE_FLOOR', 'NEW_CYCLE'])
 
 const REAL_DAY_MS = 86_400_000
 /** Gold in hand before a bot builds a Living Lobby workplace (surplus, not summon money). */
@@ -303,6 +316,7 @@ class Bot {
   private lastRaidDay = -1
   private lastTrialDay = -1
   private lastDuelDay = -1
+  private lastReliveDay = -1
   /** After a loss, the party strength and day it happened (a person waits to get stronger). */
   private lastLoss: { floor: number; ratio: number; day: number; wiped: boolean } | null = null
   /** The floor the crystal first told the bot to wait on, and the day (lane C's war room). */
@@ -355,6 +369,7 @@ class Bot {
     this.now = toWorldTime(realMs)
     this.try({ type: 'TICK' })
     if (this.s.meta.deleted) return
+    this.maybeNewCycle()
     this.trackInvasions()
     this.shop()
     this.resolveEvent()
@@ -378,6 +393,7 @@ class Bot {
     if (this.p.raids) this.raid(day)
     if (this.p.crack) this.rift()
     if (this.p.trial) this.trial(day)
+    if (this.p.relive) this.relive(day)
     if (this.p.duels) this.duel(day)
     if (this.p.drills) this.drills()
   }
@@ -769,6 +785,40 @@ class Bot {
     }
   }
 
+  /**
+   * Lane O · Memories of the Tower: once a day, relive the lowest cleared floor that still
+   * hides a truth, as it was ('true'), with the five strongest at home — but only while the
+   * truths could still matter (F90 not yet decided). Nobody dies in a memory; it costs Sanity.
+   */
+  private relive(day: number): void {
+    if (this.lastReliveDay === day || fateOf(this.s) !== null || reliveAttemptsLeft(this.s, this.now) <= 0) return
+    const missed = missedTruths(this.s)
+    if (missed.length === 0) return
+    const team = this.ranked()
+      .filter((h) => canEnterTrial(h, this.s) && h.sanity >= 60)
+      .slice(0, SIZE)
+      .map((h) => h.id)
+    for (const floor of [...new Set(missed.map((h) => h.floor))]) {
+      if (reliveRefusal(this.s, floor, 'true', team, this.now) !== null) continue
+      const before = this.s.tower.hiddenFound.length
+      if (this.try({ type: 'RELIVE_FLOOR', floor, difficulty: 'true', heroIds: team })) {
+        this.lastReliveDay = day
+        this.lever('TRUTHS_RECOVERED', this.s.tower.hiddenFound.length - before)
+      }
+      return
+    }
+  }
+
+  /** Lane O: after the summit, a Master whose world's fate is sealed begins a New Cycle. */
+  private maybeNewCycle(): void {
+    if (!this.p.newCycle || this.s.tower.highestCleared < TUNING.tower.sliceTopFloor || newCycleRefusal(this.s) !== null) return
+    if (this.try({ type: 'NEW_CYCLE' })) {
+      this.res.cycles = (this.res.cycles ?? 0) + 1
+      this.lastLoss = null
+      this.waitingSince = null
+    }
+  }
+
   /** A tryout duel a day between the next two heroes up (XP for the bench). */
   private duel(day: number): void {
     if (this.lastDuelDay === day) return
@@ -901,6 +951,9 @@ class Bot {
       if (r.firstClear) this.res.firstClearDay[floor] = day
       if (r.worldEnded) this.res.worldEnded = true
       if (r.worldSaved) this.res.worldSaved = true
+      // Lane O: the F90 choice, as the bot took it (it subverts whenever it knows enough).
+      if (r.worldEnded) this.lever('FATE_ENDED')
+      if (r.worldSaved) this.lever('FATE_SAVED')
       this.res.log.push({ day, floor, ratio: Math.round(ratio * 100) / 100, won: r.cleared, fallen: r.fallenHeroIds.length })
       if (!r.cleared) {
         this.lastLoss = { floor, ratio, day, wiped: r.result.outcome === 'wipe' }
@@ -1140,7 +1193,8 @@ function run(profileId: ProfileId, seed: number, days: number, epoch: number, on
       bot.res.deleted = true
       break
     }
-    if (bot.s.tower.highestCleared >= TUNING.tower.sliceTopFloor) break
+    // (A bot that begins a New Cycle after the summit keeps playing the next world.)
+    if (bot.s.tower.highestCleared >= TUNING.tower.sliceTopFloor && !p.newCycle) break
   }
   bot.res.captiveLosses = bot.s.pvp.log.filter((l) => l.note.startsWith('synthesized')).length
   return bot

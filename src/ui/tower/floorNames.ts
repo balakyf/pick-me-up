@@ -10,6 +10,7 @@ import { buildEncounter } from '../../engine/tower'
 import type { GameState } from '../../engine/types'
 import { hashString, seededRand } from '../pixel/rand'
 import { t } from '../i18n/i18n'
+import { POST_WALL_STORY } from '../../engine/content/story'
 
 /** Shared architectural nouns (each act lends its own qualifiers). */
 export const FLOOR_NOUNS = ['Stair', 'Hall', 'Gallery', 'Landing', 'Vault', 'Causeway', 'Terrace', 'Cloister'] as const
@@ -53,6 +54,9 @@ export function floorNameParts(accountSeed: number, floor: number): { noun: stri
 
 /** A seeded floor's name ("Stair of Wolfsong"), translated; null for an anchor. */
 export function floorName(accountSeed: number, floor: number): string | null {
+  // Lane O: the floors behind the Wall carry their story's own name ("The Breach Road").
+  const story = POST_WALL_STORY[floor]
+  if (story !== undefined && ANCHORS[floor] === undefined) return t(story.title)
   const p = floorNameParts(accountSeed, floor)
   return p ? `${t(p.noun)} ${t(p.qualifier)}` : null
 }

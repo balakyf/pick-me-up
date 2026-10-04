@@ -747,6 +747,21 @@ export const ALLY_TEMPLATES: Record<string, EnemyTemplate> = {
     element: 'light',
     attrMult: { str: 0.1, agi: 0.1, vit: 2.4, int: 0.1, wil: 1.6 },
   },
+  // Lane O · F80, the Siege of the Wailing Wall: the ram the Master's army drives at the gate.
+  // If it breaks, the siege fails. An object: iron-shod, slow, very hard to stop.
+  siege_ram: {
+    id: 'siege_ram',
+    name: 'Siege Ram',
+    element: 'physical',
+    attrMult: { str: 0.1, agi: 0.1, vit: 3.2, int: 0.1, wil: 2.2 },
+  },
+  // Lane O · F86, Taonier's Last Banner: the Al Ragna standard the Wall's defenders left behind.
+  al_ragna_banner: {
+    id: 'al_ragna_banner',
+    name: 'Al Ragna Banner',
+    element: 'light',
+    attrMult: { str: 0.1, agi: 0.1, vit: 2.6, int: 0.1, wil: 1.8 },
+  },
 }
 
 // Compile-time sanity: keep f10Waves referenced so this module and the anchors

@@ -226,13 +226,17 @@ export function truthStanding(state: GameState): TruthStanding {
   // Truths beyond the ninetieth floor do not count towards refusing it.
   const usefulAhead = HIDDEN_OBJECTIVES.filter((h) => !found.has(h.id) && h.floor > state.tower.highestCleared && h.floor <= TUNING.tower.worldEndFloor).length
   const need = TUNING.lifecycle.subvertTruths
+  // Lane O: a truth missed below the ninetieth floor can be found again by reliving its floor
+  // (Memories of the Tower), until the fate is sealed.
+  const sealed = state.tower.worldEnded || state.tower.worldSaved
+  const recoverable = sealed ? 0 : HIDDEN_OBJECTIVES.filter((h) => !found.has(h.id) && h.floor <= state.tower.highestCleared && h.floor < TUNING.tower.worldEndFloor).length
   return {
     found: found.size,
     missed,
     ahead,
     total: HIDDEN_OBJECTIVES.length,
     need,
-    reachable: found.size + usefulAhead >= need || found.size >= need,
+    reachable: found.size + usefulAhead + recoverable >= need || found.size >= need,
     qualified: found.size >= need,
   }
 }

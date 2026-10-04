@@ -14,6 +14,7 @@
 
 import type { AnchorDef } from '../types'
 import { TUNING } from '../tuning'
+import { ENDGAME } from '../endgame/tuning'
 
 export const ANCHORS: Record<number, AnchorDef> = {
   // ── F5: Survival ───────────────────────────────────────────────────────────
@@ -387,16 +388,31 @@ export const ANCHORS: Record<number, AnchorDef> = {
   },
 
   // ══ Act VII — The Wailing Wall ════════════════════════════════════════════
-  // Canon F80: the Fragment Series for ALL accounts; Taonier's boss Pryos Al Ragna.
+  // Canon F80: the Fragment Series for ALL accounts; Taonier's boss Pryos Al Ragna; "nearly all
+  // of Han's forces excluding the main party died there".
+  // Lane O · THE SIEGE OF THE WAILING WALL, four stages: the approach (shards pour off the
+  // Wall), the gate (its knights and a warden come out to meet the ram), the breach (the
+  // wardens hold the hole), and Pryos at the breach with his seals. The Siege Ram must
+  // reach the gate: if it breaks, the siege fails (lane O's `endgame/` scales the budget).
   80: {
     floor: 80,
     missionType: 'Conquest',
-    objectives: [{ kind: 'defeat', targetTag: 'pryos' }],
+    objectives: [
+      { kind: 'defend', waves: ENDGAME.siege.stages },
+      { kind: 'protect', targetTag: 'siege_ram' },
+      { kind: 'defeat', targetTag: 'pryos' },
+    ],
     timer: null,
+    allies: [{ templateId: 'siege_ram', line: 'back', targetTag: 'siege_ram', levelBonus: ENDGAME.siege.ramLevelBonus }],
     waves: [
       [
-        { templateId: 'fragment_shard', count: 3 },
+        { templateId: 'fragment_shard', count: 4 },
+        { templateId: 'fragment_knight', count: 1 },
+      ],
+      [
         { templateId: 'fragment_knight', count: 2 },
+        { templateId: 'fragment_warden', count: 1 },
+        { templateId: 'fragment_shard', count: 1 },
       ],
       [
         { templateId: 'fragment_warden', count: 2 },

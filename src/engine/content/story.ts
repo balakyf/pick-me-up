@@ -108,6 +108,9 @@ export interface AnchorStory {
   opening?: { speaker: StorySpeaker; line: string }
   /** What the results say after a clear (under the boss's name). */
   aftermath: string
+  /** Lane O: a line as wave n (0-based; the first spawn is 1) comes onto the field — the
+   *  siege's stages. */
+  waves?: Readonly<Record<number, { speaker: StorySpeaker; line: string }>>
 }
 
 /** One per anchor in `ANCHORS`, keyed by floor. */
@@ -242,6 +245,13 @@ export const ANCHOR_STORY: Record<number, AnchorStory> = {
     why: 'Taonier’s highest leader turned half-monster to hold this Wall. Only five Rankers ever passed.',
     isel: 'Pryos is of Priasis’s house, Master. He knows what happened in the loop, and he will say so.',
     aftermath: 'Pryos Al Ragna falls standing. The Wall has a hole in it the shape of your party.',
+    // Lane O: the Siege of the Wailing Wall, stage by stage (the fourth is Pryos's own: his
+    // title card and his entrance line).
+    opening: { speaker: 'isel', line: 'The siege begins. Keep the ram moving, Master: if it breaks, so does the siege.' },
+    waves: {
+      1: { speaker: 'narrator', line: 'Stage two: the gate opens, and its knights come out to meet the ram.' },
+      2: { speaker: 'narrator', line: 'Stage three: the gate gives. The wardens hold the breach with everything they are.' },
+    },
   },
   85: {
     title: 'The Wall Given Legs',
@@ -557,6 +567,34 @@ export const BOSS_LINES: Record<string, BossLines> = {
     defeat: 'You won. Remember that you chose to.',
     victory: 'The end can wait. It always arrives.',
   },
+  // Lane O: Tell's echoes, called back by her drafts — the anchors the Master already beat.
+  echo_halgiraf: {
+    voice: 'narrated',
+    entrance: 'Black wings unfold again, pale as a page: the dragon you killed, remembered.',
+    telegraph: { e_dragon_breath: 'The echo draws a breath it no longer needs.' },
+    defeat: 'The echo of the dragon tears like wet paper.',
+  },
+  echo_el_cid: {
+    voice: 'speaks',
+    entrance: 'I walked into my own game once. She wrote me back out of it.',
+    telegraph: { e_sword_rain: 'Look up. It rains swords in every draft.' },
+    defeat: 'Tell her… I am done being a draft.',
+  },
+  echo_valention: {
+    voice: 'speaks',
+    entrance: 'Iron Blood, rewritten. It still remembers your blades.',
+    defeat: 'Iron… forgets…',
+  },
+  echo_pryos: {
+    voice: 'speaks',
+    entrance: 'She wrote me back to hold one more wall. I am sorry, Master.',
+    defeat: 'Priasis… I am coming home.',
+  },
+  echo_herald: {
+    voice: 'speaks',
+    entrance: 'I announced the end once. She would like me to do it again.',
+    defeat: 'Twice ended. Twice remembered.',
+  },
   tell: {
     voice: 'speaks',
     entrance: 'Welcome to the last page, Master. I wrote the others too.',
@@ -700,6 +738,19 @@ export const PRIASIS_ARC: readonly PriasisBeat[] = [
     letter: { from: 'isel', lines: ['The world is still there, Master. Somewhere in it is a grave with her name on it.', 'I would like to think someone brings flowers.'] },
     lobby: 'Taonier is still breathing. Priasis held a gate for that. So did you.',
   },
+  // Lane O: past the summit, by the world's fate.
+  {
+    id: 'summit_ended',
+    after: 100,
+    when: 'ended',
+    lobby: 'Tell is gone, and so is the world. Her pen is still on the floor up there, Master.',
+  },
+  {
+    id: 'summit_saved',
+    after: 100,
+    when: 'saved',
+    lobby: 'The summit is yours, and the world is still there. I sent Priasis’s people the names. All of them.',
+  },
 ]
 
 // ── The F90 Herald ──────────────────────────────────────────────────────────
@@ -723,3 +774,121 @@ export const HERALD = {
   ended: 'The world beneath the tower is gone. Isel closes the ledger of the living.',
   saved: 'You refused. The Herald falls, and the world below goes on breathing.',
 } as const
+
+// ── Lane O · the endgame ────────────────────────────────────────────────────
+
+/**
+ * The floors behind the Wall (F81–89, lane O's `endgame/wall.ts`), briefed like anchors:
+ * the same shape as ANCHOR_STORY. F85 is an anchor and lives there.
+ */
+export const POST_WALL_STORY: Record<number, AnchorStory> = {
+  81: {
+    title: 'The Breach Road',
+    who: 'Fragment shards pouring back through the hole you made.',
+    why: 'The breach is closing behind you. Cross before it seals.',
+    isel: 'Do not stop to fight what you can outrun, Master.',
+    opening: { speaker: 'isel', line: 'Run. The Wall is healing itself behind you.' },
+    aftermath: 'Through. The breach seals behind the last of you.',
+  },
+  82: {
+    title: 'The Shard Archive',
+    who: 'The archive’s keeper, and the fragments that file its memories.',
+    why: 'The keeper holds a shard of the world’s record. Take it from them.',
+    isel: 'Every world that fell here left a page, Master. Ours is somewhere on these shelves.',
+    opening: { speaker: 'narrator', line: 'The archive hums with a hundred million worlds, filed and forgotten.' },
+    aftermath: 'The shard is yours. In it, a sky with two suns.',
+  },
+  83: {
+    title: 'The Hollow Garrison',
+    who: 'Two watches of the Fragment Series, in a garrison with no one to guard.',
+    why: 'Hold the hall until the bell. They will not stop coming.',
+    isel: 'Nobody built this garrison, Master. It grew. Hold it anyway.',
+    aftermath: 'The bell rings in an empty hall. The garrison forgets you were here.',
+  },
+  84: {
+    title: 'The Wardens’ Vigil',
+    who: 'The vigil’s captain, behind a guard of its own.',
+    why: 'Break the guard, then the captain. The vigil watches the stair to ninety.',
+    isel: 'They are not guarding the stair from you, Master. They are guarding it for something.',
+    aftermath: 'The vigil ends. The stair beyond it climbs toward ninety.',
+  },
+  86: {
+    title: 'Taonier’s Last Banner',
+    who: 'The Al Ragna standard, left on the field by the Wall’s last defenders.',
+    why: 'Keep the banner standing. If it falls, the Fragments take it.',
+    isel: 'Pryos’s people planted that, Master. Priasis’s people. Do not let them take it.',
+    opening: { speaker: 'narrator', line: 'A golden banner still stands in the ruin, its bearers long gone.' },
+    aftermath: 'The banner stands. Someone will carry it home, if there is still a home.',
+  },
+  87: {
+    title: 'The Echoing Hall',
+    who: 'The Fragment Series in three waves, each an echo of the last.',
+    why: 'Hold through all three. The hall remembers every party that died in it.',
+    isel: 'Do not answer if it calls you by name, Master.',
+    aftermath: 'Three echoes, three silences. The hall is quiet now.',
+  },
+  88: {
+    title: 'The Door of Ninety',
+    who: 'The last of the Fragment Series, in two waves before the door.',
+    why: 'Clear the door. On the other side, the Herald is waiting.',
+    isel: 'One more floor, Master, and then I have to tell you something.',
+    aftermath: 'The door stands open. Beyond it, one floor, and then the end.',
+  },
+  89: {
+    title: 'The Antechamber',
+    who: 'Fragments in the antechamber of the ninetieth floor.',
+    why: 'The last floor before the end. Lose no one, and the tower tells you its last truth.',
+    isel: 'Bring them all through this one, Master. All of them.',
+    aftermath: 'The antechamber is empty. The ninetieth floor is above you.',
+  },
+}
+
+/** Act VIII's card again, once the world's fate is sealed (on the first floor past ninety). */
+export const ACT_STORY_AFTER: Record<'ended' | 'saved', ActStory> = {
+  ended: {
+    name: 'The Unfinished Floors',
+    epigraph: 'The world beneath the tower is gone. The floors above it were never finished.',
+    isel: 'There is no one left below to save, Master. Climb for the ones who climbed with you.',
+  },
+  saved: {
+    name: 'The Unfinished Floors',
+    epigraph: 'The world below still breathes. Above it, floors that no one finished.',
+    isel: 'They will never know what you refused for them, Master. I will.',
+  },
+}
+
+/** One still of the epilogue: an act's backdrop and a line over it. */
+export interface EpilogueStill {
+  /** The act whose backdrop it stands on (an ACTS id). */
+  id: string
+  line: string
+}
+
+/**
+ * The epilogue after the F90 decision (lane O's `ui/ending`): stills over the acts'
+ * backdrops, Isel's last word, then the credits that list the fallen.
+ */
+export const EPILOGUE: Record<'ended' | 'saved', { title: string; stills: readonly EpilogueStill[]; isel: string }> = {
+  ended: {
+    title: 'The World’s End',
+    stills: [
+      { id: 'prairie', line: 'It began on grass, with goblins, and a hero who was someone else last week.' },
+      { id: 'ruins', line: 'A princess was carried out of a burning city. A dragon fell from a roof.' },
+      { id: 'order', line: 'A war turned in a circle until someone broke the gate. Priasis held it open.' },
+      { id: 'wall', line: 'The Wall took what it always takes. The ones who came through did not come through whole.' },
+      { id: 'void', line: 'On the ninetieth floor the Master cleared the floor, and the world beneath it ended.' },
+    ],
+    isel: 'I closed the ledger of the living today, Master. I kept the other one open. Read it with me.',
+  },
+  saved: {
+    title: 'The World Spared',
+    stills: [
+      { id: 'prairie', line: 'It began on grass, with goblins, and a hero who was someone else last week.' },
+      { id: 'ruins', line: 'A princess was carried out of a burning city. A dragon fell from a roof.' },
+      { id: 'order', line: 'A war turned in a circle until someone broke the gate. Priasis held it open.' },
+      { id: 'wall', line: 'The Wall took what it always takes. The ones who came through did not come through whole.' },
+      { id: 'void', line: 'On the ninetieth floor the Master refused. The Herald fell, and the world went on breathing.' },
+    ],
+    isel: 'They will never know your name down there, Master. I wrote it in the ledger anyway, beside theirs.',
+  },
+}
