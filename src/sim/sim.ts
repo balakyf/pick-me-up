@@ -11,7 +11,7 @@
  * who uses every system, and a whale. Everything is seeded, so a run is repeatable.
  */
 import { TUNING } from '../engine/tuning'
-import type { GameState, HeroId, Line, OwnedHero, EquipmentSlot, Command, FloorResult, BonusRoomKind, FacilityId, JobId, CombatLog, BattleOrder, HeroClass } from '../engine/types'
+import type { GameState, HeroId, Line, OwnedHero, EquipmentSlot, Command, FloorResult, BonusRoomKind, FacilityId, JobId, CombatLog, BattleOrder, HeroClass, FocusDirective } from '../engine/types'
 import { reduce, attemptFloorWithResult } from '../engine/store'
 import { toWorldTime } from '../engine/time'
 import { skillCp } from '../engine/skills'
@@ -23,6 +23,7 @@ import { bestLoadout, canCraft } from '../engine/equipment'
 import { floorPower, buildEncounter, fitCount } from '../engine/tower'
 import { heroCpFull } from '../engine/unit/trueCp'
 import { forecastFloor } from '../engine/scout/forecast'
+import { missionDirective } from './missionSense'
 import { ANCHORS, SKILLS } from '../engine/content'
 import { loginClaimed, packageRefusal } from '../engine/shop'
 import { crackRefusal, dispatchRefusal } from '../engine/rift'
@@ -89,6 +90,8 @@ export interface Profile {
   forecast: boolean
   /** Orders 2.0 (lane G): Guard against a foe's wound-up move, Unleash on a boss's turn. */
   orders: boolean
+  /** Lane P: read the mission before going in (mark the target, protect the escort). */
+  missions: boolean
   /** Lane L: answer camp incidents (a casual player lets them settle themselves) and keep
    *  an eye on morale (a feast when the top of the roster is shaken). */
   camp: boolean
@@ -120,6 +123,7 @@ export const PROFILES: Record<ProfileId, Profile> = {
     duels: false,
     forecast: false,
     orders: false,
+    missions: false,
     camp: false,
   },
   engaged: {
@@ -146,6 +150,7 @@ export const PROFILES: Record<ProfileId, Profile> = {
     duels: true,
     forecast: true,
     orders: true,
+    missions: true,
     camp: true,
   },
   whale: {
@@ -172,6 +177,7 @@ export const PROFILES: Record<ProfileId, Profile> = {
     duels: true,
     forecast: true,
     orders: true,
+    missions: true,
     camp: true,
   },
 }
@@ -859,13 +865,16 @@ class Bot {
         this.lever('NOBODY_FIT')
         return
       }
-      if (this.p.forecast && !this.forecastSaysGo(pre, floor, day, ballista, subvert)) return
+      // Lane P: a reading Master marks the mission's target and protects its escort (free).
+      const focus = this.p.missions ? missionDirective(pre) : undefined
+      if (focus !== undefined) this.lever('MISSION_READ')
+      if (this.p.forecast && !this.forecastSaysGo(pre, floor, day, ballista, subvert, focus)) return
       let out
       try {
-        out = attemptFloorWithResult(pre, undefined, ballista, subvert)
+        out = attemptFloorWithResult(pre, focus, ballista, subvert)
         // Orders 2.0 (lane G): answer a foe's big move, press a boss as it turns.
         let given: BattleOrder[] = []
-        if (this.p.orders) ({ out, given } = this.answerTheFight(pre, out, ballista, subvert))
+        if (this.p.orders) ({ out, given } = this.answerTheFight(pre, out, ballista, subvert, focus))
         // A fight going badly: call the retreat as the first hero staggers (combat is
         // deterministic, so re-resolving with the order replays the fight up to it — the
         // same revise the battle screen does).
@@ -873,7 +882,7 @@ class Bot {
         const tick = this.p.retreat && !out.result.cleared && lost > 0 ? retreatTick(out.result.result.log) : null
         if (tick !== null) {
           const orders: BattleOrder[] = [...given.filter((o) => o.tick < tick), { tick, kind: 'retreat' }]
-          const alt = attemptFloorWithResult(pre, undefined, ballista, subvert, orders)
+          const alt = attemptFloorWithResult(pre, focus, ballista, subvert, orders)
           if (alt.result.fallenHeroIds.length < lost) {
             out = alt
             this.lever('RETREAT')
@@ -914,6 +923,7 @@ class Bot {
     out: { state: GameState; result: FloorResult },
     ballista?: number,
     subvert?: boolean,
+    focus?: FocusDirective,
   ): { out: { state: GameState; result: FloorResult }; given: BattleOrder[] } {
     const r0 = out.result
     if (r0.cleared && r0.fallenHeroIds.length === 0) return { out, given: [] }
@@ -923,7 +933,7 @@ class Bot {
     for (const orders of tries) {
       let alt
       try {
-        alt = attemptFloorWithResult(pre, undefined, ballista, subvert, orders)
+        alt = attemptFloorWithResult(pre, focus, ballista, subvert, orders)
       } catch {
         continue
       }
@@ -942,8 +952,8 @@ class Bot {
    * wait (the bench trains, the camp rests, the gear improves); after a week stuck on the
    * floor, go anyway, as a person would.
    */
-  private forecastSaysGo(pre: GameState, floor: number, day: number, ballista?: number, subvert?: boolean): boolean {
-    const f = forecastFloor(pre, { ballista, subvert })
+  private forecastSaysGo(pre: GameState, floor: number, day: number, ballista?: number, subvert?: boolean, focus?: FocusDirective): boolean {
+    const f = forecastFloor(pre, { ballista, subvert, ...(focus !== undefined ? { focus } : {}) })
     if (!f || f.fielded === 0) return true
     if (f.winPct >= FORECAST_ENTER_WIN && f.expectedDeaths < FORECAST_ENTER_DEATHS) {
       this.waitingSince = null
@@ -1056,6 +1066,8 @@ export function orderAnswers(log: CombatLog, pre: GameState): BattleOrder[][] {
   const out: BattleOrder[][] = []
   const tg = bigMoveThatHurt(log)
   if (tg !== null) {
+    // Lane P: a Master who read the floor's big moves braces from the start (a standing Guard).
+    out.push([{ tick: 1, kind: 'guard', onTelegraph: true }])
     out.push([{ tick: tg.tick + 1, kind: 'guard' }])
     const stunner = [...heroIds].find((id) => (pre.heroes[id as HeroId]?.skills ?? []).some((k) => (SKILLS[k.id]?.effects ?? []).some((e) => e.kind === 'stun')))
     if (stunner !== undefined && alive(log, stunner, tg.seq)) out.push([{ tick: tg.tick + 1, kind: 'unleash', allyId: stunner }])

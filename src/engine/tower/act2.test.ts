@@ -39,22 +39,27 @@ describe('act bands', () => {
     expect(isRuinsFloor(11)).toBe(true)
   })
 
-  it('Ruins filler mixes Subjugation and Survival across accounts, from the Ruins pool only', () => {
+  // Lane P: the Ruins draw from their act's mission table (escorts out of the halls); F13 is
+  // the statuses lesson (a plain Subjugation), so the mix is read on F14.
+  it('Ruins filler mixes Subjugation, Survival, Escort and Hunt across accounts, from the Ruins pool only', () => {
     const types = new Set<string>()
-    const ruinIds = new Set(fillerPoolForFloor(13).map((t) => t.name))
-    for (let seed = 1; seed <= 40; seed++) {
-      const enc = buildEncounter(onFloor(13, {}, seed), 13)
+    const ruinIds = new Set(fillerPoolForFloor(14).map((t) => t.name))
+    for (let seed = 1; seed <= 120; seed++) {
+      const enc = buildEncounter(onFloor(14, {}, seed), 14)
       types.add(enc.mission.type)
       for (const u of enc.waves[0]!.units) expect(ruinIds.has(u.name)).toBe(true)
       if (enc.mission.type === 'Survival') {
         expect(enc.mission.objectives).toEqual([{ kind: 'survive', ticks: TUNING.tower.ruinsSurviveTicks }])
       }
     }
-    expect(types).toEqual(new Set(['Subjugation', 'Survival']))
+    expect(types).toEqual(new Set(['Subjugation', 'Survival', 'Escort', 'Hunt']))
   })
 
-  it('Prairie filler is always Subjugation (unchanged)', () => {
-    for (let seed = 1; seed <= 20; seed++) expect(buildEncounter(onFloor(7, {}, seed), 7).mission.type).toBe('Subjugation')
+  it('Prairie: F1–4 stay plain Subjugations; F7 draws Subjugation, Survival or a Hunt', () => {
+    for (let seed = 1; seed <= 20; seed++) for (const f of [1, 2, 3, 4]) expect(buildEncounter(onFloor(f, {}, seed), f).mission.type).toBe('Subjugation')
+    const types = new Set<string>()
+    for (let seed = 1; seed <= 40; seed++) types.add(buildEncounter(onFloor(7, {}, seed), 7).mission.type)
+    expect(types).toEqual(new Set(['Subjugation', 'Survival', 'Hunt']))
   })
 
   it('the tower now tops out at floor 100', () => {
