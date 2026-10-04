@@ -1,0 +1,34 @@
+/* Scene curtain (lane K): a grid of pixel blocks that covers a new scene and opens onto it. */
+.scene-curtain {
+  position: fixed;
+  inset: 0;
+  z-index: 180;
+  pointer-events: none;
+  display: grid;
+  overflow: hidden;
+}
+.scene-curtain .cb {
+  background: var(--rim-dark, #0a0714);
+  /* A faint rim so the blocks read as pixels while they fall away. */
+  box-shadow: inset -2px -2px 0 #15102a;
+  animation-name: curtainBlock;
+  animation-timing-function: steps(3, end);
+  animation-fill-mode: both;
+}
+.scene-curtain.iris .cb { background: #06040c; box-shadow: inset -2px -2px 0 #120c22; }
+@keyframes curtainBlock {
+  from { transform: scale(1.1); opacity: 1; }
+  to { transform: scale(0); opacity: 1; }
+}
+/* Reduced motion: the old scene's dark simply lifts. */
+.scene-curtain.fade {
+  display: block;
+  background: var(--rim-dark, #0a0714);
+  animation-name: curtainFade;
+  animation-timing-function: linear;
+  animation-fill-mode: both;
+}
+@keyframes curtainFade {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}

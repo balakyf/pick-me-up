@@ -26,6 +26,7 @@ import { useForecast } from './tower/useForecast'
 import { forecastNow } from './tower/forecastClient'
 import { clearPendingReplay, savePendingReplay } from './tower/pendingReplay'
 import { truthStanding } from './tower/warRoomText'
+import { SceneTransition } from './transition/SceneTransition'
 import './tower/tower.css'
 
 const MAX_FLOOR = TUNING.tower.sliceTopFloor
@@ -355,6 +356,8 @@ export function TowerScreen({ state: live, store }: { state: GameState; store: S
       )}
       {combat && <BattleScene log={combat} state={live} onDone={combatDone} orders={orders ?? undefined} />}
       {showResult && pending && <ResultsScreen result={pending} state={live} onContinue={resultDone} />}
+      {/* Lane K: an iris into the battle and into its results. */}
+      <SceneTransition channel="tower" scene={combat ? 'battle' : showResult && pending ? 'results' : 'tower'} />
       {outcome && !replay && <EventOutcomeCard outcome={outcome} onReplay={setReplay} onClose={() => setOutcome(null)} />}
       {replay && <BattleScene log={replay} state={live} onDone={() => setReplay(null)} />}
     </div>

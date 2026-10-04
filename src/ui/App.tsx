@@ -41,6 +41,7 @@ import { clearToasts } from './qol/toastBus'
 import { devToolsEnabled } from './qol/devTools'
 import { PendingReplayHost } from './tower/PendingReplayHost'
 import { clearPendingReplay } from './tower/pendingReplay'
+import { SceneTransition } from './transition/SceneTransition'
 
 type View = 'lobby' | WorldView
 
@@ -284,6 +285,7 @@ export function App() {
     return (
       <div className="app">
         <TitleScreen store={store} hasSave={hasSave} />
+        <SceneTransition scene="title" />
         <ToastHost />
       </div>
     )
@@ -371,6 +373,8 @@ export function App() {
       <PendingReplayHost key={`${state.accountId}|${epoch}`} state={state} />
       {/* A promotion that completed plays its ceremony (lane J) — never over a climb. */}
       <PromotionCeremonyHost key={`pc|${state.accountId}|${epoch}`} state={state} hold={view === 'tower' || demoLog !== null} />
+      {/* Lane K: a pixel curtain between scenes. */}
+      <SceneTransition scene={view} />
       <ToastHost />
     </div>
   )
