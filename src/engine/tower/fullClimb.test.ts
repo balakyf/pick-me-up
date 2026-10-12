@@ -144,7 +144,7 @@ describe('anchors F25–F100', () => {
 })
 
 describe('the F36–40 loop', () => {
-  const base: TowerState = { currentFloor: 35, highestCleared: 34, attemptIndex: 0, event: null, loop: null, hiddenFound: [], worldEnded: false, worldSaved: false }
+  const base: TowerState = { currentFloor: 35, highestCleared: 34, attemptIndex: 0, event: null, loop: null, hiddenFound: [], worldEnded: false, worldSaved: false, kind: 'path', doors: null, sortie: null }
 
   it('opens on reaching F36 and closes when F40 falls', () => {
     const at36 = nextTowerState(base, 35, true).state

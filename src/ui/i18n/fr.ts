@@ -4,8 +4,15 @@
  */
 import { FR_CONTENT } from './frContent'
 import { FR_LIFE } from './frLife'
+import { FR_SUMMON } from './frSummon'
+import { FR_BATTLE } from './frBattle'
+import { FR_CLIMB } from './frClimb'
+import { FR_TOWER } from './frTower'
+import { FR_LEGACY } from './frLegacy'
+import { FR_RETURN } from './frReturn'
+import { FR_SHELL } from './frShell'
 
-const FR_UI: Record<string, string> = {
+export const FR_UI: Record<string, string> = {
   // ── App shell & menus ──────────────────────────────────────────────────────
   Lobby: 'Salle d’attente',
   Menu: 'Menu',
@@ -21,7 +28,6 @@ const FR_UI: Record<string, string> = {
     'Aucun Maître n’a veillé sur ce monde depuis six mois. Sa tour se dresse, grise et vide ; le compte a disparu.',
   'Begin again as a new Master': 'Recommencer en tant que nouveau Maître',
   'The Tower': 'La Tour',
-  'Mobius Summon': 'Invocation Mobius',
   'Party Board': 'Tableau d’équipe',
   'Hero Registry': 'Registre des héros',
   'Master Lv {n}': 'Maître Niv. {n}',
@@ -311,7 +317,6 @@ const FR_UI: Record<string, string> = {
   '#{n} of {sectorSize} · server #{n2}': '#{n} sur {sectorSize} · serveur #{n2}',
   'Protection shield': 'Bouclier de protection',
   Raid: 'Raid',
-  Defense: 'Défense',
   Captives: 'Captifs',
   Log: 'Journal',
   'Raids are non-lethal. A win loots their storeroom; a fallen defender at Lv{n}+ may be carried off.':
@@ -503,4 +508,33 @@ const FR_UI: Record<string, string> = {
   'Unequip failed': 'Échec du retrait',
 }
 
-export const FR: Record<string, string> = { ...FR_CONTENT, ...FR_LIFE, ...FR_UI }
+/**
+ * Every FR module by name. A key may live in exactly one of them (i18n.test.ts checks):
+ * the spread below would otherwise let a later module override an earlier one silently.
+ * The feature modules (spec 2026-10-12, one per work package) come first.
+ */
+export const FR_MODULES: Readonly<Record<string, Record<string, string>>> = {
+  FR_SUMMON,
+  FR_BATTLE,
+  FR_CLIMB,
+  FR_TOWER,
+  FR_LEGACY,
+  FR_RETURN,
+  FR_SHELL,
+  FR_CONTENT,
+  FR_LIFE,
+  FR_UI,
+}
+
+export const FR: Record<string, string> = {
+  ...FR_SUMMON,
+  ...FR_BATTLE,
+  ...FR_CLIMB,
+  ...FR_TOWER,
+  ...FR_LEGACY,
+  ...FR_RETURN,
+  ...FR_SHELL,
+  ...FR_CONTENT,
+  ...FR_LIFE,
+  ...FR_UI,
+}

@@ -594,6 +594,12 @@ export function crystalChargeLeft(state: GameState): number {
   return c.day === worldDayOf(state) ? Math.max(0, cap - c.advancedPulls) : cap
 }
 
+/** Options for one Normal summon (spec 2026-10-12 WP0). */
+export interface SummonOpts {
+  /** Lift the drawn star to at least this (the tutorial guarantee, a New Arrival). */
+  minStar?: Star
+}
+
 /**
  * Perform one Normal Mobius Summon. PURE: never mutates `state`; returns a fresh
  * GameState plus the new hero.
@@ -606,8 +612,12 @@ export function crystalChargeLeft(state: GameState): number {
  *   - consumedHeroIds + (consumedTemplateIds | usedNames) appended, kept SORTED
  *   - pity         = star >= 3 ? 0 : pity + 1   (Rising Quality Floor payout)
  *   - pullCount   += 1                          (advances the gacha sub-stream)
+ *
+ * `opts.minStar` (spec 2026-10-12 WP0) lifts the drawn star to at least that star, the
+ * way pity does: the SAME star draw is lifted, no extra draw is taken, so the stream
+ * stays aligned. Without opts the pull is byte-identical to before.
  */
-export function summon(state: GameState): { state: GameState; hero: OwnedHero } {
+export function summon(state: GameState, opts?: SummonOpts): { state: GameState; hero: OwnedHero } {
   const cost = TUNING.gacha.normalCostGold
   if (state.gold < cost) {
     throw new Error(
@@ -626,6 +636,7 @@ export function summon(state: GameState): { state: GameState; hero: OwnedHero } 
     const alt = rollStar(rngFor(state.seed, 'gacha-nudge', state.gacha.pullCount), state.gacha.pity).value
     if (alt > star) star = alt
   }
+  if (opts?.minStar !== undefined && star < opts.minStar) star = opts.minStar
   const { value: roll } = rollHeroOfStar(first.rng, star, state.consumedHeroIds, state.consumedTemplateIds, state.usedNames)
 
   const admitted = admit({ ...state, gold: state.gold - cost }, roll)

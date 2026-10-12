@@ -93,6 +93,8 @@ export function memoryLine(state: GameState, m: Memory): string {
     }),
     mourned: t('Visited {name}’s grave', { name: other }),
     retreated: t('Retreated from floor {floor}', { floor: m.floor ?? '?' }),
+    inherited: t('Carries the echo of {name}', { name: other }),
+    avenged: t('Avenged {name}', { name: other }),
   }
   return `${day} · ${text[m.kind]}`
 }

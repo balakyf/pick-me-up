@@ -810,8 +810,211 @@ export const TUNING = {
     },
   },
 
+  // ⚠ BALANCE PASS PENDING — every section from `ftue` to `unlocks` is FIRST-PASS (spec
+  // 2026-10-12 "fun and return", §3). The lead's integration pass (§4.10) tunes `climb.*`
+  // against the sim metrics; the rest are the values the spec gives.
+
+  /** First-time user experience (spec 2026-10-12 S1). First-pass. */
+  ftue: {
+    /** The free tutorial ten-pull holds at least one hero of this star. */
+    tutorialMinTopStar: 3,
+    /** …and at least this many heroes of 2★ or higher. */
+    tutorialMin2Plus: 3,
+    /** The best tutorial 3★ gets its class's signature skill at Lv1. */
+    tutorialSignatureSkill: true,
+  },
+
+  /** The climb: floor kinds, the mercy director, Doors, rout, Last Stand, Boons, Sorties
+   *  (spec 2026-10-12 S13-S15, S19, S20). First-pass. */
+  climb: {
+    /** Budget multiplier by floor kind: budget = staticBudget(f) × kindMult[kind].
+     *  Rest and Cache have no fight (0). */
+    kindMult: { tutorial: 1.0, breather: 0.6, path: 1.0, elite: 1.45, rest: 0, cache: 0, boss: 1.0 } as Record<string, number>,
+    /** The director is a mercy cap ONLY: budget = min(staticBudget, rosterCp × mercyBand[kind]),
+     *  rosterCp = the top 5 fightable heroes' unit CP. Never raises difficulty. */
+    mercyBand: { tutorial: 1.0, breather: 0.5, path: 0.8, elite: 1.0, rest: 0, cache: 0, boss: 0.95 } as Record<string, number>,
+    /** Max budget step between consecutive Path floors (fraction; +12%). */
+    maxStepPct: 0.12,
+    /** The director and Doors start on this floor (F1-F2 are tutorial floors, unchanged). */
+    directorFromFloor: 3,
+    doors: {
+      /** Doors offered after each clear. */
+      offered: 2,
+      /** Chance the second Door before a boss floor is a Rest. */
+      restBeforeBoss: 0.5,
+      /** Chance a Door is a Cache (treasure, no fight). */
+      treasureChance: 0.15,
+      /** A Breather Door is offered right after a boss. */
+      breatherAfterBoss: true,
+    },
+    reward: {
+      /** Elite (Skull) floors: gold multiplier on the floor's gold. */
+      eliteGoldMult: 2,
+      /** Elite floors: guaranteed Promotion Stones. */
+      eliteStones: 1,
+      /** Elite floors open a Boon choice on a clear. */
+      eliteBoon: true,
+      /** Rest Door: Sanity restored to the living party. */
+      restSanity: 30,
+      /** Rest Door: cooked meals added to the pantry. */
+      restMeals: 1,
+      /** Cache Door: gold per floor number (gold = perFloor × floor). */
+      cacheGoldPerFloor: 120,
+      /** Cache Door: Promotion Stones. */
+      cacheStones: 1,
+    },
+    /** Rout (S19): survivors flee after this many heroes fall while losing, by kind. */
+    rout: { tutorial: 2, breather: 1, path: 2, elite: 2, boss: 3 } as Record<string, number>,
+    /** Last Stand (S20): all-stat bonus with few living, fightable heroes on the roster. */
+    lastStand: {
+      rosterAtMost: 3,
+      /** Fraction by living-hero count. */
+      pctByCount: { 3: 0.1, 2: 0.15, 1: 0.2 } as Record<number, number>,
+    },
+    /** Boons (S14): pick 1 of `offer` after an Elite or Boss clear; hold at most `max`. */
+    boons: { offer: 3, max: 4 },
+    /** Per-boon values (fractions unless noted). */
+    boonValues: {
+      /** Iron Vow: a Protected hero takes this much less damage. */
+      ironVow: 0.2,
+      /** Hunter's Mark: the Focus target takes this much more damage. */
+      huntersMark: 0.15,
+      /** Second Wind: the first hero below `below` HP heals `heal` of max HP, once a battle. */
+      secondWind: { below: 0.25, heal: 0.3 },
+      /** Quartermaster: extra orders per battle (count). */
+      quartermaster: 1,
+      /** War Chest: gold. */
+      warChest: 0.25,
+      /** Scholar's Lamp: XP. */
+      scholarsLamp: 0.25,
+      /** Shieldwall: warriors' pDef/mDef. */
+      shieldwall: 0.1,
+      /** Volley: archers' spd. */
+      volley: 0.1,
+      /** Arcane Tide: mages' mAtk. */
+      arcaneTide: 0.1,
+      /** Sanctuary: healers' heals. */
+      sanctuary: 0.15,
+      /** Underdog: 1-2★ heroes' every stat. */
+      underdog: 0.12,
+      /** Calm Mind: Sanity drain reduction. */
+      calmMind: 0.4,
+    },
+    /** Sorties (S15): the at-risk streak purse. */
+    sortie: {
+      /** Each consecutive clear adds this fraction of the floor's gold per floor in the streak… */
+      streakPctPerFloor: 0.1,
+      /** …capped at this fraction. */
+      streakCap: 0.5,
+      /** A rout or wipe banks only this fraction of the purse. */
+      keepOnRout: 0.5,
+    },
+  },
+
+  /** Legacy of the fallen (spec 2026-10-12 S21-S23). First-pass. */
+  legacy: {
+    /** An Echo lifts one stat by this fraction. */
+    echoPct: 0.1,
+    /** Echoes one heir can carry. */
+    echoMaxPerHeir: 3,
+    /** An Echo may carry a skill fragment (+1 level if the heir knows the skill). */
+    skillEcho: true,
+    /** Suggested heirs per pending Echo (closest friends first). */
+    heirCandidates: 3,
+    nemesis: {
+      /** The revenant returns this many floors after the death, [min, max] inclusive. */
+      revengeAfter: [3, 7] as readonly number[],
+      /** The revenant's power multiplier. */
+      powerMult: 1.25,
+      /** At most this many Nemeses wait at once. */
+      maxActive: 3,
+      /** Revenge gold per floor number. */
+      rewardGoldPerFloor: 150,
+      /** Promotion Stones for avenging. */
+      rewardStones: 1,
+    },
+    recruit: {
+      /** A battle that leaves fewer living heroes than this grants a New Arrival token. */
+      rosterBelow: 5,
+      /** The token's free pull is at least this star. */
+      minStar: 2,
+      maxTokens: 2,
+    },
+    memorial: {
+      /** Each plaque adds this fraction to every stat… */
+      pctPerPlaque: 0.005,
+      /** …capped at this fraction. */
+      capPct: 0.05,
+    },
+  },
+
+  /** Reasons to return (spec 2026-10-12 S24-S28). First-pass. */
+  return: {
+    /** Pent-up Interference (S24). */
+    rested: {
+      /** One charge per this many REAL hours away. */
+      perRealHours: 8,
+      maxCharges: 6,
+      /** A charge multiplies one floor clear's gold by this. */
+      goldMult: 2,
+    },
+    /** The welcome-back ledger (S26) and Lights Out (S27). */
+    welcome: {
+      /** Shown when away at least this many real hours. */
+      minAwayRealHours: 2,
+      maxVignettes: 5,
+      /** The lobby opens desaturated after this many real days away (cosmetic). */
+      greyAfterRealDays: 30,
+      /** "Rest for now" shows after this many real minutes of play. */
+      lightsOutAfterRealMinutes: 60,
+    },
+    /** The login stamp card (S28): never resets. */
+    stamps: {
+      perCard: 10,
+      /** The card starts pre-stamped. */
+      endowed: 2,
+      /** Every full card pays this many gems… */
+      cardGems: 300,
+      /** …and this many free Normal pulls. */
+      cardPulls: 1,
+    },
+    /** No permanent loss while away (S28). */
+    offline: {
+      /** Storeroom theft per invasion is capped at this fraction. */
+      theftCapPct: 0.02,
+    },
+  },
+
+  /** Progressive campus (spec 2026-10-12 S3): when each place opens — the first of its
+   *  floor (highestCleared ≥ floor), Master Level, or event. Places not listed are always
+   *  open (tower, summon, party, roster). Keys are UI PlaceIds. Events: 'firstDeath'
+   *  (a grave in the Memorial), 'firstGrief' (any hero grieving), 'levelCap' (any living
+   *  hero at its level cap), 'crackOpen' (the crack is open). */
+  unlocks: {
+    kitchen: { floor: 1 },
+    memorial: { floor: 1, event: 'firstDeath' },
+    daily: { floor: 1 },
+    tacticalCenter: { floor: 2 },
+    dormitory: { floor: 2 },
+    tavern: { floor: 2 },
+    trainingCenter: { floor: 3 },
+    garden: { floor: 3 },
+    armory: { floor: 5 },
+    infirmary: { floor: 5, event: 'firstGrief' },
+    market: { floor: 5 },
+    promotionChamber: { floor: 7, event: 'levelCap' },
+    synthesis: { floor: 7 },
+    shop: { floor: 8 },
+    library: { floor: 10 },
+    transferStation: { floor: 10 },
+    watchtower: { floor: 10 },
+    guild: { floor: 15 },
+    hallOfMagic: { floor: 20 },
+    rift: { masterLevel: 20, event: 'crackOpen' },
+  } as Record<string, { floor?: number; masterLevel?: number; event?: string }>,
+
   account: {
-    schemaVersion: 10,
+    schemaVersion: 11,
     /** Canon protagonist account id (display only). */
     defaultAccountId: '46631913',
     partySize: 5,

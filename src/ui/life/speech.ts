@@ -646,6 +646,10 @@ export function chronicleLine(state: GameState, e: ChronicleEntry): string {
       return t('The Forge went cold — {a} ran out of gold or stones.', { a: A })
     case 'arrival':
       return b ? t('{a} arrived through the crystal; {b} showed them around.', { a: A, b: B }) : t('{a} arrived through the crystal.', { a: A })
+    case 'bequest':
+      return t('{a} now carries the echo of {b}.', { a: A, b: B })
+    case 'revenge':
+      return e.detail ? t('{a} struck down {bane}. The fallen are avenged.', { a: A, bane: e.detail }) : t('{a} avenged a fallen friend.', { a: A })
   }
 }
 

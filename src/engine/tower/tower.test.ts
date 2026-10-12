@@ -119,7 +119,7 @@ function makeState(o: StateOpts = {}): GameState {
     gems: 0,
     materials: {},
     inventory: [],
-    meta: { masterLevel: 1, masterXp: 0, lastSeenAtWorld: 0, pi: 0, login: { lastDay: -1, streak: 0 }, monthly: null, wallet: { spentUsd: 0, purchases: {} }, skill: { blacksmith: 0.4, ballista: 0.4 }, crackOpen: false, revealedHidden: [], peekedFloors: [], nudge: false, piZeroSince: null, deleted: false },
+    meta: { masterLevel: 1, masterXp: 0, lastSeenAtWorld: 0, pi: 0, login: { lastDay: -1, streak: 0 }, monthly: null, wallet: { spentUsd: 0, purchases: {} }, skill: { blacksmith: 0.4, ballista: 0.4 }, crackOpen: false, revealedHidden: [], peekedFloors: [], nudge: false, piZeroSince: null, deleted: false, rested: { charges: 0, carryWorld: 0 }, hardcore: false, stamps: { count: 2, lastRealDay: -1 } },
     facilities: {
       kitchen: { level: 1, build: null },
       promotionChamber: { level: 0, build: null },
@@ -155,6 +155,9 @@ function makeState(o: StateOpts = {}): GameState {
       hiddenFound: [],
       worldEnded: false,
       worldSaved: false,
+      kind: 'path',
+      doors: null,
+      sortie: null,
     },
     gacha: { pity: 0, pullCount: 0, advPity4: 0, advPity5: 0, advPullCount: 0 },
     rng: { combatCounter: 0 },

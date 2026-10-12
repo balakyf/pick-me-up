@@ -10,6 +10,7 @@ import { TUNING } from '../engine/tuning'
 import { EVENT_OPTION_LABEL, merchantPrice, treasureGold, type EventOutcome } from '../engine/events'
 import { BattleScene, type BattleOrders } from './battle/BattleScene'
 import { ResultsScreen } from './screens'
+import type { PlaceId } from './world/lobbyMap'
 import { HeroCard } from './HeroCard'
 import { TimingGame } from './metaPanels'
 import { cachedDataUrl } from './pixel/render'
@@ -49,7 +50,7 @@ function optionBlurb(option: string, floor: number): string {
   }
 }
 
-const EVENT_TITLE = { bonus: 'Event Floor', recovery: 'Recovery', tournament: 'Tournament' } as const
+const EVENT_TITLE = { bonus: 'Event Floor', recovery: 'Recovery', tournament: 'Tournament', boon: 'Boon' } as const
 
 /** The open event floor: pick one option (the climb waits on it). */
 function EventPanel({ state, onResolve }: { state: GameState; onResolve: (option: string) => void }) {
@@ -319,7 +320,15 @@ function TowerExterior({ state }: { state: GameState }) {
   )
 }
 
-export function TowerScreen({ state, store }: { state: GameState; store: Store }) {
+export function TowerScreen({
+  state,
+  store,
+}: {
+  state: GameState
+  store: Store
+  /** Optional (WP0): travel to another place, e.g. from a reward card. Unused for now. */
+  onGo?: (place: PlaceId) => void
+}) {
   const [combat, setCombat] = useState<CombatLog | null>(null)
   const [pending, setPending] = useState<FloorResult | null>(null)
   const [showResult, setShowResult] = useState(false)
@@ -547,7 +556,7 @@ export function TowerScreen({ state, store }: { state: GameState; store: Store }
         />
       )}
       {combat && <BattleScene log={combat} state={state} onDone={combatDone} orders={orders ?? undefined} />}
-      {showResult && pending && <ResultsScreen result={pending} state={state} onContinue={resultDone} />}
+      {showResult && pending && <ResultsScreen result={pending} state={state} store={store} onContinue={resultDone} />}
       {outcome && !replay && <EventOutcomeCard outcome={outcome} onReplay={setReplay} onClose={() => setOutcome(null)} />}
       {replay && <BattleScene log={replay} state={state} onDone={() => setReplay(null)} />}
     </div>

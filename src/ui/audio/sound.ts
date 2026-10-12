@@ -23,6 +23,23 @@ export type Sfx =
   | 'legend'
   | 'levelup'
   | 'fail'
+  // WP0 (spec 2026-10-12): new cues, simple first-pass synths. Owners refine them.
+  | 'reveal'
+  | 'coin'
+  | 'heroFall'
+  | 'unlock'
+  | 'boon'
+  | 'door'
+  | 'stamp'
+  | 'saved'
+
+/** Optional per-call shaping. Omitted = the exact sound as before. */
+export interface SfxOpts {
+  /** Transpose the whole cue by this many semitones (e.g. rising combo pitch). Default 0. */
+  semis?: number
+  /** Rarity of the thing being revealed (1..5); used by 'reveal'. Default 1. */
+  star?: number
+}
 
 export type Music = 'lobby' | 'battle' | 'none'
 
@@ -32,6 +49,8 @@ let ctx: AudioContext | null = null
 let master: GainNode | null = null
 let musicTimer: ReturnType<typeof setInterval> | null = null
 let currentMusic: Music = 'none'
+/** Frequency multiplier applied by tone() while one sfx() call is playing (1 = untransposed). */
+let pitch = 1
 
 function readMuted(): boolean {
   try {
@@ -89,8 +108,8 @@ function tone(freq: number, dur: number, type: OscillatorType, at = 0, vol = 1, 
   const osc = a.createOscillator()
   const g = a.createGain()
   osc.type = type
-  osc.frequency.setValueAtTime(freq, t0)
-  if (slideTo !== undefined) osc.frequency.exponentialRampToValueAtTime(Math.max(20, slideTo), t0 + dur)
+  osc.frequency.setValueAtTime(freq * pitch, t0)
+  if (slideTo !== undefined) osc.frequency.exponentialRampToValueAtTime(Math.max(20, slideTo * pitch), t0 + dur)
   g.gain.setValueAtTime(0.0001, t0)
   g.gain.exponentialRampToValueAtTime(vol, t0 + 0.01)
   g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur)
@@ -117,8 +136,18 @@ function noise(dur: number, at = 0, vol = 0.6): void {
 
 const NOTE = (n: number) => 440 * 2 ** ((n - 69) / 12)
 
-/** Play a sound effect. */
-export function sfx(name: Sfx): void {
+/** Play a sound effect. `opts.semis` transposes it; `opts.star` shapes 'reveal'. */
+export function sfx(name: Sfx, opts?: SfxOpts): void {
+  const semis = opts?.semis ?? 0
+  pitch = semis === 0 ? 1 : 2 ** (semis / 12)
+  try {
+    play(name, Math.min(5, Math.max(1, Math.round(opts?.star ?? 1))))
+  } finally {
+    pitch = 1
+  }
+}
+
+function play(name: Sfx, star: number): void {
   switch (name) {
     case 'click':
       return tone(NOTE(84), 0.04, 'square', 0, 0.3)
@@ -161,6 +190,36 @@ export function sfx(name: Sfx): void {
       return
     case 'fail':
       return tone(NOTE(55), 0.3, 'square', 0, 0.35, NOTE(45))
+    case 'reveal': {
+      // One more rising note per star; 4★+ rings out, 5★ adds a low bell.
+      const notes = [64, 67, 71, 76, 79, 83].slice(0, star + 1)
+      notes.forEach((n, i) => tone(NOTE(n), 0.1, star >= 3 ? 'square' : 'triangle', i * 0.06, 0.4))
+      if (star >= 4) tone(NOTE(notes[notes.length - 1]! + 5), 0.5, 'triangle', notes.length * 0.06, 0.45)
+      if (star >= 5) tone(NOTE(55), 0.8, 'triangle', notes.length * 0.06, 0.35)
+      return
+    }
+    case 'coin':
+      tone(NOTE(88), 0.05, 'square', 0, 0.3)
+      return tone(NOTE(93), 0.12, 'square', 0.05, 0.3)
+    case 'heroFall':
+      noise(0.18, 0, 0.25)
+      tone(NOTE(55), 0.7, 'triangle', 0, 0.4, NOTE(36))
+      return tone(NOTE(62), 0.6, 'triangle', 0.18, 0.25, NOTE(43))
+    case 'unlock':
+      ;[67, 72, 76, 79].forEach((n, i) => tone(NOTE(n), 0.1, 'square', i * 0.07, 0.35))
+      return tone(NOTE(84), 0.35, 'triangle', 0.3, 0.4)
+    case 'boon':
+      ;[76, 83, 88].forEach((n, i) => tone(NOTE(n), 0.18, 'triangle', i * 0.09, 0.4))
+      return
+    case 'door':
+      noise(0.12, 0.04, 0.2)
+      return tone(NOTE(40), 0.28, 'square', 0, 0.3, NOTE(47))
+    case 'stamp':
+      noise(0.05, 0, 0.6)
+      return tone(NOTE(45), 0.09, 'square', 0, 0.45, NOTE(38))
+    case 'saved':
+      ;[79, 84, 91].forEach((n, i) => tone(NOTE(n), 0.08, 'square', i * 0.05, 0.4))
+      return tone(NOTE(90), 0.3, 'triangle', 0.16, 0.45)
   }
 }
 

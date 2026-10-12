@@ -9,6 +9,7 @@ import { allyBustUrl, allyFrameUrl, enemySize, enemyUrl, heroBustUrl, heroFrameU
 import type { LookSource } from '../pixel/look'
 import { ELEMENT_VIS, hpColor } from '../bits'
 import { t } from '../i18n/i18n'
+import './battle.css'
 
 /**
  * The battle as a side-view JRPG scene. The engine resolved the fight already;
@@ -111,6 +112,14 @@ export function BattleScene({
   state: GameState | null
   onDone: () => void
   orders?: BattleOrders
+  /** WP0 contract (WP2 fills it): 'highlights' skips to the decisive moments. Accepted, ignored for now. */
+  mode?: 'full' | 'highlights'
+  /** WP0 contract: show the first-battle "give an order" prompt. Accepted, ignored for now. */
+  tutorialPrompt?: boolean
+  /** WP0 contract: an order pulled this hero back from death. Accepted, never called yet. */
+  onSaved?: (heroId: string) => void
+  /** WP0 contract: enemy unit ids that are nemeses (WP5). Accepted, ignored for now. */
+  nemesisIds?: string[]
 }) {
   const [log, setLog] = useState(initialLog)
   const [aim, setAim] = useState<Aim>(null)

@@ -23,7 +23,8 @@ import { GuildPanel } from './pvpPanels'
 import { upgradeCost as forgeUpgradeCost, upgradeOdds, upgradeRefusal } from '../engine/minigames'
 import { upgradeEquipmentWithResult } from '../engine/store'
 import { t } from './i18n/i18n'
-import { DormitoryInfo, ForgeOrderSection, HereNow, KitchenPantry, LibraryInfo, MemorialPanel, StaffSection, WatchtowerInfo } from './life/lifePanels'
+import { DormitoryInfo, ForgeOrderSection, HereNow, KitchenPantry, LibraryInfo, StaffSection, WatchtowerInfo } from './life/lifePanels'
+import { MemorialPanel } from './legacy/MemorialPanel'
 
 /**
  * Facility panels — the rules-facing half of the Lobby. The walkable world
@@ -1143,14 +1144,7 @@ export function PlacePanel({
           <HereNow state={state} place="market" onProfile={onProfile} />
         </>
       )}
-      {place === 'memorial' && (
-        <>
-          <UpgradeControl state={state} store={store} facility="memorial" />
-          <h4 className="panel-sub">{t('Visiting now')}</h4>
-          <HereNow state={state} place="memorial" onProfile={onProfile} empty="No one is visiting." />
-          <MemorialPanel state={state} />
-        </>
-      )}
+      {place === 'memorial' && <MemorialPanel state={state} store={store} onProfile={onProfile} />}
       {place === 'daily' && <DailyPortal state={state} store={store} />}
     </div>
   )

@@ -93,3 +93,22 @@ export function enemySize(name: string, element: Element): { w: number; h: numbe
   const b = drawEnemy(enemyTemplateIdForName(name), element)
   return { w: b.w, h: b.h }
 }
+
+// ── battle poses (WP0 contract; WP8 draws the real frames) ───────────────────
+
+/** A battle pose. WP0 stubs map every pose onto the existing walk frames. */
+export type Pose = 'idle' | 'attack' | 'cast' | 'hurt' | 'ko'
+
+/** Stub mapping: acting poses use walk frame 1 (the lunge BattleScene already shows), the rest frame 0. */
+const POSE_FRAME: Record<Pose, WalkFrame> = { idle: 0, attack: 1, cast: 1, hurt: 0, ko: 0 }
+
+/** Battle frame for a hero (facing left, with the party) in a pose. Stub: the existing frame-0/1 URL. */
+export function heroPoseUrl(hero: LookSource, pose: Pose): string {
+  return heroFrameUrl(hero, 'left', POSE_FRAME[pose])
+}
+
+/** Battle frame for an enemy in a pose. Stub: enemies have one frame, so every pose is the existing art. */
+export function enemyPoseUrl(name: string, element: Element, pose: Pose): string {
+  void pose
+  return enemyUrl(name, element)
+}

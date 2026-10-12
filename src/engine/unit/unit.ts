@@ -113,12 +113,17 @@ export function resolveHeroSkills(skills: readonly HeroSkill[], registry: SkillR
  * attack followed by the hero's leveled skills. CP is the display CP of the
  * derived stats plus the skills' CP term. sourceHeroId links back to the OwnedHero for XP and
  * permadeath bookkeeping after the battle.
+ *
+ * `extraPct` (spec 2026-10-12 WP0) is an extra relative stat bonus merged into the same
+ * percentage map as passives, engraving and favor (e.g. the Memorial plaques, Last Stand,
+ * Echoes). The default `{}` leaves the unit byte-identical.
  */
 export function buildCombatUnit(
   hero: OwnedHero,
   line: Line,
   registry: SkillRegistry = {},
   inventory: readonly EquipmentItem[] = [],
+  extraPct: Partial<Record<keyof DerivedStats, number>> = {},
 ): CombatUnit {
   const level = hero.xp.level
   // Engraving + passive skills: keyword tags and relative stat bonuses (Layer 1 §2/§5.4).
@@ -132,6 +137,9 @@ export function buildCombatUnit(
   const favorMult = favorStatMult(hero.favor ?? TUNING.favor.start)
   if (favorMult !== 1) {
     for (const k of ['maxHP', 'pAtk', 'mAtk', 'pDef', 'mDef', 'spd'] as const) pct[k] = (pct[k] ?? 0) + (favorMult - 1)
+  }
+  for (const [k, v] of Object.entries(extraPct) as [keyof DerivedStats, number][]) {
+    if (v !== undefined && v !== 0) pct[k] = (pct[k] ?? 0) + v
   }
   // Low Sanity weakens the hero BEFORE the snapshot freezes (combat never recomputes).
   const base = applyStatPct(applySanityPenalty(deriveStatsForHero(hero, level), hero.sanity), pct)

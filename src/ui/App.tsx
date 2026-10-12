@@ -7,6 +7,7 @@ import { TitleScreen, SummonScreen, RosterScreen, PartyScreen } from './screens'
 import { TowerScreen } from './TowerScreen'
 import { BattleScene } from './battle/BattleScene'
 import { DevGallery } from './DevGallery'
+import { ReturnLayer } from './return/ReturnLayer'
 import { LobbyWorld, MENU_PLACES, PLACE_ICON, type WorldView } from './world/LobbyWorld'
 import { PLACE_LABEL, type PlaceId } from './world/lobbyMap'
 import { PixelWindow } from './kit'
@@ -229,7 +230,7 @@ export function App() {
         <LobbyWorld state={state} store={store} onNavigate={navigate} onMenu={openMenu} travelRequest={travel} />
       ) : (
         <Scene title={t(SCENE_TITLE[view])} state={state} onBack={back} onMenu={openMenu}>
-          {view === 'tower' && <TowerScreen state={state} store={store} />}
+          {view === 'tower' && <TowerScreen state={state} store={store} onGo={go} />}
           {view === 'summon' && <SummonScreen state={state} store={store} />}
           {view === 'party' && <PartyScreen state={state} store={store} />}
           {view === 'roster' && <RosterScreen state={state} store={store} />}
@@ -238,6 +239,7 @@ export function App() {
 
       {menuOpen && <GameMenu store={store} onGo={go} onClose={() => setMenuOpen(false)} />}
       {demoLog && <BattleScene log={demoLog} state={state} onDone={() => setDemoLog(null)} />}
+      <ReturnLayer state={state} store={store} view={view} onGo={go} />
     </div>
   )
 }

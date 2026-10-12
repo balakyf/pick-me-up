@@ -31,6 +31,7 @@ import type {
   HeroLife,
   LifePlace,
   LifeState,
+  LegacyState,
   Memory,
   NeedKey,
   OwnedHero,
@@ -81,7 +82,14 @@ export function defaultLifeState(nowWorld: number): LifeState {
     letterReadAt: nowWorld,
     guide: { tutorialPull: false, done: [] },
     crystal: { day: -1, advancedPulls: 0 },
+    legacy: defaultLegacyState(),
+    unlocks: [],
   }
+}
+
+/** The legacy ledger of a fresh (or v10-migrated) account (schema v11). */
+export function defaultLegacyState(): LegacyState {
+  return { pending: [], nemeses: [], recruitTokens: 0, lessons: [] }
 }
 
 export function newHeroLife(day: number): HeroLife {
@@ -410,7 +418,14 @@ interface Working {
 const clamp = (v: number, lo = 0, hi = 100) => (v < lo ? lo : v > hi ? hi : v)
 
 function cloneLife(l: HeroLife): HeroLife {
-  return { ...l, needs: { ...l.needs }, jobXp: { ...l.jobXp }, doing: { ...l.doing }, memories: [...l.memories] }
+  return {
+    ...l,
+    needs: { ...l.needs },
+    jobXp: { ...l.jobXp },
+    doing: { ...l.doing },
+    memories: [...l.memories],
+    ...(l.echoes ? { echoes: [...l.echoes] } : {}),
+  }
 }
 
 /**

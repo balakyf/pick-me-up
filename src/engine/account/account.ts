@@ -32,7 +32,8 @@ import { makeSeed } from '../rng/rng'
 import { buildOwnedHeroFromTemplate, HERO_V8_DEFAULTS } from '../gacha'
 import { CAMEO_HEROES } from '../content'
 import { toWorldTime } from '../time'
-import { defaultLifeState } from '../life/life'
+import { defaultLifeState, defaultLegacyState } from '../life/life'
+import { openScheduledPlaces } from '../unlocks'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Constants
@@ -92,7 +93,22 @@ function META_V8_DEFAULTS(): Omit<GameState['meta'], 'masterLevel' | 'masterXp' 
     nudge: false,
     piZeroSince: null,
     deleted: false,
+    ...META_V11_DEFAULTS(),
   }
+}
+
+/** The return-loop meta fields of schema v11 (spec 2026-10-12 S24, S25, S28). */
+function META_V11_DEFAULTS(): Pick<GameState['meta'], 'rested' | 'hardcore' | 'stamps'> {
+  return {
+    rested: { charges: 0, carryWorld: 0 },
+    hardcore: false,
+    stamps: { count: TUNING.return.stamps.endowed, lastRealDay: -1 },
+  }
+}
+
+/** The climb's tower fields of schema v11 (spec 2026-10-12 S13, S15). */
+function TOWER_V11_DEFAULTS(): Pick<GameState['tower'], 'kind' | 'doors' | 'sortie'> {
+  return { kind: 'path', doors: null, sortie: null }
 }
 
 /** A fresh (or v8-migrated) account's PvP/social state (Layer 4). */
@@ -167,6 +183,7 @@ export function createAccount(entropySeed: number, opts?: CreateAccountOpts): Ga
       hiddenFound: [],
       worldEnded: false,
       worldSaved: false,
+      ...TOWER_V11_DEFAULTS(),
     },
     gacha: { pity: 0, pullCount: 0, advPity4: 0, advPity5: 0, advPullCount: 0 },
     rng: { combatCounter: 0 },
@@ -400,6 +417,49 @@ function migrateV9toV10(envelope: SaveEnvelope): SaveEnvelope {
 }
 
 /**
+ * v10 → v11: fun and return (spec 2026-10-12) — Pent-up Interference, the hardcore flag
+ * and the stamp card on meta; the floor kind, Doors and Sortie on the tower; the legacy
+ * ledger and the seen-unlocks set on life. Idempotent: every field merges with `??`, so a
+ * v9 save (whose v9 → v10 step already used the current defaultLifeState) keeps its values.
+ * `life.unlocks` is backfilled with every place already open for this save, so a veteran
+ * sees no storm of unlock fanfares (union with any set already present).
+ */
+function migrateV10toV11(envelope: SaveEnvelope): SaveEnvelope {
+  const s = envelope.state as unknown as GameState
+  const meta = s.meta as Partial<GameState['meta']> & GameState['meta']
+  const tower = s.tower as Partial<GameState['tower']> & GameState['tower']
+  const life = s.life as Partial<GameState['life']> & GameState['life']
+  const metaDefaults = META_V11_DEFAULTS()
+  const towerDefaults = TOWER_V11_DEFAULTS()
+  const unlocks = [...new Set([...(life.unlocks ?? []), ...openScheduledPlaces(s)])].sort()
+  return {
+    schemaVersion: 11,
+    savedAt: envelope.savedAt,
+    state: {
+      ...s,
+      schemaVersion: 11,
+      meta: {
+        ...meta,
+        rested: meta.rested ?? metaDefaults.rested,
+        hardcore: meta.hardcore ?? metaDefaults.hardcore,
+        stamps: meta.stamps ?? metaDefaults.stamps,
+      },
+      tower: {
+        ...tower,
+        kind: tower.kind ?? towerDefaults.kind,
+        doors: tower.doors ?? towerDefaults.doors,
+        sortie: tower.sortie ?? towerDefaults.sortie,
+      },
+      life: {
+        ...life,
+        legacy: life.legacy ?? defaultLegacyState(),
+        unlocks,
+      },
+    },
+  }
+}
+
+/**
  * Migrate a SaveEnvelope from `fromVersion` up to the current schema version.
  * Identity when already current; otherwise apply each version's upgrade step in
  * sequence (v1 → v2 → …). An older version with no registered path is rejected.
@@ -449,6 +509,10 @@ export function migrate(envelope: SaveEnvelope, fromVersion: number): SaveEnvelo
   if (v === 9) {
     env = migrateV9toV10(env)
     v = 10
+  }
+  if (v === 10) {
+    env = migrateV10toV11(env)
+    v = 11
   }
   if (v !== current) {
     throw new SaveLoadError(`migrate: no migration path from version ${fromVersion}`)

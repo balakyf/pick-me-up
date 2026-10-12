@@ -1,7 +1,8 @@
 /**
  * Living Lobby building panels: who is here right now, who works here (and who else
- * could), the Forge's standing order, and the Memorial's graves. Each building's rules
- * live in the engine; these only read state and dispatch Commands.
+ * could), and the Forge's standing order. Each building's rules live in the engine;
+ * these only read state and dispatch Commands. (The Memorial's graves live in
+ * ui/legacy/MemorialPanel.tsx.)
  */
 import { useState } from 'react'
 import type { ForgeOrder, GameState, JobId, LifePlace, OwnedHero } from '../../engine/types'
@@ -22,7 +23,7 @@ import {
 } from '../../engine/life'
 import { forgeCost, forgeGrade, smithyUnlocked } from '../../engine/equipment'
 import { heroBustUrl } from '../pixel/sprites'
-import { JOB_NAME, accountDay, lastWords, shortName, statusLine } from './speech'
+import { JOB_NAME, shortName, statusLine } from './speech'
 import { JOB_BLURB, JOB_ICON } from './lifeWindows'
 import { t } from '../i18n/i18n'
 
@@ -162,31 +163,6 @@ export function ForgeOrderSection({ state, store }: { state: GameState; store: S
           </span>
         </div>
       )}
-    </div>
-  )
-}
-
-/** The Memorial: every grave, with the words each hero left behind. */
-export function MemorialPanel({ state }: { state: GameState }) {
-  const graves = [...state.life.memorial].reverse()
-  if (graves.length === 0) return <div className="lr-empty">{t('The lawn is empty. Keep it that way, Master.')}</div>
-  const cause = (c: string, floor: number) =>
-    c === 'synthesis' ? t('lost to the Synthesis Chamber') : c === 'captor' ? t('never ransomed') : t('fell on floor {n}', { n: floor })
-  return (
-    <div className="memorial">
-      <p className="muted">{t('{n} names on the obelisk.', { n: graves.length })}</p>
-      {graves.map((g) => (
-        <div key={g.heroId} className="grave-row">
-          <div className="grave-name">
-            <b>{g.name}</b> <span className="muted small">{g.star}★ Lv{g.level}</span>
-          </div>
-          <div className="muted small">
-            {cause(g.cause, g.floor)} · {t('day {n}', { n: accountDay(state, g.day) })} · {t('served {n} days', { n: g.daysServed })}
-            {g.mourners.length > 0 && ` · ${t('mourned by {names}', { names: g.mourners.map((m) => shortName(state, m)).join(', ') })}`}
-          </div>
-          <div className="last-words">“{lastWords(state, g)}”</div>
-        </div>
-      ))}
     </div>
   )
 }

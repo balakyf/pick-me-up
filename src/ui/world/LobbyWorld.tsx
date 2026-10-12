@@ -50,6 +50,7 @@ import { heroBustUrl, heroFrameCanvas, iselBustUrl, masterBustUrl, masterFrameCa
 import type { Dir, WalkFrame } from '../pixel/heroSprite'
 import { hashString } from '../pixel/rand'
 import { t, t as tr } from '../i18n/i18n'
+import { drawAmbience } from './ambience'
 
 /**
  * The waiting room as a walkable campus (Living Lobby spec §3). The Master walks with
@@ -913,6 +914,9 @@ export function LobbyWorld({
         }
         ctx.globalCompositeOperation = 'source-over'
       }
+
+      // ambient tint and particles (world/ambience.ts)
+      drawAmbience(ctx, { nowReal: Date.now(), view: { camX, camY, w: VW, h: VH }, zoom: vpRef.current.zoom })
 
       // warm vignette
       const g = ctx.createRadialGradient(VW / 2, VH / 2, Math.min(VW, VH) * 0.45, VW / 2, VH / 2, Math.max(VW, VH) * 0.7)

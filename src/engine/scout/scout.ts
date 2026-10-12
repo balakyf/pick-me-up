@@ -14,7 +14,7 @@ import { skillCp } from '../skills'
 import { engravingCp } from '../engravings'
 import { buildEncounter, floorPower } from '../tower'
 import { ELEMENT_ADVANTAGE } from '../tuning'
-import type { Element, EnemyFamily, GameState, HeroId, KeywordTag, Line, OwnedHero } from '../types'
+import type { Element, EnemyFamily, FloorKind, GameState, HeroId, KeywordTag, Line, OwnedHero } from '../types'
 
 export type Threat = 'safe' | 'fair' | 'risky' | 'deadly'
 
@@ -44,6 +44,18 @@ export interface ScoutReport {
   studied: boolean
   /** Damage types most of the floor shrugs off. */
   immune: { physical: boolean; magic: boolean }
+  /** The floor's kind (spec 2026-10-12 S12/S13). */
+  kind: FloorKind
+  /** The 1-2 named threats and why ("Bone Choir ×3" / "heals each other"). */
+  threats: { name: string; why: string }[]
+  /** Heroes that may fall before the party routs; null = fights to the last. */
+  rout: number | null
+  /** Last Stand bonus to every stat (fraction; 0 = none). */
+  lastStandPct: number
+  /** The director's mercy cap lowered this floor's budget. */
+  mercyCapped: boolean
+  /** A Nemesis waiting here ("Mira's Bane"), or null. */
+  nemesis: string | null
 }
 
 export function heroCp(h: OwnedHero): number {
@@ -112,6 +124,13 @@ export function scoutFloor(state: GameState, heroes: OwnedHero[] = partyHeroes(s
     ...threatFor(ratio),
     studied: state.meta.peekedFloors.includes(floor),
     immune: { physical: immPhys > total / 2, magic: immMagic > total / 2 },
+    // Neutral defaults (WP0); WP3 fills these from the climb.
+    kind: 'path',
+    threats: [],
+    rout: null,
+    lastStandPct: 0,
+    mercyCapped: false,
+    nemesis: null,
   }
 }
 

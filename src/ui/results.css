@@ -1,0 +1,19 @@
+/*
+ * Results overlay — moved verbatim from ui.css (WP0). Owned by WP4.
+ * Imported by ResultsScreen.tsx; it loads after ui.css, so the shared tokens apply.
+ */
+.overlay { position: fixed; inset: 0; background: rgba(6,3,14,0.8); z-index: 80; display: flex; flex-direction: column; padding: 20px; }
+.result-card { max-width: 480px; width: 100%; margin: 8vh auto 0; padding: 26px; text-align: center; }
+.result-card .big-outcome { font-size: 40px; font-weight: 600; letter-spacing: 2px; margin: 0 0 6px; text-shadow: 3px 3px 0 var(--rim-dark); }
+.win { color: var(--gold); }
+.lose { color: var(--bad); }
+.reward-row { display: flex; justify-content: center; gap: 28px; margin: 18px 0; }
+.reward-row .r .n { font-size: 26px; font-weight: 600; }
+.reward-row .r .l { font-size: 13px; color: var(--ink-dim); text-transform: uppercase; letter-spacing: 1px; }
+.fallen { background: #2a0e18; border: 2px solid #6a1e2a; padding: 10px; margin: 14px 0; }
+.fallen .ft { color: var(--bad); font-weight: 600; margin-bottom: 4px; }
+
+/* Skill progress on results */
+.skill-progress { margin: 10px 0 4px; display: flex; flex-direction: column; gap: 4px; text-align: left; }
+.skill-progress .sp-row { font-size: 15px; }
+.skill-progress .sp-row.merge { color: var(--gold); }
