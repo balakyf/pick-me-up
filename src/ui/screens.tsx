@@ -447,7 +447,12 @@ export function ResultsScreen({
             <div className="ft">{t('✋ Refused to fight')}</div>
             {result.refusedHeroIds.map((id) => (
               <div key={id}>
-                {state.heroes[id]?.name ?? id} <span className="muted">{t('(Wary and broken — win back their trust)')}</span>
+                {state.heroes[id]?.name ?? id}{' '}
+                <span className="muted">
+                  {state.heroes[id]?.life?.trauma
+                    ? t(state.heroes[id]!.life!.trauma!.kind === 'withdrawn' ? '(Withdrawn — talk to them in their Profile)' : '(Burnt out — let them rest, or offer them a post)')
+                    : t('(Wary and broken — win back their trust)')}
+                </span>
               </div>
             ))}
           </div>

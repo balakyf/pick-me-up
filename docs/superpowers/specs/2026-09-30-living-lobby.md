@@ -1,6 +1,6 @@
 # The Living Lobby · Quanton Life
 
-> **Status:** Built (first pass) · **Date:** 2026-09-30 · Builds on the balance pass (2026-09-29).
+> **Status:** Built (first pass; Hearts added 2026-10-12, §11) · **Date:** 2026-09-30 · Builds on the balance pass (2026-09-29).
 
 ## Goal
 
@@ -245,15 +245,109 @@ letter bookkeeping), plus the new facility keys. Migration fills defaults.
 - **Pacing**: the tutorial ten-pull is free once; the Mobius crystal gives at most 10
   Advanced pulls per world-day (30 per real day). The bots take the free pull.
 
-### Not built yet / next
+### Not built yet / next (as of 2026-09-30)
 
 - Trauma states beyond grief (withdrawn, burnout → instructor), tryout duels, a
   favoritism tracker, and gift-meaning drift, all suggested by the lore research.
+  **Built 2026-10-12, see §11.**
 - The dialogue banks are hand-written. More topics and more lines per voice make heroes
   feel less repetitive over long sessions.
 - 60 days × 3 seeds after this work: casual F79 ×3, engaged F78–79, whales F79–84; the
   Wall holds. At a charge of 10 per world-day, whale runs diverge (one 20-day seed stalls
   at F59). Casual bots still hold ~1M idle gold because they don't build; the nine new
-  buildings can absorb about 3.7M across their levels.
+  buildings can absorb about 3.7M across their levels. **Bots build now, see §11.**
 - The bots don't use jobs, buildings, orders or retreat, so the sim doesn't measure
-  those levers yet.
+  those levers yet. **Jobs and buildings: done (§11). Orders and retreat: still open.**
+
+## 11. Hearts (2026-10-12) · schema v11
+
+The lore research's §4 ("reactions to death, favoritism, synthesis and low morale"),
+built as engine + UI + French. Code: `src/engine/life/hearts.ts` (commands),
+`life.ts`/`react.ts` (triggers, recovery, the tracker), `src/ui/life/heartsPanels.tsx`.
+Tuning lives in `TUNING.life.trauma`, `.favoritism`, `.tryout` and `TUNING.favor.collectAt`.
+
+### Trauma (canon: floor 35)
+
+- **Withdrawn** (Kishasha). Triggers:
+  - A friend's death leaves grief ≥ 70 in a hero whose courage is below 0.55.
+  - Or the hero survives a floor where 2+ heroes fell, with courage below 0.45.
+- **Burnout** (Roderick). Triggers on a survivor with 3+ hard memories (near death, a
+  defeat, a comrade or friend lost) in the last 5 days and Sanity below 40 after the
+  fight. Brave heroes (courage > 0.6) need one more hard memory.
+- **Effects.** A traumatized hero refuses the tower (listed under "Refused to fight",
+  and no RNG is drawn, so other replays don't change). They also sit out the daily
+  dungeon and cannot duel.
+  - Withdrawn heroes avoid company, hobbies and the yard, and sleep and wander more.
+  - Burnt-out heroes stop training and pray, or rest in the Infirmary.
+- **Recovery:**
+  - *Time heals.* Withdrawn: after 4 days, once grief is below 20. Burnout: after 3 days,
+    once Sanity is above 60.
+  - *A friend's talk.* When a friend (affinity ≥ 30) shares a slot with a withdrawn
+    hero, each exchange rolls 0.08 + 0.2 × the friend's warmth to bring them back. The
+    roll is drawn only when someone is withdrawn.
+  - *The Master's talk* (`CONSOLE_HERO`). Once per hero per world-day, with a chance of
+    0.15 + favor/100. A failed talk still earns +2 favor.
+  - *A staff role* (`CONSOLE_HERO { offer: 'instructor' }`). For burnout only. It always
+    works when an instructor seat is free. The hero becomes a **veteran** instructor
+    with ×1.3 work power ("they know what the tower costs").
+
+### Favoritism tracker (canon: Amkena and Han)
+
+- **Attention.** Gifts (+1, or +3 for a gem gift), drills (+1), interventions (+2) and
+  skipped hero timers (+1) are the Master's attention, kept in `life.attention`.
+- **Decay and the favourite.** At each world-dawn the lobby judges the day that ended,
+  then attention decays ×0.75. A favourite stands out with 8+ total attention, a 55%+
+  share, and 3+ living heroes.
+- **Effects, per day of open favoritism:**
+  - Every other hero below Devoted loses 1 favor and 1.5 Sanity.
+  - Hot-tempered, cold-hearted heroes lose 3 affinity toward the favourite and remember
+    resenting them.
+  - The letter notes it. The others say "the Master only looks at {fav}", and the
+    favourite feels the stares.
+
+### Gift meaning drift (canon: the warhorse statues)
+
+- Each hero counts every gift received (`gift.counts`).
+- A repeated gift still sours (−2 from the fourth in a row). From the 6th of the same
+  gift it is a **collection**: +3 favor every time, whatever the streak or the hero's
+  dislike.
+- The moment is a memory and a letter line. The profile shows the shelf, and the gift
+  panel marks "★ collects ×n".
+
+### Tryout duels (canon: Edith vs Usher)
+
+- `TRYOUT { challengerId, holderId }`: a hero outside the party fights a party member
+  1v1. It uses the real combat engine and is seeded by a duel counter.
+- **Outcome.** The challenger takes the seat only by winning; a draw or a loss keeps the
+  holder. Nobody dies.
+- **Cost.** The loser loses 8 Sanity, the pair lose 10 affinity, and both remember it.
+- **Limit.** One duel per hero per world-day. The traumatized cannot duel.
+
+### Bots
+
+- The sim bots now build the nine lobby buildings with gold above a 60k reserve. They
+  staff every free seat from the bench by aptitude and set the forge to auto.
+- They leave traumatized heroes out of the party. They offer the burnt-out an instructor
+  seat when one is free, and otherwise talk to them daily.
+- The report adds lobby levels, workers and trauma counts.
+- 30 days × 2 seeds, before → after:
+
+  | Profile | Final floor | Idle gold |
+  |---|---|---|
+  | casual | F79/F71 → F78/F75 | 910k/821k → 55k/74k |
+  | engaged | F59/F75 → F76/F67 | (not reported) |
+  | whale | F59/F79 → F79/F79 | (not reported) |
+
+  The Wall holds. At most 13 heroes were traumatized at once in an engaged run.
+
+### Save
+
+v10 → v11 adds `gift.counts`, `life.trauma` and `life.veteran` per hero, plus
+`life.attention`, `life.favorite` and `life.duels`.
+
+### Still open
+
+- Survivor's guilt (the group drink with the original four).
+- The welcome committee's acclimation penalty.
+- Bots using orders and retreat.
+- Longer dialogue banks.

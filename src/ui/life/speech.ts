@@ -14,6 +14,7 @@ import type { GameState, HeroId, Memory, OwnedHero, JobId, ActivityKind, LifePla
 import {
   bondOf,
   dayOfSlot,
+  favoriteOf,
   jobFeeling,
   jobTier,
   lifeOf,
@@ -25,6 +26,7 @@ import {
   type Voice,
 } from '../../engine/life'
 import { hashString } from '../pixel/rand'
+import { GIFTS, collectionsOf, favorTier } from '../../engine/favor'
 import { toWorldTime } from '../../engine/time'
 import { slotOf } from '../../engine/life'
 import { t } from '../i18n/i18n'
@@ -215,6 +217,59 @@ const MEMORY: Partial<Record<Memory['kind'], ByVoice>> = {
   mourned: {
     any: ['I visited {fallen} yesterday. Told them about the new floors.'],
   },
+  recovered: {
+    any: ['I am back, Master. Mostly. Thank you for waiting.', 'Some days are still heavy. Today is not one of them.'],
+    cheerful: ['Guess who is back on their feet!'],
+    grim: ['I came back from the dark. It will still be there. So will I.'],
+  },
+  turnedInstructor: {
+    any: ['I teach now. I tell them everything the tower taught me, so it does not have to teach them.', 'I will not climb again. But they will climb better for me.'],
+    rough: ['Feet apart! — See, Master? I am useful yet.'],
+  },
+  collection: {
+    any: ['I have {n} of the {gift} now. Do not laugh. I have a shelf.', 'The first {gift} annoyed me. Now I would fight anyone who touched them.'],
+    cheerful: ['Another {gift}?! Master, the shelf is going to collapse!'],
+    formal: ['I confess the {gift}s have grown on me, Master.'],
+  },
+  wonTryout: {
+    any: ['I beat {rival} in the yard. Fair and square. The seat is mine.', '{rival} fought well. I fought better.'],
+    rough: ['{rival} wanted my seat. {rival} can have the bruise instead.'],
+  },
+  lostTryout: {
+    any: ['{rival} beat me in the tryout. Next time I will be ready.', 'I lost the duel to {rival}. My pride hurts more than my ribs.'],
+    rough: ['{rival} got lucky. Tell them I said so.'],
+    quiet: ['…{rival} was better. Today.'],
+  },
+  jealous: {
+    any: ['The Master only looks at {rival}. The rest of us might as well be furniture.', 'Another present for {rival}, I hear. How nice for {rival}.'],
+    rough: ['{rival}, {rival}, always {rival}.'],
+  },
+}
+
+/** What a withdrawn or burnt-out hero says (it drowns out nearly everything else). */
+const TRAUMA: Record<'withdrawn' | 'burnout', ByVoice> = {
+  withdrawn: {
+    any: ['Please… not now, Master. I cannot.', 'I just want to stay in here a while longer.', 'Every time I close my eyes I am back on the stairs.'],
+    rough: ['Go away. I mean it.'],
+    quiet: ['…'],
+    cheerful: ['I will be fine. I will. Just… not yet.'],
+  },
+  burnout: {
+    any: ['I have nothing left, Master. Find someone else for the floors.', 'I keep thinking I should just… stop. Teach, maybe. Anything but climb.', 'My hands shake when I pick up my weapon now.'],
+    grim: ['How many more floors before it is my turn? Do not answer.'],
+    formal: ['Master, I must ask to be released from the front line.'],
+  },
+}
+
+/** The lobby has noticed the Master's favourite. */
+const FAVOURED_OTHERS: ByVoice = {
+  any: ['The Master only looks at {fav}. We all see it.', 'Gifts, drills, all of it — for {fav}. Must be nice.'],
+  cheerful: ['{fav} again? Ha! I am not jealous. Much.'],
+  formal: ['It is not my place to say, Master — but the others notice how you favour {fav}.'],
+}
+const FAVOURED_SELF: ByVoice = {
+  any: ['Thank you, Master, truly — but the others are starting to look at me strangely.', 'They whisper that I am your favourite. Am I?'],
+  rough: ['Everyone is glaring at me. Your fault, Master.'],
 }
 
 const FRIEND_LINE: ByVoice = {
@@ -385,6 +440,7 @@ function memoryVars(state: GameState, hero: OwnedHero, m: Memory, p: Personality
     job: job ? t(JOB_NAME[job]) : '',
     tier: t(TIER_NAMES[tier] ?? 'Novice'),
     food: t(p.food),
+    ...(m.kind === 'collection' && m.detail ? { gift: t(GIFTS[m.detail]?.name ?? m.detail), n: hero.gift.counts[m.detail] ?? '?' } : {}),
   }
 }
 
@@ -396,6 +452,18 @@ function topicsFor(state: GameState, hero: OwnedHero, inParty: boolean): Topic[]
   const out: Topic[] = []
   const baseVars: Vars = { food: t(p.food), floor: state.tower.currentFloor, trade: tradeName(p.background) }
   const { friend, rival } = bondsOf(state, hero.id)
+
+  // Trauma drowns out everything else.
+  if (life.trauma) out.push({ weight: 95, say: (s) => render(TRAUMA[life.trauma!.kind], v, s, baseVars) })
+
+  // The favourite, and everyone else who has noticed.
+  const fav = favoriteOf(state)
+  if (fav === hero.id) out.push({ weight: 32, say: (s) => render(FAVOURED_SELF, v, s, baseVars) })
+  else if (fav && state.heroes[fav] && favorTier(hero.favor) < 3) out.push({ weight: 38, say: (s) => render(FAVOURED_OTHERS, v, s, { fav: nameOf(state, fav) }) })
+
+  // A collection the hero has come to love.
+  const coll = collectionsOf(hero)[0]
+  if (coll) out.push({ weight: 16, say: (s) => render(MEMORY.collection!, v, s, { gift: t(GIFTS[coll[0]]?.name ?? coll[0]), n: coll[1] }) })
 
   // Heavy grief drowns out everything else.
   if (life.grief > 70) {
@@ -646,6 +714,24 @@ export function chronicleLine(state: GameState, e: ChronicleEntry): string {
       return t('The Forge went cold — {a} ran out of gold or stones.', { a: A })
     case 'arrival':
       return b ? t('{a} arrived through the crystal; {b} showed them around.', { a: A, b: B }) : t('{a} arrived through the crystal.', { a: A })
+    case 'withdrawn':
+      return b ? t('{a} has shut themselves away since {b} died.', { a: A, b: fallenName(state, b) }) : t('{a} has shut themselves away after what happened on the floor.', { a: A })
+    case 'burnout':
+      return t('{a} is burnt out and asks not to climb.', { a: A })
+    case 'recovered':
+      return e.detail === 'instructor'
+        ? t('{a} put down their weapon and took up teaching in the Yard.', { a: A })
+        : b
+          ? t('{b} talked {a} back to the living.', { a: A, b: B })
+          : e.detail === 'master'
+            ? t('{a} came round after your talk.', { a: A })
+            : t('{a} is themselves again.', { a: A })
+    case 'favoritism':
+      return t('The lobby whispers that {a} is your favourite.', { a: A })
+    case 'collection':
+      return t('{a} has started collecting your {gift}s.', { a: A, gift: t(GIFTS[e.detail ?? '']?.name ?? e.detail ?? '') })
+    case 'tryout':
+      return e.detail === 'seat' ? t('{a} beat {b} in a tryout and took the seat.', { a: A, b: B }) : t('{a} saw off {b}’s challenge in a tryout.', { a: A, b: B })
   }
 }
 

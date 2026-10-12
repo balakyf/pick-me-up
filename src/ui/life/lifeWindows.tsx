@@ -7,6 +7,7 @@ import { useState } from 'react'
 import type { GameState, HeroId, JobId, Memory, OwnedHero } from '../../engine/types'
 import type { Store } from '../../engine/store'
 import { TUNING } from '../../engine/tuning'
+import { GIFTS } from '../../engine/favor'
 import {
   JOBS,
   JOB_FACILITY,
@@ -26,6 +27,7 @@ import {
   slotOf,
 } from '../../engine/life'
 import { PixelWindow, Gauge } from '../kit'
+import { GiftShelf, TraumaBanner, TryoutPanel } from './heartsPanels'
 import { heroBustUrl } from '../pixel/sprites'
 import { JOB_NAME, accountDay, chronicleLine, diaryLine, groupedChronicle, placeName, shortName, speak, statusLine, tradeName } from './speech'
 import { t } from '../i18n/i18n'
@@ -93,6 +95,14 @@ export function memoryLine(state: GameState, m: Memory): string {
     }),
     mourned: t('Visited {name}’s grave', { name: other }),
     retreated: t('Retreated from floor {floor}', { floor: m.floor ?? '?' }),
+    withdrew: m.other ? t('Withdrew after {name} died', { name: other }) : t('Withdrew from everyone'),
+    burnedOut: t('Burnt out'),
+    recovered: m.other ? t('{name} talked them back', { name: other }) : m.detail === 'master' ? t('Came round after the Master’s talk') : t('Found their feet again'),
+    turnedInstructor: t('Laid down arms to teach'),
+    collection: t('Began a collection of {gift}s', { gift: t(GIFTS[m.detail ?? '']?.name ?? m.detail ?? '') }),
+    wonTryout: t('Beat {name} in a tryout', { name: other }),
+    lostTryout: t('Lost a tryout to {name}', { name: other }),
+    jealous: t('Resented the Master’s favour for {name}', { name: other }),
   }
   return `${day} · ${text[m.kind]}`
 }
@@ -139,6 +149,7 @@ export function HeroTracker({
                 <div className="tracker-main">
                   <b>{h.name}</b> <span className="muted">{h.star}★ Lv{h.xp.level}</span>
                   {lifeOf(h).job && <span className="chip">{JOB_ICON[lifeOf(h).job!]} {t(JOB_NAME[lifeOf(h).job!])}</span>}
+                  {lifeOf(h).trauma && <span className="chip dislikes">{t(lifeOf(h).trauma!.kind === 'withdrawn' ? 'Withdrawn' : 'Burnt out')}</span>}
                   <div className="muted small">{statusLine(state, h)}</div>
                 </div>
                 <button className="pbtn sm" onClick={() => onFind(h.id)} title={t('Follow with the camera')}>
@@ -259,6 +270,7 @@ export function HeroProfile({
             <div className="muted small">{statusLine(state, hero)}</div>
           </div>
         </div>
+        <TraumaBanner state={state} store={store} hero={hero} />
 
         <div className="profile-cols">
           <div>
@@ -282,6 +294,7 @@ export function HeroProfile({
                 <Gauge pct={life.grief} color="#8a7ad8" />
               </div>
             )}
+            <GiftShelf hero={hero} />
           </div>
           <div>
             <h4 className="panel-sub">{t('People')}</h4>
@@ -311,6 +324,7 @@ export function HeroProfile({
           {job && ` · ${t(TIER_NAMES[tier]!)} ${t(JOB_NAME[job])}`}
         </h4>
         <JobPicker state={state} store={store} hero={hero} />
+        <TryoutPanel state={state} store={store} hero={hero} />
         <div className="profile-foot">
           <button className="pbtn" onClick={() => onFind(hero.id)}>
             👁 {t('Find on the map')}

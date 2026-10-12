@@ -654,6 +654,19 @@ span.arm-slot { padding: 2px 8px; border: 2px dashed #3e3478; color: var(--ink-f
 .letter-list li { margin: 2px 0; }
 .letter-sign { text-align: right; font-style: italic; color: var(--gold); }
 
+/* Hearts: trauma, the gift shelf, favoritism, tryouts */
+.trauma-banner { display: flex; flex-direction: column; gap: 4px; margin: 10px 0 4px; padding: 8px 10px; border: 2px solid #8a7ad8; background: #221a4a; }
+.trauma-banner.burnout { border-color: var(--warn); }
+.trauma-banner b { color: #d8ccff; }
+.trauma-banner.burnout b { color: var(--warn); }
+.trauma-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 2px; }
+.gift-shelf { margin-top: 6px; }
+.shelf-item { border-color: var(--gold-deep); color: var(--gold); margin: 2px 4px 2px 0; }
+.gift-repeat.collect { color: var(--gold); }
+.fav-notice { margin: 0 0 6px; padding: 4px 8px; border-left: 3px solid var(--warn); color: var(--ink-dim); }
+.tryout { margin-top: 10px; }
+.tryout-msg { margin-top: 6px; color: var(--gold); }
+
 @media (max-width: 720px) {
   .profile-cols { grid-template-columns: 1fr; }
   .job-grid { grid-template-columns: repeat(2, 1fr); }

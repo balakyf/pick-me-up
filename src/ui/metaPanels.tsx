@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import type { Command, GameState, HeroId, InterventionId, OwnedHero } from '../engine/types'
 import type { Store } from '../engine/store'
 import { TUNING } from '../engine/tuning'
-import { GIFTS, favorTier, favorTierName, giftDelta, giftPreferences } from '../engine/favor'
+import { GIFTS, favorTier, favorTierName, giftCount, giftDelta, giftPreferences, isCollection } from '../engine/favor'
+import { FavoriteNotice } from './life/heartsPanels'
 import { INTERVENTIONS, INTERVENTION_LABEL, interventionCost, interventionRefusal } from '../engine/intervention'
 import {
   frustrationDeal,
@@ -155,6 +156,7 @@ export function HeroBond({ hero, state, store }: { hero: OwnedHero; state: GameS
       </div>
 
       <h4 className="panel-sub">{t('Gifts')}</h4>
+      <FavoriteNotice state={state} hero={hero} />
       <div className="gift-grid">
         {Object.values(GIFTS).map((g) => {
           const d = giftDelta(hero, g.id)
@@ -169,7 +171,11 @@ export function HeroBond({ hero, state, store }: { hero: OwnedHero; state: GameS
             >
               <span>{t(g.name)}</span>
               <span className="muted">{g.gems > 0 ? `${g.gems} ♦` : `${g.gold} ◆`}</span>
-              {hero.gift.last === g.id && hero.gift.streak > 0 && <span className="gift-repeat">{t('again ×{streak}', { streak: hero.gift.streak })}</span>}
+              {isCollection(hero, g.id) ? (
+                <span className="gift-repeat collect">{t('★ collects ×{n}', { n: giftCount(hero, g.id) })}</span>
+              ) : (
+                hero.gift.last === g.id && hero.gift.streak > 0 && <span className="gift-repeat">{t('again ×{streak}', { streak: hero.gift.streak })}</span>
+              )}
             </button>
           )
         })}
