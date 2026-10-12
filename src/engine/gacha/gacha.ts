@@ -264,7 +264,7 @@ export function buildOwnedHeroFromTemplate(template: HeroTemplate, id: HeroId): 
 export function HERO_V8_DEFAULTS(): Pick<OwnedHero, 'favor' | 'bondTier' | 'ip' | 'gift' | 'blessed' | 'expedition' | 'captiveOf'> {
   const favor = TUNING.favor.start
   const bondTier = TUNING.favor.tierCeilings.findIndex((c) => favor <= c)
-  return { favor, bondTier, ip: 0, gift: { last: null, streak: 0 }, blessed: false, expedition: null, captiveOf: null }
+  return { favor, bondTier, ip: 0, gift: { last: null, streak: 0, counts: {} }, blessed: false, expedition: null, captiveOf: null }
 }
 
 /** Build a fresh OwnedHero around an already-assembled static Hero: its innate

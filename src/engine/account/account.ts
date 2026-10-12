@@ -399,6 +399,29 @@ function migrateV9toV10(envelope: SaveEnvelope): SaveEnvelope {
   }
 }
 
+/** v10 → v11: Hearts — trauma states, the favoritism tracker, gift collections, tryouts. */
+function migrateV10toV11(envelope: SaveEnvelope): SaveEnvelope {
+  const s = envelope.state as unknown as GameState
+  const heroes: Record<string, OwnedHero> = {}
+  for (const [id, h] of Object.entries(s.heroes)) {
+    heroes[id] = {
+      ...h,
+      gift: { ...h.gift, counts: h.gift.counts ?? {} },
+      ...(h.life ? { life: { ...h.life, trauma: h.life.trauma ?? null, veteran: h.life.veteran ?? false } } : {}),
+    }
+  }
+  return {
+    schemaVersion: 11,
+    savedAt: envelope.savedAt,
+    state: {
+      ...s,
+      schemaVersion: 11,
+      heroes: heroes as GameState['heroes'],
+      life: { ...s.life, attention: {}, favorite: null, duels: { count: 0, byHero: {} } },
+    },
+  }
+}
+
 /**
  * Migrate a SaveEnvelope from `fromVersion` up to the current schema version.
  * Identity when already current; otherwise apply each version's upgrade step in
@@ -449,6 +472,10 @@ export function migrate(envelope: SaveEnvelope, fromVersion: number): SaveEnvelo
   if (v === 9) {
     env = migrateV9toV10(env)
     v = 10
+  }
+  if (v === 10) {
+    env = migrateV10toV11(env)
+    v = 11
   }
   if (v !== current) {
     throw new SaveLoadError(`migrate: no migration path from version ${fromVersion}`)

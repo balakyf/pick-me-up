@@ -245,6 +245,9 @@ export const TUNING = {
     repeatDecay: 0.5,
     repeatSour: 3,
     sourLoss: 2,
+    /** Gift meaning drift: from this many of the same gift, it is a collection they love. */
+    collectAt: 6,
+    collectionFavor: 3,
   },
 
   /** Probability Interference — passive, account-wide (Layer 3 §D1). */
@@ -808,10 +811,57 @@ export const TUNING = {
       /** Invasion defense power per guard power point (fraction of rival CP). */
       guardDefensePerPower: 0.04,
     },
+    /** Trauma (lore §4.1): who breaks, and how they come back. */
+    trauma: {
+      /** Withdrawn: a friend's death leaves grief at/above this in a hero below this courage. */
+      withdrawGrief: 70,
+      withdrawCourage: 0.55,
+      /** …or a massacre: survivors of a floor where this many fell, below this courage. */
+      massDeaths: 2,
+      massCourage: 0.45,
+      /** Burnout: this many hard memories (near death, defeat, a comrade lost) inside the
+       *  window, and Sanity below the line after the fight. Brave heroes need one more. */
+      burnoutHard: 3,
+      burnoutWindowDays: 5,
+      burnoutSanity: 40,
+      /** Time heals: withdrawn after N days once grief is low; burnout after N days once rested. */
+      withdrawnDays: 4,
+      withdrawnGriefBelow: 20,
+      burnoutDays: 3,
+      burnoutSanityAbove: 60,
+      /** A friend's talk brings a withdrawn hero back: base + warmth × k per conversation. */
+      persuadeBase: 0.08,
+      persuadeWarmth: 0.2,
+      /** The Master's talk: base + favor / 100. A failed talk still earns a little favor. */
+      consoleBase: 0.15,
+      consoleFavor: 2,
+      /** A burnt-out hero turned instructor teaches ×this. */
+      veteranInstructor: 1.3,
+    },
+    /** Favoritism (lore §4.2): the Master's attention, and the lobby's jealousy. */
+    favoritism: {
+      gift: 1,
+      gemGift: 3,
+      intervene: 2,
+      drill: 1,
+      skip: 1,
+      decayPerDay: 0.75,
+      /** A favourite stands out from this much attention, and this share of it, among this many heroes. */
+      minTotal: 8,
+      share: 0.55,
+      minHeroes: 3,
+      /** Per world-day of open favoritism: others below Devoted lose favor and Sanity… */
+      favorLoss: 1,
+      sanityLoss: 1.5,
+      /** …and the hot-tempered, cold-hearted resent the favourite. */
+      resent: 3,
+    },
+    /** Tryout duels for party seats (lore: Edith vs Usher). Real weapons, nobody dies. */
+    tryout: { loserSanity: 8, rivalry: 10 },
   },
 
   account: {
-    schemaVersion: 10,
+    schemaVersion: 11,
     /** Canon protagonist account id (display only). */
     defaultAccountId: '46631913',
     partySize: 5,

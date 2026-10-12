@@ -115,7 +115,8 @@ export function jobHolders(state: GameState, job: JobId): OwnedHero[] {
 export function workPower(state: GameState, hero: OwnedHero, job: JobId): number {
   const lvl = state.facilities[JOB_FACILITY[job]].level
   const xp = hero.life?.jobXp[job] ?? 0
-  return aptitude(hero, job) * tierMult(xp) * (1 + 0.15 * Math.max(0, lvl - 1))
+  const veteran = job === 'instructor' && hero.life?.veteran ? TUNING.life.trauma.veteranInstructor : 1
+  return aptitude(hero, job) * tierMult(xp) * (1 + 0.15 * Math.max(0, lvl - 1)) * veteran
 }
 
 /** ASSIGN_JOB: give a hero a job (or relieve them with null). Throws when not allowed. */

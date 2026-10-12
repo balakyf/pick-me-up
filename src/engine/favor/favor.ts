@@ -6,7 +6,9 @@
  * hero refuse to fight at all.
  *
  * Gifts follow the canon "repetitive gifts lower favorability": each hero has a seeded
- * liked and disliked category; giving the same gift again decays it until it sours.
+ * liked and disliked category; giving the same gift again decays it until it sours. Keep
+ * giving it anyway and its meaning drifts: past `collectAt` it is a collection the hero
+ * loves (canon: Han's anger at the warhorse statues turned to fondness).
  *
  * Reaching Devoted, then Bonded, for the first time grants Intervention Points
  * (Layer 3 §D2). PURE and DETERMINISTIC (preferences come from a hash of the hero id).
@@ -90,10 +92,28 @@ export function withFavor(hero: OwnedHero, favor: number): OwnedHero {
   return { ...hero, favor: next, bondTier, ip }
 }
 
+/** How many of this gift the hero has received. */
+export function giftCount(hero: OwnedHero, giftId: string): number {
+  return hero.gift.counts[giftId] ?? 0
+}
+
+/** The hero treasures this gift as a collection now (its meaning has drifted). */
+export function isCollection(hero: OwnedHero, giftId: string): boolean {
+  return giftCount(hero, giftId) >= F.collectAt
+}
+
+/** The gifts a hero collects, most-given first: [giftId, count]. */
+export function collectionsOf(hero: OwnedHero): [string, number][] {
+  return Object.entries(hero.gift.counts)
+    .filter(([, n]) => n >= F.collectAt)
+    .sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1))
+}
+
 /** Favor a gift would change on this hero right now (preference + repeat decay). */
 export function giftDelta(hero: OwnedHero, giftId: string): number {
   const gift = GIFTS[giftId]
   if (!gift) return 0
+  if (isCollection(hero, giftId)) return F.collectionFavor
   const pref = giftPreferences(hero.id)
   const repeat = hero.gift.last === giftId ? hero.gift.streak : 0
   if (repeat >= F.repeatSour) return -F.sourLoss
@@ -114,7 +134,8 @@ export function giveGift(state: GameState, heroId: HeroId, giftId: string): Game
   if (state.gems < gift.gems) throw new Error('giveGift: not enough gems')
   const delta = giftDelta(hero, giftId)
   const streak = hero.gift.last === giftId ? hero.gift.streak + 1 : 1
-  const given = withFavor({ ...hero, gift: { last: giftId, streak } }, hero.favor + delta)
+  const counts = { ...hero.gift.counts, [giftId]: giftCount(hero, giftId) + 1 }
+  const given = withFavor({ ...hero, gift: { last: giftId, streak, counts } }, hero.favor + delta)
   return {
     ...state,
     gold: state.gold - gift.gold,

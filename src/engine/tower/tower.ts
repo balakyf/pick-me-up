@@ -508,6 +508,11 @@ export function playFloor(
     // Skip empty slots, the dead, and the broken-down (Sanity 0 = cannot deploy).
     // A hero in a Training Center drill is in the yard, one in the Ruins is away.
     if (hero === undefined || !hero.alive || hero.sanity <= 0 || hero.training !== null || hero.expedition !== null || hero.captiveOf) continue
+    // TRAUMA (Living Lobby): a withdrawn or burnt-out hero will not go. No draw is taken.
+    if (hero.life?.trauma) {
+      refusedHeroIds.push(heroId)
+      continue
+    }
     // REBELLION (Layer 3 §C1): a Wary, broken hero may refuse the order. The draw is
     // gated on a positive chance, so everyone else's replays are untouched.
     const rebel = rebellionChance(hero)

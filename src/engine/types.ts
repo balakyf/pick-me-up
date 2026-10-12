@@ -323,8 +323,10 @@ export interface OwnedHero extends Omit<Hero, 'skillIds'> {
   bondTier: number
   /** Intervention Points (Layer 3 §D2). */
   ip: number
-  /** The last gift given and how many times in a row (repeat gifts decay). */
-  gift: { last: string | null; streak: number }
+  /** The last gift given and how many times in a row (repeat gifts decay), and how many of
+   *  each gift the hero has ever received (past a threshold a sour gift becomes a beloved
+   *  collection — canon: Han's warhorse statues; schema v11). */
+  gift: { last: string | null; streak: number; counts: Record<string, number> }
   /** Whale-bait inflation: the star the summon SHOWED (engine always uses `star`). */
   displayStar?: Star
   /** Guarantee an action: the next tower battle's first strike lands ×2. */
@@ -401,6 +403,14 @@ export type MemoryKind =
   | 'jobTier'
   | 'mourned'
   | 'retreated'
+  | 'withdrew'
+  | 'burnedOut'
+  | 'recovered'
+  | 'turnedInstructor'
+  | 'collection'
+  | 'wonTryout'
+  | 'lostTryout'
+  | 'jealous'
 
 export interface Memory {
   kind: MemoryKind
@@ -439,6 +449,25 @@ export interface HeroLife {
   arrivedDay: number
   /** Deepest floor the hero has fought on. */
   bestFloor: number
+  /** A trauma state that keeps the hero out of the fight (schema v11). */
+  trauma: Trauma | null
+  /** Burnt out and turned instructor: teaches harder (they know what the tower costs). */
+  veteran: boolean
+}
+
+/**
+ * Floor-35-style trauma (lore §4.1): *withdrawn* (Kishasha — shut away after a friend's
+ * death or a massacre; a friend or the Master talks them back) and *burnout* (Roderick —
+ * too many near-deaths; rest, or a staff role as an instructor). A traumatized hero
+ * refuses to deploy.
+ */
+export type TraumaKind = 'withdrawn' | 'burnout'
+export interface Trauma {
+  kind: TraumaKind
+  /** World-day it began. */
+  sinceDay: number
+  /** World-day the Master last tried to talk them round (once a day); -1 = never. */
+  consoledDay: number
 }
 
 /** A pair of heroes' history ("a|b", ids sorted). */
@@ -462,6 +491,12 @@ export type ChronicleKind =
   | 'research'
   | 'stalled'
   | 'arrival'
+  | 'withdrawn'
+  | 'burnout'
+  | 'recovered'
+  | 'favoritism'
+  | 'collection'
+  | 'tryout'
 
 export interface ChronicleEntry {
   /** World-time ms. */
@@ -529,6 +564,13 @@ export interface LifeState {
   guide: { tutorialPull: boolean; done: string[] }
   /** Advanced pulls taken today (the crystal's charge), and which world-day. */
   crystal: { day: number; advancedPulls: number }
+  /** The Master's attention per hero (gifts, drills, interventions), decaying daily —
+   *  the favoritism tracker (schema v11). */
+  attention: Record<string, number>
+  /** The hero the lobby currently thinks the Master favours (null = none stands out). */
+  favorite: HeroId | null
+  /** Tryout duels fought (seeds the next), and the world-day each hero last duelled. */
+  duels: { count: number; byHero: Record<string, number> }
 }
 
 /** Where a captured hero is held and what it costs to get them back. */
@@ -1160,6 +1202,11 @@ export type Command =
   | { type: 'SET_FORGE_ORDER'; order: ForgeOrder | null }
   /** Quanton Life: the Master has read Isel's letter (the tally resets). */
   | { type: 'READ_LETTER' }
+  /** Hearts: talk a traumatized hero round (once per world-day); a burnt-out hero can be
+   *  offered a staff role as an instructor instead. */
+  | { type: 'CONSOLE_HERO'; heroId: HeroId; offer?: 'instructor' }
+  /** Hearts: a hero outside the party duels a party member for their seat (non-lethal). */
+  | { type: 'TRYOUT'; challengerId: HeroId; holderId: HeroId }
   /** Onboarding: mark a first-steps item the engine cannot see (e.g. talking to a hero). */
   | { type: 'GUIDE_STEP'; step: string }
   /** Testing-only: grant free gold. Not part of the real economy. */

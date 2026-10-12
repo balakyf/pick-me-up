@@ -84,7 +84,7 @@ function makeHero(o: HeroOpts): OwnedHero {
     favor: 35,
     bondTier: 1,
     ip: 0,
-    gift: { last: null, streak: 0 },
+    gift: { last: null, streak: 0, counts: {} },
     blessed: false,
     expedition: null,
     captiveOf: null,

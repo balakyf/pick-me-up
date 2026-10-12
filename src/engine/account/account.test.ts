@@ -150,7 +150,7 @@ function midGameOf(acct: GameState): GameState {
     favor: 35,
     bondTier: 1,
     ip: 0,
-    gift: { last: null, streak: 0 },
+    gift: { last: null, streak: 0, counts: {} },
     blessed: false,
     expedition: null,
     captiveOf: null,
@@ -602,9 +602,33 @@ describe('migrate — v9 → v10 (Quanton Life)', () => {
     const { dormitory, tavern, infirmary, garden, memorial, forge, library, watchtower, market, ...facV9 } = v10.facilities
     const v9Json = JSON.stringify({ schemaVersion: 9, savedAt: 0, state: { ...rest, schemaVersion: 9, facilities: facV9 } })
     const restored = loadState(v9Json)
-    expect(restored.schemaVersion).toBe(10)
+    expect(restored.schemaVersion).toBe(11)
     expect(restored.facilities.dormitory.level).toBe(TUNING.lobby.facilityStartLevels.dormitory)
     expect(restored.facilities.forge).toEqual({ level: 0, build: null })
     expect(restored.life).toEqual(life)
+  })
+})
+
+describe('migrate — v10 → v11 (Hearts)', () => {
+  it('adds gift counts, trauma and the favoritism/tryout state', () => {
+    const v11 = createAccount(565, { now: 1000 })
+    const heroes = Object.fromEntries(
+      Object.entries(v11.heroes).map(([id, h]) => {
+        const { counts: _c, ...gift } = h.gift
+        const life = h.life ? (({ trauma: _t, veteran: _v, ...l }) => l)(h.life) : undefined
+        return [id, { ...h, gift, ...(life ? { life } : {}) }]
+      }),
+    )
+    const { attention: _a, favorite: _f, duels: _d, ...lifeV10 } = v11.life
+    const v10Json = JSON.stringify({ schemaVersion: 10, savedAt: 0, state: { ...v11, schemaVersion: 10, heroes, life: lifeV10 } })
+    const restored = loadState(v10Json)
+    expect(restored.schemaVersion).toBe(11)
+    for (const h of Object.values(restored.heroes)) {
+      expect(h.gift.counts).toEqual({})
+      if (h.life) expect(h.life.trauma).toBeNull()
+    }
+    expect(restored.life.attention).toEqual({})
+    expect(restored.life.favorite).toBeNull()
+    expect(restored.life.duels).toEqual({ count: 0, byHero: {} })
   })
 })

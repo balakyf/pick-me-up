@@ -62,7 +62,7 @@ import { startUpgrade, skipFacility } from '../facilities'
 import { startTraining, skipTraining } from '../training'
 import { attemptDaily, type DailyResult } from '../daily'
 import { advanceTime, toWorldTime } from '../time'
-import { assignJob, lifeOf, lifeReact } from '../life'
+import { assignJob, consoleHero, lifeOf, lifeReact, tryout, type TryoutResult } from '../life'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Guards
@@ -260,6 +260,12 @@ function reduceCore(state: GameState | null, cmd: Command, nowWorld: number): Ga
     case 'SET_FORGE_ORDER':
       return { ...current, life: { ...current.life, forge: { ...current.life.forge, order: cmd.order } } }
 
+    case 'CONSOLE_HERO':
+      return consoleHero(current, cmd.heroId, nowWorld, cmd.offer)
+
+    case 'TRYOUT':
+      return tryout(current, cmd.challengerId, cmd.holderId, nowWorld).state
+
     case 'READ_LETTER':
       return {
         ...current,
@@ -373,6 +379,20 @@ export function attemptDailyWithResult(
 ): { state: GameState; result: DailyResult } {
   const nowWorld = toWorldTime(nowReal)
   return attemptDaily(advanceTime(requireState(state, 'ATTEMPT_DAILY'), nowWorld), nowWorld)
+}
+
+/**
+ * Like dispatching TRYOUT, but also returns the duel (winner, the seat, the log) for the
+ * UI. Runs the same advanceTime catch-up `reduce` does.
+ */
+export function tryoutWithResult(
+  state: GameState | null,
+  challengerId: HeroId,
+  holderId: HeroId,
+  nowReal = 0,
+): { state: GameState; result: TryoutResult } {
+  const nowWorld = toWorldTime(nowReal)
+  return tryout(advanceTime(requireState(state, 'TRYOUT'), nowWorld), challengerId, holderId, nowWorld)
 }
 
 /**

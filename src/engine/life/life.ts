@@ -18,6 +18,7 @@ import { TUNING } from '../tuning'
 import { floatStream } from '../rng'
 import { applyXp, xpToNext } from '../stats'
 import { forgeCost, forgeGrade, statBlockFor, itemName, smithyUnlocked } from '../equipment'
+import { favorTier, withFavor } from '../favor'
 import type {
   ActivityKind,
   ChronicleEntry,
@@ -35,6 +36,7 @@ import type {
   NeedKey,
   OwnedHero,
   Relation,
+  Trauma,
   XpProgress,
 } from '../types'
 import { personalityOf, chemistry, type Personality } from './personality'
@@ -42,6 +44,8 @@ import { JOB_PLACE, jobOpen, jobTier, workPower, aptitude, jobFeeling } from './
 
 const L = TUNING.life
 const R = L.relation
+const TR = L.trauma
+const FV = L.favoritism
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Clock
@@ -81,6 +85,9 @@ export function defaultLifeState(nowWorld: number): LifeState {
     letterReadAt: nowWorld,
     guide: { tutorialPull: false, done: [] },
     crystal: { day: -1, advancedPulls: 0 },
+    attention: {},
+    favorite: null,
+    duels: { count: 0, byHero: {} },
   }
 }
 
@@ -94,6 +101,8 @@ export function newHeroLife(day: number): HeroLife {
     grief: 0,
     arrivedDay: day,
     bestFloor: 0,
+    trauma: null,
+    veteran: false,
   }
 }
 
@@ -128,6 +137,40 @@ export function relationsOf(state: GameState, heroId: string): [HeroId, Relation
     else if (b === heroId) out.push([a, r])
   }
   return out.sort((x, y) => Math.abs(y[1].affinity) - Math.abs(x[1].affinity))
+}
+
+/** A hero's trauma state, if any (withdrawn or burnt out — they refuse to deploy). */
+export function traumaOf(hero: OwnedHero): Trauma | null {
+  return hero.life?.trauma ?? null
+}
+
+/** A traumatized hero will not fight (tower, daily dungeon, tryouts). */
+export function refusesToFight(hero: OwnedHero): boolean {
+  return traumaOf(hero) !== null
+}
+
+/**
+ * The favoritism tracker: the hero the Master's attention has settled on, or null. A
+ * favourite stands out when attention is high enough, one hero holds most of it, and the
+ * lobby is big enough for it to be noticed. Only the living count.
+ */
+export function favoriteOf(state: GameState, attention: Record<string, number> = state.life.attention): HeroId | null {
+  let total = 0
+  let top: HeroId | null = null
+  let topV = 0
+  let living = 0
+  for (const id of Object.keys(state.heroes) as HeroId[]) {
+    if (!state.heroes[id]!.alive) continue
+    living++
+    const v = attention[id] ?? 0
+    total += v
+    if (v > topV || (v === topV && top !== null && id < top)) {
+      topV = v
+      top = id
+    }
+  }
+  if (!top || living < FV.minHeroes || total < FV.minTotal || topV / total < FV.share) return null
+  return top
 }
 
 /** Beds in the dormitory. */
@@ -336,6 +379,20 @@ function chooseActivity(hero: OwnedHero, life: HeroLife, ctx: Ctx, rnd: () => nu
     if (hero.sanity < 50) scores.push(['pray', ((50 - hero.sanity) / 50) * 1.2])
     if (life.grief > 0) scores.push(['mourn', (life.grief / 100) * 1.8 + p.warmth * 0.3])
     if (hero.sanity < 35 && f.infirmary.level > 0) scores.push(['heal', 1.4 + ((35 - hero.sanity) / 35) * 0.8])
+    // Trauma bends the day: the withdrawn shut themselves away, the burnt-out stop drilling.
+    const t = life.trauma
+    if (t) {
+      for (const e of scores) {
+        if (t.kind === 'withdrawn') {
+          if (e[0] === 'socialize') e[1] -= 1.1
+          else if (e[0] === 'hobby' || e[0] === 'read') e[1] -= 0.5
+          else if (e[0] === 'train') e[1] -= 0.8
+          else if (e[0] === 'sleep') e[1] += 0.5
+          else if (e[0] === 'wander') e[1] += 0.3
+        } else if (e[0] === 'train') e[1] -= 1.5
+      }
+      if (t.kind === 'burnout') scores.push(['pray', 0.7], ['heal', f.infirmary.level > 0 ? 0.9 : -1])
+    }
   }
   let best: ActivityKind = 'wander'
   let bestScore = -Infinity
@@ -405,12 +462,14 @@ interface Working {
   sanity: number
   xp: XpProgress
   p: Personality
+  /** Favor gained or lost this step (favoritism). */
+  favor: number
 }
 
 const clamp = (v: number, lo = 0, hi = 100) => (v < lo ? lo : v > hi ? hi : v)
 
 function cloneLife(l: HeroLife): HeroLife {
-  return { ...l, needs: { ...l.needs }, jobXp: { ...l.jobXp }, doing: { ...l.doing }, memories: [...l.memories] }
+  return { ...l, needs: { ...l.needs }, jobXp: { ...l.jobXp }, doing: { ...l.doing }, memories: [...l.memories], trauma: l.trauma ? { ...l.trauma } : null }
 }
 
 /**
@@ -437,7 +496,7 @@ export function stepLife(state: GameState, nowWorld: number): GameState {
       life.needs = { energy: 70, hunger: 70, social: 70, fun: 70 }
       life.doing = { ...life.doing, untilSlot: 0 }
     }
-    const w: Working = { hero: h, life, sanity: h.sanity, xp: h.xp, p: personalityOf(h) }
+    const w: Working = { hero: h, life, sanity: h.sanity, xp: h.xp, p: personalityOf(h), favor: 0 }
     work.push(w)
     byId.set(id, w)
   }
@@ -454,6 +513,8 @@ export function stepLife(state: GameState, nowWorld: number): GameState {
   let inventory = state.inventory
   let peeked = state.meta.peekedFloors
   let guardPower = state.life.guardPower
+  let attention = state.life.attention
+  let favorite = state.life.favorite
   const pantryCap = Math.max(4, work.length * L.jobs.pantryPerHero)
   const seed = state.seed
   let lastStallDay = -1
@@ -462,6 +523,21 @@ export function stepLife(state: GameState, nowWorld: number): GameState {
     const hour = hourOfSlot(slot)
     const day = dayOfSlot(slot)
     const atWorld = slot * L.slotMs
+    // Dawn of a new world-day: time heals trauma, and the Master's attention cools.
+    if (slot % L.slotsPerDay === 0) {
+      for (const w of work) recoverWithTime(w, day, atWorld, chronicle)
+      // The lobby judges the day that ended, then the attention cools.
+      const fav = favoriteOf(state, attention)
+      if (fav && fav !== favorite) pushChronicle(chronicle, { at: atWorld, kind: 'favoritism', heroIds: [fav] })
+      favorite = fav
+      if (fav) jealousy(work, fav, day, relations)
+      const next: Record<string, number> = {}
+      for (const [id, v] of Object.entries(attention)) {
+        const d = Math.round(v * FV.decayPerDay * 100) / 100
+        if (d >= 0.1 && state.heroes[id as HeroId]?.alive) next[id] = d
+      }
+      attention = next
+    }
     // The forge has work when an order stands and the smiths can pay for (or already hold) an item.
     const forgeState = { ...state, gold, materials, inventory }
     const orderSlot: EquipmentSlot | null =
@@ -739,6 +815,18 @@ export function stepLife(state: GameState, nowWorld: number): GameState {
           b.life.doing.with = a.hero.id
         }
         crossThresholds(a, b, before, after, day, atWorld, chronicle)
+        // A friend sits with a withdrawn hero and talks them back (canon: Kishasha). The
+        // roll is drawn only when someone is withdrawn, so other replays are untouched.
+        if (!argue && before >= R.friend) {
+          for (const [x, y] of [[a, b], [b, a]] as const) {
+            if (x.life.trauma?.kind !== 'withdrawn' || y.life.trauma) continue
+            if (rnd() < TR.persuadeBase + TR.persuadeWarmth * y.p.warmth) {
+              x.life.trauma = null
+              addMemory(x.life, { kind: 'recovered', day, other: y.hero.id, weight: 60 })
+              pushChronicle(chronicle, { at: atWorld, kind: 'recovered', heroIds: [x.hero.id, y.hero.id] })
+            }
+          }
+        }
       }
     }
   }
@@ -757,7 +845,8 @@ export function stepLife(state: GameState, nowWorld: number): GameState {
 
   const heroes = { ...state.heroes }
   for (const w of work) {
-    heroes[w.hero.id] = { ...w.hero, sanity: Math.round(w.sanity * 100) / 100, xp: w.xp, life: w.life }
+    const h = { ...w.hero, sanity: Math.round(w.sanity * 100) / 100, xp: w.xp, life: w.life }
+    heroes[w.hero.id] = w.favor !== 0 ? withFavor(h, h.favor + w.favor) : h
   }
   return {
     ...state,
@@ -766,7 +855,43 @@ export function stepLife(state: GameState, nowWorld: number): GameState {
     inventory,
     heroes,
     meta: { ...state.meta, pi, peekedFloors: peeked },
-    life: { ...state.life, slot: target, relations, chronicle, pantry: Math.round(pantry * 100) / 100, forge, research, guardPower, tally },
+    life: { ...state.life, slot: target, relations, chronicle, pantry: Math.round(pantry * 100) / 100, forge, research, guardPower, tally, attention, favorite },
+  }
+}
+
+/** Time heals: grief fades for the withdrawn; rest restores the burnt-out. */
+function recoverWithTime(w: Working, day: number, at: number, chronicle: ChronicleEntry[]): void {
+  const t = w.life.trauma
+  if (!t) return
+  const days = day - t.sinceDay
+  const healed =
+    t.kind === 'withdrawn'
+      ? days >= TR.withdrawnDays && w.life.grief < TR.withdrawnGriefBelow
+      : days >= TR.burnoutDays && w.sanity > TR.burnoutSanityAbove
+  if (!healed) return
+  w.life.trauma = null
+  addMemory(w.life, { kind: 'recovered', day, detail: 'time', weight: 40 })
+  pushChronicle(chronicle, { at, kind: 'recovered', heroIds: [w.hero.id], detail: 'time' })
+}
+
+/**
+ * A day of open favoritism (lore §4.2): everyone below Devoted feels passed over — a
+ * little favor and Sanity lost — and the hot-tempered, cold-hearted resent the favourite
+ * ("the Master only looks at him").
+ */
+function jealousy(work: Working[], fav: HeroId, day: number, relations: Record<string, Relation>): void {
+  for (const w of work) {
+    if (w.hero.id === fav) continue
+    if (favorTier(w.hero.favor + w.favor) < 3) {
+      w.favor -= FV.favorLoss
+      w.sanity = clamp(w.sanity - FV.sanityLoss, 0, TUNING.lobby.sanityMax)
+    }
+    if (w.p.temper > 0.6 && w.p.warmth < 0.4) {
+      const k = relationKey(w.hero.id, fav)
+      const r = relations[k] ?? { affinity: 0, shared: 0 }
+      relations[k] = { ...r, affinity: clamp(r.affinity - FV.resent, -100, 100) }
+      if (!w.life.memories.some((m) => m.kind === 'jealous' && m.other === fav)) addMemory(w.life, { kind: 'jealous', day, other: fav, weight: 30 })
+    }
   }
 }
 

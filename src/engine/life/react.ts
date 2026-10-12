@@ -7,16 +7,41 @@
  * - a floor attempt becomes a memory for each survivor (cleared, lost, nearly died), and
  *   fighting side by side draws the party together;
  * - a gift, a promotion, a newcomer (the veterans welcome them — canon Jenna) all leave
- *   their mark.
+ *   their mark;
+ * - trauma (lore §4.1): a timid hero who loses a close friend, or survives a massacre,
+ *   withdraws; one who has nearly died too often burns out;
+ * - favoritism (lore §4.2): gifts, drills, interventions and skipped timers are the
+ *   Master's attention, and the lobby notices who gets it.
  * PURE.
  */
 import { TUNING } from '../tuning'
 import type { Command, DeathCause, FallenRecord, FloorResult, GameState, HeroId, HeroLife, OwnedHero, Relation } from '../types'
 import { addMemory, dayOfSlot, lifeOf, relationKey, slotOf, newHeroLife } from './life'
 import { personalityOf } from './personality'
+import { GIFTS } from '../favor'
 
 const R = TUNING.life.relation
 const G = TUNING.life.grief
+const TR = TUNING.life.trauma
+const FV = TUNING.life.favoritism
+
+const HARD: ReadonlySet<string> = new Set(['nearDeath', 'floorLost', 'comradeDied', 'friendDied'])
+
+/** Whose attention a command spends, and how much (the favoritism tracker). */
+function attentionFor(cmd: Command, before: GameState): [HeroId, number] | null {
+  switch (cmd.type) {
+    case 'GIVE_GIFT':
+      return [cmd.heroId, (GIFTS[cmd.giftId]?.gems ?? 0) > 0 ? FV.gemGift : FV.gift]
+    case 'INTERVENE':
+      return [cmd.heroId, FV.intervene]
+    case 'TRAIN_SKILL':
+      return [cmd.heroId, FV.drill]
+    case 'SKIP_TIMER':
+      return cmd.kind !== 'facility' && before.heroes[cmd.id as HeroId] ? [cmd.id as HeroId, FV.skip] : null
+    default:
+      return null
+  }
+}
 
 function causeFor(cmd: Command): DeathCause {
   if (cmd.type === 'ATTEMPT_FLOOR') return 'battle'
@@ -54,7 +79,7 @@ export function lifeReact(before: GameState | null, after: GameState, cmd: Comma
     if (!l) {
       const h = after.heroes[id]!
       const src = h.life ?? newHeroLife(day)
-      l = { ...src, needs: { ...src.needs }, jobXp: { ...src.jobXp }, doing: { ...src.doing }, memories: [...src.memories] }
+      l = { ...src, needs: { ...src.needs }, jobXp: { ...src.jobXp }, doing: { ...src.doing }, memories: [...src.memories], trauma: src.trauma ? { ...src.trauma } : null }
       lives.set(id, l)
     }
     return l
@@ -71,6 +96,14 @@ export function lifeReact(before: GameState | null, after: GameState, cmd: Comma
   const push = (e: GameState['life']['chronicle'][number]) => {
     chronicle = [...chronicle, e].slice(-TUNING.life.chronicleMax)
   }
+  const traumatize = (id: HeroId, kind: 'withdrawn' | 'burnout', other?: HeroId) => {
+    const l = lifeFor(id)
+    if (l.trauma) return
+    l.trauma = { kind, sinceDay: day, consoledDay: -1 }
+    addMemory(l, { kind: kind === 'withdrawn' ? 'withdrew' : 'burnedOut', day, other, weight: 75 })
+    push({ at, kind, heroIds: other ? [id, other] : [id] })
+  }
+  let deaths = 0
 
   const deployed = cmd.type === 'ATTEMPT_FLOOR' ? (before.party.slots.filter((id) => id && before.heroes[id]?.alive) as HeroId[]) : []
 
@@ -99,6 +132,7 @@ export function lifeReact(before: GameState | null, after: GameState, cmd: Comma
       mourners,
     }
     memorial = [...memorial, rec]
+    deaths++
     push({ at, kind: 'death', heroIds: [id], floor: rec.floor, detail: cause })
     for (const o of living) {
       const aff = affinity(id, o)
@@ -109,6 +143,8 @@ export function lifeReact(before: GameState | null, after: GameState, cmd: Comma
         l.grief = Math.min(100, l.grief + G.base + aff * G.perAffinity)
         addMemory(l, { kind: 'friendDied', day, other: id, floor: rec.floor, weight: 90 })
         sanityDelta.set(o, (sanityDelta.get(o) ?? 0) - (G.sanityBase + aff * G.sanityPerAffinity) * (1 - p.courage * 0.4))
+        // Grief past bearing shuts a timid hero away (canon: Kishasha after floor 35).
+        if (l.grief >= TR.withdrawGrief && p.courage < TR.withdrawCourage) traumatize(o, 'withdrawn', id)
       } else if (deployed.includes(o)) {
         addMemory(lifeFor(o), { kind: 'comradeDied', day, other: id, floor: rec.floor, weight: 60 })
       }
@@ -128,6 +164,18 @@ export function lifeReact(before: GameState | null, after: GameState, cmd: Comma
       else if (floor.result.outcome === 'retreat') addMemory(l, { kind: 'retreated', day, floor: floor.floor, weight: 35 })
       else if (!floor.cleared) addMemory(l, { kind: 'floorLost', day, floor: floor.floor, weight: 40 })
     }
+    // Trauma: a massacre breaks the timid; too many brushes with death burn a hero out.
+    for (const id of survivors) {
+      const p = personalityOf(after.heroes[id]!)
+      if (deaths >= TR.massDeaths && p.courage < TR.massCourage) {
+        traumatize(id, 'withdrawn')
+        continue
+      }
+      const l = lifeFor(id)
+      const hard = l.memories.filter((m) => HARD.has(m.kind) && day - m.day < TR.burnoutWindowDays).length
+      const sanity = after.heroes[id]!.sanity + (sanityDelta.get(id) ?? 0)
+      if (hard >= TR.burnoutHard + (p.courage > 0.6 ? 1 : 0) && sanity < TR.burnoutSanity) traumatize(id, 'burnout')
+    }
     for (let i = 0; i < survivors.length; i++) {
       for (let j = i + 1; j < survivors.length; j++) {
         const r = rel(survivors[i]!, survivors[j]!)
@@ -142,7 +190,17 @@ export function lifeReact(before: GameState | null, after: GameState, cmd: Comma
     const l = lifeFor(cmd.heroId)
     l.memories = l.memories.filter((m) => m.kind !== 'gift')
     addMemory(l, { kind: 'gift', day, detail: cmd.giftId, weight: 35 })
+    // The gift's meaning has drifted: from tiresome to treasured (canon: the warhorse statues).
+    const n = after.heroes[cmd.heroId]!.gift.counts[cmd.giftId] ?? 0
+    if (n === TUNING.favor.collectAt) {
+      addMemory(l, { kind: 'collection', day, detail: cmd.giftId, weight: 55 })
+      push({ at, kind: 'collection', heroIds: [cmd.heroId], detail: cmd.giftId })
+    }
   }
+  // The Master's attention (the favoritism tracker).
+  const att = attentionFor(cmd, before)
+  let attention = after.life.attention
+  if (att && after.heroes[att[0]]?.alive) attention = { ...attention, [att[0]]: Math.round(((attention[att[0]] ?? 0) + att[1]) * 100) / 100 }
   for (const id of living) {
     const b = before.heroes[id]
     const a = after.heroes[id]!
@@ -168,12 +226,12 @@ export function lifeReact(before: GameState | null, after: GameState, cmd: Comma
     }
   }
 
-  if (lives.size === 0 && relations === null && chronicle === after.life.chronicle && memorial === after.life.memorial) return after
+  if (lives.size === 0 && relations === null && chronicle === after.life.chronicle && memorial === after.life.memorial && attention === after.life.attention) return after
   heroes = { ...after.heroes }
   for (const [id, l] of lives) {
     const h = heroes[id]!
     const s = Math.max(0, Math.min(TUNING.lobby.sanityMax, h.sanity + (sanityDelta.get(id) ?? 0)))
     heroes[id] = { ...h, life: l, sanity: Math.round(s * 100) / 100 }
   }
-  return { ...after, heroes, life: { ...after.life, relations: relations ?? after.life.relations, chronicle, memorial } }
+  return { ...after, heroes, life: { ...after.life, relations: relations ?? after.life.relations, chronicle, memorial, attention } }
 }
