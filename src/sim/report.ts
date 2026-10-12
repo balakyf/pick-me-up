@@ -17,6 +17,7 @@ export function summarize(results: SimResult[]): string {
     const finals = runs.map((r) => r.days[r.days.length - 1]!)
     lines.push(`final floor: ${finals.map((f) => f.highestCleared).join(', ')} · dead: ${finals.map((f) => f.deaths).join(', ')} · alive: ${finals.map((f) => f.alive).join(', ')}`)
     lines.push(`gold: ${finals.map((f) => f.gold).join(', ')} · gems: ${finals.map((f) => f.gems).join(', ')} · ML: ${finals.map((f) => f.masterLevel).join(', ')} · spent $${finals.map((f) => f.spentUsd).join(', ')}`)
+    lines.push(`lobby levels: ${finals.map((f) => f.lobbyLevels).join(', ')} · workers: ${finals.map((f) => f.workers).join(', ')} · traumatized now: ${finals.map((f) => f.traumatized).join(', ')} · peak traumatized: ${runs.map((r) => Math.max(...r.days.map((d) => d.traumatized))).join(', ')}`)
     lines.push(`invasions: ${runs.map((r) => r.invasions).join(', ')} · lost to captors: ${runs.map((r) => r.captiveLosses).join(', ')} · deleted: ${runs.filter((r) => r.deleted).length}`)
     lines.push('act            | median day to clear | deaths (median) | attempts (median)')
     for (const a of ACTS) {

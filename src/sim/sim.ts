@@ -27,6 +27,8 @@ import { ANCHORS } from '../engine/content'
 import { loginClaimed, packageRefusal } from '../engine/shop'
 import { crackRefusal, dispatchRefusal } from '../engine/rift'
 import { GIFTS, giftDelta } from '../engine/favor'
+import { JOBS, aptitude, consoleRefusal, jobHolders, jobSeats, lifeOf } from '../engine/life'
+import type { FacilityId, JobId } from '../engine/types'
 
 export type ProfileId = 'casual' | 'engaged' | 'whale'
 
@@ -114,6 +116,10 @@ export interface DaySample {
   avgSanity: number
   spentUsd: number
   pi: number
+  /** Sum of the Living Lobby buildings' levels, heroes holding a job, heroes in trauma. */
+  lobbyLevels: number
+  workers: number
+  traumatized: number
 }
 
 /** One floor attempt: how strong the party was against the floor's budget, and how it went. */
@@ -161,8 +167,13 @@ function living(s: GameState): OwnedHero[] {
 }
 
 function available(h: OwnedHero): boolean {
-  return h.alive && h.training === null && h.expedition === null && !h.captiveOf && h.promotion === null
+  return h.alive && h.training === null && h.expedition === null && !h.captiveOf && h.promotion === null && !h.life?.trauma
 }
+
+/** The Living Lobby's buildings, in the order a player would want them. */
+const LOBBY: readonly FacilityId[] = ['dormitory', 'garden', 'market', 'infirmary', 'tavern', 'library', 'forge', 'watchtower', 'memorial']
+/** Gold a player keeps in hand before spending on the lobby (the climb comes first). */
+const LOBBY_RESERVE = 60_000
 
 /** A mutable bot context: the state plus what the run has recorded. */
 class Bot {
@@ -221,6 +232,8 @@ class Bot {
     if (this.p.gifts) this.gifts()
     if (this.p.guild) this.guild()
     this.rescueCaptives()
+    this.hearts()
+    this.lobby()
     this.feast()
     this.setParty()
     if (this.p.dailies) this.dailies()
@@ -349,6 +362,38 @@ class Bot {
     for (const h of living(this.s)) {
       if (!h.captiveOf) continue
       if (!this.try({ type: 'RANSOM_HERO', heroId: h.id })) this.try({ type: 'COUNTER_RAID', heroId: h.id })
+    }
+  }
+
+  /** Talk the troubled round: a burnt-out hero is offered an instructor's seat if one is free. */
+  private hearts(): void {
+    for (const h of living(this.s)) {
+      if (!h.life?.trauma) continue
+      if (h.life.trauma.kind === 'burnout' && consoleRefusal(this.s, h.id, this.now, 'instructor') === null) {
+        this.try({ type: 'CONSOLE_HERO', heroId: h.id, offer: 'instructor' })
+      } else if (consoleRefusal(this.s, h.id, this.now) === null) this.try({ type: 'CONSOLE_HERO', heroId: h.id })
+    }
+  }
+
+  /**
+   * The Living Lobby: idle gold above a reserve goes into the nine buildings, and the
+   * bench (heroes outside the party) is put to work where each is most apt.
+   */
+  private lobby(): void {
+    for (const f of LOBBY) {
+      if (this.s.gold < LOBBY_RESERVE) break
+      if (canUpgrade(this.s, f) && this.s.gold - LOBBY_RESERVE >= 0) this.try({ type: 'UPGRADE_FACILITY', facility: f })
+    }
+    if (this.p.equipment && this.s.life.forge.order === null && jobSeats(this.s, 'blacksmith') > 0) this.try({ type: 'SET_FORGE_ORDER', order: 'auto' })
+    const party = new Set(this.s.party.slots.filter(Boolean))
+    for (const job of JOBS as JobId[]) {
+      let free = jobSeats(this.s, job) - jobHolders(this.s, job).length
+      while (free-- > 0) {
+        const pick = living(this.s)
+          .filter((h) => !party.has(h.id) && !h.captiveOf && lifeOf(h).job === null)
+          .sort((a, b) => aptitude(b, job) - aptitude(a, job) || (a.id < b.id ? -1 : 1))[0]
+        if (!pick || !this.try({ type: 'ASSIGN_JOB', heroId: pick.id, job })) break
+      }
     }
   }
 
@@ -498,6 +543,9 @@ class Bot {
       avgSanity: Math.round(this.avgSanity()),
       spentUsd: Math.round(s.meta.wallet.spentUsd * 100) / 100,
       pi: Math.round(s.meta.pi),
+      lobbyLevels: LOBBY.reduce((n, f) => n + s.facilities[f].level, 0),
+      workers: living(s).filter((h) => h.life?.job).length,
+      traumatized: living(s).filter((h) => h.life?.trauma).length,
     }
   }
 }
