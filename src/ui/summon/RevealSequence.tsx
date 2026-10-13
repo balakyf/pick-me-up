@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { OwnedHero, Star } from '../../engine/types'
-import { playMusic, sfx, stopMusic } from '../audio/sound'
+import { playMusic, sfx } from '../audio/sound'
 import { drawSummonCircle } from '../pixel/summonFx'
 import { cachedDataUrl } from '../pixel/render'
 import { scale } from '../pixel/bitmap'
@@ -121,9 +121,10 @@ export function RevealSequence({ heroes, masterLevel, onDone }: RevealSequencePr
       return
     }
     if (card.tier >= 3 && !hushed.current) {
-      // 4★+: the music drops out for the hold — the room holds its breath.
+      // 4★+: the lobby theme gives way to the reveal drone for the hold — the room holds
+      // its breath (the next click, or the theatre closing, brings the lobby back).
       hushed.current = true
-      stopMusic()
+      playMusic('reveal')
     }
     const timers: ReturnType<typeof setTimeout>[] = []
     if (isSurpriseCard(plan, phase.index)) {

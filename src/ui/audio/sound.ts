@@ -77,7 +77,9 @@ const HIT_BODY: readonly { type: OscillatorType; from: number; to: number; dur: 
 
 let hitCounter = 0
 
-export type Music = 'lobby' | 'battle' | 'none'
+/** `reveal` is the Summon Theatre's 4★+ hold (WP1): a slow, low, rising drone instead of
+ *  silence, so a legendary card is a real change of music. */
+export type Music = 'lobby' | 'battle' | 'reveal' | 'none'
 
 const MUTE_KEY = 'pmu.muted'
 
@@ -320,6 +322,8 @@ function play(name: Sfx, star: number): void {
 const THEMES: Record<Exclude<Music, 'none'>, { notes: number[]; step: number; type: OscillatorType; bass: number[] }> = {
   lobby: { notes: [60, 64, 67, 72, 67, 64, 62, 65, 69, 74, 69, 65], step: 0.28, type: 'triangle', bass: [36, 36, 38, 41] },
   battle: { notes: [57, 60, 64, 60, 57, 60, 65, 64, 62, 59, 62, 64], step: 0.16, type: 'square', bass: [33, 33, 29, 31] },
+  // A held breath: a slow climb over a low pedal that never resolves until the card turns.
+  reveal: { notes: [55, 58, 62, 63, 62, 65, 67, 70, 67, 70, 72, 74], step: 0.42, type: 'sine', bass: [31, 31, 32, 34] },
 }
 
 export function playMusic(m: Music): void {

@@ -103,7 +103,7 @@ export function UnlockBanner({
         <div className="unlock-isel">
           <img className="px unlock-bust" src={iselBustUrl()} width={40} height={40} alt="" />
           <p id="unlock-line">
-            <b>Isel</b> {unlockLine(featured)}
+            <b>{t('Isel')}</b> {unlockLine(featured)}
           </p>
         </div>
         {others.length > 0 && (

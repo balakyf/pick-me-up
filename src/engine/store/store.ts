@@ -119,7 +119,7 @@ function validateParty(slots: readonly unknown[], lines: readonly unknown[]): vo
  */
 export function reduce(state: GameState | null, cmd: Command, nowWorld: number = 0): GameState {
   if (cmd.type === 'NEW_ACCOUNT') {
-    return createAccount(cmd.seed, { now: cmd.now })
+    return createAccount(cmd.seed, { now: cmd.now, ...(cmd.hardcore === true ? { hardcore: true } : {}) })
   }
   // Quanton Life: the waiting room reacts to what changed (graves, grief, memories).
   if (cmd.type === 'ATTEMPT_FLOOR') {
@@ -132,7 +132,7 @@ export function reduce(state: GameState | null, cmd: Command, nowWorld: number =
 }
 
 function reduceCore(state: GameState | null, cmd: Command, nowWorld: number): GameState {
-  if (cmd.type === 'NEW_ACCOUNT') return createAccount(cmd.seed, { now: cmd.now })
+  if (cmd.type === 'NEW_ACCOUNT') return createAccount(cmd.seed, { now: cmd.now, ...(cmd.hardcore === true ? { hardcore: true } : {}) })
 
   // Every other command acts on an existing account, with world-time advanced first.
   const current = advanceTime(requireState(state, cmd.type), nowWorld)

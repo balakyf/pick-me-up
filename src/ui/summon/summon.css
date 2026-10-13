@@ -14,7 +14,7 @@
 .summon-buttons { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
 .pity { color: var(--ink-dim); font-size: 15px; }
 .pity b { color: var(--accent-2); }
-.btn.gold.pulse { animation: pulseGlow 1.2s steps(4) infinite; }
+.btn.cta.pulse, .btn.gold.pulse { animation: pulseGlow 1.2s steps(4) infinite; }
 .flip-in { animation: flipIn 0.35s steps(5) both; }
 @keyframes flipIn { from { transform: rotateY(90deg) scale(0.9); filter: brightness(3); } to { transform: rotateY(0) scale(1); filter: none; } }
 

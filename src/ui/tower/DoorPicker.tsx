@@ -57,7 +57,7 @@ export function DoorPicker({
         <div className="isel-tip">
           <img className="px" src={iselBustUrl()} width={32} height={32} alt="" />
           <div className="isel-tip-body">
-            <b>Isel</b>
+            <b>{t('Isel')}</b>
             <span>
               {iselCoach('doors')}
             </span>

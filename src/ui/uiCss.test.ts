@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
+import { STAR_COLOR } from './bits'
 
 /** WP8 (spec 2026-10-12 V7): ui.css hygiene, the colour hierarchy and reduced motion. */
 const css = readFileSync(fileURLToPath(new URL('./ui.css', import.meta.url)), 'utf8')
@@ -12,6 +13,13 @@ describe('ui.css colour hierarchy (V7)', () => {
   it('defines the hierarchy tokens on :root', () => {
     for (const tok of ['--accent-cta', '--danger', '--neg', '--locked-opacity', '--r1', '--r5', '--r7']) {
       expect(root, tok).toMatch(new RegExp(`${tok}\\s*:`))
+    }
+  })
+
+  it('the rarity tokens --r1…--r7 match STAR_COLOR in bits.tsx (keep them in sync)', () => {
+    for (const [star, color] of Object.entries(STAR_COLOR)) {
+      const m = new RegExp(`--r${star}\\s*:\\s*(#[0-9a-fA-F]{3,8})`).exec(root)
+      expect(m?.[1]?.toLowerCase(), `--r${star}`).toBe(color.toLowerCase())
     }
   })
 

@@ -441,6 +441,7 @@ span.arm-slot { padding: 2px 8px; border: 2px dashed var(--line); color: var(--i
   color: var(--ink); text-shadow: 4px 4px 0 var(--title-glow), 8px 8px 0 var(--rim-dark);
 }
 .title-wrap .logo .spark { color: var(--gold); }
+.title-hardcore { display: block; margin-top: 12px; font-size: 14px; color: var(--ink-dim); cursor: pointer; }
 .title-wrap .subtitle { color: var(--accent-2); font-size: 20px; letter-spacing: 4px; text-transform: uppercase; margin-bottom: 8px; }
 .title-wrap .tag { color: var(--ink-dim); margin: 6px 0 20px; max-width: 480px; font-size: 17px; background: none; border: none; }
 .title-wrap .btns { display: flex; gap: 22px; }
@@ -460,7 +461,8 @@ span.arm-slot { padding: 2px 8px; border: 2px dashed var(--line); color: var(--i
   .hud-help { display: none; }
   .hud-tl { min-width: 0; padding: 6px; }
   .hud-tl .gauge { width: 90px; }
-  .hud-tr { top: auto; bottom: 12px; right: 12px; }
+  /* Wraps inside the screen instead of running off its left edge ("Daily" was clipped at 390 px). */
+  .hud-tr { top: auto; bottom: 12px; right: 12px; left: 12px; flex-wrap: wrap; justify-content: flex-end; }
   .scene-bar { flex-wrap: wrap; }
 }
 
@@ -622,15 +624,12 @@ span.arm-slot { padding: 2px 8px; border: 2px dashed var(--line); color: var(--i
 .scout-warn { color: var(--warn); font-size: 13px; margin-top: 4px; }
 .scout-actions { margin-top: 8px; }
 
-/* ── Onboarding ─────────────────────────────────────────────────────────────── */
-.hud-guide { top: 124px; left: 12px; width: 250px; background: var(--well-glass); border: 2px solid var(--rim-dark); box-shadow: 0 0 0 2px var(--line); padding: 6px 10px; font-size: 13px; pointer-events: auto; }
-.guide-head { background: none; border: none; color: var(--gold); font: inherit; font-weight: 600; cursor: pointer; padding: 0; }
+/* ── Onboarding (the checklist the goal tracker folds out) ──────────────────── */
 .guide-list { list-style: none; margin: 6px 0; padding: 0; }
 .guide-list li { margin: 2px 0; color: var(--ink-dim); }
 .guide-list li.done { color: var(--good); text-decoration: line-through; opacity: 0.8; }
 .guide-list li.next { color: var(--ink); font-weight: 600; }
 .guide-hint { font-style: italic; color: var(--ink-lilac); margin-bottom: 6px; }
-@media (max-width: 720px) { .hud-guide { top: auto; bottom: 170px; width: 220px; } }
 
 /* ═══════════════════════════════════════════════════════════════════════════
    Colour hierarchy & living sprites (spec 2026-10-12 V7, S10)

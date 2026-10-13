@@ -66,6 +66,8 @@ export interface CreateAccountOpts {
   worldGrade?: WorldGrade
   /** Display-only creation timestamp; never feeds RNG. Defaults to 0. */
   now?: number
+  /** Canon rules (S25): Interference decays while the Master is away. Off by default. */
+  hardcore?: boolean
 }
 
 /** Locate the starter cameo template; the canon set is guaranteed to contain it. */
@@ -158,7 +160,13 @@ export function createAccount(entropySeed: number, opts?: CreateAccountOpts): Ga
     gems: TUNING.lobby.startingGems,
     materials: {},
     inventory: [],
-    meta: { masterLevel: 1, masterXp: 0, lastSeenAtWorld: toWorldTime(opts?.now ?? 0), ...META_V8_DEFAULTS() },
+    meta: {
+      masterLevel: 1,
+      masterXp: 0,
+      lastSeenAtWorld: toWorldTime(opts?.now ?? 0),
+      ...META_V8_DEFAULTS(),
+      ...(opts?.hardcore === true ? { hardcore: true } : {}),
+    },
     facilities: {
       kitchen: { level: TUNING.lobby.facilityStartLevels.kitchen, build: null },
       promotionChamber: { level: TUNING.lobby.facilityStartLevels.promotionChamber, build: null },

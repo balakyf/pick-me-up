@@ -51,7 +51,7 @@ import { canvasAvailable, cachedCanvas } from '../pixel/render'
 import { renderLobbyBase, drawSummonCircle } from '../pixel/tiles'
 import { PROP_FRAMES, drawEmote, drawProp, type EmoteKind } from '../pixel/props'
 import { ROOF_LIFT, blanket, drawRoof, smoke } from '../pixel/campusProps'
-import { heroBustUrl, heroFrameCanvas, iselBustUrl, masterBustUrl, masterFrameCanvas } from '../pixel/sprites'
+import { heroBustUrl, heroFrameCanvas, heroPoseCanvas, iselBustUrl, masterBustUrl, masterFrameCanvas } from '../pixel/sprites'
 import type { Dir, WalkFrame } from '../pixel/heroSprite'
 import { hashString } from '../pixel/rand'
 import { t, t as tr } from '../i18n/i18n'
@@ -820,6 +820,8 @@ export function LobbyWorld({
         ctx.fillRect(px - 6 - camX, py - 1 - camY, 12, 3)
         ctx.fillRect(px - 5 - camX, py - 2 - camY, 10, 5)
       }
+      // The grey Re-interference (S25, the return layer's body.greyed): the campus dozes.
+      const dozing = typeof document !== 'undefined' && document.body.classList.contains('greyed')
       for (const hw of w.heroes.values()) {
         if (hw.hidden) continue
         const h = st.heroes[hw.id as OwnedHero['id']]
@@ -829,9 +831,15 @@ export function LobbyWorld({
         const d = activityOf(h)
         const busy = hw.arrived ? d.kind : null
         const sparring = busy === 'train' || busy === 'drilling' || (busy === 'work' && (h.life?.job === 'blacksmith' || h.life?.job === 'instructor'))
-        const frame = sparring ? (((Math.floor(w.time * 5) % 2) + 1) as WalkFrame) : walkFrame(hw)
-        const img = heroFrameCanvas(h, hw.lying ? 'down' : hw.dir, hw.lying ? 0 : frame)
-        const emote = busy ? ACTIVITY_EMOTE[busy] : null
+        const frame = dozing ? 0 : sparring ? (((Math.floor(w.time * 5) % 2) + 1) as WalkFrame) : walkFrame(hw)
+        // Sparring side-on trades real blows (WP8's battle poses: wind-up, then the strike).
+        // The battle frames face left; a hero facing right is drawn mirrored.
+        const spar = !dozing && sparring && !hw.lying && (hw.dir === 'left' || hw.dir === 'right')
+        const img = spar
+          ? heroPoseCanvas(h, (Math.floor(w.time * 2.5 + (hashString(hw.id) % 7)) % 2 === 0 ? 'windup' : 'attack'))
+          : heroFrameCanvas(h, hw.lying ? 'down' : hw.dir, hw.lying ? 0 : frame)
+        const mirror = spar && hw.dir === 'right'
+        const emote = dozing && !hw.lying ? ('zz' as EmoteKind) : busy ? ACTIVITY_EMOTE[busy] : null
         const isFollowed = w.follow === hw.id
         list.push({
           y: hw.lying ? py + 14 : py,
@@ -845,7 +853,12 @@ export function LobbyWorld({
               if (bl) ctx.drawImage(bl, bx + 1, by + 11)
             } else {
               drawShadow(px, py)
-              if (img) ctx.drawImage(img, Math.round(px - 12 - camX), Math.round(py - 30 - camY))
+              if (img && mirror) {
+                ctx.save()
+                ctx.scale(-1, 1)
+                ctx.drawImage(img, -Math.round(px + 12 - camX), Math.round(py - 30 - camY))
+                ctx.restore()
+              } else if (img) ctx.drawImage(img, Math.round(px - 12 - camX), Math.round(py - 30 - camY))
             }
             if (isFollowed) {
               ctx.strokeStyle = '#f2c75c'
@@ -936,8 +949,9 @@ export function LobbyWorld({
         ctx.globalCompositeOperation = 'source-over'
       }
 
-      // ambient tint and particles (world/ambience.ts)
-      drawAmbience(ctx, { nowReal: Date.now(), view: { camX, camY, w: VW, h: VH }, zoom: vpRef.current.zoom })
+      // ambient tint and particles (world/ambience.ts) — outdoors only: no leaves or
+      // fireflies drifting through an interior.
+      if (insideBuilding(m.x, m.y) === null) drawAmbience(ctx, { nowReal: Date.now(), view: { camX, camY, w: VW, h: VH }, zoom: vpRef.current.zoom })
 
       // warm vignette
       const g = ctx.createRadialGradient(VW / 2, VH / 2, Math.min(VW, VH) * 0.45, VW / 2, VH / 2, Math.max(VW, VH) * 0.7)

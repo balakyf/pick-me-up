@@ -60,6 +60,8 @@ export function TitleScreen({ store, hasSave }: { store: Store; hasSave: boolean
   // App passes hasSave=false for it (continuableSave()), so the title checks the kept copy
   // itself: the broken save is still on disk, and a new game will overwrite it.
   const [broken, setBroken] = useState(() => saveLooksBroken())
+  /** Canon rules (S25): opt in to Interference decaying while away. */
+  const [hardcore, setHardcore] = useState(false)
   const canContinue = hasSave && !broken
   function resume() {
     try {
@@ -104,11 +106,14 @@ export function TitleScreen({ store, hasSave }: { store: Store; hasSave: boolean
         )}
         <button
           className="btn primary big"
-          onClick={() => store.dispatch({ type: 'NEW_ACCOUNT', seed: freshSeed(), now: Date.now() })}
+          onClick={() => store.dispatch({ type: 'NEW_ACCOUNT', seed: freshSeed(), now: Date.now(), ...(hardcore ? { hardcore: true } : {}) })}
         >
           {hasSave || broken ? t('New Game') : t('Begin')}
         </button>
       </div>
+      <label className="title-hardcore" title={t('Interference fades while you are away, and six months away greys the world for good. Off by default.')}>
+        <input type="checkbox" checked={hardcore} onChange={(e) => setHardcore(e.target.checked)} /> {t('Canon rules (Hardcore)')}
+      </label>
       {broken && (
         <div className="save-broken" role="alert">
           {t('This save could not be read. A copy was kept.')}
@@ -206,10 +211,11 @@ export function SummonScreen({ state, store }: { state: GameState; store: Store 
         <div className="summon-buttons">
           {pool === 'normal' ? (
             <>
-              <button className="btn gold big" onClick={() => pull(1)} disabled={!canOne}>
+              {/* One gold CTA per screen (V7): the ×10 while it is affordable, else the ×1. */}
+              <button className={`btn big ${!canTenNormal && canOne ? 'cta' : ''}`} onClick={() => pull(1)} disabled={!canOne}>
                 {mercy ? t('Summon · free (the crystal takes pity)') : t('Summon · {SUMMON_COST} Gold', { SUMMON_COST: SUMMON_COST.toLocaleString() })}
               </button>
-              <button className={`btn gold big ${tutorial ? 'pulse' : ''}`} onClick={() => pull(10)} disabled={!canTenNormal}>
+              <button className={`btn big ${canTenNormal ? 'cta' : ''} ${tutorial ? 'pulse' : ''}`} onClick={() => pull(10)} disabled={!canTenNormal}>
                 {tutorial
                   ? t('Summon ×10 · free (your first summon)')
                   : t('Summon ×10 · {gold} Gold', { gold: (SUMMON_COST * 10).toLocaleString() })}

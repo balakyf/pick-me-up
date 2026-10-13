@@ -1240,7 +1240,7 @@ export type InterventionId = 'reveal' | 'peek' | 'nudge' | 'guarantee'
 export type RescueChoice = { kind: 'skill'; skillId: string } | { kind: 'grade'; attr: AttrKey }
 
 export type Command =
-  | { type: 'NEW_ACCOUNT'; seed: number; now?: number }
+  | { type: 'NEW_ACCOUNT'; seed: number; now?: number; /** Canon rules (S25). */ hardcore?: boolean }
   /** Mobius Summon: Normal (gold) or Advanced (gems); a 10-pull is discounted on Advanced. */
   | { type: 'SUMMON'; pool?: SummonPool; count?: 1 | 10 }
   | { type: 'SET_PARTY'; slots: (HeroId | null)[]; lines: Line[] }

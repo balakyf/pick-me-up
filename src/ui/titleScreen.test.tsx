@@ -88,3 +88,38 @@ describe('TitleScreen and an unreadable save', () => {
     expect(container.textContent).not.toContain(MESSAGE)
   })
 })
+
+describe('TitleScreen: Canon rules (S25, integration)', () => {
+  function fakeStore(): Store & { sent: unknown[] } {
+    const sent: unknown[] = []
+    return { sent, dispatch: (c: unknown) => sent.push(c), load: () => {} } as unknown as Store & { sent: unknown[] }
+  }
+
+  it('a new Master plays without Hardcore unless they tick it', () => {
+    const plain = fakeStore()
+    act(() => root.render(<TitleScreen store={plain} hasSave={false} />))
+    act(() => buttonsWith('Begin')[0]!.click())
+    expect(plain.sent[0]).toMatchObject({ type: 'NEW_ACCOUNT' })
+    expect((plain.sent[0] as { hardcore?: boolean }).hardcore).toBeUndefined()
+
+    const canon = fakeStore()
+    act(() => root.render(<TitleScreen key="canon" store={canon} hasSave={false} />))
+    const box = container.querySelector<HTMLInputElement>('.title-hardcore input')!
+    expect(box.checked).toBe(false)
+    act(() => box.click())
+    act(() => buttonsWith('Begin')[0]!.click())
+    expect(canon.sent[0]).toMatchObject({ type: 'NEW_ACCOUNT', hardcore: true })
+  })
+
+  it('NEW_ACCOUNT with hardcore makes a Hardcore Master', () => {
+    const s = getStore()
+    act(() => {
+      s.dispatch({ type: 'NEW_ACCOUNT', seed: 3, now: 0, hardcore: true })
+    })
+    expect(s.getState()!.meta.hardcore).toBe(true)
+    act(() => {
+      s.dispatch({ type: 'NEW_ACCOUNT', seed: 3, now: 0 })
+    })
+    expect(s.getState()!.meta.hardcore).toBe(false)
+  })
+})

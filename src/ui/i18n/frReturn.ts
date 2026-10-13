@@ -129,6 +129,9 @@ export const FR_RETURN: Record<string, string> = {
   '{bane} waits there.': '{bane} y attend.',
   '{enemy} waits there.': '{enemy} y attend.',
   '{bane} waits on floor {n}.': '{bane} attend à l’étage {n}.',
+  'Canon rules (Hardcore)': 'Règles du canon (Hardcore)',
+  'Interference fades while you are away, and six months away greys the world for good. Off by default.':
+    'L’interférence s’estompe pendant votre absence, et six mois d’absence grisent le monde pour de bon. Désactivé par défaut.',
   '{enemy} ×{n} wait there.': '{enemy} ×{n} y attendent.',
   Brewing: 'En cours',
   '{a}’s promotion': 'Promotion de {a}',
