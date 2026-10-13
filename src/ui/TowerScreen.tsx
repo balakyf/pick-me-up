@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import type { GameState, FloorResult, CombatLog, BattleOrder } from '../engine/types'
-import { scoutFloor, suggestParty, type ScoutReport } from '../engine/scout'
+import type { GameState, FloorResult, CombatLog, BattleOrder, BoonId, HeroId, Sortie } from '../engine/types'
+import { scoutFloor, suggestParty } from '../engine/scout'
 import { ordersAllowed } from '../engine/tower'
 import type { Store } from '../engine/store'
 import { attemptFloorWithResult, resolveEventWithResult } from '../engine/store'
@@ -9,7 +9,7 @@ import { ACTS, ANCHORS, HIDDEN_OBJECTIVES, actForFloor } from '../engine/content
 import { TUNING } from '../engine/tuning'
 import { EVENT_OPTION_LABEL, merchantPrice, treasureGold, type EventOutcome } from '../engine/events'
 import { BattleScene, type BattleOrders } from './battle/BattleScene'
-import { ResultsScreen } from './screens'
+import { ResultsScreen } from './ResultsScreen'
 import type { PlaceId } from './world/lobbyMap'
 import { HeroCard } from './HeroCard'
 import { TimingGame } from './metaPanels'
@@ -18,6 +18,16 @@ import { scale } from './pixel/bitmap'
 import { drawTowerExterior, TOWER_H, TOWER_W } from './pixel/towerMap'
 import { t } from './i18n/i18n'
 import { ELEMENT_VIS } from './bits'
+import { sfx } from './audio/sound'
+import { usePrefs } from './prefs'
+import { ScoutCard, KindBadge } from './tower/ScoutCard'
+import { DoorPicker, DOORS_GUIDE_STEP } from './tower/DoorPicker'
+import { BoonPicker } from './tower/BoonPicker'
+import { SortieBar } from './tower/SortieBar'
+import { useVictoryAutoAdvance } from './tower/autoAdvance'
+import { currentKind, boonText, isFightKind } from './tower/kinds'
+import { doorOutcome, levelsOf, sweepMode } from './tower/rewards'
+import './tower/tower.css'
 
 const MAX_FLOOR = TUNING.tower.sliceTopFloor
 const EV = TUNING.events
@@ -134,7 +144,7 @@ function EventOutcomeCard({
           {mats.map(([k, v]) => (
             <div className="r" key={k}>
               <div className="n">+{v}</div>
-              <div className="l">{k === 'promotionStone' ? 'Stones' : k}</div>
+              <div className="l">{k === 'promotionStone' ? t('Stones') : k}</div>
             </div>
           ))}
           {outcome.sanity !== 0 && (
@@ -213,96 +223,6 @@ function PeekLine({ preview }: { preview: ReturnType<typeof buildEncounter> }) {
   return <div className="peek-line">👁 {notes.size > 0 ? [...notes].join(' · ') : t('No special weakness — just steel and nerve.')}</div>
 }
 
-const THREAT_LABEL: Record<ScoutReport['threat'], string> = {
-  safe: 'Safe',
-  fair: 'Fair fight',
-  risky: 'Risky',
-  deadly: 'Deadly',
-}
-const THREAT_COLOR: Record<ScoutReport['threat'], string> = {
-  safe: 'var(--good)',
-  fair: 'var(--gold)',
-  risky: 'var(--warn)',
-  deadly: 'var(--bad)',
-}
-
-function keywordNote(k: ScoutReport['enemies'][number]['keywords'][number]): string | null {
-  switch (k.kind) {
-    case 'immune':
-      return t('immune to {what}', { what: t(k.damageType) })
-    case 'resist':
-      return t('resists {what}', { what: t(k.damageType) })
-    case 'vulnerable':
-      return t('weak to {what}', { what: t(ELEMENT_VIS[k.element].label) })
-    case 'looming':
-      return t('too strong to fight — finish first')
-    case 'phased':
-      return t('shielded until its guard falls')
-    case 'enrage':
-      return t('enrages after {n} ticks', { n: k.afterTick })
-    case 'aegis':
-      return t('shrugs off the first {n} hits', { n: k.charges })
-    default:
-      return null
-  }
-}
-
-/** The scouting report: who waits on the floor, and how the party measures up. */
-function ScoutPanel({ state, report, onSuggest }: { state: GameState; report: ScoutReport; onSuggest: () => void }) {
-  const pct = Math.min(100, (report.ratio / 2) * 100)
-  return (
-    <div className="pframe scout">
-      <div className="event-head">
-        <span className="event-kind">{t('Scouting report · F{n}', { n: report.floor })}</span>
-        <span className="muted">
-          {t(report.mission)} · {report.waves === 1 ? t('1 wave') : t('{n} waves', { n: report.waves })}
-        </span>
-      </div>
-      <div className="threat-row">
-        <span className="threat-label" style={{ color: THREAT_COLOR[report.threat] }}>
-          {t(THREAT_LABEL[report.threat])}
-        </span>
-        <span className="gauge threat-gauge">
-          <span style={{ width: `${pct}%`, background: THREAT_COLOR[report.threat] }} />
-        </span>
-        <span className="muted small">
-          {t('party {p} vs floor {f}', { p: Math.round(report.partyCp).toLocaleString(), f: Math.round(report.budget).toLocaleString() })}
-        </span>
-      </div>
-      <div className="muted small">
-        {report.expectedDeaths === 0
-          ? t('Parties this strong have come back whole.')
-          : t('Parties this strong lose about {n} heroes an attempt.', { n: report.expectedDeaths })}
-      </div>
-      <div className="scout-enemies">
-        {report.enemies.map((e) => {
-          const notes = report.studied || e.keywords.some((k) => k.kind === 'looming') ? e.keywords.map(keywordNote).filter(Boolean) : []
-          return (
-            <div key={`${e.name}|${e.level}`} className="scout-enemy">
-              <span className="el-dot" style={{ background: ELEMENT_VIS[e.element].color }} title={t(ELEMENT_VIS[e.element].label)} />
-              <b>{t(e.name)}</b>
-              {e.count > 1 && <span className="muted">×{e.count}</span>}
-              <span className="muted small">Lv{e.level}</span>
-              {e.target && <span className="chip">{t('target')}</span>}
-              {notes.length > 0 && <span className="scout-notes">{notes.join(' · ')}</span>}
-            </div>
-          )
-        })}
-      </div>
-      {!report.studied && (
-        <div className="muted small">{t('Weaknesses unknown — a Scholar in the Library can study this floor.')}</div>
-      )}
-      {report.immune.physical && <div className="scout-warn">⚠ {t('Most of this floor shrugs off physical blows — bring magic.')}</div>}
-      {report.immune.magic && <div className="scout-warn">⚠ {t('Most of this floor shrugs off magic — bring blades.')}</div>}
-      <div className="scout-actions">
-        <button className="pbtn sm" onClick={onSuggest} disabled={Object.values(state.heroes).filter((h) => h.alive).length === 0}>
-          ✦ {t('Suggest a party')}
-        </button>
-      </div>
-    </div>
-  )
-}
-
 /** The tower from outside: where the party stands on the spire of 100 floors. */
 function TowerExterior({ state }: { state: GameState }) {
   const tw = state.tower
@@ -320,34 +240,99 @@ function TowerExterior({ state }: { state: GameState }) {
   )
 }
 
+
+/** What the Tower remembers about the fight in flight, for the results card. */
+interface FightContext {
+  /** Every hero's level just before the attempt (level-up rows). */
+  preLevels: Record<HeroId, number>
+  /** Gold just before the attempt (the count-up shows everything it paid). */
+  goldBefore: number
+  /** The Sortie as it stood before the attempt. */
+  preSortie: Sortie | null
+  /** Full replay or a Sweep highlight (S6). */
+  mode: 'full' | 'highlights'
+}
+
+/** A short line that confirms a choice made outside battle (a Door, a Boon, a bank). */
+interface Notice {
+  icon: string
+  text: string
+  key: number
+  /** A follow-up the line offers (a summon the Door just paid for). */
+  go?: { label: string; place: PlaceId }
+}
+
+/** Mounted TowerScreens (React StrictMode mounts twice in development). */
+let liveTowerScreens = 0
+
 export function TowerScreen({
   state,
   store,
+  onGo,
 }: {
   state: GameState
   store: Store
-  /** Optional (WP0): travel to another place, e.g. from a reward card. Unused for now. */
+  /** Travel to another place (the results card's "Summon now ▸", returning to campus). */
   onGo?: (place: PlaceId) => void
 }) {
   const [combat, setCombat] = useState<CombatLog | null>(null)
   const [pending, setPending] = useState<FloorResult | null>(null)
+  const [fightCtx, setFightCtx] = useState<FightContext | null>(null)
+  const [given, setGiven] = useState<BattleOrder[]>([])
   const [showResult, setShowResult] = useState(false)
+  const [resultSeen, setResultSeen] = useState(false)
   const [outcome, setOutcome] = useState<EventOutcome | null>(null)
-  const [replay, setReplay] = useState<CombatLog | null>(null)
+  const [replay, setReplay] = useState<{ log: CombatLog; back: 'results' | 'event' } | null>(null)
   const [err, setErr] = useState<string | null>(null)
+  const [notice, setNotice] = useState<Notice | null>(null)
   const [aiming, setAiming] = useState(false)
   const [orders, setOrders] = useState<BattleOrders | null>(null)
   const [openActs, setOpenActs] = useState<Set<string>>(() => new Set([actForFloor(state.tower.currentFloor).id]))
+  const [prefs, setPrefs] = usePrefs()
+  const battleRef = useRef<HTMLDivElement>(null)
 
   const current = state.tower.currentFloor
   const currentRef = useRef<HTMLDivElement>(null)
-  // The tower is drawn bottom-up; bring the floor you're standing on into view.
+  const decisionRef = useRef<HTMLDivElement>(null)
+  const pendingDoors = !!state.tower.doors?.length
+  const eventKind = state.tower.event?.kind ?? null
+  // Bring the next decision into view (the Sortie, the Doors or Boon, the scout and its
+  // Fight button) on arrival and whenever the floor or the pending choice changes.
   useEffect(() => {
-    currentRef.current?.scrollIntoView?.({ block: 'center' })
-  }, [current])
+    decisionRef.current?.scrollIntoView?.({ block: 'start' })
+  }, [current, pendingDoors, eventKind])
   useEffect(() => {
     setOpenActs((cur) => new Set([...cur, actForFloor(current).id]))
   }, [current])
+
+  // Leaving the Tower view with a Sortie underway banks it (S15). Deferred a tick so
+  // StrictMode's mount-unmount-mount in development does not end the Sortie.
+  useEffect(() => {
+    liveTowerScreens++
+    return () => {
+      liveTowerScreens--
+      setTimeout(() => {
+        if (liveTowerScreens > 0) return
+        if (store.getState()?.tower.sortie) {
+          try {
+            store.dispatch({ type: 'RETURN_TO_CAMPUS' })
+          } catch {
+            /* nothing to bank */
+          }
+        }
+      }, 0)
+    }
+  }, [store])
+
+  // Confirmation lines fade on their own (one that offers a follow-up stays longer).
+  useEffect(() => {
+    if (!notice) return
+    const id = setTimeout(() => setNotice(null), notice.go ? 9000 : 3600)
+    return () => clearTimeout(id)
+  }, [notice])
+
+  // VICTORY → results after 1.2 s: one click per floor, not two (S11).
+  useVictoryAutoAdvance(battleRef, combat !== null, combatDone)
 
   const deployable = state.party.slots.some((id) => {
     const h = id ? state.heroes[id] : undefined
@@ -356,6 +341,13 @@ export function TowerScreen({
   const summit = state.tower.highestCleared >= MAX_FLOOR
   const event = state.tower.event
   const loop = state.tower.loop
+  const sortie = state.tower.sortie
+  const doorsPending = !!state.tower.doors?.length && event === null
+  const kind = currentKind(state)
+
+  const noticeSeq = useRef(0)
+  const say = (icon: string, text: string, go?: Notice['go']) => setNotice({ icon, text, key: ++noticeSeq.current, go })
+  const errText = (e: unknown) => t(e instanceof Error ? e.message.replace(/^\w+: /, '') : 'That failed')
 
   function enter() {
     if (!deployable || current > MAX_FLOOR || event !== null) return
@@ -368,22 +360,34 @@ export function TowerScreen({
   }
   function fight(ballista: number | undefined, subvert?: boolean) {
     setAiming(false)
+    setErr(null)
     const pre = store.getState()!
+    const preReport = scoutFloor(pre)
     const { result } = attemptFloorWithResult(pre, undefined, ballista, subvert) // capture the log for playback
     store.dispatch({ type: 'ATTEMPT_FLOOR', ballista, subvert }) // advance the store identically (deterministic)
     setPending(result)
+    setFightCtx({
+      preLevels: levelsOf(pre),
+      goldBefore: pre.gold,
+      preSortie: pre.tower.sortie,
+      mode: sweepMode({ report: preReport ? { threat: preReport.threat, kind: currentKind(pre) } : null, result, autoSweep: prefs.autoSweep }),
+    })
+    setGiven([])
+    setResultSeen(false)
     setCombat(result.result.log)
     // Mid-battle orders re-resolve the same fight from the same state (deterministic up to
-    // the order's tick) and revise the attempt the store just recorded.
-    const given: BattleOrder[] = []
+    // the order's tick) and revise the attempt the store just recorded. Nothing else may
+    // dispatch until the battle is over, or `revise` would refuse.
+    const sent: BattleOrder[] = []
     setOrders({
       left: ordersAllowed(pre),
       give: (order) => {
         try {
-          const next = [...given, order]
+          const next = [...sent, order]
           const r = attemptFloorWithResult(pre, undefined, ballista, subvert, next)
           store.revise({ type: 'ATTEMPT_FLOOR', ballista, subvert, orders: next })
-          given.push(order)
+          sent.push(order)
+          setGiven([...sent])
           setPending(r.result)
           return r.result.result.log
         } catch {
@@ -405,8 +409,81 @@ export function TowerScreen({
       store.dispatch({ type: 'RESOLVE_EVENT', option }, Date.now())
       setOutcome(out)
     } catch (e) {
-      setErr(t(e instanceof Error ? e.message.replace(/^\w+: /, '') : 'That failed'))
+      setErr(errText(e))
     }
+  }
+
+  function pickBoon(id: BoonId) {
+    setErr(null)
+    try {
+      store.dispatch({ type: 'RESOLVE_EVENT', option: id }, Date.now())
+      sfx('boon')
+      say('✦', t('Boon gained: {name}. It lasts this sortie.', { name: boonText(id).name }))
+    } catch (e) {
+      setErr(errText(e))
+    }
+  }
+
+  /** CHOOSE_DOOR. Rest and Cache resolve at once, with no fight. Returns whether it took. */
+  function chooseDoor(index: number): boolean {
+    setErr(null)
+    const before = store.getState()
+    const door = before?.tower.doors?.[index]
+    if (!before || !door) return false
+    try {
+      const after = store.dispatch({ type: 'CHOOSE_DOOR', index })
+      sfx('door')
+      if (!isFightKind(door.kind)) {
+        // A Door that pays for a summon says so, one click from spending it.
+        const cost = TUNING.gacha.normalCostGold
+        const go = onGo && before.gold < cost && after.gold >= cost ? { label: t('A summon is ready'), place: 'summon' as const } : undefined
+        say(door.kind === 'rest' ? '⛺' : '📦', doorOutcome(before, after, door.kind), go)
+      }
+      if (before.tower.doors!.some((d) => d.kind === 'elite')) seeDoorGuide()
+      return true
+    } catch (e) {
+      setErr(errText(e))
+      return false
+    }
+  }
+
+  function seeDoorGuide() {
+    if (!store.getState()?.life.guide.done.includes(DOORS_GUIDE_STEP)) store.dispatch({ type: 'GUIDE_STEP', step: DOORS_GUIDE_STEP })
+  }
+
+  /** Leave the Tower for another place. A running Sortie is banked first, as leaving does. */
+  function leaveTo(place: PlaceId) {
+    if (!onGo) return
+    setShowResult(false)
+    setPending(null)
+    setFightCtx(null)
+    if (store.getState()?.tower.sortie) {
+      try {
+        store.dispatch({ type: 'RETURN_TO_CAMPUS' })
+        sfx('coin', { semis: 7 })
+      } catch {
+        /* nothing to bank */
+      }
+    }
+    onGo(place)
+  }
+
+  /** RETURN_TO_CAMPUS: bank the purse, then walk home. */
+  function returnToCampus() {
+    setErr(null)
+    const purse = store.getState()?.tower.sortie?.purse ?? 0
+    try {
+      store.dispatch({ type: 'RETURN_TO_CAMPUS' })
+    } catch (e) {
+      setErr(errText(e))
+      return
+    }
+    sfx('coin', { semis: 7 })
+    setShowResult(false)
+    setPending(null)
+    setFightCtx(null)
+    if (onGo) onGo('fairy')
+    else say('⌂', t('Purse banked: +{n} gold. The party is home.', { n: purse.toLocaleString() }))
   }
 
   function combatDone() {
@@ -416,6 +493,7 @@ export function TowerScreen({
   function resultDone() {
     setShowResult(false)
     setPending(null)
+    setFightCtx(null)
   }
   const toggleAct = (id: string) =>
     setOpenActs((cur) => {
@@ -428,9 +506,10 @@ export function TowerScreen({
   // Floor descriptions (anchors are labelled; the current floor gets a live preview).
   const preview = current <= MAX_FLOOR ? buildEncounter(state, current) : null
   const report = current <= MAX_FLOOR && !event ? scoutFloor(state) : null
+  const busy = combat !== null || showResult
 
   return (
-    <div className="screen">
+    <div className={`screen tower-screen ${prefs.reducedMotion ? 'motion-off' : ''}`}>
       <h2>{t('The Tower')}</h2>
       <p className="sub">
         {t('100 floors of permadeath. Falling heroes are gone for good.')}
@@ -465,10 +544,43 @@ export function TowerScreen({
         </div>
       )}
 
-      {event && <EventPanel state={state} onResolve={resolve} />}
-      {err && <div className="muted" style={{ color: 'var(--bad)' }}>{err}</div>}
+      <div ref={decisionRef} className="tower-decision">
+      {sortie && <SortieBar sortie={sortie} onReturn={returnToCampus} disabled={busy} />}
 
-      {report && <ScoutPanel state={state} report={report} onSuggest={suggest} />}
+      {event && (event.kind === 'boon' ? <BoonPicker state={state} onPick={pickBoon} /> : <EventPanel state={state} onResolve={resolve} />)}
+      {err && <div className="muted" style={{ color: 'var(--bad)' }}>{err}</div>}
+      {notice && (
+        <div key={notice.key} className={`tower-notice ${notice.go ? 'with-go' : ''}`} role="status">
+          {notice.icon} {notice.text}
+          {notice.go && (
+            <>
+              {' '}
+              <button className="btn gold sm summon-cta" onClick={() => leaveTo(notice.go!.place)}>
+                ✦ {notice.go.label}
+                {sortie && <span className="small"> {t('(banks the purse)')}</span>} ▸
+              </button>
+            </>
+          )}
+        </div>
+      )}
+
+      {doorsPending ? (
+        <DoorPicker state={state} onChoose={chooseDoor} onSeenGuide={seeDoorGuide} />
+      ) : (
+        report && (
+          <ScoutCard
+            state={state}
+            report={report}
+            kind={kind}
+            onSuggest={suggest}
+            autoSweep={prefs.autoSweep}
+            onToggleSweep={() => setPrefs({ autoSweep: !prefs.autoSweep })}
+            onFight={current === TUNING.tower.worldEndFloor ? undefined : enter}
+            fightDisabled={!deployable || event !== null}
+          />
+        )
+      )}
+      </div>
 
       {!deployable && !event && (
         <div className="empty" style={{ color: 'var(--warn)' }}>
@@ -512,6 +624,7 @@ export function TowerScreen({
                 <div className="ft">
                   {t('Floor {n}', { n: f })} {anchor && <span className="anchor-badge">{t('ANCHOR')}</span>}
                   {f === TUNING.tower.worldEndFloor && <span className="anchor-badge danger">{t('WORLD\'S END')}</span>}
+                  {isCurrent && !doorsPending && kind !== 'path' && kind !== 'tutorial' && <KindBadge kind={kind} />}
                 </div>
                 <div className="fs">
                   {t(mission)}
@@ -522,7 +635,12 @@ export function TowerScreen({
                 {isCurrent && preview && state.meta.peekedFloors.includes(f) && <PeekLine preview={preview} />}
               </div>
               {isCurrent && f <= MAX_FLOOR && (
-                <button className="btn primary" onClick={enter} disabled={!deployable || event !== null}>
+                <button
+                  className="btn primary"
+                  onClick={enter}
+                  disabled={!deployable || event !== null}
+                  title={doorsPending ? t('No door chosen: the party takes the first one.') : undefined}
+                >
                   {f === TUNING.tower.worldEndFloor && !state.tower.worldSaved ? t('Clear it ▸') : t('Enter ▸')}
                 </button>
               )}
@@ -555,10 +673,48 @@ export function TowerScreen({
           onCancel={() => setAiming(false)}
         />
       )}
-      {combat && <BattleScene log={combat} state={state} onDone={combatDone} orders={orders ?? undefined} />}
-      {showResult && pending && <ResultsScreen result={pending} state={state} store={store} onContinue={resultDone} />}
-      {outcome && !replay && <EventOutcomeCard outcome={outcome} onReplay={setReplay} onClose={() => setOutcome(null)} />}
-      {replay && <BattleScene log={replay} state={state} onDone={() => setReplay(null)} />}
+      {combat && (
+        <div ref={battleRef} className="battle-host">
+          <BattleScene log={combat} state={state} onDone={combatDone} orders={orders ?? undefined} mode={fightCtx?.mode ?? 'full'} />
+        </div>
+      )}
+      {showResult && pending && (
+        <ResultsScreen
+          result={pending}
+          state={state}
+          store={store}
+          onContinue={resultDone}
+          preLevels={fightCtx?.preLevels}
+          goldBefore={fightCtx?.goldBefore}
+          orders={given}
+          preSortie={fightCtx?.preSortie ?? null}
+          swept={fightCtx?.mode === 'highlights' && pending.cleared && pending.fallenHeroIds.length === 0}
+          instant={resultSeen}
+          onGo={onGo ? leaveTo : undefined}
+          onReplay={() => {
+            setShowResult(false)
+            setResultSeen(true)
+            setReplay({ log: pending.result.log, back: 'results' })
+          }}
+          onChooseDoor={(i) => {
+            if (chooseDoor(i)) resultDone()
+          }}
+          onSeenDoorGuide={seeDoorGuide}
+          onReturnToCampus={returnToCampus}
+        />
+      )}
+      {outcome && !replay && <EventOutcomeCard outcome={outcome} onReplay={(log) => setReplay({ log, back: 'event' })} onClose={() => setOutcome(null)} />}
+      {replay && (
+        <BattleScene
+          log={replay.log}
+          state={state}
+          mode="full"
+          onDone={() => {
+            if (replay.back === 'results' && pending) setShowResult(true)
+            setReplay(null)
+          }}
+        />
+      )}
     </div>
   )
 }

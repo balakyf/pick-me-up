@@ -17,3 +17,93 @@
 .skill-progress { margin: 10px 0 4px; display: flex; flex-direction: column; gap: 4px; text-align: left; }
 .skill-progress .sp-row { font-size: 15px; }
 .skill-progress .sp-row.merge { color: var(--gold); }
+
+/* ── Reward cascade (spec 2026-10-12 S11, WP4) ────────────────────────────── */
+/* A tall card scrolls inside the overlay instead of running off-screen. */
+.results-overlay { overflow-y: auto; }
+.results-overlay .result-card { margin: 4vh auto 24px; flex: none; }
+.result-card.cascade { animation: cardIn 0.24s steps(3) both; }
+/* Opacity only: a transform or clip on the card would trap the flying coins inside it. */
+@keyframes cardIn { from { opacity: 0; } to { opacity: 1; } }
+.result-card.cascade .big-outcome { animation: outcomePop 0.36s steps(4) 0.05s both; }
+@keyframes outcomePop { 0% { transform: scale(0.6); opacity: 0; } 60% { transform: scale(1.12); opacity: 1; } 100% { transform: scale(1); } }
+
+/* Rows enter one after another: --i is the row's slot. */
+.result-card.cascade .cascade-row { animation: rowIn 0.22s steps(3) both; animation-delay: calc(0.7s + var(--i, 0) * 0.12s); }
+@keyframes rowIn { from { opacity: 0; transform: translateX(-8px); } to { opacity: 1; transform: none; } }
+
+.reward-row .r .n { position: relative; font-variant-numeric: tabular-nums; }
+
+.bonus-line { font-size: 15px; margin: 2px 0; color: var(--ink); }
+.bonus-line.purse { color: var(--gold); }
+.bonus-line.lost { color: var(--warn); }
+
+.mat-row { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 4px; margin: 10px 0 4px; }
+.mat-chip { border-color: var(--gold-deep); color: var(--ink); font-size: 13px; }
+
+.level-ups { display: flex; flex-direction: column; gap: 3px; margin: 10px 0 4px; text-align: left; }
+.lvl-row { display: flex; align-items: center; gap: 8px; font-size: 16px; font-weight: 600; }
+.lvl-row img { image-rendering: pixelated; background: #120e2c; border: 1px solid var(--line); }
+.lvl-up { color: var(--good); }
+.lvl-bench { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--ink-dim); }
+.lvl-busts { display: inline-flex; }
+.lvl-busts img { image-rendering: pixelated; margin-right: -6px; background: #120e2c; border: 1px solid var(--line); }
+
+.swept-chip { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 8px 0 0; padding: 2px 8px; font-size: 13px; color: var(--gem); border: 1px solid #1e5a6a; background: #0e2630; }
+.linkish { font: inherit; font-size: 13px; color: var(--accent-2); background: none; border: 0; padding: 0; text-decoration: underline; cursor: pointer; }
+.linkish:hover { color: var(--gold); }
+
+.because { margin: 12px 0 6px; padding: 8px 10px; text-align: left; background: #120e2c; border: 2px solid var(--line); }
+.because-title { font-weight: 600; color: var(--accent-2); margin-bottom: 2px; }
+.because-line { font-size: 14px; margin: 2px 0; }
+.because-line.mvp { color: var(--gold); }
+.because-line.rout, .because-line.wipe { color: var(--warn); }
+.because-line.nemesis { color: #ffc0c6; }
+
+/* "Avenged!" */
+.avenged-banner { margin: -6px 0 10px; padding: 6px 8px; border: 2px solid var(--bad); background: linear-gradient(180deg, #3a1424, #1a0a16); }
+.avenged-title { font-size: 28px; font-weight: 600; letter-spacing: 3px; color: var(--gold); text-shadow: 2px 2px 0 #4a0e18; animation: outcomePop 0.4s steps(4) both; }
+.avenged-line { font-size: 14px; color: #ffc0c6; }
+
+/* "Next summon" bar */
+.summon-bar { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 4px 10px; margin: 14px 0 6px; padding: 8px 10px; text-align: left; background: #120e2c; border: 2px solid var(--line); }
+.summon-bar .sb-head { grid-column: 1 / -1; display: flex; justify-content: space-between; font-size: 14px; color: var(--ink-dim); }
+.summon-bar .coin-target { color: var(--gold); font-variant-numeric: tabular-nums; }
+.summon-bar .sb-gauge { height: 10px; }
+.summon-bar .sb-gauge > span { background: var(--gold); transition: width 0.6s steps(6); }
+.summon-bar.ready { border-color: var(--gold); }
+.summon-cta { animation: pulseGlow 1.2s steps(4) infinite; white-space: nowrap; }
+.summon-ready { border-color: var(--gold); color: var(--gold); }
+
+.teaser { margin: 8px 0 4px; font-size: 14px; color: var(--accent-2); }
+
+.results-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 10px; }
+.results-next { margin-top: 4px; }
+
+/* Coins fly from the reward to the purse (CoinBurst). */
+.coin-burst-anchor { position: absolute; left: 50%; top: 50%; width: 0; height: 0; pointer-events: none; }
+.coin-fx {
+  position: fixed; z-index: 95; width: 8px; height: 8px; margin: -4px 0 0 -4px; pointer-events: none;
+  background: var(--gold); box-shadow: inset -2px -2px 0 var(--gold-deep), inset 1px 1px 0 #fff3c0, 0 0 0 1px #2a1a04;
+  animation: coinFly 0.8s steps(8) both;
+}
+@keyframes coinFly {
+  0% { transform: translate(0, 0) scale(0.4); opacity: 0; }
+  15% { transform: translate(0, -14px) scale(1.2); opacity: 1; }
+  100% { transform: translate(var(--dx), var(--dy)) scale(0.7); opacity: 0.9; }
+}
+
+@media (max-width: 640px) {
+  .result-card { padding: 18px 14px; }
+  /* The gauge keeps the full width; the call to action drops below it. */
+  .summon-bar { grid-template-columns: 1fr; }
+  .summon-bar .summon-cta { justify-self: stretch; white-space: normal; }
+  .result-card .big-outcome { font-size: 32px; }
+  .reward-row { gap: 18px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .result-card.cascade, .result-card.cascade .big-outcome, .result-card.cascade .cascade-row, .avenged-title, .summon-cta { animation: none; }
+  .summon-bar .sb-gauge > span { transition: none; }
+  .coin-fx { display: none; }
+}
