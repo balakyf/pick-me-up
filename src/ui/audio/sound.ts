@@ -125,6 +125,10 @@ export function setMuted(m: boolean): void {
 /** Lazily create the context on first use (browsers require a user gesture first). */
 function audio(): AudioContext | null {
   if (ctx) return ctx
+  // Before any click or key press, a context would start suspended and Chrome logs "The
+  // AudioContext was not allowed to start" for every cue (a returning player's lobby music
+  // spammed the console). Stay silent until the page has been interacted with.
+  if (typeof navigator !== 'undefined' && (navigator as { userActivation?: { hasBeenActive: boolean } }).userActivation?.hasBeenActive === false) return null
   const Ctor = typeof window !== 'undefined' ? (window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext) : undefined
   if (!Ctor) return null
   try {

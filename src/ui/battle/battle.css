@@ -275,9 +275,11 @@
 /* ═══════════════════════════════════════════════════════════════════════════
    The portrait dock
    ═══════════════════════════════════════════════════════════════════════════ */
-.orders-dock { flex: 1; display: flex; flex-wrap: wrap; gap: 6px; padding: 6px; align-content: flex-start; }
+/* A grid, not a wrapping flex row: the fifth hero wrapped alone and stretched to twice
+   the width of the other four (playtest 2026-10-13). */
+.orders-dock { flex: 1; display: grid; grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); gap: 6px; padding: 6px; align-content: start; }
 .dock-hero {
-  appearance: none; position: relative; flex: 1 1 128px; min-width: 112px; max-width: 220px;
+  appearance: none; position: relative; min-width: 0;
   display: flex; gap: 6px; align-items: center; padding: 4px 6px; text-align: left;
   font-family: var(--font); color: var(--ink); background: #1a1440; border: 2px solid var(--rim-dark);
 }
@@ -350,4 +352,11 @@ button.dock-hero:focus-visible { outline: 2px solid var(--gold); outline-offset:
   .dock-hero { flex-basis: 96px; min-width: 96px; }
   .battle-controls { gap: 6px; }
   .isel-bark { font-size: 12px; line-height: 14px; }
+}
+
+/* Touch screens have no P / F / R / Space: the key hints on the Decisive card are noise. */
+@media (hover: none) and (pointer: coarse) {
+  .decisive-key { display: none; }
+  .decisive-choice { grid-template-columns: 1fr; }
+  .decisive-hint { grid-column: 1; }
 }

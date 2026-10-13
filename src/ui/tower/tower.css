@@ -112,7 +112,8 @@
 @keyframes noticeOut { to { opacity: 0; } }
 
 @media (max-width: 640px) {
-  .tower-decision { scroll-margin-top: 116px; }
+  /* The phone scene bar wraps to three rows (title, purse + Menu, the goal chip): ~160px. */
+  .tower-decision { scroll-margin-top: 172px; }
   .door-row { grid-template-columns: 1fr 1fr; }
   .door-title { font-size: 17px; }
   .sortie-purse { font-size: 16px; }

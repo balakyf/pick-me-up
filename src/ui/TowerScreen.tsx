@@ -27,6 +27,7 @@ import { BoonPicker } from './tower/BoonPicker'
 import { SortieBar } from './tower/SortieBar'
 import { currentKind, boonText, isFightKind } from './tower/kinds'
 import { doorOutcome, levelsOf, sweepMode } from './tower/rewards'
+import { openPlaces } from './shell/unlocks'
 import './tower/tower.css'
 
 const MAX_FLOOR = TUNING.tower.sliceTopFloor
@@ -255,6 +256,8 @@ interface FightContext {
   tutorial: boolean
   /** The Banes fighting on this floor, by unit id (skull and red nameplate). */
   nemesisIds: string[]
+  /** Campus places open before the fight (the card names the ones this clear opens). */
+  preOpen: PlaceId[]
 }
 
 /** A short line that confirms a choice made outside battle (a Door, a Boon, a bank). */
@@ -387,6 +390,7 @@ export function TowerScreen({
         : sweepMode({ report: preReport ? { threat: preReport.threat, kind: currentKind(pre) } : null, result, autoSweep: prefs.autoSweep }),
       tutorial,
       nemesisIds: nemesesOnFloor(pre, pre.tower.currentFloor).map(nemesisUnitId),
+      preOpen: openPlaces(pre),
     })
     setSaved([])
     tutorialShown.current = false
@@ -726,6 +730,7 @@ export function TowerScreen({
           orders={given}
           saved={saved}
           preSortie={fightCtx?.preSortie ?? null}
+          preOpen={fightCtx?.preOpen}
           swept={fightCtx?.mode === 'highlights' && pending.cleared && pending.fallenHeroIds.length === 0}
           instant={resultSeen}
           onGo={onGo ? leaveTo : undefined}

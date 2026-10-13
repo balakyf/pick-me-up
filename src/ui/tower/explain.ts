@@ -147,7 +147,9 @@ export function explainFloor(
       kind: 'door',
       icon: KIND_ICON.elite,
       text: result.cleared
-        ? stones > 0
+        ? stones === 1
+          ? t('Skull door: ×{m} gold and +1 stone.', { m: TUNING.climb.reward.eliteGoldMult })
+          : stones > 1
           ? t('Skull door: ×{m} gold and +{n} stones.', { m: TUNING.climb.reward.eliteGoldMult, n: stones })
           : t('Skull door: ×{m} gold.', { m: TUNING.climb.reward.eliteGoldMult })
         : t('Skull door: you chose the harder fight.'),

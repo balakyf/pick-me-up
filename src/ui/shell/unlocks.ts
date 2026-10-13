@@ -105,6 +105,11 @@ export function placeAccess(state: GameState, place: PlaceId): PlaceAccess {
   }
 }
 
+/** Every scheduled place open now, in menu order (the four core doors are not news). */
+export function openPlaces(state: GameState): PlaceId[] {
+  return MENU_ORDER.filter((p) => unlockRule(p) !== null && isPlaceOpen(state, p))
+}
+
 /** Every scheduled place still locked, in menu order. */
 export function lockedPlaces(state: GameState): PlaceId[] {
   return MENU_ORDER.filter((p) => !isPlaceOpen(state, p))

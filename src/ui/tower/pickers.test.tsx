@@ -159,4 +159,14 @@ describe('ScoutCard (S12)', () => {
     act(() => button('Sweep easy floors: on').click())
     expect(toggle).toHaveBeenCalled()
   })
+
+  it('never says a party "loses about 3 heroes" when it fields fewer than that: it reports its trial runs', () => {
+    const s = atFloor(base)
+    const fielded = s.party.slots.filter(Boolean).length
+    const scouted = scoutFloor(s)!
+    const r: ScoutReport = { ...scouted, threat: 'deadly', expectedDeaths: fielded + 2, trials: { ...scouted.trials, runs: 8, won: 0 } }
+    act(() => root.render(<ScoutCard state={s} report={r} onSuggest={() => {}} />))
+    expect(text()).toContain('In 8 trial runs: won 0')
+    expect(text()).not.toContain('heroes an attempt')
+  })
 })

@@ -80,7 +80,8 @@ export function heirBond(state: GameState, fallenId: HeroId, heirId: HeroId): st
   if (b === 'closeFriend') return t('Closest friend')
   if (b === 'friend') return t('Their friend')
   if (b === 'rival' || b === 'grudge') return t('Their old rival')
-  return t('Fought beside them')
+  // Only a hero who stood in the party can truly be said to have fought beside them.
+  return state.party.slots.includes(heirId) ? t('Fought beside them') : t('A fellow hero')
 }
 
 /** "Mira’s Bane" */

@@ -51,6 +51,13 @@ describe('ui.css colour hierarchy (V7)', () => {
     expect(css).not.toMatch(/font-weight:\s*(700|800|900|bold)\b/)
   })
 
+  it('turns off font ligatures (Pixelify Sans renders "fi"/"fl" as a glyph that reads "A")', () => {
+    const bodyRule = body.match(/\nbody \{([^}]*)\}/)?.[1] ?? ''
+    expect(bodyRule).toMatch(/font-variant-ligatures:\s*none/)
+    // Form controls do not inherit font settings from body in the UA stylesheet.
+    expect(body).toMatch(/button, input, select, textarea \{[^}]*font-variant-ligatures:\s*none/)
+  })
+
   it('honours reduced motion: the OS setting and the in-game .reduce-motion class', () => {
     expect(css).toMatch(/@media \(prefers-reduced-motion: reduce\)/)
     expect(css).toMatch(/\.reduce-motion \*/)

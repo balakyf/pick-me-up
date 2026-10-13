@@ -391,7 +391,7 @@ export const FR_UI: Record<string, string> = {
   Empty: 'Vide',
   '+ empty': '+ vide',
   '✓ Saved': '✓ Enregistrée',
-  'Save Party': 'Enregistrer l’équipe',
+  'Tap a hero to add them; tap a slot to remove. Changes save at once.': 'Touchez un héros pour l’ajouter, un emplacement pour le retirer. Tout est enregistré aussitôt.',
   '{n}/5 deployed': '{n}/5 déployés',
   'Available heroes': 'Héros disponibles',
   'No living heroes. Summon to recruit.': 'Aucun héros vivant. Invoquez pour recruter.',

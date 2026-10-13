@@ -100,10 +100,14 @@ export function GoalTracker({
   if (variant === 'bar') {
     const here = (g: Goal | null) => g?.go?.kind === 'place' && g.go.place === view
     const chips: Goal[] = []
-    if (stack.cta && !here(stack.cta)) chips.push(stack.cta)
-    for (const g of [stack.short, stack.medium]) {
+    // While Isel's first steps run, the step leads: a phone shows only the first chip, and
+    // a new Master who just set a party should be pointed at Floor 1, not back at the
+    // crystal (playtest 2026-10-13). After onboarding the gold "Summon now!" leads.
+    const order = stack.onboarding ? [stack.short, stack.cta, stack.medium] : [stack.cta, stack.short, stack.medium]
+    for (const g of order) {
       if (chips.length >= 2) break
-      if (g && g.go?.kind === 'place' && !here(g) && !chips.some((c) => c.id === g.id)) chips.push(g)
+      if (!g || here(g) || chips.some((c) => c.id === g.id)) continue
+      if (g === stack.cta || g.go?.kind === 'place') chips.push(g)
     }
     if (chips.length === 0) return null
     return (

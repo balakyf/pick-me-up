@@ -1,11 +1,12 @@
-import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import type { BattleOrder, FloorResult, GameState, OwnedHero, SkillProgress, Sortie } from '../engine/types'
 import type { Store } from '../engine/store'
 import { TUNING } from '../engine/tuning'
 import { HIDDEN_OBJECTIVES, SKILLS } from '../engine/content'
 import { t } from './i18n/i18n'
 import { LegacySlot } from './legacy/LegacySlot'
-import type { PlaceId } from './world/lobbyMap'
+import { PLACE_LABEL, type PlaceId } from './world/lobbyMap'
+import { openPlaces } from './shell/unlocks'
 import { sfx } from './audio/sound'
 import { getPrefs } from './prefs'
 import { heroBustUrl } from './pixel/sprites'
@@ -72,6 +73,10 @@ export interface ResultsScreenProps {
   onSeenDoorGuide?: () => void
   /** End the Sortie and bank the purse. */
   onReturnToCampus?: () => void
+  /** The campus places already open before the fight: the card names any this clear
+   *  opened, at the moment it is earned (a long Sortie used to save them all up for one
+   *  crowded fanfare back in the lobby). */
+  preOpen?: readonly PlaceId[]
 }
 
 export function ResultsScreen({
@@ -91,6 +96,7 @@ export function ResultsScreen({
   onChooseDoor,
   onSeenDoorGuide,
   onReturnToCampus,
+  preOpen,
 }: ResultsScreenProps) {
   const win = result.cleared
   const failed = result.result.outcome === 'failed'
@@ -107,6 +113,7 @@ export function ResultsScreen({
     mvp: win || retreated ? mvpOf(result.result.log) : null,
     sortie: state.tower.sortie,
     rested: state.meta.rested?.charges ?? 0,
+    opened: preOpen ? openPlaces(state).filter((p) => !preOpen.includes(p)) : [],
   }))
   const reduced = getPrefs().reducedMotion
   const animate = !instant && !reduced
@@ -140,6 +147,25 @@ export function ResultsScreen({
     if (snap.avenged.length > 0) timers.push(setTimeout(() => sfx('saved'), 200))
     if (snap.ups.length > 0) timers.push(setTimeout(() => sfx('levelup'), 900))
     return () => timers.forEach(clearTimeout)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // The card is taller than a laptop screen once it lists level-ups, the Because… box and
+  // the summon bar: when the cascade has played, bring the next decision (the Doors, or
+  // Press on / Return) into view instead of leaving it below the fold (playtest 2026-10-13).
+  const nextRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    const el = nextRef.current
+    if (!el) return
+    const id = setTimeout(
+      () => {
+        const r = el.getBoundingClientRect?.()
+        const vh = typeof window !== 'undefined' ? window.innerHeight : 0
+        if (r && vh > 0 && r.bottom > vh) el.scrollIntoView?.({ block: 'end', behavior: animate ? 'smooth' : 'auto' })
+      },
+      animate ? 1700 : 0,
+    )
+    return () => clearTimeout(id)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -183,6 +209,14 @@ export function ResultsScreen({
     lines.push(
       <div key="sortie-end" className="bonus-line lost cascade-row" style={row(i++)}>
         ⚑ {t('Sortie over: {kept} of the ◆ {purse} purse was saved.', { kept: keptOnRout(preSortie.purse).toLocaleString(), purse: preSortie.purse.toLocaleString() })}
+      </div>,
+    )
+  }
+
+  if (snap.opened.length > 0) {
+    lines.push(
+      <div key="opened" className="bonus-line opened cascade-row" style={row(i++)}>
+        🔓 {t('New on campus: {places}', { places: snap.opened.map((p) => t(PLACE_LABEL[p])).join(', ') })}
       </div>,
     )
   }
@@ -423,7 +457,7 @@ export function ResultsScreen({
         {teaser && <div className="teaser">{teaser}</div>}
 
         {doorsHere ? (
-          <div className="results-next">
+          <div className="results-next" ref={nextRef}>
             <DoorPicker state={state} onChoose={onChooseDoor!} onSeenGuide={onSeenDoorGuide} compact />
             <div className="results-actions">
               {bank}
@@ -433,7 +467,7 @@ export function ResultsScreen({
             </div>
           </div>
         ) : win && bank && state.tower.event === null ? (
-          <div className="results-actions">
+          <div className="results-actions" ref={nextRef}>
             <button className="btn primary big" onClick={onContinue}>
               {t('Press on ▸')}
             </button>

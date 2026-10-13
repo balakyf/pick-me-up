@@ -34,7 +34,7 @@ import { BARK_SHOW_MS, barkLine, canBark, firstName, isPriorityBark, planBarks, 
 import { COMBO_MIN, comboSemis, comboSeries } from './combo'
 import { Sparks, sparkCount, sparkSpecs } from './Sparks'
 import { OrdersDock, type DockHero } from './OrdersDock'
-import { DecisiveMoment, type DecisiveChoice } from './DecisiveMoment'
+import { DecisiveMoment, decisiveHeadline, ordersLeftText, type DecisiveChoice } from './DecisiveMoment'
 import './battle.css'
 
 /**
@@ -770,11 +770,7 @@ export function BattleScene({
   return (
     <div className={rootCls}>
       <div className="battle-caption pframe">
-        {decisive
-          ? decisive.kind === 'death'
-            ? t('{name} is about to fall!', { name: shortName(decisive.heroId) })
-            : t('{name} is in danger!', { name: shortName(decisive.heroId) })
-          : snap.caption}
+        {decisive ? decisiveHeadline(decisive.kind, shortName(decisive.heroId)) : snap.caption}
       </div>
 
       <div className={`battle-stage-wrap ${aim ? 'aiming' : ''}`} style={{ width: BG_W * zoom, height: BG_H * zoom }}>
@@ -1073,7 +1069,7 @@ export function BattleScene({
                 >
                   🎯 {t('Focus')}
                 </button>
-                <span className="muted small order-count">{t('{n} orders', { n: ordersLeft })}</span>
+                <span className="muted small order-count">{ordersLeftText(ordersLeft)}</span>
                 <button className="pbtn sm danger" onClick={() => (decisive ? decide('retreat') : retreat())} title={t('End the fight now: the living come home, nothing is won')}>
                   🏳 {t('Retreat')}
                 </button>

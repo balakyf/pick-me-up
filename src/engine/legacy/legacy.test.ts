@@ -165,6 +165,22 @@ describe('a death leaves an Echo', () => {
     expect(p.candidates).toHaveLength(LG.heirCandidates)
   })
 
+  it('among heroes equally close, suggests the ones who stood in the party first', async () => {
+    // Playtest 2026-10-13: a 3-hero party lost two; the survivor who fought beside them
+    // was not offered, three higher-level bench heroes were.
+    const { rankHeirs } = await import('.')
+    const s0 = roster(105)
+    const all = living(s0)
+    const fallen = all[0]!
+    // The party: the fallen and the hero the old order ranked LAST (lowest level, then the
+    // highest id); everyone else waits on the bench.
+    const before = rankHeirs(s0, fallen.id)
+    const comrade = s0.heroes[before[before.length - 1]!]!
+    expect(before[0]).not.toBe(comrade.id)
+    const s = reduce(s0, { type: 'SET_PARTY', slots: [fallen.id, comrade.id, null, null, null], lines: ['front', 'front', 'mid', 'back', 'back'] })
+    expect(rankHeirs(s, fallen.id)[0]).toBe(comrade.id)
+  })
+
   it('never offers the dead as heirs, and fills with the next closest when friends are gone', () => {
     const s0 = party(102)
     const [a, b, c] = living(s0)

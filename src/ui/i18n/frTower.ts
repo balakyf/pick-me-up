@@ -57,7 +57,7 @@ export const FR_TOWER: Record<string, string> = {
   'The party breaks after 1 falls.': 'L’équipe se débande après 1 perte.',
   'The party breaks after {n} fall.': 'L’équipe se débande après {n} pertes.',
   'Last Stand +{p}%: a thin roster fights harder.': 'Dernier rempart +{p} % : des rangs clairsemés se battent plus fort.',
-  'The tower eases off: your roster is thin.': 'La tour relâche la pression : vos rangs sont clairsemés.',
+  'The tower eases off: it is pitched to your strongest five.': 'La tour relâche la pression : elle se règle sur vos cinq meilleurs.',
   'Easy floors won with nobody lost play as a short highlight.':
     'Les étages faciles gagnés sans perte se jouent en un court résumé.',
   'Fight floor {n} ▸': 'Combattre l’étage {n} ▸',
@@ -148,6 +148,9 @@ export const FR_TOWER: Record<string, string> = {
   'Retreat: you called it, and 1 hero came home.': 'Retraite : vous l’avez ordonnée, et 1 héros est rentré.',
   'Retreat: you called it, and {n} heroes came home.': 'Retraite : vous l’avez ordonnée, et {n} héros sont rentrés.',
   'Skull door: ×{m} gold and +{n} stones.': 'Porte au crâne : or ×{m} et +{n} pierres.',
+  'Skull door: ×{m} gold and +1 stone.': 'Porte au crâne : or ×{m} et +1 pierre.',
+  'New on campus: {places}': 'Nouveau au campus : {places}',
+  'The steady road. Standard rewards.': 'Le chemin ordinaire. Récompenses habituelles.',
   'Skull door: ×{m} gold.': 'Porte au crâne : or ×{m}.',
   'Skull door: you chose the harder fight.': 'Porte au crâne : vous avez choisi le combat le plus rude.',
   'Breather: an easier floor after the boss.': 'Répit : un étage plus facile après le gardien.',

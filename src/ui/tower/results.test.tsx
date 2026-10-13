@@ -257,6 +257,47 @@ describe('ResultsScreen — the next decision, one click away', () => {
     expect(onContinue).toHaveBeenCalled()
   })
 
+  it('brings the Doors into view once the cascade has played, when they sit below the fold', () => {
+    const { state, result } = setup({}, { doors: [{ kind: 'path', reward: 'gold' }, { kind: 'elite', reward: 'boon' }] })
+    const scrolled: Element[] = []
+    const proto = HTMLElement.prototype as unknown as { scrollIntoView?: unknown; getBoundingClientRect: () => DOMRect }
+    const hadScroll = 'scrollIntoView' in proto
+    const oldScroll = proto.scrollIntoView
+    const oldRect = proto.getBoundingClientRect
+    proto.scrollIntoView = function (this: Element) {
+      scrolled.push(this)
+    }
+    proto.getBoundingClientRect = function (this: Element) {
+      // The decision block ends far below a laptop screen.
+      return { top: 900, bottom: 1400, left: 0, right: 400, width: 400, height: 500, x: 0, y: 900, toJSON: () => ({}) } as DOMRect
+    }
+    try {
+      render({ state, result, onChooseDoor: vi.fn(), onReturnToCampus: vi.fn() })
+      expect(scrolled).toHaveLength(0)
+      settle()
+      expect(scrolled.map((e) => e.className)).toEqual(['results-next'])
+    } finally {
+      if (hadScroll) proto.scrollIntoView = oldScroll
+      else delete proto.scrollIntoView
+      proto.getBoundingClientRect = oldRect
+    }
+  })
+
+  it('names the campus places this clear opened, at the moment they are earned', () => {
+    const { state, result } = setup()
+    // Before the fight nothing scheduled was open; the F1 clear opens the Kitchen & co.
+    render({ state, result, preOpen: [] })
+    settle()
+    expect(text()).toContain('New on campus: ')
+    expect(text()).toContain('Kitchen')
+    // Shown once: when everything was already open there is no such line.
+    act(() => root.unmount())
+    root = createRoot(container)
+    render({ state, result, preOpen: ['kitchen', 'memorial', 'daily'] })
+    settle()
+    expect(text()).not.toContain('New on campus')
+  })
+
   it('asks "Press on" or "Return to campus" during a Sortie', () => {
     const { state, result } = setup({}, { sortie: { startFloor: 1, floors: 1, purse: 150, boons: [] } })
     const onContinue = vi.fn()

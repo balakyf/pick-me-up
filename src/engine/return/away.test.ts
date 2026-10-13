@@ -102,6 +102,20 @@ describe('summarizeAway', () => {
     expect(summarizeAway(prior, forges).vignettes.map((v) => v.kind)).toEqual(['forged', 'forged'])
   })
 
+  it('a quarrel between two heroes is one line, whichever side the chronicle wrote it from', () => {
+    const before = roster()
+    const [a, b, c] = ids(before)
+    const t = before.meta.lastSeenAtWorld
+    const after = withChronicle({ ...before, meta: { ...before.meta, lastSeenAtWorld: t + toWorldTime(9 * REAL_HOUR) } }, [
+      { at: t + 5, kind: 'argument', heroIds: [a!, b!] },
+      { at: t + 6, kind: 'argument', heroIds: [b!, a!] },
+      { at: t + 7, kind: 'argument', heroIds: [a!, c!] },
+    ])
+    const lines = summarizeAway(before, after).vignettes.filter((v) => v.kind === 'argument')
+    expect(lines).toHaveLength(2)
+    expect(lines.map((v) => [...v.heroIds].sort().join('|')).sort()).toEqual([[a!, b!].sort().join('|'), [a!, c!].sort().join('|')].sort())
+  })
+
   it('each expedition home reports its own haul, and the total matches the purse', () => {
     const s = roster()
     const [a, b] = ids(s)

@@ -76,6 +76,7 @@ export const FR_CLIMB: Record<string, string> = {
   'Goes after your strongest hero.': 'Traque votre héros le plus fort.',
   'Strength in numbers.': 'La force du nombre.',
   'Hits the hardest on this floor.': 'Frappe le plus fort de l’étage.',
+  'Keeps the pressure on your line.': 'Maintient la pression sur votre ligne.',
   'Very fast: acts far more often than its strength suggests.':
     'Très rapide : agit bien plus souvent que sa force ne le laisse croire.',
 }

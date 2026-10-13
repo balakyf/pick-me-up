@@ -135,7 +135,7 @@ export function GraveList({ state }: { state: GameState }) {
         return (
           <div key={g.heroId} className="grave-row">
             <div className="grave-name">
-              <b>{g.name}</b> <span className="muted small">{g.star}★ Lv{g.level}</span>
+              <b>{g.name}</b> <span className="muted small">{t('{star}★ Lv{level}', { star: g.star, level: g.level })}</span>
             </div>
             <div className="muted small">
               {cause(g.cause, g.floor)} · {t('day {n}', { n: accountDay(state, g.day) })} · {t('served {n} days', { n: g.daysServed })}

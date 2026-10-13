@@ -352,6 +352,7 @@ export function LobbyWorld({
   onMenu,
   travelRequest,
   paused = false,
+  onModalChange,
 }: {
   state: GameState
   store: Store
@@ -361,6 +362,9 @@ export function LobbyWorld({
   travelRequest?: { place: PlaceId; nonce: number } | null
   /** Something app-level (the Menu, a battle replay) covers the lobby: hold the fanfare. */
   paused?: boolean
+  /** A lobby window (a place, a dialogue, the unlock fanfare…) opened or closed: the App
+   *  keeps its own small prompts (the backup nudge) from stacking on top of it. */
+  onModalChange?: (up: boolean) => void
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const miniRef = useRef<HTMLCanvasElement>(null)
@@ -395,7 +399,14 @@ export function LobbyWorld({
   const stateRef = useRef(state)
   stateRef.current = state
   const modalRef = useRef(false)
-  modalRef.current = openPlace !== null || dialog !== null || profile !== null || tracker || letter || fanfare !== null
+  const modalUp = openPlace !== null || dialog !== null || profile !== null || tracker || letter || fanfare !== null
+  modalRef.current = modalUp
+  const modalCb = useRef(onModalChange)
+  modalCb.current = onModalChange
+  useEffect(() => {
+    modalCb.current?.(modalUp)
+  }, [modalUp])
+  useEffect(() => () => modalCb.current?.(false), [])
 
   // The unlock fanfare (spec 2026-10-12 S3): when a place has opened and its fanfare has
   // not been seen, play it once the Master is free (no window or dialog open). It is

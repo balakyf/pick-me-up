@@ -33,3 +33,15 @@ describe('battle UI French coverage', () => {
     }
   })
 })
+
+describe('order counts and the Decisive headline (playtest 2026-10-13)', () => {
+  it('says "1 order left", never "1 orders"', async () => {
+    const { ordersLeftText, decisiveHeadline } = await import('./DecisiveMoment')
+    expect(ordersLeftText(1)).toBe('1 order left')
+    expect(ordersLeftText(0)).toBe('0 orders left')
+    expect(ordersLeftText(3)).toBe('3 orders left')
+    // The tutorial's teaching moment has no death in it: it must not claim one.
+    expect(decisiveHeadline('danger', 'Islat')).toBe('A heavy blow is coming for Islat!')
+    expect(decisiveHeadline('death', 'Islat')).toBe('Islat is about to fall!')
+  })
+})

@@ -85,6 +85,9 @@ describe('explainFloor', () => {
   it('explains the Skull door and its stones', () => {
     const r = explainFloor(fixtureResult(log, { kind: 'elite', materialsAwarded: { promotionStone: 2 } }))
     expect(r).toEqual([{ kind: 'door', icon: '💀', text: 'Skull door: ×2 gold and +2 stones.' }])
+    // One stone is "+1 stone", not "+1 stones" (playtest 2026-10-13).
+    const one = explainFloor(fixtureResult(log, { kind: 'elite', materialsAwarded: { promotionStone: 1 } }))
+    expect(one[0]!.text).toBe('Skull door: ×2 gold and +1 stone.')
   })
 
   it('explains a Breather clear', () => {

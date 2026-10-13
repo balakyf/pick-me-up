@@ -163,6 +163,18 @@ describe('the honest scout (spec 2026-10-12 S12)', () => {
     expect(threats[0]).toMatchObject({ name: 'Quick', why: THREAT_REASONS.fast, count: 1 })
   })
 
+  it('never calls two named threats "the hardest hitter" (playtest: Wolf and Goblin both did)', () => {
+    const s = party(6, 8)
+    const units = scoutUnits(s, Object.values(s.heroes).slice(0, 3))
+    const goblin = buildEnemyUnit(ENEMY_TEMPLATES.goblin!, 10, 'g', {})
+    const big = { ...goblin, id: 'big', name: 'Big', cp: goblin.cp * 3, stats: { ...goblin.stats, pAtk: goblin.stats.pAtk * 3 } }
+    const threats = namedThreats([goblin, big], units, new Set())
+    expect(threats).toHaveLength(2)
+    expect(threats.filter((x) => x.why === THREAT_REASONS.heavy)).toHaveLength(1)
+    expect(threats.find((x) => x.why === THREAT_REASONS.heavy)!.name).toBe('Big')
+    expect(threats.find((x) => x.name !== 'Big')!.why).toBe(THREAT_REASONS.pressure)
+  })
+
   it('estimates the opening blow from the strongest skill the enemy can open with', () => {
     const s = party(6, 8)
     const units = scoutUnits(s, Object.values(s.heroes).slice(0, 3))

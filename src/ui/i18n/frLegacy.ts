@@ -40,6 +40,7 @@ export const FR_LEGACY: Record<string, string> = {
   'Their friend': 'Son ami',
   'Their old rival': 'Son vieux rival',
   'Fought beside them': 'A combattu à ses côtés',
+  'A fellow hero': 'Un compagnon de la salle d’attente',
   'Passed on by {name}, who fell in the tower.': 'Transmis par {name}, tombé dans la tour.',
 
   // ── Results: what they leave behind ────────────────────────────────────────
@@ -62,6 +63,7 @@ export const FR_LEGACY: Record<string, string> = {
   '{name}’s Bane': 'Le Fléau de {name}',
   Banes: 'Fléaux',
   '{enemy} · Lv{level}': '{enemy} · Niv.{level}',
+  '{star}★ Lv{level}': '{star}★ Niv.{level}',
   'Struck {name} down on floor {floor}.': 'A abattu {name} à l’étage {floor}.',
   'waits on floor {n}': 'attend à l’étage {n}',
   'still at large in the tower': 'rôde toujours dans la tour',

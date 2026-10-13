@@ -10,6 +10,16 @@ import type { Decisive } from './decisive'
 
 export type DecisiveChoice = 'protect' | 'focus' | 'retreat' | 'fate'
 
+/** "1 order left" / "3 orders left" (the dock and the card share it). */
+export function ordersLeftText(n: number): string {
+  return n === 1 ? t('1 order left') : t('{n} orders left', { n })
+}
+
+/** The card's headline: a death foreseen, or the tutorial's heavy blow (no death in it). */
+export function decisiveHeadline(kind: Decisive['kind'], name: string): string {
+  return kind === 'death' ? t('{name} is about to fall!', { name }) : t('A heavy blow is coming for {name}!', { name })
+}
+
 export function DecisiveMoment({
   decisive,
   heroName,
@@ -50,7 +60,7 @@ export function DecisiveMoment({
         <img className="px decisive-bust" src={heroBust} width={48} height={48} alt="" />
         <div>
           <div className="decisive-title">
-            {decisive.kind === 'death' ? t('{name} is about to fall!', { name: heroName }) : t('{name} is in danger!', { name: heroName })}
+            {decisiveHeadline(decisive.kind, heroName)}
           </div>
           <div className="decisive-sub">{t('Time stands still. Your order, Master?')}</div>
         </div>
@@ -89,7 +99,7 @@ export function DecisiveMoment({
         </button>
       </div>
       <div className="decisive-foot muted small">
-        {canOrder ? t('{n} orders', { n: ordersLeft }) : t('No orders left this battle: only Retreat can change this.')}
+        {canOrder ? ordersLeftText(ordersLeft) : t('No orders left this battle: only Retreat can change this.')}
       </div>
     </div>
   )

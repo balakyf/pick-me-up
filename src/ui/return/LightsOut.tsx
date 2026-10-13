@@ -87,13 +87,14 @@ export function LightsOut({
               <span className="wb-text">
                 <b>{t('Floor {n}', { n: teaser.floor })}</b> · {t(teaser.mission)}
                 {teaser.threat && ` · ${t(THREAT_PHRASE[teaser.threat]!)}`}
+                {/* Each hook is its own sentence after the headline (the reasons already end in a full stop). */}
                 {teaser.nemesis ? (
-                  <span className="lo-hook"> {t('{bane} waits there.', { bane: enemyName(teaser.nemesis) })}</span>
+                  <span className="lo-hook">. {t('{bane} waits there.', { bane: enemyName(teaser.nemesis) })}</span>
                 ) : teaser.namedThreat ? (
-                  <span className="lo-hook"> {enemyName(teaser.namedThreat.name)} — {t(teaser.namedThreat.why)}.</span>
+                  <span className="lo-hook">. {enemyName(teaser.namedThreat.name)} — {t(teaser.namedThreat.why)}</span>
                 ) : teaser.headline ? (
                   <span className="lo-hook">
-                    {' '}
+                    {'. '}
                     {teaser.headline.count > 1
                       ? t('{enemy} ×{n} wait there.', { enemy: enemyName(teaser.headline.name), n: teaser.headline.count })
                       : t('{enemy} waits there.', { enemy: enemyName(teaser.headline.name) })}
@@ -101,7 +102,7 @@ export function LightsOut({
                 ) : null}
                 {teaser.laterBane && (
                   <span className="lo-hook lo-bane">
-                    {' '}☠ {t('{bane} waits on floor {n}.', { bane: baneName(teaser.laterBane), n: teaser.laterBane.floor })}
+                    {teaser.nemesis || teaser.namedThreat || teaser.headline ? ' ' : '. '}☠ {t('{bane} waits on floor {n}.', { bane: baneName(teaser.laterBane), n: teaser.laterBane.floor })}
                   </span>
                 )}
               </span>

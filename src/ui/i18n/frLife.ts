@@ -32,7 +32,6 @@ export const FR_LIFE: Record<string, string> = {
   Focus: 'Focaliser',
   'Enemies avoid the hero you pick while anyone else stands': 'Les ennemis épargnent le héros choisi tant qu’un autre tient debout',
   Protect: 'Protéger',
-  '{n} orders': '{n} ordres',
   'End the fight now: the living come home, nothing is won': 'Mettre fin au combat : les vivants rentrent, rien n’est gagné',
   Retreat: 'Retraite',
   'Click an enemy…': 'Cliquez sur un ennemi…',

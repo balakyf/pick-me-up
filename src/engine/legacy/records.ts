@@ -237,7 +237,14 @@ export function canInherit(hero: OwnedHero | undefined): hero is OwnedHero {
 export function rankHeirs(state: GameState, fallenId: HeroId): HeroId[] {
   return (Object.values(state.heroes) as OwnedHero[])
     .filter((h) => h.id !== fallenId && canInherit(h))
-    .sort((x, y) => affinity(state, fallenId, y.id) - affinity(state, fallenId, x.id) || y.xp.level - x.xp.level || (x.id < y.id ? -1 : x.id > y.id ? 1 : 0))
+    // Closest friends first; among equals, the comrades who were in the party with them.
+    .sort(
+      (x, y) =>
+        affinity(state, fallenId, y.id) - affinity(state, fallenId, x.id) ||
+        Number(state.party.slots.includes(y.id)) - Number(state.party.slots.includes(x.id)) ||
+        y.xp.level - x.xp.level ||
+        (x.id < y.id ? -1 : x.id > y.id ? 1 : 0),
+    )
     .map((h) => h.id)
 }
 

@@ -122,6 +122,8 @@ export const THREAT_REASONS = {
   assassin: 'Goes after your strongest hero.',
   numbers: 'Strength in numbers.',
   heavy: 'Hits the hardest on this floor.',
+  /** The fallback for a second named threat: only one group can hit the hardest. */
+  pressure: 'Keeps the pressure on your line.',
 } as const
 
 /** A hero's sheet CP (level, skills and engraving; no Sanity, favor or gear). Kept for
@@ -370,15 +372,19 @@ export function namedThreats(enemies: readonly CombatUnit[], party: readonly Com
       g.weight += u.cp * tempo(u)
     } else groups.set(key, { unit: u, count: 1, weight: u.cp * tempo(u), nemesis })
   }
-  return [...groups.values()]
+  const named = [...groups.values()]
     .sort((a, b) => Number(b.nemesis) - Number(a.nemesis) || b.weight - a.weight)
     .slice(0, 2)
     .map((g) => ({
       name: g.unit.name,
-      why: reasonFor(g.unit, g.count, g.nemesis, partySpd),
+      why: reasonFor(g.unit, g.count, g.nemesis, partySpd) as string,
       count: g.count,
       hit: blowOn(g.unit, front),
     }))
+  // "Hits the hardest" is a superlative: only the named threat with the biggest blow
+  // keeps it; another one that fell through to it says something true instead.
+  const hardest = named.reduce((best, x, i) => (x.why === THREAT_REASONS.heavy && (best < 0 || x.hit > named[best]!.hit) ? i : best), -1)
+  return named.map((x, i) => (x.why === THREAT_REASONS.heavy && i !== hardest ? { ...x, why: THREAT_REASONS.pressure } : x))
 }
 
 /** Reports already scouted, per (immutable) state and the heroes sent. */

@@ -293,37 +293,41 @@ export function RosterScreen({ state, store }: { state: GameState; store?: Store
 
 // ── Party builder ─────────────────────────────────────────────────────────────
 export function PartyScreen({ state, store }: { state: GameState; store: Store }) {
-  const [draft, setDraft] = useState<(HeroId | null)[]>(() => [...state.party.slots])
+  // Every tap saves (playtest 2026-10-13): a draft that only a small "Save Party" button
+  // kept was lost the moment a new Master followed the goal tracker away, and the tracker
+  // went on asking for a party they thought they had set.
+  const draft = state.party.slots
   const [saved, setSaved] = useState(false)
 
   const living = roster(state).filter((h) => h.alive)
   const inParty = (id: HeroId) => draft.includes(id)
 
+  function commit(next: (HeroId | null)[]) {
+    try {
+      store.dispatch({ type: 'SET_PARTY', slots: next, lines: PARTY_LINES })
+      setSaved(true)
+    } catch {
+      /* the store refused it; the board shows what is saved */
+    }
+  }
   function addHero(id: HeroId) {
     if (inParty(id)) return
     const i = draft.indexOf(null)
     if (i === -1) return
     const next = [...draft]
     next[i] = id
-    setDraft(next)
-    setSaved(false)
+    commit(next)
   }
   function clearSlot(i: number) {
     const next = [...draft]
     next[i] = null
-    setDraft(next)
-    setSaved(false)
-  }
-  function save() {
-    store.dispatch({ type: 'SET_PARTY', slots: draft, lines: PARTY_LINES })
-    setSaved(true)
+    commit(next)
   }
 
   const partyCP = draft.reduce((sum, id) => {
     const h = id ? state.heroes[id] : undefined
     return sum + (h && h.alive ? cpOf(h) : 0)
   }, 0)
-  const dirty = JSON.stringify(draft) !== JSON.stringify(state.party.slots)
 
   return (
     <div className="screen">
@@ -359,10 +363,10 @@ export function PartyScreen({ state, store }: { state: GameState; store: Store }
       </div>
 
       <div className="row" style={{ margin: '8px 0 20px' }}>
-        <button className="btn primary" onClick={save} disabled={!dirty}>
-          {saved && !dirty ? t('✓ Saved') : t('Save Party')}
-        </button>
         <span className="muted">{t('{n}/5 deployed', { n: draft.filter(Boolean).length })}</span>
+        <span className="muted small" role="status">
+          {saved ? t('✓ Saved') : t('Tap a hero to add them; tap a slot to remove. Changes save at once.')}
+        </span>
       </div>
 
       <h3 style={{ margin: '0 0 10px' }}>{t('Available heroes')}</h3>

@@ -16,7 +16,7 @@ import { getStore, BROKEN_SAVE_KEY } from '../useGame'
 import { createAccount } from '../../engine/account'
 import { toWorldTime } from '../../engine/time'
 import { setLocale } from '../i18n/i18n'
-import type { GameState } from '../../engine/types'
+import type { GameState, HeroId } from '../../engine/types'
 import { PLACE_LABEL, type PlaceId } from '../world/lobbyMap'
 import { t } from '../i18n/i18n'
 import { setPrefs } from '../prefs'
@@ -388,6 +388,27 @@ describe('the goal tracker', () => {
       short.click()
     })
     expect(container.querySelector('.scene-title')?.textContent).toBe('Mobius Summon')
+  })
+
+  it('during the first steps the scene bar leads with the step, not "Summon now!" (a phone shows one chip)', () => {
+    mount()
+    act(() => {
+      getStore().dispatch({ type: 'NEW_ACCOUNT', seed: 511, now: 0 })
+    })
+    loadSave(greeted(511))
+    act(() => {
+      getStore().dispatch({ type: 'SUMMON', count: 10 })
+    })
+    const st = getStore().getState()!
+    const five = Object.keys(st.heroes).slice(0, 5) as HeroId[]
+    act(() => {
+      getStore().dispatch({ type: 'SET_PARTY', slots: five, lines: st.party.lines })
+    })
+    clickButton('Menu')
+    clickButton('Party')
+    const chips = Array.from(container.querySelectorAll('.scene-bar .goals-bar button')).map((b) => b.textContent ?? '')
+    expect(chips[0]).toContain('Clear Floor 1')
+    expect(chips.some((c) => c.includes('Summon now!'))).toBe(true)
   })
 
   it('rides in the scene bar after the Menu button, skips the scene it is in, and never says "Enter"', () => {

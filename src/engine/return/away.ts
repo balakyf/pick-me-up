@@ -119,8 +119,18 @@ export function summarizeAway(before: GameState, after: GameState): AwaySummary 
 
   // ── Vignettes: the chronicle, hero and Master level-ups, expeditions home ──
   const candidates: AwayVignette[] = []
-  for (const e of after.life.chronicle) {
+  // A quarrel or a friendship between two heroes is one piece of news, however many
+  // times (and from whichever side) the chronicle wrote it down: the playtest ledger read
+  // "Bram and Ridigeon had a shouting match" and then "Ridigeon and Bram had…". The latest
+  // entry for a pair stands for all of them.
+  const pairShown = new Set<string>()
+  for (const e of [...after.life.chronicle].reverse()) {
     if (e.at <= since) continue
+    if (e.heroIds.length >= 2) {
+      const key = `${e.kind}|${[...e.heroIds].sort().join('|')}|${e.detail ?? ''}`
+      if (pairShown.has(key)) continue
+      pairShown.add(key)
+    }
     const v: AwayVignette = { kind: e.kind, weight: VIGNETTE_WEIGHT[e.kind], heroIds: [...e.heroIds], at: e.at }
     if (e.detail !== undefined) v.detail = e.detail
     if (e.floor !== undefined) v.floor = e.floor

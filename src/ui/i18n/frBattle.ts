@@ -7,7 +7,9 @@ export const FR_BATTLE: Record<string, string> = {
   // ── The Decisive Moment (S16, S5) ──────────────────────────────────────────
   'Decisive moment': 'Instant décisif',
   '{name} is about to fall!': '{name} va tomber !',
-  '{name} is in danger!': '{name} est en danger !',
+  'A heavy blow is coming for {name}!': 'Un coup terrible menace {name} !',
+  '1 order left': '1 ordre restant',
+  '{n} orders left': '{n} ordres restants',
   'Time stands still. Your order, Master?': 'Le temps s’arrête. Vos ordres, Maître ?',
   'Protect {name}': 'Protéger {name}',
   'Focus {name}': 'Focaliser {name}',

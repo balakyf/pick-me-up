@@ -103,7 +103,8 @@ export function doorBlurb(door: Door, floor: number, worldMult: number = 1): str
       return t('A gentle floor to learn the ropes.')
     case 'path':
     default:
-      return t('A fair fight. Standard rewards.')
+      // Not "a fair fight": the threat line under it may well say Deadly.
+      return t('The steady road. Standard rewards.')
   }
 }
 

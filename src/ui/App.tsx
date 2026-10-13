@@ -301,6 +301,8 @@ export function App() {
   }, [prefs.reducedMotion])
   /** The return layer has a ceremony or window up (the unlock fanfare waits for it). */
   const [returnBusy, setReturnBusy] = useState(false)
+  /** A lobby window or the unlock fanfare is up: the return layer keeps its nudge back. */
+  const [lobbyModal, setLobbyModal] = useState(false)
   /** Where the Master asked to go from the Tower while a Sortie runs (S15 confirm). */
   const [leaving, setLeaving] = useState<{ to: PlaceId | 'lobby' } | null>(null)
   // Every pixel button clicks; the first gesture wakes the audio context and the lobby theme.
@@ -423,6 +425,7 @@ export function App() {
           onMenu={openMenu}
           travelRequest={travel}
           paused={menuOpen || demoLog !== null || returnBusy}
+          onModalChange={setLobbyModal}
         />
       ) : (
         <Scene title={t(SCENE_TITLE[view])} view={view} state={state} onBack={back} onMenu={openMenu} onGo={go}>
@@ -438,7 +441,7 @@ export function App() {
         <LeaveTowerConfirm purse={state.tower.sortie.purse} onBank={bankAndLeave} onStay={() => setLeaving(null)} />
       )}
       {demoLog && <BattleScene log={demoLog} state={state} onDone={() => setDemoLog(null)} />}
-      <ReturnLayer state={state} store={store} view={view} onGo={go} onBusyChange={setReturnBusy} />
+      <ReturnLayer state={state} store={store} view={view} onGo={go} onBusyChange={setReturnBusy} quiet={menuOpen || lobbyModal} />
     </div>
   )
 }

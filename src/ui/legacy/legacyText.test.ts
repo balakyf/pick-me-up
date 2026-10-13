@@ -41,7 +41,11 @@ describe('legacy words', () => {
     const rel = (affinity: number): GameState => ({ ...s, life: { ...s.life, relations: { 'h_a|h_b': { affinity, shared: 0 } } } })
     expect(heirBond(rel(70), a, b)).toBe('Closest friend')
     expect(heirBond(rel(35), a, b)).toBe('Their friend')
-    expect(heirBond(rel(5), a, b)).toBe('Fought beside them')
+    // "Fought beside them" only for a hero who stood in the party (playtest 2026-10-13:
+    // bench heroes who never fought with the fallen were labelled so).
+    expect(heirBond(rel(5), a, b)).toBe('A fellow hero')
+    const inParty: GameState = { ...rel(5), party: { ...s.party, slots: [b, null, null, null, null] } }
+    expect(heirBond(inParty, a, b)).toBe('Fought beside them')
     expect(heirBond(rel(-40), a, b)).toBe('Their old rival')
   })
 

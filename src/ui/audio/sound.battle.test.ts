@@ -126,6 +126,16 @@ describe('battle sound (WP2)', () => {
     expect(oscs(1).map((o) => o.type)).not.toEqual(oscs(3).slice(0, 2).map((o) => o.type))
   })
 
+  it('builds no AudioContext before the page has been interacted with (no autoplay warnings)', async () => {
+    const { log, sfx } = await withAudio()
+    vi.stubGlobal('navigator', { userActivation: { hasBeenActive: false } })
+    sfx('hit')
+    expect(log).toHaveLength(0)
+    vi.stubGlobal('navigator', { userActivation: { hasBeenActive: true } })
+    sfx('hit')
+    expect(log.length).toBeGreaterThan(0)
+  })
+
   it('every cue is a silent no-op without an AudioContext', async () => {
     const { sfx } = await import('./sound')
     for (const name of ['hit', 'crit', 'heroFall', 'decisive', 'saved'] as const) expect(() => sfx(name, { semis: 5 })).not.toThrow()

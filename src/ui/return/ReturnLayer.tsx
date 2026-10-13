@@ -29,6 +29,9 @@ export interface ReturnLayerProps {
   /** The layer has its ceremony or a window up (the App holds the unlock fanfare meanwhile,
    *  so the two never stack). */
   onBusyChange?: (busy: boolean) => void
+  /** Something else is on screen (a lobby window, the unlock fanfare, the Menu): hold the
+   *  backup nudge so two prompts never stack. */
+  quiet?: boolean
 }
 
 /** The window event that opens the backup window (WP7's Menu footer dispatches it). */
@@ -78,7 +81,7 @@ function setFlag(key: string): void {
  * visibility return), the login is never claimed for the Master, and nothing dispatches
  * while the Tower view is up.
  */
-export function ReturnLayer({ state, store, view, onGo, onBusyChange }: ReturnLayerProps): JSX.Element | null {
+export function ReturnLayer({ state, store, view, onGo, onBusyChange, quiet = false }: ReturnLayerProps): JSX.Element | null {
   useHonestTabTitle(store)
   const [arrival, setArrival] = useState<Arrival | null>(null)
   const [letterOpen, setLetterOpen] = useState(false)
@@ -126,8 +129,11 @@ export function ReturnLayer({ state, store, view, onGo, onBusyChange }: ReturnLa
   useEffect(() => {
     if (!ceremony || typeof document === 'undefined') return
     const body = document.body.classList
-    body.add('greyed', 'reinterfering')
+    // Grey at once (no transition on the way in: a 2.4 s fade towards grey never got
+    // there before the colour came back), then fade the colour back in.
+    body.add('greyed')
     const back = setTimeout(() => {
+      body.add('reinterfering')
       body.remove('greyed')
       sfx('unlock')
       setArrival(ceremony)
@@ -251,7 +257,7 @@ export function ReturnLayer({ state, store, view, onGo, onBusyChange }: ReturnLa
         </button>
       )}
 
-      {inLobby && nudge && !backup && (
+      {inLobby && nudge && !backup && !quiet && !ceremony && !arrival && !lightsOut && !letterOpen && (
         <div className="backup-nudge" role="status">
           <span>💾 {t('Back up your save? Browsers sometimes forget.')}</span>
           <button className="pbtn sm" onClick={() => closeNudge(true)}>

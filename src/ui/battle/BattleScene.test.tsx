@@ -350,7 +350,7 @@ describe('BattleScene', () => {
     until(() => !!q('.decisive-card'))
     expect(text()).toContain('Your orders change fate. Try Protect.')
     expect(shown).toHaveBeenCalledTimes(1)
-    expect(text()).toContain('is in danger!')
+    expect(text()).toContain('A heavy blow is coming for')
     expect(q('.decisive-card .protect.coach')).toBeTruthy()
     click(button('Let fate decide'))
     expect(q('.decisive-card')).toBeNull()

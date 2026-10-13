@@ -107,8 +107,8 @@
 .backup-confirm { padding: 8px 10px; border: 2px solid var(--warn); background: var(--panel); display: flex; flex-direction: column; gap: 6px; }
 
 /* ── Re-interference: the grey lobby, and the colour flooding back (S25) ─── */
-body.greyed .world-canvas { filter: grayscale(1) brightness(0.72) contrast(0.9); }
-body.reinterfering .world-canvas { transition: filter 2.4s ease-out; }
+body.greyed .world-canvas, body.greyed .minimap { filter: grayscale(1) brightness(0.72) contrast(0.9); }
+body.reinterfering .world-canvas, body.reinterfering .minimap { transition: filter 2.4s ease-out; }
 .reinterference {
   position: fixed; top: 38%; left: 50%; transform: translate(-50%, -50%); z-index: 59;
   pointer-events: none; font-size: 26px; font-weight: 600; letter-spacing: 2px;

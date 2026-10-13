@@ -138,17 +138,19 @@ export function ScoutCard({
         {report.lastStandPct > 0 && (
           <span className="scout-note good">✊ {t('Last Stand +{p}%: a thin roster fights harder.', { p: Math.round(report.lastStandPct * 100) })}</span>
         )}
-        {report.mercyCapped && <span className="scout-note good">✚ {t('The tower eases off: your roster is thin.')}</span>}
+        {report.mercyCapped && <span className="scout-note good">✚ {t('The tower eases off: it is pitched to your strongest five.')}</span>}
       </div>
       <div className="scout-enemies">
         {report.enemies.map((e) => {
-          const notes = report.studied || e.keywords.some((kw) => kw.kind === 'looming') ? e.keywords.map(keywordNote).filter(Boolean) : []
+          // One line per note: a unit can carry the same keyword twice (an anchor that
+          // repeats its template's keywords), and "enrage · enrage" reads as a bug.
+          const notes = report.studied || e.keywords.some((kw) => kw.kind === 'looming') ? [...new Set(e.keywords.map(keywordNote).filter(Boolean))] : []
           return (
             <div key={`${e.name}|${e.level}`} className="scout-enemy">
               <span className="el-dot" style={{ background: ELEMENT_VIS[e.element].color }} title={t(ELEMENT_VIS[e.element].label)} />
               <b>{enemyName(e.name)}</b>
               {e.count > 1 && <span className="muted">×{e.count}</span>}
-              <span className="muted small">Lv{e.level}</span>
+              <span className="muted small">{t('Lv{level}', { level: e.level })}</span>
               {e.target && <span className="chip">{t('target')}</span>}
               {notes.length > 0 && <span className="scout-notes">{notes.join(' · ')}</span>}
             </div>

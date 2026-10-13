@@ -67,6 +67,29 @@ function returningSave(hoursAgo: number, seed = 61): GameState {
   return s
 }
 
+describe('Return smoke — prompts never stack (playtest 2026-10-13)', () => {
+  it('the backup nudge waits while the unlock fanfare is up, then shows', () => {
+    // Back from a long Sortie: past floor 5, seen just now (no arrival), and a pile of
+    // places opened that the Master has not seen yet, so the fanfare plays.
+    const base = createAccount(81, { now: Date.now() })
+    const s: GameState = {
+      ...base,
+      tower: { ...base.tower, highestCleared: 7, currentFloor: 8 },
+      life: { ...base.life, guide: { ...base.life.guide, done: ['welcome'] }, unlocks: [] },
+    }
+    window.localStorage.setItem('pmu.save.v1', saveState(s))
+    act(() => {
+      getStore().load()
+    })
+    mount()
+    expect(container.textContent).toContain('New facility!')
+    expect(container.textContent).not.toContain('Browsers sometimes forget')
+    clickButton('Later')
+    expect(container.textContent).not.toContain('New facility!')
+    expect(container.textContent).toContain('Browsers sometimes forget')
+  })
+})
+
 describe('Return smoke — the welcome-back ledger', () => {
   it('a save last seen 10 real hours ago, with a promotion done, opens "While you were away" at mount', () => {
     const before = returningSave(10)
@@ -152,10 +175,13 @@ describe('Return smoke — StrictMode (the dev build)', () => {
         )
       })
       expect(document.body.classList.contains('greyed')).toBe(true)
+      // Grey at once: the slow colour transition only runs on the way back.
+      expect(document.body.classList.contains('reinterfering')).toBe(false)
       act(() => {
         vi.advanceTimersByTime(1300)
       })
       expect(document.body.classList.contains('greyed')).toBe(false)
+      expect(document.body.classList.contains('reinterfering')).toBe(true)
       expect(container.textContent).toContain('The towers remembered you')
       expect(container.querySelectorAll('.pwin').length).toBe(1)
     } finally {
