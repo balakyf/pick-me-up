@@ -62,11 +62,11 @@ describe('DoorPicker (S13)', () => {
       { kind: 'elite' as const, reward: 'boon' as const },
     ]
     act(() => root.render(<DoorPicker state={withDoors(doors)} onChoose={() => {}} onSeenGuide={seen} />))
-    expect(text()).toContain('The skull door hits much harder')
+    expect(text()).toContain('The skull door hides an elite')
     act(() => button('Got it').click())
     expect(seen).toHaveBeenCalled()
     act(() => root.render(<DoorPicker state={withDoors(doors, [DOORS_GUIDE_STEP])} onChoose={() => {}} />))
-    expect(text()).not.toContain('The skull door hits much harder')
+    expect(text()).not.toContain('The skull door hides an elite')
   })
 
   it('labels the no-fight doors and never says Enter or Treasure', () => {

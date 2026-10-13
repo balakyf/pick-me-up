@@ -57,7 +57,10 @@ export function saveLooksBroken(): boolean {
 
 export function TitleScreen({ store, hasSave }: { store: Store; hasSave: boolean }) {
   // A save that could not be read gets no dead Continue button: say so, keep New Game.
-  const [broken, setBroken] = useState(() => hasSave && saveLooksBroken())
+  // App passes hasSave=false for it (continuableSave()), so the title checks the kept copy
+  // itself: the broken save is still on disk, and a new game will overwrite it.
+  const [broken, setBroken] = useState(() => saveLooksBroken())
+  const canContinue = hasSave && !broken
   function resume() {
     try {
       store.load()
@@ -94,7 +97,7 @@ export function TitleScreen({ store, hasSave }: { store: Store; hasSave: boolean
         {t('Summon unique heroes from the Mobius gacha, build a party of five, and climb the permadeath tower. Every hero is one of a kind. Every death is forever.')}
       </div>
       <div className="btns">
-        {hasSave && !broken && (
+        {canContinue && (
           <button className="btn big" onClick={resume}>
             {t('Continue')}
           </button>
@@ -103,7 +106,7 @@ export function TitleScreen({ store, hasSave }: { store: Store; hasSave: boolean
           className="btn primary big"
           onClick={() => store.dispatch({ type: 'NEW_ACCOUNT', seed: freshSeed(), now: Date.now() })}
         >
-          {hasSave ? t('New Game') : t('Begin')}
+          {hasSave || broken ? t('New Game') : t('Begin')}
         </button>
       </div>
       {broken && (
@@ -111,7 +114,7 @@ export function TitleScreen({ store, hasSave }: { store: Store; hasSave: boolean
           {t('This save could not be read. A copy was kept.')}
         </div>
       )}
-      {hasSave && <div className="muted" style={{ marginTop: 14 }}>{t('Starting a new game overwrites your save.')}</div>}
+      {canContinue && <div className="muted" style={{ marginTop: 14 }}>{t('Starting a new game overwrites your save.')}</div>}
     </div>
   )
 }

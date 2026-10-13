@@ -94,7 +94,7 @@ describe('Tower smoke — Doors', () => {
     }))
     openPlace('Tower Gate')
     expect(container.textContent).toContain('Choose the next door')
-    expect(container.textContent).toContain('The skull door hits much harder') // Isel, the first time
+    expect(container.textContent).toContain('The skull door hides an elite') // Isel, the first time
     const enter = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('Enter'))
     expect((enter as HTMLButtonElement).disabled).toBe(false) // Enter still works: it takes doors[0]
     clickButton('Skull')

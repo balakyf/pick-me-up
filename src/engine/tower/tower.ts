@@ -67,7 +67,7 @@ import {
   sortieBoons,
   sortieAfterFloor,
 } from '../climb'
-import { consumeRested } from '../return'
+import { consumeRested } from '../return/rested' // the leaf, not the barrel: return/away → daily → tower would cycle
 
 const T = TUNING.tower
 const ECON = TUNING.economy

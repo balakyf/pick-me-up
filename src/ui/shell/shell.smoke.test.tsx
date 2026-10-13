@@ -69,7 +69,9 @@ describe('boot', () => {
       mount() // first getStore(): load throws, the raw save is set aside
       expect(window.localStorage.getItem(BROKEN_SAVE_KEY)).toBe('{not json')
       expect(container.textContent).toContain('Pick Me Up')
-      expect(container.textContent).toContain('Begin')
+      // The title says why (a copy was kept) and offers a New Game over the unreadable save.
+      expect(container.textContent).toContain('This save could not be read. A copy was kept.')
+      expect(buttons().filter((b) => b.textContent?.includes('New Game'))).toHaveLength(1)
       expect(buttons().some((b) => b.textContent?.includes('Continue'))).toBe(false)
       expect(continuableSave()).toBe(false)
     } finally {

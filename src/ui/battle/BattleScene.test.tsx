@@ -6,7 +6,22 @@ import type { CombatEvent, CombatLog, GameState } from '../../engine/types'
 import { BattleScene, DECISIVE_KEY_GRACE_MS, VICTORY_AUTO_MS } from './BattleScene'
 import { findDangerMoment, findDecisive } from './decisive'
 import { highlightPlan, HIGHLIGHT_BUDGET_MS } from './fx'
-import { SEEDS, atFloor, floorLog, ordersFor, partyIdsOf, type EventSpec } from './__fixtures__/logs'
+import {
+  SEEDS,
+  atFloor,
+  costlyWin,
+  deadlyFight,
+  floorLog,
+  ordersFor,
+  partyDeaths,
+  partyIdsOf,
+  protectHolds,
+  rearmFight,
+  retreatSaves,
+  twoRescues,
+  wipeFight,
+  type EventSpec,
+} from './__fixtures__/logs'
 import { PREFS_KEY } from '../prefs'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
@@ -126,9 +141,9 @@ describe('BattleScene', () => {
 
   it('a win that cost a hero waits for the Master instead of moving on', () => {
     localStorage.setItem(PREFS_KEY, JSON.stringify({ battleSpeed: 8 }))
-    const pre = atFloor(3, 12)
-    const log = floorLog(3, 12)
+    const { pre, log } = costlyWin()
     expect(log.outcome).toBe('win')
+    expect(partyDeaths(log)).toBeGreaterThan(0)
     const onDone = vi.fn()
     act(() => root.render(<BattleScene log={log} state={pre} onDone={onDone} orders={ordersFor(pre)} />))
     until(() => {
@@ -144,10 +159,9 @@ describe('BattleScene', () => {
 
   it('the Decisive Moment pauses before a hero’s fatal tick, and Protect re-resolves through orders.give', () => {
     localStorage.setItem(PREFS_KEY, JSON.stringify({ battleSpeed: 8 }))
-    const seed = SEEDS[0]
-    const pre = atFloor(seed, 15)
-    const log = floorLog(seed, 15)
+    const { pre, log } = deadlyFight()
     const d = findDecisive(log, partyIdsOf(log))!
+    expect(d).not.toBeNull()
     const orders = ordersFor(pre)
     const giveSpy = vi.spyOn(orders, 'give')
     const onSaved = vi.fn()
@@ -176,10 +190,9 @@ describe('BattleScene', () => {
 
   it('Retreat at the Decisive Moment (key R) saves the hero: a "Saved!" callout and onSaved', () => {
     localStorage.setItem(PREFS_KEY, JSON.stringify({ battleSpeed: 8 }))
-    const seed = SEEDS[1]
-    const pre = atFloor(seed, 15)
-    const log = floorLog(seed, 15)
+    const { pre, log } = retreatSaves()
     const d = findDecisive(log, partyIdsOf(log))!
+    expect(d).not.toBeNull()
     const orders = ordersFor(pre)
     const onSaved = vi.fn()
     act(() => root.render(<BattleScene log={log} state={pre} onDone={() => {}} orders={orders} onSaved={onSaved} />))
@@ -195,10 +208,9 @@ describe('BattleScene', () => {
     expect(onSaved).toHaveBeenCalledTimes(1)
   })
 
-  it('Protect that holds plays "Saved!" and the fight is won (seed 3, F12)', () => {
+  it('Protect that holds plays "Saved!" and the fight is won', () => {
     localStorage.setItem(PREFS_KEY, JSON.stringify({ battleSpeed: 8 }))
-    const pre = atFloor(3, 12)
-    const log = floorLog(3, 12)
+    const { pre, log } = protectHolds()
     expect(log.outcome).toBe('win')
     const d = findDecisive(log, partyIdsOf(log))!
     expect(d).not.toBeNull()
@@ -219,9 +231,9 @@ describe('BattleScene', () => {
 
   it('re-arms once for a different hero after an order, and never offers a third moment', () => {
     localStorage.setItem(PREFS_KEY, JSON.stringify({ battleSpeed: 8 }))
-    const pre = atFloor(7, 10)
-    const log = floorLog(7, 10)
+    const { pre, log } = rearmFight()
     const first = findDecisive(log, partyIdsOf(log))!
+    expect(first).not.toBeNull()
     const orders = ordersFor(pre)
     act(() => root.render(<BattleScene log={log} state={pre} onDone={() => {}} orders={orders} />))
     const doomed: string[] = []
@@ -247,8 +259,7 @@ describe('BattleScene', () => {
 
   it('"Let fate decide" is final: no second moment in the same fight', () => {
     localStorage.setItem(PREFS_KEY, JSON.stringify({ battleSpeed: 8 }))
-    const pre = atFloor(1, 10)
-    const log = floorLog(1, 10)
+    const { pre, log } = wipeFight()
     expect(log.events.filter((e) => e.kind === 'death' && partyIdsOf(log).includes(e.unitId)).length).toBeGreaterThan(1)
     const orders = ordersFor(pre)
     act(() => root.render(<BattleScene log={log} state={pre} onDone={() => {}} orders={orders} />))
@@ -284,9 +295,7 @@ describe('BattleScene', () => {
   })
 
   it('Skip stops at an unmade decision instead of jumping past it', () => {
-    const seed = SEEDS[2]
-    const pre = atFloor(seed, 15)
-    const log = floorLog(seed, 15)
+    const { pre, log } = deadlyFight(SEEDS[2])
     act(() => root.render(<BattleScene log={log} state={pre} onDone={() => {}} orders={ordersFor(pre)} />))
     advance(50)
     key('s')
@@ -295,7 +304,7 @@ describe('BattleScene', () => {
 
   it('never offers a Decisive Moment without orders (replays, PvP), but keeps the death hold and graves', () => {
     localStorage.setItem(PREFS_KEY, JSON.stringify({ battleSpeed: 8 }))
-    const log = floorLog(SEEDS[0], 15)
+    const { log } = wipeFight()
     let sawCard = false
     let sawGrave = false
     act(() => root.render(<BattleScene log={log} state={null} onDone={() => {}} />))
@@ -373,7 +382,8 @@ describe('BattleScene', () => {
   })
 
   it('a log with a hero death is never swept, even when highlights are asked for', () => {
-    const log = floorLog(SEEDS[0], 15)
+    const { log } = deadlyFight()
+    expect(partyDeaths(log)).toBeGreaterThan(0)
     act(() => root.render(<BattleScene log={log} state={null} onDone={() => {}} mode="highlights" />))
     expect(button('Watch full replay ▸')).toBeFalsy()
     expect(button('2×')).toBeTruthy()
@@ -450,10 +460,9 @@ describe('BattleScene', () => {
     expect(give).toHaveBeenCalledWith({ tick: 3, kind: 'focus', enemyId: E })
   })
 
-  it('two rescues in one fight each get their "Saved!" (seed 2, F36: Protect, then Retreat)', () => {
+  it('two rescues in one fight each get their "Saved!" (Protect, then Retreat)', () => {
     localStorage.setItem(PREFS_KEY, JSON.stringify({ battleSpeed: 8 }))
-    const pre = atFloor(2, 36)
-    const log = floorLog(2, 36)
+    const { pre, log } = twoRescues()
     const orders = ordersFor(pre)
     const onSaved = vi.fn()
     act(() => root.render(<BattleScene log={log} state={pre} onDone={() => {}} orders={orders} onSaved={onSaved} />))
@@ -474,9 +483,7 @@ describe('BattleScene', () => {
 
   it('a Space pressed as time stops is not read as "Let fate decide"; after a short grace it is', () => {
     localStorage.setItem(PREFS_KEY, JSON.stringify({ battleSpeed: 8 }))
-    const seed = SEEDS[0]
-    const pre = atFloor(seed, 15)
-    const log = floorLog(seed, 15)
+    const { pre, log } = deadlyFight()
     const orders = ordersFor(pre)
     act(() => root.render(<BattleScene log={log} state={pre} onDone={() => {}} orders={orders} />))
     until(() => !!q('.decisive-card'), 300_000, 10)

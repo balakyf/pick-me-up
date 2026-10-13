@@ -5,6 +5,7 @@
  */
 import type { CSSProperties } from 'react'
 import { t } from '../i18n/i18n'
+import { iselCoach } from '../world/lines'
 import type { Decisive } from './decisive'
 
 export type DecisiveChoice = 'protect' | 'focus' | 'retreat' | 'fate'
@@ -58,7 +59,7 @@ export function DecisiveMoment({
         <div className="decisive-coach">
           <img className="px" src={iselBust} width={32} height={32} alt="" />
           <span>
-            <b>{t('Isel')}</b> {t('Your orders change fate. Try Protect.')}
+            <b>{t('Isel')}</b> {iselCoach('decisive')}
           </span>
         </div>
       )}

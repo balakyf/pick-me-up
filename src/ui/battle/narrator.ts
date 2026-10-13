@@ -7,6 +7,7 @@
  */
 import type { CombatLog } from '../../engine/types'
 import { hashString } from '../pixel/rand'
+import { ISEL_COACH } from '../world/lines'
 
 export type BarkKind = 'firstCrit' | 'nearWipe' | 'heroDeath' | 'saved' | 'flawless' | 'tutorial'
 
@@ -19,14 +20,14 @@ export interface Bark {
   vars: Record<string, string | number>
 }
 
-/** Isel's lines, by moment. Every string here has a French entry in frBattle.ts. */
+/** Isel's lines, by moment. French in frBattle.ts, except the coaching line (ISEL_COACH, owned by world/lines.ts; French in frShell.ts). */
 export const BARK_LINES: Record<BarkKind, readonly string[]> = {
   firstCrit: ['A clean critical! They remember the drills.', 'Oh, that one landed. Well struck!', 'There — right where it hurts.'],
   nearWipe: ['Master… one left standing. Choose carefully.', 'The line is breaking. Pull them out, or trust them?', 'Careful. I would rather not carve another name.'],
   heroDeath: ['{name}… I will light a lamp at the Memorial.', 'We lost {name}. The waiting room will feel it.', 'Rest now, {name}. You were brave.'],
   saved: ['Saved! Your orders changed fate.', 'You pulled {name} back from the edge.', '{name} lives — because you chose.'],
   flawless: ['Flawless. Everyone comes home tonight.', 'Not a single scratch worth mourning. Well led.', 'All of them, safe. That is how it should be.'],
-  tutorial: ['Your orders change fate. Try Protect.'],
+  tutorial: [ISEL_COACH.decisive],
 }
 
 /** Normal barks wait this long after the last one (replay time). */

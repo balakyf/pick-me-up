@@ -11,7 +11,7 @@ import {
   planBarks,
   type BarkKind,
 } from './narrator'
-import { SEEDS, floorLog, type EventSpec } from './__fixtures__/logs'
+import { SEEDS, deadlyFight, type EventSpec } from './__fixtures__/logs'
 
 const base: Omit<CombatUnitInit, 'id' | 'name' | 'side'> = { line: 'front', unitClass: 'warrior', element: 'fire', level: 1, maxHP: 100, maxSP: 0, cp: 10 }
 const units: CombatUnitInit[] = [
@@ -61,7 +61,7 @@ describe('planBarks', () => {
 
   it('is deterministic on real fights', () => {
     for (const seed of SEEDS) {
-      const l = floorLog(seed, 15)
+      const l = deadlyFight(seed).log
       expect(planBarks(l)).toEqual(planBarks(l))
       expect(planBarks(l).some((b) => b.kind === 'heroDeath')).toBe(true)
     }

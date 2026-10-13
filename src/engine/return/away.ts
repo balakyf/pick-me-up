@@ -12,7 +12,7 @@ import { TUNING } from '../tuning'
 import { loginClaimed } from '../shop'
 import { stampReady } from './stamps'
 import { dailyAttemptsLeft, dailyUnlocked } from '../daily'
-import { expeditionHaul } from '../rift'
+import { expeditionHaul } from '../rift/haul'
 import type { ChronicleKind, FacilityId, GameState, HeroId, LifeTally, OwnedHero } from '../types'
 
 const W = TUNING.return.welcome

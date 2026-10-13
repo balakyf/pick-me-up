@@ -9,7 +9,6 @@ export const FR_BATTLE: Record<string, string> = {
   '{name} is about to fall!': '{name} va tomber !',
   '{name} is in danger!': '{name} est en danger !',
   'Time stands still. Your order, Master?': 'Le temps s’arrête. Vos ordres, Maître ?',
-  'Your orders change fate. Try Protect.': 'Vos ordres changent le destin. Essayez Protéger.',
   'Protect {name}': 'Protéger {name}',
   'Focus {name}': 'Focaliser {name}',
   'Foes avoid them while anyone else stands': 'Les ennemis l’épargnent tant qu’un autre tient debout',

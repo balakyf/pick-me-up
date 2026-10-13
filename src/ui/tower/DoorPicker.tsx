@@ -10,6 +10,7 @@ import { useMemo } from 'react'
 import type { Door, GameState } from '../../engine/types'
 import { scoutFloor, type ScoutReport } from '../../engine/scout'
 import { t } from '../i18n/i18n'
+import { iselCoach } from '../world/lines'
 import { iselBustUrl } from '../pixel/sprites'
 import { DOOR_TITLE, KIND_ICON, REWARD_ICON, REWARD_LABEL, doorBlurb, isFightKind, worldMultOf } from './kinds'
 import { THREAT_COLOR, THREAT_LABEL } from './ScoutCard'
@@ -57,7 +58,7 @@ export function DoorPicker({
           <div className="isel-tip-body">
             <b>Isel</b>
             <span>
-              {t('The skull door hits much harder, but it pays double gold, a Promotion Stone and a Boon. Take it when your party feels strong.')}
+              {iselCoach('doors')}
             </span>
             {onSeenGuide && (
               <button className="pbtn sm ghost" onClick={onSeenGuide}>

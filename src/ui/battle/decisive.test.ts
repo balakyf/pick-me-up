@@ -11,7 +11,7 @@ import {
   savedCursor,
   survives,
 } from './decisive'
-import { SEEDS, atFloor, floorLog, partyIdsOf, type EventSpec } from './__fixtures__/logs'
+import { SEEDS, deadlyFight, partyIdsOf, wipeFight, type EventSpec } from './__fixtures__/logs'
 
 const base: Omit<CombatUnitInit, 'id' | 'name' | 'side'> = { line: 'front', unitClass: 'warrior', element: 'fire', level: 1, maxHP: 100, maxSP: 0, cp: 10 }
 const A: CombatUnitInit = { ...base, id: 'h_a', name: 'Ada', side: 'hero' }
@@ -99,10 +99,8 @@ describe('findDecisive', () => {
     expect(killerOf(synthetic, 'h_a', 5)).toBeNull()
   })
 
-  it('on real wipes, an order at the decisive tick re-resolves the same fight up to that point', () => {
-    for (const seed of SEEDS) {
-      const pre = atFloor(seed, 15)
-      const log = floorLog(seed, 15)
+  it('on real deadly fights (routs, costly wins and a wipe), an order at the decisive tick re-resolves the same fight up to that point', () => {
+    for (const { pre, log } of [...SEEDS.map((seed) => deadlyFight(seed)), wipeFight()]) {
       const d = findDecisive(log, partyIdsOf(log))
       expect(d).not.toBeNull()
       const next = attemptFloorWithResult(pre, undefined, undefined, undefined, [{ tick: d!.orderTick, kind: 'protect', allyId: d!.heroId }]).result.result.log

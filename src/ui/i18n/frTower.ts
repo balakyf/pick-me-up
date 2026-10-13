@@ -26,8 +26,6 @@ export const FR_TOWER: Record<string, string> = {
   'party ×{r}': 'équipe ×{r}',
   'No choice made? The party takes the {door}.': 'Pas de choix ? L’équipe prend la porte {door}.',
   'No door chosen: the party takes the first one.': 'Aucune porte choisie : l’équipe prend la première.',
-  'The skull door hits much harder, but it pays double gold, a Promotion Stone and a Boon. Take it when your party feels strong.':
-    'La porte au crâne frappe bien plus fort, mais elle paie le double d’or, une Pierre de promotion et une Faveur. Prenez-la quand votre équipe se sent forte.',
   'Got it': 'Compris',
   'The door opens.': 'La porte s’ouvre.',
   'The party rests.': 'L’équipe se repose.',

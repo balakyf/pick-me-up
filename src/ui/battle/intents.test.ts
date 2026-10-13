@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { CombatEvent, CombatLog, CombatUnitInit } from '../../engine/types'
 import { HEAVY_SHARE, INTENT_LEAD_ACTIONS, findIntents, intentsAt, isAuthoredSkill } from './intents'
-import { SEEDS, floorLog, type EventSpec } from './__fixtures__/logs'
+import { SEEDS, deadlyFight, floorLog, type EventSpec } from './__fixtures__/logs'
 
 const base: Omit<CombatUnitInit, 'id' | 'name' | 'side'> = { line: 'front', unitClass: 'warrior', element: 'fire', level: 1, maxHP: 100, maxSP: 0, cp: 10 }
 const A: CombatUnitInit = { ...base, id: 'h_a', name: 'Ada', side: 'hero' }
@@ -62,7 +62,8 @@ describe('findIntents', () => {
   it('on real fights, every big blow on the party is flagged at least 2 actions ahead', () => {
     let checked = 0
     for (const seed of SEEDS) {
-      for (const floor of [3, 8, 12, 15]) {
+      // A spread of floors, plus the seed's first deadly fight (where the big blows land).
+      for (const floor of new Set([3, 8, 12, 15, deadlyFight(seed).floor])) {
         const l = floorLog(seed, floor)
         const found = findIntents(l)
         const unit = new Map(l.unitsInit.map((u) => [u.id, u]))
