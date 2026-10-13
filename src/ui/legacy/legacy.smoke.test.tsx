@@ -15,6 +15,8 @@ import { App } from '../App'
 import { ResultsScreen } from '../ResultsScreen'
 import { getStore } from '../useGame'
 import { setLocale } from '../i18n/i18n'
+import { HeroProfile } from '../life/lifeWindows'
+import { lifeOf } from '../../engine/life'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
@@ -173,5 +175,24 @@ describe('the Memorial, from the real App', () => {
     expect(text).toContain('Le Fléau de')
     expect(text).not.toContain('No one is visiting.')
     expect(text).not.toMatch(/\d\.\d %/) // "+2,5 %", never "+2.5 %"
+  })
+})
+
+describe('the Echo on the heir’s profile (S21, integration)', () => {
+  it('HeroProfile shows the "Echo of Mira" badge, in French too', () => {
+    const s = createAccount(7)
+    const hero = Object.values(s.heroes)[0]!
+    const heir = {
+      ...hero,
+      life: { ...lifeOf(hero), echoes: [{ fromHeroId: 'h_mira' as HeroId, fromName: 'Mira Vey', stat: 'pAtk' as const, pct: 0.1, at: 0 }] },
+    }
+    const state: GameState = { ...s, heroes: { ...s.heroes, [hero.id]: heir } }
+    const store = storeWith(state)
+    act(() => root.render(<HeroProfile state={state} store={store} heroId={hero.id} onClose={() => {}} onFind={() => {}} />))
+    expect(container.querySelector('.profile .echo-badge')!.textContent).toContain('Echo of Mira · +10% P.ATK')
+    setLocale('fr')
+    act(() => root.render(<HeroProfile state={state} store={store} heroId={hero.id} onClose={() => {}} onFind={() => {}} />))
+    expect(container.querySelector('.profile .echo-badge')!.textContent).toMatch(/Mira/)
+    expect(container.querySelector('.profile .echo-badge')!.textContent).not.toContain('Echo of')
   })
 })

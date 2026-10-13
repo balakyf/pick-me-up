@@ -19,6 +19,7 @@ import { setLocale } from '../i18n/i18n'
 import type { GameState } from '../../engine/types'
 import { PLACE_LABEL, type PlaceId } from '../world/lobbyMap'
 import { t } from '../i18n/i18n'
+import { setPrefs } from '../prefs'
 
 let container: HTMLDivElement
 let root: Root
@@ -279,6 +280,78 @@ describe('the unlock fanfare', () => {
     }
     expect(container.querySelector('.dialog')).toBeNull()
     expect(container.querySelector('.unlock-name')!.textContent).toContain('Kitchen')
+  })
+})
+
+describe('integration: the shell around the other packages', () => {
+  it('the unlock fanfare holds while the return layer has a window up, then plays (never stacked)', () => {
+    loadSave(greeted(7))
+    mount()
+    act(() => {
+      window.dispatchEvent(new CustomEvent('pmu:backup'))
+    })
+    expect(container.textContent).toContain('Back up your save')
+    act(() => {
+      getStore().dispatch({ type: 'ATTEMPT_FLOOR' })
+    })
+    expect(getStore().getState()!.tower.highestCleared).toBe(1)
+    expect(container.querySelector('.unlock-card')).toBeNull()
+    act(() => {
+      ;(container.querySelector('button.pwin-close') as HTMLButtonElement).click()
+    })
+    expect(container.textContent).not.toContain('Back up your save')
+    expect(container.querySelector('.unlock-name')!.textContent).toContain('Kitchen')
+  })
+
+  it('the in-game Reduce motion sets .reduce-motion on <html>', () => {
+    loadSave(greeted(9))
+    mount()
+    expect(document.documentElement.classList.contains('reduce-motion')).toBe(false)
+    act(() => {
+      setPrefs({ reducedMotion: true })
+    })
+    expect(document.documentElement.classList.contains('reduce-motion')).toBe(true)
+    act(() => {
+      setPrefs({ reducedMotion: false })
+    })
+    expect(document.documentElement.classList.contains('reduce-motion')).toBe(false)
+  })
+
+  it('leaving the Tower with a Sortie running asks first; Stay stays, Bank it banks and goes (S15)', () => {
+    loadSave(
+      greeted(10, (s) => ({
+        ...s,
+        life: { ...s.life, unlocks: ['daily', 'kitchen', 'memorial'] },
+        tower: { ...s.tower, currentFloor: 4, highestCleared: 3, sortie: { startFloor: 1, floors: 3, purse: 480, boons: [] } },
+      })),
+    )
+    mount()
+    const menuItem = (label: string) => Array.from(container.querySelectorAll('button.menu-item')).find((b) => b.textContent?.includes(label))!
+    clickButton('Menu')
+    act(() => {
+      ;(menuItem('Tower Gate') as HTMLButtonElement).click()
+    })
+    expect(container.querySelector('.tower-screen')).not.toBeNull()
+    const gold = getStore().getState()!.gold
+    clickButton('Lobby')
+    expect(container.textContent).toContain('Return to campus and bank +480?')
+    clickButton('Stay')
+    expect(container.querySelector('.tower-screen')).not.toBeNull()
+    expect(getStore().getState()!.tower.sortie).not.toBeNull()
+    clickButton('Lobby')
+    clickButton('Bank it')
+    expect(container.querySelector('.tower-screen')).toBeNull()
+    expect(getStore().getState()!.tower.sortie).toBeNull()
+    expect(getStore().getState()!.gold).toBe(gold + 480)
+  })
+
+  it('the Menu’s locked tiles carry the lock badge', () => {
+    loadSave(greeted(11))
+    mount()
+    clickButton('Menu')
+    const later = container.querySelectorAll('.menu-group-later button.menu-item.locked')
+    expect(later.length).toBeGreaterThan(0)
+    for (const b of later) expect(b.querySelector('.lock-badge')!.textContent).toMatch(/^🔒 /)
   })
 })
 

@@ -156,15 +156,15 @@ function storeWith(state: GameState): { store: Store; sent: Command[] } {
   return { store, sent }
 }
 
-function Harness({ store, onGo }: { store: Store; onGo?: (p: PlaceId) => void }) {
+function Harness({ store, onGo, onHome }: { store: Store; onGo?: (p: PlaceId) => void; onHome?: () => void }) {
   const [, bump] = useState(0)
   useEffect(() => store.subscribe(() => bump((n) => n + 1)), [store])
-  return <TowerScreen state={store.getState()!} store={store} onGo={onGo} />
+  return <TowerScreen state={store.getState()!} store={store} onGo={onGo} onHome={onHome} />
 }
 
-function mount(state: GameState, onGo?: (p: PlaceId) => void) {
+function mount(state: GameState, onGo?: (p: PlaceId) => void, onHome?: () => void) {
   const h = storeWith(state)
-  act(() => root.render(<Harness store={h.store} onGo={onGo} />))
+  act(() => root.render(<Harness store={h.store} onGo={onGo} onHome={onHome} />))
   return h
 }
 
@@ -395,6 +395,17 @@ describe('TowerScreen — Doors, Boons and the Sortie', () => {
     click('Return to campus (bank +640)')
     expect(sent).toContainEqual({ type: 'RETURN_TO_CAMPUS' })
     expect(onGo).toHaveBeenCalledWith('fairy')
+  })
+
+  it('Return to campus lands in the lobby itself when the App offers it', () => {
+    const onGo = vi.fn()
+    const onHome = vi.fn()
+    const s = atFloor(createAccount(12), { sortie: { startFloor: 3, floors: 3, purse: 640, boons: [] } })
+    const { sent } = mount(s, onGo, onHome)
+    click('Return to campus (bank +640)')
+    expect(sent).toContainEqual({ type: 'RETURN_TO_CAMPUS' })
+    expect(onHome).toHaveBeenCalledTimes(1)
+    expect(onGo).not.toHaveBeenCalled()
   })
 
   it('banks a running Sortie when the Tower view closes', () => {

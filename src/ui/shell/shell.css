@@ -206,3 +206,11 @@ button.goal:focus-visible { box-shadow: 0 0 0 2px var(--gold); }
   .unlock-backdrop, .unlock-backdrop *, .goal-cta { animation: none !important; }
   .goal-bar-fill { transition: none; }
 }
+
+/* The Menu's Later tiles show their gate as WP8's lock badge (the tile itself is .locked). */
+.menu-item .menu-sub .lock-badge { margin-left: 0; }
+
+/* Leaving the Tower with a Sortie running (S15). */
+.leave-tower { display: flex; flex-direction: column; gap: 6px; max-width: 420px; }
+.leave-tower p { margin: 0; }
+.leave-tower-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; }

@@ -1176,7 +1176,9 @@ export function LobbyWorld({
         />
       )}
       {dialog && <DialogBox script={dialog} onDone={() => setDialog(null)} />}
-      {fanfare && (
+      {/* Held (already recorded as seen) while the App is busy: the Menu, a replay, or the
+          return layer's welcome-back, so the two never stack. */}
+      {fanfare && !paused && (
         <UnlockBanner
           places={fanfare}
           icons={PLACE_ICON}

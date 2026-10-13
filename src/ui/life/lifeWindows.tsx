@@ -30,6 +30,7 @@ import { heroBustUrl } from '../pixel/sprites'
 import { JOB_NAME, accountDay, chronicleLine, diaryLine, groupedChronicle, placeName, shortName, speak, statusLine, tradeName } from './speech'
 import { t } from '../i18n/i18n'
 import { isArrival } from '../return/arrival'
+import { EchoList } from '../legacy/EchoList'
 
 const first = (n: string) => n.split(/\s+/)[0] ?? n
 
@@ -260,6 +261,7 @@ export function HeroProfile({
             </div>
             <div className="profile-now">“{speak(state, hero, inParty, 'profile')}”</div>
             <div className="muted small">{statusLine(state, hero)}</div>
+            <EchoList hero={hero} />
           </div>
         </div>
 

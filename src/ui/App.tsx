@@ -21,6 +21,7 @@ import { t } from './i18n/i18n'
 import { GoalTracker } from './shell/GoalTracker'
 import { menuGroups, nextUnlock, placeAccess, shortCondition } from './shell/unlocks'
 import { DEFAULT_SAVE_KEY } from '../engine/account'
+import { usePrefs } from './prefs'
 import './shell/shell.css'
 
 type View = 'lobby' | WorldView
@@ -111,7 +112,14 @@ function MenuTile({ place, state, kind, onGo }: { place: PlaceId; state: GameSta
         <span>
           {t(PLACE_LABEL[place])}
         </span>
-        {access?.reason && <span className="menu-sub">{kind === 'later' ? `🔒 ${shortCondition(access.rule)}` : access.reason}</span>}
+        {access?.reason &&
+          (kind === 'later' ? (
+            <span className="menu-sub">
+              <span className="lock-badge">🔒 {shortCondition(access.rule)}</span>
+            </span>
+          ) : (
+            <span className="menu-sub">{access.reason}</span>
+          ))}
         {kind === 'next' && p && (
           <span className="goal-bar" aria-hidden="true">
             <span className="goal-bar-track">
@@ -254,10 +262,47 @@ export function continuableSave(): boolean {
   }
 }
 
+/**
+ * Leaving the Tower ends a running Sortie and banks its purse (S15): asked first. "Bank it"
+ * dispatches RETURN_TO_CAMPUS and then goes; TowerScreen's own unmount bank then finds no
+ * Sortie. In-page (browser confirm() dialogs are blocked in embedded viewers).
+ */
+function LeaveTowerConfirm({ purse, onBank, onStay }: { purse: number; onBank: () => void; onStay: () => void }) {
+  return (
+    <PixelWindow title={t('Leave the Tower?')} icon="⛫" onClose={onStay}>
+      <div className="leave-tower">
+        <p>{t('Return to campus and bank +{purse}?', { purse: purse.toLocaleString() })}</p>
+        <p className="muted small">{t('The Sortie ends: its Boons fade and the next climb starts a new streak.')}</p>
+        <div className="leave-tower-actions">
+          <button className="pbtn primary" onClick={onBank}>
+            ◆ {t('Bank it')}
+          </button>
+          <button className="pbtn ghost" onClick={onStay}>
+            {t('Stay')}
+          </button>
+        </div>
+      </div>
+    </PixelWindow>
+  )
+}
+
 export function App() {
   const { state, store } = useGame()
   // Re-render the whole tree when the language changes (every t() re-reads it).
   const [locale] = useLocale()
+  // The in-game "Reduce motion" (prefs) stills every animation, as the OS setting does:
+  // ui.css keys its global rule on .reduce-motion on <html>.
+  const [prefs] = usePrefs()
+  useEffect(() => {
+    if (typeof document === 'undefined') return
+    const root = document.documentElement
+    root.classList.toggle('reduce-motion', prefs.reducedMotion)
+    return () => root.classList.remove('reduce-motion')
+  }, [prefs.reducedMotion])
+  /** The return layer has a ceremony or window up (the unlock fanfare waits for it). */
+  const [returnBusy, setReturnBusy] = useState(false)
+  /** Where the Master asked to go from the Tower while a Sortie runs (S15 confirm). */
+  const [leaving, setLeaving] = useState<{ to: PlaceId | 'lobby' } | null>(null)
   // Every pixel button clicks; the first gesture wakes the audio context and the lobby theme.
   useEffect(() => {
     const onClick = (e: MouseEvent) => {
@@ -324,8 +369,17 @@ export function App() {
     )
   }
 
+  /** Leaving the Tower with a Sortie running asks first (S15); everything else goes at once. */
+  const sortieAtRisk = (to: PlaceId | 'lobby') => view === 'tower' && to !== 'tower' && state.tower.sortie !== null
   function go(place: PlaceId) {
     setMenuOpen(false)
+    if (sortieAtRisk(place)) {
+      setLeaving({ to: place })
+      return
+    }
+    goNow(place)
+  }
+  function goNow(place: PlaceId) {
     if (place === 'tower' || place === 'summon' || place === 'party' || place === 'roster') {
       navigate(place)
     } else {
@@ -333,9 +387,25 @@ export function App() {
       setTravel({ place, nonce: Date.now() })
     }
   }
-  const back = () => {
+  const home = () => {
     setTravel(null)
     setView('lobby')
+  }
+  const back = () => {
+    if (sortieAtRisk('lobby')) setLeaving({ to: 'lobby' })
+    else home()
+  }
+  const bankAndLeave = () => {
+    const to = leaving?.to
+    setLeaving(null)
+    try {
+      if (store.getState()?.tower.sortie) store.dispatch({ type: 'RETURN_TO_CAMPUS' })
+      sfx('coin', { semis: 7 })
+    } catch {
+      /* nothing to bank (the Tower's own unmount tries again) */
+    }
+    if (to === 'lobby' || to === undefined) home()
+    else goNow(to)
   }
   const navigate = (v: WorldView) => {
     setTravel(null)
@@ -346,10 +416,17 @@ export function App() {
   return (
     <div className="app">
       {view === 'lobby' ? (
-        <LobbyWorld state={state} store={store} onNavigate={navigate} onMenu={openMenu} travelRequest={travel} paused={menuOpen || demoLog !== null} />
+        <LobbyWorld
+          state={state}
+          store={store}
+          onNavigate={navigate}
+          onMenu={openMenu}
+          travelRequest={travel}
+          paused={menuOpen || demoLog !== null || returnBusy}
+        />
       ) : (
         <Scene title={t(SCENE_TITLE[view])} view={view} state={state} onBack={back} onMenu={openMenu} onGo={go}>
-          {view === 'tower' && <TowerScreen state={state} store={store} onGo={go} />}
+          {view === 'tower' && <TowerScreen state={state} store={store} onGo={go} onHome={home} />}
           {view === 'summon' && <SummonScreen state={state} store={store} />}
           {view === 'party' && <PartyScreen state={state} store={store} />}
           {view === 'roster' && <RosterScreen state={state} store={store} />}
@@ -357,8 +434,11 @@ export function App() {
       )}
 
       {menuOpen && <GameMenu state={state} store={store} onGo={go} onClose={() => setMenuOpen(false)} />}
+      {leaving && view === 'tower' && state.tower.sortie && (
+        <LeaveTowerConfirm purse={state.tower.sortie.purse} onBank={bankAndLeave} onStay={() => setLeaving(null)} />
+      )}
       {demoLog && <BattleScene log={demoLog} state={state} onDone={() => setDemoLog(null)} />}
-      <ReturnLayer state={state} store={store} view={view} onGo={go} />
+      <ReturnLayer state={state} store={store} view={view} onGo={go} onBusyChange={setReturnBusy} />
     </div>
   )
 }

@@ -105,6 +105,12 @@ export const FR_SHELL: Record<string, string> = {
   'Next summon': 'Prochaine invocation',
   'A new face answers the bell': 'Un nouveau visage répond à l’appel',
   '{bane} waits on floor {n}': '{bane} attend à l’étage {n}',
+  'Leave the Tower?': 'Quitter la Tour ?',
+  'Return to campus and bank +{purse}?': 'Rentrer au campus et mettre +{purse} en banque ?',
+  'The Sortie ends: its Boons fade and the next climb starts a new streak.':
+    'La sortie s’achève : ses faveurs s’effacent et la prochaine ascension repart de zéro.',
+  'Bank it': 'Encaisser',
+  Stay: 'Rester',
   'A free summon waits at the Memorial': 'Une invocation gratuite vous attend au Mémorial',
   '{name}’s echo waits for an heir': 'L’écho de {name} attend un héritier',
   'Choose who carries it, at the Memorial': 'Choisissez qui le portera, au Mémorial',

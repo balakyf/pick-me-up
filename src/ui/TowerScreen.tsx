@@ -273,11 +273,14 @@ export function TowerScreen({
   state,
   store,
   onGo,
+  onHome,
 }: {
   state: GameState
   store: Store
   /** Travel to another place (the results card's "Summon now ▸", returning to campus). */
   onGo?: (place: PlaceId) => void
+  /** Walk back to the lobby itself (Return to campus); without it, campus is Isel. */
+  onHome?: () => void
 }) {
   const [combat, setCombat] = useState<CombatLog | null>(null)
   const [pending, setPending] = useState<FloorResult | null>(null)
@@ -497,7 +500,8 @@ export function TowerScreen({
     setShowResult(false)
     setPending(null)
     setFightCtx(null)
-    if (onGo) onGo('fairy')
+    if (onHome) onHome()
+    else if (onGo) onGo('fairy')
     else say('⌂', t('Purse banked: +{n} gold. The party is home.', { n: purse.toLocaleString() }))
   }
 

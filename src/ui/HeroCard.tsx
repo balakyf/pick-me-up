@@ -4,6 +4,7 @@ import { favorTierName } from '../engine/favor'
 import { deriveStatsForHero, levelCapForStar } from '../engine/stats'
 import { Stars, ElementBadge, ClassBadge, Portrait, STAR_COLOR, cpOf, gradeLetters, SkillList, EngravingBadge } from './bits'
 import { t } from './i18n/i18n'
+import { EchoList } from './legacy/EchoList'
 
 interface Props {
   hero: OwnedHero
@@ -55,6 +56,7 @@ export function HeroCard({ hero, onClick, selected, showStats, masterLevel = 1 }
       </div>
       <EngravingBadge hero={hero} />
       <SkillList hero={hero} max={showStats ? undefined : 3} />
+      {showStats && <EchoList hero={hero} />}
       {dead && <div className="muted" style={{ color: 'var(--bad)', marginTop: 6, fontWeight: 700 }}>{t('☠ Fallen')}</div>}
       {stats && (
         <div className="statgrid">

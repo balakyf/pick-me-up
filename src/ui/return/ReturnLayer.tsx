@@ -26,6 +26,9 @@ export interface ReturnLayerProps {
   view: 'lobby' | WorldView
   /** Travel to a place (same handler as the Menu). */
   onGo: (place: PlaceId) => void
+  /** The layer has its ceremony or a window up (the App holds the unlock fanfare meanwhile,
+   *  so the two never stack). */
+  onBusyChange?: (busy: boolean) => void
 }
 
 /** The window event that opens the backup window (WP7's Menu footer dispatches it). */
@@ -75,7 +78,7 @@ function setFlag(key: string): void {
  * visibility return), the login is never claimed for the Master, and nothing dispatches
  * while the Tower view is up.
  */
-export function ReturnLayer({ state, store, view, onGo }: ReturnLayerProps): JSX.Element | null {
+export function ReturnLayer({ state, store, view, onGo, onBusyChange }: ReturnLayerProps): JSX.Element | null {
   useHonestTabTitle(store)
   const [arrival, setArrival] = useState<Arrival | null>(null)
   const [letterOpen, setLetterOpen] = useState(false)
@@ -228,6 +231,13 @@ export function ReturnLayer({ state, store, view, onGo }: ReturnLayerProps): JSX
     setNudge(false)
     if (thenBackup) setBackup(true)
   }
+
+  const busy = ceremony !== null || arrival !== null || letterOpen || lightsOut || backup
+  const busyCb = useRef(onBusyChange)
+  busyCb.current = onBusyChange
+  useEffect(() => {
+    busyCb.current?.(busy)
+  }, [busy])
 
   const inLobby = view === 'lobby'
   const nowWorld = toWorldTime(Date.now())
