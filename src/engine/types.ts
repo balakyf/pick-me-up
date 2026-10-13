@@ -759,6 +759,9 @@ export interface TowerEvent {
   kind: TowerEventKind
   floor: number
   options: string[]
+  /** An Elite or Boss clear that opened another event first (a recovery after 3+ deaths)
+   *  still owes its Boon choice: it follows once this event is resolved (spec S14). */
+  boonAfter?: true
 }
 
 /** Hidden objective condition (Layer 2 §5.3). */

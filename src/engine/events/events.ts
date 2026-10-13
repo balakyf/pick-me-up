@@ -287,8 +287,9 @@ export function resolveEvent(state: GameState, option: string): { state: GameSta
 
   if (option !== 'merchant') next = { ...next, gold: next.gold + outcome.gold }
   next = { ...addMaterials(next, outcome.materials), gems: next.gems + outcome.gems }
-  // A Boss's first clear opens its bonus first; the Boon choice it earned follows.
-  const boons = ev.kind === 'bonus' ? boonOffer(next, floor) : []
+  // A Boss's first clear opens its bonus first, and a costly Elite or Boss clear its
+  // recovery event; the Boon choice it earned follows.
+  const boons = ev.kind === 'bonus' || ev.boonAfter === true ? boonOffer(next, floor) : []
   const after = boons.length > 0 ? { kind: 'boon' as const, floor, options: boons } : null
   return { state: { ...next, tower: { ...next.tower, event: after } }, outcome }
 }

@@ -806,13 +806,19 @@ export function playFloor(
   //        after an Elite clear, or a Boss clear that opened no other event (a Boss's
   //        first clear chains it after the bonus event — see events.resolveEvent). ──
   ;({ state: nextState, result } = sortieAfterFloor(nextState, result))
-  if (cleared && event === null && floor < T.sliceTopFloor && ((kind === 'elite' && CL.reward.eliteBoon) || kind === 'boss')) {
+  const earnsBoon = cleared && floor < T.sliceTopFloor && ((kind === 'elite' && CL.reward.eliteBoon) || kind === 'boss')
+  if (earnsBoon && event === null) {
     const offer = boonOffer(nextState, floor)
     if (offer.length > 0) {
       const boonEvent: TowerEvent = { kind: 'boon', floor, options: offer }
       nextState = { ...nextState, tower: { ...nextState.tower, event: boonEvent } }
       result = { ...result, event: boonEvent }
     }
+  } else if (earnsBoon && event?.kind === 'recovery') {
+    // A costly clear opens the recovery event first; the Boon it earned follows it.
+    const chained: TowerEvent = { ...event, options: [...event.options], boonAfter: true }
+    nextState = { ...nextState, tower: { ...nextState.tower, event: chained } }
+    result = { ...result, event: chained }
   }
 
   return { state: nextState, result }
