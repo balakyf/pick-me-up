@@ -144,6 +144,7 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
       maxSP: u.maxSP,
       cp: u.cp,
       ...(u.isNpc ? { isNpc: true } : {}),
+      ...(u.templateId !== undefined ? { templateId: u.templateId } : {}),
     })
   }
   const allyUnits = encounter.allies ?? []

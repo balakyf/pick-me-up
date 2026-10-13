@@ -273,6 +273,7 @@ export function buildEnemyUnit(
     keywords: [...(template.keywords ?? []), ...(opts?.keywords ?? [])],
     cp: combatPower(stats),
     targetTag: opts?.targetTag ?? template.id,
+    templateId: template.id,
     ...(template.family !== undefined ? { family: template.family } : {}),
   }
 }

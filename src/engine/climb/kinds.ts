@@ -1,9 +1,8 @@
 /**
  * Floor kinds and the floor budget: the sawtooth climb and its mercy director
- * (spec 2026-10-12 S13, S20). Owner: WP3. Numbers live in `TUNING.climb`, plus the early
- * lift and mercy bands in `./tune.ts` until the lead folds them into TUNING.
+ * (spec 2026-10-12 S13, S20). Owner: WP3. Numbers live in `TUNING.climb`.
  *
- *   pathLift(f)            the early climb's lift over floorPower: CLIMB_TUNE.earlyLift at
+ *   pathLift(f)            the early climb's lift over floorPower: climb.earlyLift at
  *                          the foot of the tower, fading quadratically to ×1 at the
  *                          inflection floor.
  *   staticBudget(f, kind)  the authored curve for a kind: Path floors follow floorPower ×
@@ -25,7 +24,6 @@
  * PURE and DETERMINISTIC (no RNG at all here).
  */
 import { TUNING } from '../tuning'
-import { CLIMB_TUNE } from './tune'
 import { floorPower } from '../tower/power'
 import { ANCHORS, SKILLS } from '../content'
 import { buildCombatUnit } from '../unit'
@@ -120,14 +118,14 @@ export function rosterCp(state: GameState): number {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * The Path lift over floorPower on floor `f`: `CLIMB_TUNE.earlyLift` at the foot of the tower,
+ * The Path lift over floorPower on floor `f`: `TUNING.climb.earlyLift` at the foot of the tower,
  * fading (quadratically) to ×1 at the inflection floor, the same window the tower's
  * `earlyBudgetBoost` tapers over. The lift can't live in floorPower itself: an
  * earlyBudgetBoost above ~4.2 breaks floorPower's monotonicity near F69. The fade leaves
  * the late tower (tuned by the 2026-09-29 balance pass) as it was.
  */
 export function pathLift(f: number): number {
-  const lift = CLIMB_TUNE.earlyLift
+  const lift = CL.earlyLift
   const span = T.inflectionFloor
   const t = span > 0 ? Math.max(0, span - f) / span : 0
   return 1 + (lift - 1) * t * t
@@ -198,7 +196,7 @@ export function staticBudget(state: GameState, f: number, kind: FloorKind): numb
 
 /** The director's mercy band for `kind`: budget ≤ rosterCp × mercyBand(kind). */
 export function mercyBand(kind: FloorKind): number {
-  return CLIMB_TUNE.mercyBand[kind] ?? CL.mercyBand[kind] ?? 1
+  return CL.mercyBand[kind] ?? 1
 }
 
 /** The director's cap for this roster and kind, or null when it does not apply (tutorial

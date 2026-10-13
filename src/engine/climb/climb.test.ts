@@ -15,6 +15,7 @@ import { createAccount } from '../account'
 import { reduce, attemptFloorWithResult } from '../store'
 import { suggestParty } from '../scout'
 import { rngFor } from '../rng'
+import { revenantName, fallenKiller } from '../legacy'
 import { TUNING } from '../tuning'
 import type { Door, FloorKind, GameState, HeroId, Nemesis, OwnedHero } from '../types'
 
@@ -174,7 +175,8 @@ describe('the Nemesis (S22)', () => {
   const bane = (o: Partial<Nemesis> = {}): Nemesis => ({
     id: 'nm1',
     templateId: 'goblin',
-    name: 'Mira’s Bane',
+    // As `nemesisFor` records it: the killer template's own name.
+    name: 'Goblin',
     element: 'fire',
     level: 4,
     heroId: 'h_mira' as HeroId,
@@ -192,13 +194,15 @@ describe('the Nemesis (S22)', () => {
     const units = enc.waves.flatMap((w) => w.units)
     const rev = units.find((u) => u.id === nemesisUnitId(bane()))!
     expect(rev).toBeDefined()
-    expect(rev.name).toBe('Mira’s Bane')
+    expect(rev.name).toBe("Mira's Bane")
+    expect(rev.name).toBe(revenantName(bane()))
+    expect(rev.templateId).toBe('goblin')
     expect(rev.element).toBe('fire')
     const plain = buildEnemyUnit(ENEMY_TEMPLATES.goblin!, rev.level, 'x', {})
     expect(rev.stats.maxHP).toBeGreaterThan(plain.stats.maxHP)
     const report = scoutFloor(s)!
-    expect(report.nemesis).toBe('Mira’s Bane')
-    expect(report.threats[0]).toMatchObject({ name: 'Mira’s Bane', why: THREAT_REASONS.nemesis })
+    expect(report.nemesis).toBe("Mira's Bane")
+    expect(report.threats[0]).toMatchObject({ name: "Mira's Bane", why: THREAT_REASONS.nemesis })
     // Floors before it, anchors and unknown templates stay clear.
     expect(buildEncounter(withBane(at(gods(), 7), [bane()]), 7).waves.flatMap((w) => w.units).some((u) => u.id.startsWith('nem_'))).toBe(false)
     const onAnchor = withBane(at(gods(), 10), [bane({ revengeFloor: 10 })])
@@ -214,13 +218,28 @@ describe('the Nemesis (S22)', () => {
     const skip = withBane(at(gods(), 8), [bane()])
     const skipped = chooseDoor({ ...skip, tower: { ...skip.tower, doors: [doors![0]!, { kind: 'cache', reward: 'stones' }] } }, 1)
     expect(skipped.tower.currentFloor).toBe(9)
-    expect(scoutFloor(skipped)!.nemesis).toBe('Mira’s Bane')
+    expect(scoutFloor(skipped)!.nemesis).toBe("Mira's Bane")
     const { state, result } = playFloor(skipped)
     expect(result.cleared).toBe(true)
     expect(result.nemesisDefeated).toEqual(['nm1'])
     expect(state.life.legacy.nemeses[0]!.status).toBe('avenged')
     // An anchor on the way never hosts it.
     expect(buildEncounter(withBane(at(gods(), 10), [bane()]), 10).waves.flatMap((w) => w.units).some((u) => u.id.startsWith('nem_'))).toBe(false)
+  })
+
+  it('never stands inside the F36-40 loop, and waits for the first plain floor after it', () => {
+    const late = bane({ diedFloor: 31, revengeFloor: 34 })
+    const hasBane = (f: number) => buildEncounter(withBane(at(gods(), f), [late]), f).waves.flatMap((w) => w.units).some((u) => u.id.startsWith('nem_'))
+    expect(hasBane(34)).toBe(true)
+    for (let f = TUNING.tower.loop.start; f <= TUNING.tower.loop.gate; f++) expect(hasBane(f)).toBe(false)
+    expect(hasBane(43)).toBe(true)
+  })
+
+  it('a Bane that kills again is remembered by its template, not its name', () => {
+    const s = withBane(at(gods(), 8), [bane()])
+    const rev = buildEncounter(s, 8).waves.flatMap((w) => w.units).find((u) => u.id === nemesisUnitId(bane()))!
+    const killer = fallenKiller({ ...rev, maxHP: rev.stats.maxHP, maxSP: rev.maxSP })
+    expect(killer).toMatchObject({ templateId: 'goblin', name: 'Goblin', element: 'fire' })
   })
 
   it('is avenged once: revenge gold and a stone, status under life, nemesisDefeated', () => {

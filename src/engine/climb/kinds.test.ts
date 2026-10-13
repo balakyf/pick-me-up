@@ -17,7 +17,6 @@ import {
   climbExtraPct,
   fightableCount,
 } from './kinds'
-import { CLIMB_TUNE } from './tune'
 import { floorPower } from '../tower'
 import { createAccount } from '../account'
 import { reduce } from '../store'
@@ -99,9 +98,9 @@ describe('static budget (the sawtooth)', () => {
     }
   })
 
-  it('the Path lift is CLIMB_TUNE.earlyLift at the foot and fades to ×1 at the inflection floor', () => {
+  it('the Path lift is climb.earlyLift at the foot and fades to ×1 at the inflection floor', () => {
     const I = TUNING.tower.inflectionFloor
-    expect(pathLift(0)).toBeCloseTo(CLIMB_TUNE.earlyLift, 9)
+    expect(pathLift(0)).toBeCloseTo(TUNING.climb.earlyLift, 9)
     // kindMult keeps its WP0 meaning: Path 1, Elite 1.45, Breather 0.6, Boss 1.
     expect(CL.kindMult.path).toBe(1)
     for (let f = 1; f <= I; f++) expect(pathLift(f), `F${f}`).toBeLessThanOrEqual(pathLift(f - 1))
@@ -179,8 +178,8 @@ describe('the mercy director', () => {
     expect(floorBudget(empty(), 12, 'path')).toBe(staticBudget(empty(), 12, 'path'))
   })
 
-  it('mercyBand reads the climb’s bands (CLIMB_TUNE until the lead folds them into TUNING)', () => {
-    for (const k of KINDS) expect(mercyBand(k)).toBe(CLIMB_TUNE.mercyBand[k])
+  it('mercyBand reads the climb’s bands from TUNING.climb', () => {
+    for (const k of KINDS) expect(mercyBand(k)).toBe(TUNING.climb.mercyBand[k])
     // A mercy cap only: every fought kind's band is at most 1.
     for (const k of KINDS) expect(mercyBand(k)).toBeLessThanOrEqual(1)
   })

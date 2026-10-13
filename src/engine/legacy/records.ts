@@ -19,6 +19,7 @@ import type {
   Element,
   EchoStat,
   EnemyTemplate,
+  FallenKiller,
   FallenRecord,
   GameState,
   HeroId,
@@ -36,27 +37,15 @@ const LG = TUNING.legacy
 // The killer
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** Who struck a hero down: the enemy template, as the Memorial remembers it. */
-export interface FallenKiller {
-  /** Enemy template id (`ENEMY_TEMPLATES` key). */
-  templateId: string
-  name: string
-  element: Element
-  level: number
-  /** The template's enemy family, when it has one (the lesson). */
-  family?: string
-}
+/** Who struck a hero down (now `FallenRecord.killer`; the aliases stay for callers). */
+export type { FallenKiller }
 
-/**
- * A Memorial grave plus who killed them. `killer` is an optional extension written by
- * `lifeReact` for tower deaths (SHARED-FILE REQUEST: fold it into `FallenRecord`). Old
- * graves and non-battle deaths have none.
- */
-export type MemorialRecord = FallenRecord & { killer?: FallenKiller }
+/** A Memorial grave (with its optional killer). Kept as an alias of `FallenRecord`. */
+export type MemorialRecord = FallenRecord
 
 /** The killer recorded on a grave, if any. */
 export function killerOf(rec: FallenRecord): FallenKiller | null {
-  return (rec as MemorialRecord).killer ?? null
+  return rec.killer ?? null
 }
 
 const TEMPLATE_BY_NAME: ReadonlyMap<string, EnemyTemplate> = (() => {
@@ -96,20 +85,33 @@ export function killingBlow(log: CombatLog, heroId: string): CombatUnitInit | nu
 }
 
 /**
- * The revenant's display name on its floor: "Mira's Bane" (the fallen's first name).
- * WP3 names the injected unit with this, so a Bane that kills again is still recognised.
+ * The revenant's display name on its floor: "Mira's Bane" (the fallen's first name). The
+ * tower names the injected unit with this (an English content string; the UI renders it
+ * through `parseRevenantName` + its own translated "{name}’s Bane").
  */
 export function revenantName(n: Pick<Nemesis, 'heroName'>): string {
   return `${n.heroName.split(/\s+/)[0] ?? n.heroName}'s Bane`
 }
 
+/** The fallen hero's first name inside a `revenantName` ("Mira's Bane" → "Mira"), or null
+ *  for any other enemy name. */
+export function parseRevenantName(name: string): string | null {
+  const m = /^(.+)'s Bane$/.exec(name)
+  return m ? m[1]! : null
+}
+
 /**
- * The Memorial's view of a killing blow (null when the template is unknown). A revenant
- * (a Bane that kills again) is recognised by its name among `nemeses`.
+ * The Memorial's view of a killing blow (null when the template is unknown). The unit's
+ * `templateId` identifies it; logs from before that field fall back to the display name,
+ * and a revenant (a Bane that kills again) to its name among `nemeses`.
  */
 export function fallenKiller(unit: CombatUnitInit, nemeses: readonly Nemesis[] = []): FallenKiller | null {
-  const bane = nemeses.find((n) => revenantName(n) === unit.name)
-  const tpl = bane ? ((ENEMY_TEMPLATES as Record<string, EnemyTemplate>)[bane.templateId] ?? null) : templateByName(unit.name)
+  const templates = ENEMY_TEMPLATES as Record<string, EnemyTemplate>
+  let tpl: EnemyTemplate | null = unit.templateId !== undefined ? (templates[unit.templateId] ?? null) : null
+  if (tpl === null) {
+    const bane = nemeses.find((n) => revenantName(n) === unit.name)
+    tpl = bane ? (templates[bane.templateId] ?? null) : templateByName(unit.name)
+  }
   if (tpl === null) return null
   return {
     templateId: tpl.id,

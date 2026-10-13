@@ -503,6 +503,19 @@ export interface FallenRecord {
   bestFloor: number
   /** Ids of the friends left behind (affinity ≥ friend threshold at death). */
   mourners: HeroId[]
+  /** Who struck them down (tower deaths only; old graves and other causes have none). */
+  killer?: FallenKiller
+}
+
+/** Who struck a hero down: the enemy template, as the Memorial remembers it (S22, S23). */
+export interface FallenKiller {
+  /** Enemy template id (`ENEMY_TEMPLATES` key). */
+  templateId: string
+  name: string
+  element: Element
+  level: number
+  /** The template's enemy family, when it has one (the lesson). */
+  family?: string
 }
 
 /** Running totals since the Master last read Isel's letter. */
@@ -799,7 +812,8 @@ export interface MetaState {
   lastSeenAtWorld: number
   /** Probability Interference — passive, account-wide, never spent (Layer 3 §D1; schema v8). */
   pi: number
-  /** Daily login streak (FOMO: a missed world-day resets it). */
+  /** Daily login: `lastDay` claimed, and `streak` = days the login was claimed (never
+   *  resets, S28 — the name is kept for save compatibility). */
   login: { lastDay: number; streak: number }
   /** Monthly package: days of the daily claim left, and the last day claimed. */
   monthly: { daysLeft: number; lastClaimDay: number } | null
@@ -939,6 +953,8 @@ export interface CombatUnit {
   defiant?: boolean
   /** Stable enemy template id for Defeat(target) missions; absent for heroes. */
   targetTag?: string
+  /** The template this unit was built from (enemies and NPC allies); absent for heroes. */
+  templateId?: string
   /** A mission NPC on the hero side: targetable, never acts, not part of the party. */
   isNpc?: boolean
   /** Enemy family for `bane` keywords; absent for heroes. */
@@ -1027,6 +1043,9 @@ export interface CombatUnitInit {
   cp: number
   /** Present (true) for mission NPC allies. */
   isNpc?: boolean
+  /** The enemy/ally template the unit was built from (absent for heroes). Identifies a
+   *  killer without matching display names (a Bane carries a hero's name, S22). */
+  templateId?: string
 }
 
 /** `failed` = the mission was lost without a wipe (e.g. the escort target fell). */

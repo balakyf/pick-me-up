@@ -67,6 +67,7 @@ import {
   sortieBoons,
   sortieAfterFloor,
 } from '../climb'
+import { revenantName } from '../legacy/records'
 import { consumeRested } from '../return/rested' // the leaf, not the barrel: return/away → daily → tower would cycle
 
 const T = TUNING.tower
@@ -477,23 +478,31 @@ export function nemesisUnitId(n: Nemesis): string {
   return `nem_${n.id}`
 }
 
-/** The Nemeses waiting on `floor` (never an anchor floor): each waits on its revenge
- *  floor, and one the climb got past without killing it (a Rest or Cache Door taken on
- *  that floor, an anchor, a Survival clear that outlasted it) follows the party to every
- *  later non-anchor floor until it is avenged. */
+/** Can a Bane wait on `floor`? Never on an anchor or inside the F36-40 loop (the same
+ *  floors WP5's `isRevengeFloor` never draws), so it only ever stands on a plain floor. */
+function baneMayWaitOn(floor: number): boolean {
+  if (ANCHORS[floor] !== undefined) return false
+  return floor < T.loop.start || floor > T.loop.gate
+}
+
+/** The Nemeses waiting on `floor`: each waits on its revenge floor, and one the climb got
+ *  past without killing it (a Rest or Cache Door taken on that floor, a Survival clear
+ *  that outlasted it) follows the party to every later plain floor (`baneMayWaitOn`)
+ *  until it is avenged, so a Bane never strands in a `maxActive` slot. */
 export function nemesesOnFloor(state: GameState, floor: number): Nemesis[] {
-  if (ANCHORS[floor] !== undefined) return []
+  if (!baneMayWaitOn(floor)) return []
   return (state.life.legacy?.nemeses ?? []).filter(
     (n) => n.status === 'waiting' && n.revengeFloor <= floor && ENEMY_TEMPLATES[n.templateId] !== undefined,
   )
 }
 
 /** The revenants waiting on `floor`: the killer's template at the floor's level, ×powerMult,
- *  under the Nemesis's name ("Mira's Bane"). Unknown templates are skipped. */
+ *  named for the hero it killed (`revenantName`: "Mira's Bane"; `templateId` still names
+ *  the template). Unknown templates are skipped. */
 function nemesisUnits(state: GameState, floor: number, level: number): CombatUnit[] {
   return nemesesOnFloor(state, floor).map((n) => ({
     ...buildEnemyUnit(ENEMY_TEMPLATES[n.templateId]!, level, nemesisUnitId(n), { powerMult: TUNING.legacy.nemesis.powerMult }),
-    name: n.name,
+    name: revenantName(n),
     element: n.element,
   }))
 }

@@ -308,8 +308,6 @@ export const TUNING = {
     monthlyGems: 150,
     monthlyGold: 10000,
     loginGems: 50,
-    /** The 7th consecutive day pays this bonus on top. */
-    streakBonusGems: 150,
     /** Today-only offer: one package, this discount on its price. */
     todayOnly: ['satchel', 'chest', 'vault'] as readonly string[],
     todayDiscount: 0.4,
@@ -830,9 +828,15 @@ export const TUNING = {
     /** Budget multiplier by floor kind: budget = staticBudget(f) × kindMult[kind].
      *  Rest and Cache have no fight (0). */
     kindMult: { tutorial: 1.0, breather: 0.6, path: 1.0, elite: 1.45, rest: 0, cache: 0, boss: 1.0 } as Record<string, number>,
+    /** The early climb's lift over floorPower on a Path floor: ×earlyLift at the foot of the
+     *  tower, fading quadratically to ×1 at the inflection floor (`tower.inflectionFloor`).
+     *  It can't go into `tower.earlyBudgetBoost`: above ~4.2 that breaks floorPower's
+     *  monotonicity near F69, and it would also move F1-F2 and the dailies (WP3 notes). */
+    earlyLift: 2.42,
     /** The director is a mercy cap ONLY: budget = min(staticBudget, rosterCp × mercyBand[kind]),
-     *  rosterCp = the top 5 fightable heroes' unit CP. Never raises difficulty. */
-    mercyBand: { tutorial: 1.0, breather: 0.5, path: 0.8, elite: 1.0, rest: 0, cache: 0, boss: 0.95 } as Record<string, number>,
+     *  rosterCp = the top 5 fightable heroes' unit CP. Never raises difficulty. A median
+     *  roster meets a Path ratio of ~1.39 (Fair); Skull and Boss floors stay a risk. */
+    mercyBand: { tutorial: 1.0, breather: 0.5, path: 0.72, elite: 0.9, rest: 0, cache: 0, boss: 0.85 } as Record<string, number>,
     /** Max budget step between consecutive Path floors (fraction; +12%). */
     maxStepPct: 0.12,
     /** The director and Doors start on this floor (F1-F2 are tutorial floors, unchanged). */
@@ -982,6 +986,10 @@ export const TUNING = {
     offline: {
       /** Storeroom theft per invasion is capped at this fraction. */
       theftCapPct: 0.02,
+      /** The longest gap between two clock ticks still counted as live play, in REAL
+       *  seconds (the lobby ticks once a second; a hidden tab's throttled ticks count as
+       *  away). Offline-only clocks (a captive's deadline) pause beyond it. */
+      liveGapRealSeconds: 30,
     },
   },
 

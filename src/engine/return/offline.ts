@@ -10,10 +10,10 @@
  */
 import { TUNING } from '../tuning'
 
-/** The longest gap (world-ms) still counted as live play: 30 real seconds. A hidden tab's
- *  throttled timers (about one tick a minute) therefore count as away.
- *  ⚠ SHARED-FILE REQUEST: move to `TUNING.return.offline.liveGapRealSeconds` (WP6 notes). */
-export const LIVE_GAP_WORLD = 30_000 * TUNING.time.worldTimeFactor
+/** The longest gap (world-ms) still counted as live play: `return.offline.liveGapRealSeconds`
+ *  real seconds (30). A hidden tab's throttled timers (about one tick a minute) therefore
+ *  count as away. */
+export const LIVE_GAP_WORLD = TUNING.return.offline.liveGapRealSeconds * 1000 * TUNING.time.worldTimeFactor
 
 /** The part of a gap (world-ms) during which offline-only clocks are paused. */
 export function awayPause(gapWorld: number): number {

@@ -280,10 +280,8 @@ export const FR_UI: Record<string, string> = {
   Use: 'Utiliser',
   'Isel smiles. “Everything here is for your own good, Master.” — money here is simulated; nothing is ever charged.':
     'Isel sourit. « Tout ici est pour votre bien, Maître. » — l’argent est simulé ; rien n’est jamais facturé.',
-  'Daily login · streak {streak}': 'Connexion quotidienne · série {streak}',
   'Claimed today': 'Réclamé aujourd’hui',
   Claim: 'Réclamer',
-  'You missed a day — your {streak}-day streak is gone.': 'Vous avez manqué un jour — votre série de {streak} jours est perdue.',
   'Monthly Package · {daysLeft} days left': 'Forfait mensuel · {daysLeft} jours restants',
   'So close! Your next 4★ is right around the corner…': 'Si près du but ! Votre prochain 4★ est juste au coin de la rue…',
   Packages: 'Offres',
