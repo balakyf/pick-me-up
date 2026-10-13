@@ -6,7 +6,8 @@
  *   packages      — gem bundles at price points; the canon Monthly Package pays
  *                   150 gems + 10,000 gold on each claimed day for 30 days
  *   today only    — one package rotates each world-day at a discount (FOMO)
- *   login streak  — daily gems; the 7th day pays a bonus; a missed day resets it
+ *   daily login   — daily gems, plus a stamp on a card that never resets (spec
+ *                   2026-10-12 S28: the old streak, reset by one missed day, is gone)
  *   frustration   — after a long dry Advanced streak, a "so close!" bundle appears
  *   whale-bait    — (in gacha) a 3★ may be *shown* as 4★ after a dry streak; the
  *                   goddess's lie is revealed at Master Lv 25 or the hero's true cap
@@ -18,6 +19,7 @@ import type { GameState, OwnedHero } from '../types'
 import { TUNING } from '../tuning'
 import { worldDayIndex } from '../daily'
 import { addPi } from '../interference'
+import { stampOnLogin } from '../return/stamps'
 
 const S = TUNING.shop
 
@@ -71,19 +73,22 @@ export function loginClaimed(state: GameState, nowWorld: number): boolean {
   return state.meta.login.lastDay === worldDayIndex(nowWorld)
 }
 
-/** The streak a claim today would reach (resets after a missed day). */
-export function nextStreak(state: GameState, nowWorld: number): number {
-  const day = worldDayIndex(nowWorld)
-  return state.meta.login.lastDay === day - 1 ? state.meta.login.streak + 1 : 1
+/** The login count a claim today would reach. It never resets (spec 2026-10-12 S28):
+ *  `login.streak` now counts every day claimed, missed days or not. */
+export function nextStreak(state: GameState, _nowWorld?: number): number {
+  return state.meta.login.streak + 1
 }
 
-/** Claim today's login: gems (+ the 7th-day bonus) and a little Probability Interference. */
+/**
+ * Claim today's login (once per world-day): `loginGems` gems, a little Probability
+ * Interference, and — once per REAL day — a stamp on the card that never resets (every
+ * full card pays a bonus; see `engine/return/stamps`). PURE.
+ */
 export function claimLogin(state: GameState, nowWorld: number): GameState {
   if (loginClaimed(state, nowWorld)) throw new Error('claimLogin: already claimed today')
   const streak = nextStreak(state, nowWorld)
-  const gems = S.loginGems + (streak % 7 === 0 ? S.streakBonusGems : 0)
   const meta = addPi({ ...state.meta, login: { lastDay: worldDayIndex(nowWorld), streak } }, TUNING.interference.perLogin)
-  return { ...state, gems: state.gems + gems, meta }
+  return stampOnLogin({ ...state, gems: state.gems + S.loginGems, meta }, nowWorld)
 }
 
 /** Claim today's Monthly Package payout (150 gems + 10,000 gold). */

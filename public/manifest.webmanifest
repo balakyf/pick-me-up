@@ -1,0 +1,15 @@
+{
+  "name": "Pick Me Up! Infinite Gacha",
+  "short_name": "Pick Me Up!",
+  "description": "Summon heroes, climb the endless tower, and keep the waiting room alive.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0a0710",
+  "theme_color": "#120d20",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "maskable" }
+  ]
+}

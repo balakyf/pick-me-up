@@ -211,3 +211,28 @@ describe('advanceTime — promotion completion', () => {
     expect(next.meta.masterXp).toBe(before.meta.masterXp)
   })
 })
+
+describe('advanceTime — reasons to return (spec 2026-10-12 S24/S25)', () => {
+  const REAL_DAY_WORLD = 24 * WORLD_HOUR_MS * TUNING.time.worldTimeFactor
+
+  it('PI is unchanged after a 30-real-day gap, and the account is never greyed or deleted', () => {
+    const s = stateWith([{ sanity: 50 }], { lastSeenAtWorld: 1_000 })
+    const pi = { ...s, meta: { ...s.meta, pi: 75 } }
+    const back = advanceTime(pi, 1_000 + 30 * REAL_DAY_WORLD)
+    expect(back.meta.pi).toBe(75)
+    expect(back.meta.piZeroSince).toBeNull()
+    expect(back.meta.deleted).toBe(false)
+  })
+
+  it('a Hardcore Master keeps the canon fade', () => {
+    const s = stateWith([{ sanity: 50 }], { lastSeenAtWorld: 1_000 })
+    const hc = { ...s, meta: { ...s.meta, pi: 75, hardcore: true } }
+    expect(advanceTime(hc, 1_000 + 30 * REAL_DAY_WORLD).meta.pi).toBeLessThan(75)
+  })
+
+  it('time away builds Interference charges (1 per 8 real hours, capped)', () => {
+    const s = stateWith([{ sanity: 50 }], { lastSeenAtWorld: 1_000 })
+    expect(advanceTime(s, 1_000 + REAL_DAY_WORLD).meta.rested.charges).toBe(3)
+    expect(advanceTime(s, 1_000 + 10 * REAL_DAY_WORLD).meta.rested.charges).toBe(TUNING.return.rested.maxCharges)
+  })
+})

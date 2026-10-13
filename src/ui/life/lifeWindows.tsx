@@ -29,6 +29,7 @@ import { PixelWindow, Gauge } from '../kit'
 import { heroBustUrl } from '../pixel/sprites'
 import { JOB_NAME, accountDay, chronicleLine, diaryLine, groupedChronicle, placeName, shortName, speak, statusLine, tradeName } from './speech'
 import { t } from '../i18n/i18n'
+import { isArrival } from '../return/arrival'
 
 const first = (n: string) => n.split(/\s+/)[0] ?? n
 
@@ -328,8 +329,12 @@ export function HeroProfile({
 // ─────────────────────────────────────────────────────────────────────────────
 
 /** A letter is waiting when something happened since the last one and the Master has been
- *  away at least `minGapWorld` (default: two real hours). */
+ *  away at least `minGapWorld` (default: two real hours). On an arrival (a stale save away
+ *  long enough for the welcome-back ledger, spec 2026-10-12 S26) the letter waits: the
+ *  ledger opens instead and offers the full letter itself, so the Master never gets two
+ *  windows at once. */
 export function letterReady(state: GameState, nowWorld: number, minGapWorld = 2 * 3_600_000 * TUNING.time.worldTimeFactor): boolean {
+  if (isArrival(state, nowWorld / TUNING.time.worldTimeFactor)) return false
   const since = state.life.letterReadAt
   if (nowWorld - since < minGapWorld) return false
   const tl = state.life.tally

@@ -23,6 +23,7 @@ import {
 } from './index'
 import { createAccount } from '../account'
 import { advanceTime } from '../time'
+import { awayPause, storeroomLossPct } from '../return'
 import { reduce } from '../store'
 import { playFloor } from '../tower'
 import { TUNING } from '../tuning'
@@ -181,6 +182,33 @@ describe('incoming invasions and the kidnap-chain', () => {
     expect(lost.pvp.log[0]!.note).toMatch(/synthesized/)
   })
 
+  it('a captive is never synthesized purely offline: time away pauses the clock (S28)', () => {
+    const { after, ids } = invadedWeakDefense(60)
+    const id = ids.find((x) => after.heroes[x]!.captiveOf)!
+    const hold = after.heroes[id]!.captiveOf!
+    const closed = { ...after, meta: { ...after.meta, crackOpen: false } }
+    // Away for a whole real day across the deadline: paused, the deadline moves back.
+    const away = resolveInvasions(closed, hold.deadlineWorld + 1, hold.deadlineWorld - DAY)
+    expect(away.heroes[id]!.alive).toBe(true)
+    expect(away.heroes[id]!.captiveOf!.deadlineWorld).toBe(hold.deadlineWorld + awayPause(DAY + 1))
+    // Live play (a one-second tick) across the deadline: the captor acts, on screen.
+    const live = resolveInvasions(closed, hold.deadlineWorld + 1, hold.deadlineWorld - 2_000)
+    expect(live.heroes[id]!.alive).toBe(false)
+    // End to end: a Master who closes the tab for ten days comes back to the same captive.
+    const back = advanceTime({ ...closed, meta: { ...closed.meta, lastSeenAtWorld: hold.deadlineWorld - DAY } }, hold.deadlineWorld + 10 * DAY)
+    expect(back.heroes[id]!.alive).toBe(true)
+    expect(back.heroes[id]!.captiveOf).not.toBeNull()
+    expect(back.pvp.log.some((r) => /synthesized/.test(r.note))).toBe(false)
+  })
+
+  it('a lost defense only takes a token share of the storeroom (S28)', () => {
+    const { before, after } = invadedWeakDefense(20)
+    const lost = before.gold - after.gold
+    expect(lost).toBeGreaterThan(0)
+    expect(lost).toBeLessThanOrEqual(Math.ceil(before.gold * TUNING.return.offline.theftCapPct))
+    expect(storeroomLossPct()).toBe(Math.min(P.storeLoss, TUNING.return.offline.theftCapPct))
+  })
+
   it('a counter-raid can free a captive; a shield blocks re-raids', () => {
     const { after, ids } = invadedWeakDefense(60)
     const id = ids.find((x) => after.heroes[x]!.captiveOf)!
@@ -235,8 +263,26 @@ describe('guilds and server wars', () => {
 })
 
 describe('the account lifecycle and the terminus', () => {
-  it('six months at zero PI deletes the account; only TICK still works', () => {
+  it('without Hardcore the world never fades or is deleted, however long the absence (S24, S25)', () => {
     const acct = createAccount(5)
+    const s = { ...acct, meta: { ...acct.meta, pi: 40, lastSeenAtWorld: DAY } }
+    const back = advanceTime(s, DAY + 30 * 3 * DAY) // 30 real days
+    expect(back.meta.pi).toBe(40)
+    expect(back.meta.piZeroSince).toBeNull()
+    expect(back.meta.deleted).toBe(false)
+    const faded = advanceTime({ ...acct, meta: { ...acct.meta, pi: 1.02 } }, 30 * DAY)
+    const later = advanceTime(faded, TUNING.lifecycle.deleteMs * 3)
+    expect(later.meta.deleted).toBe(false)
+    expect(later.meta.piZeroSince).toBeNull()
+    expect(reduce(later, { type: 'SUMMON' }).heroes).toBeDefined()
+    // An account an older build already deleted stays deleted (honoured, never set).
+    const gone = { ...acct, meta: { ...acct.meta, deleted: true } }
+    expect(advanceTime(gone, DAY).meta.deleted).toBe(true)
+  })
+
+  it('Hardcore (canon): six months at zero PI deletes the account; only TICK still works', () => {
+    const plain = createAccount(5)
+    const acct = { ...plain, meta: { ...plain.meta, hardcore: true } }
     // A world that never had any PI isn't fading…
     expect(advanceTime(acct, TUNING.lifecycle.deleteMs * 2).meta.deleted).toBe(false)
     // …but one that had some, and let it fade to nothing, greys and is deleted.

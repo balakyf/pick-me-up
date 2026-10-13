@@ -1,6 +1,6 @@
 /** WP0 contract (spec 2026-10-12 S24): consumeRested spends one charge on a clear's gold. */
 import { describe, it, expect } from 'vitest'
-import { consumeRested, accrueRested } from './rested'
+import { consumeRested } from './rested'
 import { createAccount } from '../account'
 import { TUNING } from '../tuning'
 import type { MetaState } from '../types'
@@ -44,8 +44,4 @@ describe('consumeRested', () => {
     expect(m.rested.charges).toBe(0)
   })
 
-  it('accrueRested is an identity stub for now', () => {
-    const m = meta(1)
-    expect(accrueRested(m, 10 * 3_600_000)).toBe(m)
-  })
 })

@@ -26,6 +26,7 @@ import { clampSanity } from '../kitchen'
 import { withFavor } from '../favor'
 import { rngFor, hash, chance, nextFloat, pick } from '../rng'
 import { findRival, raidTargets, sectorRivals, guildById, type RivalMaster } from './rivals'
+import { awayPause, storeroomLossPct } from '../return/offline'
 
 const P = TUNING.pvp
 const WORLD_DAY_MS = 24 * 3_600_000
@@ -238,11 +239,13 @@ function invasion(state: GameState, day: number, nowWorld: number): GameState {
     return { ...state, pvp: { ...pushLog(state, rec), shieldUntil, rating: state.pvp.rating + P.ratingWin } }
   }
 
-  // The defense fell: the storeroom is looted and the fallen are taken or scarred.
+  // The defense fell: the storeroom is looted (a token share — nothing big is lost while
+  // the Master is away, spec 2026-10-12 S28) and the fallen are taken or scarred.
   const fallen = res?.fallenHeroIds ?? []
-  const goldLoss = Math.floor(state.gold * P.storeLoss)
+  const loss = storeroomLossPct()
+  const goldLoss = Math.floor(state.gold * loss)
   const materials: Record<string, number> = {}
-  for (const [k, v] of Object.entries(state.materials)) materials[k] = v - Math.floor(v * P.storeLoss)
+  for (const [k, v] of Object.entries(state.materials)) materials[k] = v - Math.floor(v * loss)
   const heroes = { ...state.heroes }
   const taken: string[] = []
   for (const id of fallen) {
@@ -283,9 +286,14 @@ function invasion(state: GameState, day: number, nowWorld: number): GameState {
  * Roll the invasions of every world-day since the last roll (at most the last
  * `invasionLookbackDays`), while the crack is open and no shield is up. Then any captive
  * whose deadline passed is synthesized by its captor (permadeath). PURE.
+ *
+ * `prevSeenWorld` is when the Master was last seen (advanceTime passes the old
+ * `lastSeenAtWorld`). The part of the gap spent away pauses every captive's clock — their
+ * deadlines move back by it — so a captive is never synthesized while nobody is watching
+ * (spec 2026-10-12 S28). Omitted, the whole gap counts as live.
  */
-export function resolveInvasions(state: GameState, nowWorld: number): GameState {
-  let s = state
+export function resolveInvasions(state: GameState, nowWorld: number, prevSeenWorld: number = nowWorld): GameState {
+  let s = pauseCaptiveClocks(state, awayPause(nowWorld - prevSeenWorld))
   const today = worldDayIndex(nowWorld)
   if (s.meta.crackOpen && today > s.pvp.lastInvasionDay) {
     const from = Math.max(s.pvp.lastInvasionDay + 1, today - P.invasionLookbackDays + 1)
@@ -309,6 +317,18 @@ export function resolveInvasions(state: GameState, nowWorld: number): GameState 
     }
   }
   return heroes === s.heroes ? s : { ...s, heroes, pvp: { ...s.pvp, log } }
+}
+
+/** Push every held captive's deadline back by `pauseWorld` (the Master was away). PURE. */
+function pauseCaptiveClocks(state: GameState, pauseWorld: number): GameState {
+  if (pauseWorld <= 0) return state
+  let heroes = state.heroes
+  for (const h of Object.values(state.heroes) as OwnedHero[]) {
+    if (h.alive && h.captiveOf) {
+      heroes = { ...heroes, [h.id]: { ...h, captiveOf: { ...h.captiveOf, deadlineWorld: h.captiveOf.deadlineWorld + pauseWorld } } }
+    }
+  }
+  return heroes === state.heroes ? state : { ...state, heroes }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

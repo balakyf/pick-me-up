@@ -1,0 +1,128 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   Reasons to return (spec 2026-10-12 S25-S28, WP6): the welcome-back ledger, the
+   Lights Out card, the stamp card, the backup window and the grey Re-interference.
+   Reads the shared tokens in ui.css; defines none of its own on :root.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── The welcome-back ledger ─────────────────────────────────────────────── */
+.wb, .lights-out { display: flex; flex-direction: column; gap: 6px; }
+.wb-isel { display: flex; gap: 10px; align-items: flex-start; }
+.wb-isel img { flex: none; border: 2px solid var(--rim-dark); background: var(--panel); }
+.wb-isel p { margin: 0 0 2px; }
+.wb-greeting { color: var(--ink); font-style: italic; font-size: 17px; }
+.wb-section { display: flex; flex-direction: column; gap: 4px; }
+.wb-section .panel-sub { margin: 10px 0 4px; }
+
+.wb-line {
+  appearance: none; display: flex; align-items: center; gap: 10px; width: 100%;
+  text-align: left; font: inherit; font-size: 15px; color: var(--ink);
+  background: var(--panel); border: 2px solid var(--line); border-radius: 2px;
+  padding: 6px 10px; cursor: pointer;
+}
+.wb-line:hover, .wb-line:focus-visible { border-color: var(--gold); background: var(--panel-2); outline: none; }
+.wb-line.static { cursor: default; }
+.wb-line.static:hover { border-color: var(--line); background: var(--panel); }
+.wb-icon { flex: none; width: 20px; text-align: center; color: var(--gold); }
+.wb-text { flex: 1; }
+.wb-go { flex: none; color: var(--ink-faint); font-size: 18px; }
+.wb-line:hover .wb-go { color: var(--gold); }
+.wb-quiet { color: var(--ink-dim); font-style: italic; margin: 4px 0; }
+
+.wb-claim { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 4px; }
+
+.wb-hero-letter {
+  display: flex; gap: 10px; align-items: flex-start; margin-top: 10px;
+  padding: 10px 12px; color: #3a2a18;
+  background: var(--rim);
+  border: 2px solid var(--gold-deep);
+  box-shadow: inset 0 0 0 2px #f8eed2, 3px 3px 0 rgba(0, 0, 0, 0.4);
+}
+.wb-hero-letter img { flex: none; image-rendering: pixelated; }
+.wb-hero-letter p { margin: 0 0 4px; font-size: 15px; }
+.wb-sign { text-align: right; font-style: italic; margin-top: 2px !important; }
+.wb-dear { font-style: italic; }
+.wb-claimed { color: var(--good); font-size: 14px; margin-top: 4px; }
+
+.wb-foot { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+
+/* ── The stamp card ──────────────────────────────────────────────────────── */
+.stamp-card { margin-top: 6px; }
+.stamp-row { display: flex; gap: 5px; flex-wrap: wrap; }
+.stamp {
+  width: 26px; height: 26px; display: inline-flex; align-items: center; justify-content: center;
+  border: 2px dashed var(--line); border-radius: 50%;
+  color: var(--ink-faint); font-size: 14px; background: var(--bg-2);
+}
+.stamp.prize { border-color: var(--gem); color: var(--gem); }
+.stamp.on { border-style: solid; border-color: var(--gold); color: var(--gold); background: #3a2a10; }
+.stamp.fresh { animation: stampIn 0.45s steps(5) both; }
+@keyframes stampIn {
+  0% { transform: scale(2.2) rotate(-18deg); opacity: 0; }
+  60% { transform: scale(0.9) rotate(4deg); opacity: 1; }
+  100% { transform: scale(1) rotate(0); }
+}
+.stamp-note { margin-top: 4px; font-size: 13px; }
+
+/* ── Lights Out ──────────────────────────────────────────────────────────── */
+.lo-section .panel-sub { margin: 8px 0 4px; }
+.lo-hook { color: var(--ink-dim); }
+.lo-goal {
+  appearance: none; display: grid; grid-template-columns: 1fr 120px; gap: 10px; align-items: center;
+  width: 100%; padding: 3px 4px; background: none; border: none; color: var(--ink);
+  font: inherit; font-size: 14px; text-align: left; cursor: pointer;
+}
+.lo-goal:hover .lo-goal-label, .lo-goal:focus-visible .lo-goal-label { color: var(--gold); }
+.lo-goal .gauge { width: 120px; }
+.lo-rested { margin-top: 6px; font-size: 13px; }
+.lo-isel { margin-top: 12px; }
+
+.rest-btn {
+  position: fixed; left: 12px; bottom: 44px; z-index: 22;
+  background: #1c1640; border-color: var(--rim-dark);
+}
+@media (max-width: 640px) { .rest-btn { bottom: 64px; } }
+/* The lobby's stage is its own stacking context, so a window opened inside it would sit
+   under these fixed buttons: hide them while any window is open. */
+.app:has(.pwin-backdrop) .rest-btn, .app:has(.pwin-backdrop) .backup-nudge,
+.app:has(.dialog) .rest-btn { display: none; }
+
+/* ── The backup nudge and window ─────────────────────────────────────────── */
+.backup-nudge {
+  position: fixed; top: 84px; left: 50%; transform: translateX(-50%); z-index: 22;
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: center;
+  max-width: calc(100vw - 24px); padding: 6px 10px; font-size: 14px;
+  background: #120e2cee; border: 2px solid var(--rim-dark); box-shadow: 0 0 0 2px var(--line);
+}
+.backup { display: flex; flex-direction: column; gap: 6px; }
+.backup p { margin: 0; }
+.backup-ok { color: var(--good); font-size: 14px; }
+.backup-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.backup-code {
+  width: 100%; resize: vertical; font-family: ui-monospace, monospace; font-size: 12px;
+  color: var(--ink); background: var(--bg-2); border: 2px solid var(--line); padding: 6px;
+  word-break: break-all;
+}
+.backup-file { position: relative; overflow: hidden; display: inline-block; }
+.backup-file input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.backup-confirm { padding: 8px 10px; border: 2px solid var(--warn); background: var(--panel); display: flex; flex-direction: column; gap: 6px; }
+
+/* ── Re-interference: the grey lobby, and the colour flooding back (S25) ─── */
+body.greyed .world-canvas { filter: grayscale(1) brightness(0.72) contrast(0.9); }
+body.reinterfering .world-canvas { transition: filter 2.4s ease-out; }
+.reinterference {
+  position: fixed; top: 38%; left: 50%; transform: translate(-50%, -50%); z-index: 59;
+  pointer-events: none; font-size: 26px; font-weight: 600; letter-spacing: 2px;
+  color: var(--gold); text-shadow: 2px 2px 0 var(--rim-dark), 0 0 12px #f2c75c88;
+  animation: reinterfere 3.8s ease-out both;
+}
+@keyframes reinterfere {
+  0% { opacity: 0; }
+  25% { opacity: 1; }
+  70% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stamp.fresh, .reinterference { animation: none; }
+  body.reinterfering .world-canvas { transition: none; }
+}

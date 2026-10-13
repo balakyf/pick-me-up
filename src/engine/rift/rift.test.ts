@@ -55,10 +55,13 @@ describe('the Crack of Time and Space', () => {
 
 describe('Probability Interference', () => {
   const HOUR = 3_600_000
-  it('the Hall of Magic generates it; a long absence fades it', () => {
+  it('the Hall of Magic generates it; only a Hardcore Master’s long absence fades it', () => {
     expect(piAfterGap(100, 10 * HOUR, 2)).toBe(100 + 10 * 2 * TUNING.interference.hallPerHourPerLevel)
-    expect(piAfterGap(100, TUNING.interference.idleDays * 24 * HOUR, 0)).toBe(100)
-    expect(piAfterGap(100, (TUNING.interference.idleDays + 2) * 24 * HOUR, 0)).toBeLessThan(100)
+    expect(piAfterGap(100, TUNING.interference.idleDays * 24 * HOUR, 0, true)).toBe(100)
+    expect(piAfterGap(100, (TUNING.interference.idleDays + 2) * 24 * HOUR, 0, true)).toBeLessThan(100)
+    // Spec 2026-10-12 S24: absence never takes PI away from a normal Master.
+    expect(piAfterGap(100, (TUNING.interference.idleDays + 2) * 24 * HOUR, 0)).toBe(100)
+    expect(piAfterGap(100, 400 * 24 * HOUR, 0)).toBe(100)
   })
 
   it('gates the Hall of Magic build', () => {
