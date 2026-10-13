@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 
@@ -23,6 +23,13 @@ beforeEach(() => {
   container = document.createElement('div')
   document.body.appendChild(container)
   root = createRoot(container)
+})
+
+// Unmount each test's App: a mounted lobby keeps Isel's typewriter timer running, and
+// one firing after jsdom is torn down fails the run with "window is not defined".
+afterEach(() => {
+  act(() => root.unmount())
+  container.remove()
 })
 
 function clickButton(label: string) {

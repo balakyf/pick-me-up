@@ -25,6 +25,7 @@ import { upgradeEquipmentWithResult } from '../engine/store'
 import { t } from './i18n/i18n'
 import { DormitoryInfo, ForgeOrderSection, HereNow, KitchenPantry, LibraryInfo, StaffSection, WatchtowerInfo } from './life/lifePanels'
 import { MemorialPanel } from './legacy/MemorialPanel'
+import { PlacePreview } from './shell/PlacePreview'
 
 /**
  * Facility panels — the rules-facing half of the Lobby. The walkable world
@@ -1017,6 +1018,7 @@ export function PlacePanel({
 
   return (
     <div className={`place-panel place-${place}`}>
+      <PlacePreview state={state} place={place} />
       <p className="place-blurb">{t(BLURB[place])}</p>
       {(place === 'kitchen' ||
         place === 'tacticalCenter' ||

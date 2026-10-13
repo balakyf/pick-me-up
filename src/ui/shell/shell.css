@@ -1,0 +1,208 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   Shell: goal tracker, progressive Menu, previews and the unlock fanfare
+   (spec 2026-10-12 S3/S4, WP7). Reads the shared :root tokens; defines none.
+   One gold accent per surface: the "Summon now!" chip and the "Show me" button.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Goal tracker (lobby HUD) ───────────────────────────────────────────── */
+.hud-goals {
+  top: 124px; left: 12px; width: 280px;
+  background: #120e2cdd; border: 2px solid var(--rim-dark); box-shadow: 0 0 0 2px #3e3478;
+  padding: 6px 8px 8px; font-size: 13px; pointer-events: auto;
+  display: flex; flex-direction: column; gap: 4px;
+}
+.goals-head { display: flex; align-items: center; gap: 8px; }
+.goals-title {
+  background: none; border: none; padding: 0; cursor: pointer;
+  font: inherit; font-weight: 600; color: var(--gold); text-shadow: 1px 1px 0 var(--rim-dark);
+}
+.goal-cta {
+  margin-left: auto; cursor: pointer; font: inherit; font-weight: 600; font-size: 13px;
+  color: #2a1a04; background: var(--gold); border: 2px solid var(--rim-dark);
+  box-shadow: inset -2px -2px 0 var(--gold-deep), inset 2px 2px 0 #ffe9a8;
+  padding: 2px 8px; animation: goalCtaGlow 1.6s steps(4) infinite;
+}
+.goal-cta:hover { background: #ffd877; }
+.goal-cta.calm { animation: none; }
+@keyframes goalCtaGlow { 50% { box-shadow: inset -2px -2px 0 var(--gold-deep), inset 2px 2px 0 #ffe9a8, 0 0 0 3px #f2c75c55; } }
+
+.goal {
+  display: flex; align-items: flex-start; gap: 8px; width: 100%; text-align: left;
+  font: inherit; color: var(--ink); background: transparent; cursor: pointer;
+  border: none; border-left: 3px solid var(--line); padding: 4px 6px;
+}
+div.goal { cursor: default; }
+button.goal:hover, button.goal:focus-visible { background: #2a2258; outline: none; }
+button.goal:focus-visible { box-shadow: 0 0 0 2px var(--gold); }
+.goal-icon { flex: none; width: 16px; text-align: center; line-height: 1.3; }
+.goal-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.goal-text { line-height: 1.25; }
+.goal-short .goal-text { font-size: 15px; font-weight: 600; }
+.goal-detail { color: var(--ink-dim); font-size: 12px; line-height: 1.25; }
+.goal-long .goal-text { color: var(--ink-dim); }
+.goal-step .goal-text { font-size: 14px; }
+.goal-request .goal-text { color: #d8faff; }
+.goal-bar { display: flex; align-items: center; gap: 6px; margin-top: 1px; }
+.goal-bar-track {
+  flex: 1; height: 6px; background: #0a0714; border: 1px solid var(--rim-dark);
+  box-shadow: 0 0 0 1px #4a3e8e; overflow: hidden;
+}
+.goal-bar-fill {
+  display: block; height: 100%; background: var(--accent-2);
+  background-image: linear-gradient(180deg, rgba(255,255,255,0.35) 0 1px, transparent 1px);
+  transition: width 0.3s steps(5);
+}
+.goal-bar-label { flex: none; font-size: 11px; color: var(--ink-faint); font-variant-numeric: tabular-nums; }
+
+/* tone = the stripe on the left (and the bar): rarity colours stay for rarity */
+.goal.tone-safe { border-left-color: var(--good); }
+.goal.tone-fair { border-left-color: var(--gold); }
+.goal.tone-risky { border-left-color: var(--warn); }
+.goal.tone-deadly { border-left-color: var(--bad); }
+.goal.tone-deadly .goal-text { color: #ffc0c6; }
+.goal.tone-reward { border-left-color: var(--gold); }
+.goal.tone-reward .goal-bar-fill { background: var(--gold); }
+.goal.tone-info { border-left-color: var(--accent); }
+.goal.tone-request { border-left-color: var(--gem); }
+
+.goal-steps { padding-left: 6px; }
+.goal-steps-toggle { font-size: 12px; }
+.goal-steps .guide-list { margin: 4px 0; }
+.goal-steps .guide-go { text-decoration: none; color: inherit; text-align: left; }
+.goal-steps .guide-go:hover { color: var(--gold); }
+
+/* Phones: under the Master's card, clear of the action bar and the E-prompt at the bottom. */
+@media (max-width: 720px) {
+  .hud-goals { top: 112px; left: 8px; width: min(300px, calc(100vw - 16px)); }
+}
+
+/* ── Goal chips (scene title bar) ───────────────────────────────────────── */
+.goals-bar { display: flex; gap: 6px; align-items: center; min-width: 0; overflow: hidden; }
+.goal-chip {
+  font: inherit; font-size: 13px; color: var(--ink); cursor: pointer; white-space: nowrap;
+  background: #120e2c; border: 2px solid var(--line); padding: 3px 8px;
+  display: inline-flex; align-items: center; gap: 5px; max-width: 280px; overflow: hidden; text-overflow: ellipsis;
+}
+.goal-chip:hover, .goal-chip:focus-visible { border-color: var(--gold); outline: none; }
+.goal-chip.tone-cta {
+  color: #2a1a04; background: var(--gold); border-color: var(--rim-dark); font-weight: 600;
+  box-shadow: inset -2px -2px 0 var(--gold-deep), inset 2px 2px 0 #ffe9a8;
+}
+.goal-chip.tone-safe { border-color: var(--good); }
+.goal-chip.tone-risky { border-color: var(--warn); }
+.goal-chip.tone-deadly { border-color: var(--bad); }
+.goal-chip-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.goal-chip-num { flex: none; color: var(--ink-faint); font-size: 11px; font-variant-numeric: tabular-nums; }
+@media (max-width: 900px) { .goals-bar .goal-chip:nth-child(2) { display: none; } }
+@media (max-width: 640px) { .goals-bar { order: 10; width: 100%; } }
+
+/* ── Progressive Menu (Now / Campus / Next unlock / Later) ──────────────── */
+.menu-groups { display: flex; flex-direction: column; gap: 12px; }
+.menu-group-title {
+  font-size: 13px; font-weight: 600; letter-spacing: 1px; text-transform: uppercase;
+  color: var(--ink-faint); margin: 0 0 6px;
+}
+.menu-group-now .menu-grid { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
+.menu-item.now {
+  font-size: 19px; font-weight: 600; padding: 12px 12px;
+  background: #1c1640; border-color: #4a3e8e;
+  box-shadow: inset -2px -2px 0 #120e2c, inset 2px 2px 0 #3e3478;
+}
+.menu-item.now .menu-icon { font-size: 22px; width: 28px; }
+.menu-item.now:hover, .menu-item.now:focus-visible { border-color: var(--gold); }
+.menu-item .menu-sub { display: block; font-size: 12px; color: var(--ink-faint); font-weight: 400; }
+.menu-item .menu-text { display: flex; flex-direction: column; min-width: 0; }
+.menu-item.next {
+  width: 100%; border: 2px dashed var(--gold-deep); background: #1c1640;
+}
+.menu-item.next .menu-sub { color: var(--ink-dim); }
+.menu-next-also { margin: 4px 2px 0; font-size: 12px; color: var(--ink-dim); }
+.menu-item.next .goal-bar { width: 180px; max-width: 100%; }
+.menu-item.next .goal-bar-fill { background: var(--gold); }
+/* Later: a dense, dimmed grid, so the Menu's footer stays in view */
+.menu-group-later .menu-grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 2px 6px; }
+.menu-item.locked { color: var(--ink-faint); font-size: 14px; padding: 4px 8px; gap: 8px; }
+.menu-item.locked .menu-sub { font-size: 11px; }
+.menu-item.locked .menu-icon { filter: grayscale(1) brightness(0.7); }
+.menu-item.locked:hover, .menu-item.locked:focus-visible { color: var(--ink-dim); }
+
+/* ── Locked place preview (inside a place window) ───────────────────────── */
+.place-preview {
+  display: flex; gap: 10px; align-items: center; margin: -4px 0 12px;
+  padding: 8px 10px; background: #2a1e10; border: 2px solid var(--gold-deep);
+  box-shadow: inset 2px 2px 0 #4a3418;
+}
+.place-preview-bust { flex: none; background: #120e2c; border: 2px solid var(--rim-dark); }
+.place-preview-title { color: var(--gold); font-weight: 600; }
+.place-preview-line { color: var(--ink-dim); font-size: 13px; font-style: italic; }
+
+/* ── The unlock fanfare ─────────────────────────────────────────────────── */
+.unlock-backdrop {
+  position: fixed; inset: 0; z-index: 75; padding: 16px;
+  display: flex; align-items: center; justify-content: center;
+  background: radial-gradient(circle at 50% 40%, rgba(242, 199, 92, 0.18), rgba(6, 3, 14, 0.78) 60%);
+  animation: unlockFade 0.25s steps(4) both;
+}
+@keyframes unlockFade { from { opacity: 0; } to { opacity: 1; } }
+.unlock-card {
+  width: min(440px, 100%); text-align: center; padding: 14px 18px 16px;
+  background: linear-gradient(180deg, var(--win-top), var(--win-bot));
+  border: 2px solid var(--gold);
+  box-shadow: 0 0 0 2px var(--rim-dark), inset 0 0 0 2px #6a4ad0, 4px 4px 0 2px rgba(0, 0, 0, 0.45), 0 0 40px rgba(242, 199, 92, 0.35);
+  animation: unlockPop 0.42s steps(6) both;
+}
+@keyframes unlockPop {
+  0% { transform: scale(0.6); }
+  60% { transform: scale(1.06); }
+  100% { transform: scale(1); }
+}
+.unlock-kicker {
+  font-size: 26px; font-weight: 600; color: var(--gold); letter-spacing: 1px;
+  text-shadow: 2px 2px 0 var(--rim-dark), 0 0 12px rgba(242, 199, 92, 0.6);
+  animation: unlockKicker 0.9s steps(3) 0.2s both;
+}
+@keyframes unlockKicker { 0% { transform: translateY(-8px); opacity: 0; } 100% { transform: none; opacity: 1; } }
+.unlock-art {
+  position: relative; height: 130px; margin: 6px auto 4px; width: 220px;
+  display: flex; align-items: center; justify-content: center; overflow: hidden;
+}
+.unlock-rays {
+  position: absolute; left: 50%; top: 50%; width: 320px; height: 320px; margin: -160px 0 0 -160px;
+  background: repeating-conic-gradient(from 0deg, rgba(242, 199, 92, 0.22) 0deg 10deg, transparent 10deg 30deg);
+  -webkit-mask-image: radial-gradient(circle, #000 20%, transparent 62%);
+  mask-image: radial-gradient(circle, #000 20%, transparent 62%);
+  animation: unlockSpin 12s linear infinite;
+}
+@keyframes unlockSpin { to { transform: rotate(360deg); } }
+.unlock-spark {
+  position: absolute; color: #ffe9a8; font-size: 12px; text-shadow: 0 0 6px var(--gold);
+  animation: unlockTwinkle 1.2s steps(3) infinite both;
+}
+@keyframes unlockTwinkle { 0%, 100% { opacity: 0; transform: scale(0.6); } 50% { opacity: 1; transform: scale(1.1); } }
+.unlock-sprite { position: relative; max-height: 120px; max-width: 200px; filter: drop-shadow(0 4px 0 rgba(0, 0, 0, 0.45)); animation: unlockBob 1.6s steps(2) infinite; }
+.unlock-glyph { position: relative; font-size: 64px; line-height: 1; animation: unlockBob 1.6s steps(2) infinite; }
+@keyframes unlockBob { 50% { transform: translateY(-3px); } }
+.unlock-name { margin: 2px 0 8px; font-size: 24px; color: var(--ink); text-shadow: 2px 2px 0 var(--rim-dark); }
+.unlock-isel { display: flex; gap: 10px; align-items: flex-start; text-align: left; margin: 0 0 10px; }
+.unlock-isel p { margin: 0; font-size: 15px; line-height: 1.35; }
+.unlock-isel b { color: var(--gold); margin-right: 4px; }
+.unlock-bust { flex: none; background: #120e2c; border: 2px solid var(--rim-dark); }
+.unlock-also { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; align-items: center; margin-bottom: 12px; font-size: 13px; }
+.unlock-also-chip { border: 1px solid var(--line); background: #1c1640; padding: 1px 6px; }
+.unlock-actions { display: flex; gap: 10px; justify-content: center; }
+.pbtn.unlock-show {
+  color: #2a1a04; background: var(--gold); text-shadow: none;
+  box-shadow: inset -2px -2px 0 var(--gold-deep), inset 2px 2px 0 #ffe9a8;
+}
+.pbtn.unlock-show:hover:not(:disabled) { background: #ffd877; }
+.pbtn.unlock-show:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+
+.unlock-backdrop.calm *, .unlock-backdrop.calm { animation: none !important; }
+/* the Memorial: candlelight, not confetti */
+.unlock-backdrop.somber { background: radial-gradient(circle at 50% 40%, rgba(255, 170, 90, 0.10), rgba(6, 3, 14, 0.82) 60%); }
+.unlock-backdrop.somber .unlock-card { border-color: var(--rim); box-shadow: 0 0 0 2px var(--rim-dark), inset 0 0 0 2px #4a3e8e, 4px 4px 0 2px rgba(0, 0, 0, 0.45); animation: unlockFade 0.6s steps(6) both; }
+.unlock-backdrop.somber .unlock-kicker { color: var(--ink-dim); text-shadow: 2px 2px 0 var(--rim-dark); font-size: 22px; }
+@media (prefers-reduced-motion: reduce) {
+  .unlock-backdrop, .unlock-backdrop *, .goal-cta { animation: none !important; }
+  .goal-bar-fill { transition: none; }
+}

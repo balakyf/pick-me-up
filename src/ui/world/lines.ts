@@ -6,6 +6,8 @@
 import type { GameState, OwnedHero } from '../../engine/types'
 import { hashString } from '../pixel/rand'
 import { t } from '../i18n/i18n'
+import { nextUnlock } from '../shell/unlocks'
+import { PLACE_LABEL } from './lobbyMap'
 
 const COMMONER_JOBS = ['farmer', 'carpenter', 'baker', 'fisher', 'weaver', 'shepherd', 'miller', 'tanner']
 
@@ -54,9 +56,36 @@ export function iselLines(state: GameState): string[] {
   else if (!living.some((h) => h.life?.job)) tip = 'Idle hands, Master. Give someone a job — a cook in the Kitchen, a smith at the Forge. Open their Profile.'
   else if (state.life.memorial.length > 0 && living.some((h) => (h.life?.grief ?? 0) > 50))
     tip = 'Some of them still visit the Memorial every day. Grief passes faster with a healer in the Infirmary.'
+  else if (unlockNextFloor(state)) tip = unlockNextFloor(state)!
   else if (state.gold >= 3000) tip = 'The Mobius crystal hums. You could afford another summon.'
   else tip = t('Floor {n} is next. Every hero who falls there is gone for good — remember that.', { n: state.tower.currentFloor })
   return [t('Welcome back, Master. I am Isel — I keep this waiting room in order.'), t(tip)]
+}
+
+/** Isel's promise when a place opens with the very next clear (null otherwise). */
+function unlockNextFloor(state: GameState): string | null {
+  const nu = nextUnlock(state)
+  if (!nu || nu.unlockAt === null || nu.unlockAt - state.tower.highestCleared !== 1) return null
+  return t('Clear Floor {n} and I will open the {place} for you.', { n: nu.unlockAt, place: t(PLACE_LABEL[nu.place]) })
+}
+
+/**
+ * Isel's coaching lines for the first decisions (spec 2026-10-12 S5). WP7 owns the copy;
+ * the screens that stage the moment (the Decisive Moment in battle, the first pair of
+ * Doors) show it through `iselCoach()` so the words and their French live in one place.
+ */
+export const ISEL_COACH = {
+  /** The first Decisive Moment: a hero is about to fall. */
+  decisive: 'Your orders change fate. Try Protect.',
+  /** The first time two Doors are offered. */
+  doors: 'Two doors, Master. The plain one is the steady road. The skull door hides an elite: a harder fight, but double gold, stones and a boon.',
+} as const
+
+export type CoachMoment = keyof typeof ISEL_COACH
+
+/** Isel's coaching line for a first-time moment, translated. */
+export function iselCoach(moment: CoachMoment): string {
+  return t(ISEL_COACH[moment])
 }
 
 const BANTER: string[][] = [

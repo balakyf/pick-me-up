@@ -39,7 +39,12 @@ import { iselLines } from './lines'
 import { activityKey, isOffsite, spotFor, type Spot } from './heroAgent'
 import { accountDay, conversation, pairLines, speak, statusLine } from '../life/speech'
 import { HeroProfile, HeroTracker, LetterWindow, letterReady } from '../life/lifeWindows'
-import { FirstSteps } from '../life/FirstSteps'
+import { GoalTracker } from '../shell/GoalTracker'
+import { UnlockBanner } from '../shell/UnlockBanner'
+import { MENU_ORDER, unseenUnlocks } from '../shell/unlocks'
+import { isPlaceOpen } from '../../engine/unlocks'
+import { drawLockSign, signTileFor, SIGN_H, SIGN_W } from '../shell/lockSign'
+import type { GoalTarget } from '../shell/goals'
 import { PlacePanel, type PanelPlace } from '../facilityPanels'
 import { DialogBox, Gauge, PixelWindow, type DialogScript } from '../kit'
 import { canvasAvailable, cachedCanvas } from '../pixel/render'
@@ -139,33 +144,11 @@ export const PLACE_ICON: Record<PlaceId, string> = {
   watchtower: '🔭',
   market: '⚖',
 }
-/** Order of the fast-travel menu. */
-export const MENU_PLACES: PlaceId[] = [
-  'tower',
-  'summon',
-  'party',
-  'roster',
-  'kitchen',
-  'tavern',
-  'dormitory',
-  'tacticalCenter',
-  'promotionChamber',
-  'trainingCenter',
-  'armory',
-  'transferStation',
-  'synthesis',
-  'library',
-  'infirmary',
-  'garden',
-  'market',
-  'watchtower',
-  'memorial',
-  'daily',
-  'hallOfMagic',
-  'rift',
-  'guild',
-  'shop',
-]
+/** Order of the fast-travel menu (the progressive campus groups it: shell/unlocks). */
+export const MENU_PLACES: PlaceId[] = [...MENU_ORDER]
+
+/** Places with an unlock schedule: they get a boarded sign until they open. */
+const LOCKABLE_PLACES: PlaceId[] = MENU_ORDER.filter((p) => !['tower', 'summon', 'party', 'roster'].includes(p))
 
 interface Walker {
   x: number
@@ -368,6 +351,7 @@ export function LobbyWorld({
   onNavigate,
   onMenu,
   travelRequest,
+  paused = false,
 }: {
   state: GameState
   store: Store
@@ -375,6 +359,8 @@ export function LobbyWorld({
   onMenu: () => void
   /** Fast-travel request from the app menu; a new nonce re-triggers it. */
   travelRequest?: { place: PlaceId; nonce: number } | null
+  /** Something app-level (the Menu, a battle replay) covers the lobby: hold the fanfare. */
+  paused?: boolean
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const miniRef = useRef<HTMLCanvasElement>(null)
@@ -391,6 +377,8 @@ export function LobbyWorld({
   const [showMap, setShowMap] = useState(() => typeof window === 'undefined' || window.innerWidth >= 720)
   const [clock, setClock] = useState(() => toWorldTime(Date.now()))
   const [following, setFollowing] = useState<string | null>(null)
+  /** The "New facility!" fanfare on screen (newly open places; the first is featured). */
+  const [fanfare, setFanfare] = useState<PlaceId[] | null>(null)
 
   // Live world state for the game loop (never React state: 60 fps mutation).
   const world = useRef({
@@ -407,7 +395,22 @@ export function LobbyWorld({
   const stateRef = useRef(state)
   stateRef.current = state
   const modalRef = useRef(false)
-  modalRef.current = openPlace !== null || dialog !== null || profile !== null || tracker || letter
+  modalRef.current = openPlace !== null || dialog !== null || profile !== null || tracker || letter || fanfare !== null
+
+  // The unlock fanfare (spec 2026-10-12 S3): when a place has opened and its fanfare has
+  // not been seen, play it once the Master is free (no window or dialog open). It is
+  // recorded as seen right away, so it plays once per place. Fresh accounts have nothing
+  // open; veterans were backfilled by the v11 migration; so this only fires on a real
+  // unlock (or on arrival, for one earned while away from the lobby).
+  const unseen = unseenUnlocks(state)
+  const unseenKey = unseen.join(',')
+  const busy = paused || openPlace !== null || dialog !== null || profile !== null || tracker || letter
+  useEffect(() => {
+    if (fanfare !== null || busy || unseen.length === 0) return
+    setFanfare(unseen)
+    for (const p of unseen) store.dispatch({ type: 'SEE_UNLOCK', place: p })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [unseenKey, busy, fanfare])
 
   // Pump the world clock (timers finish, heroes live, Sanity regenerates) while in the lobby.
   useEffect(() => {
@@ -524,7 +527,9 @@ export function LobbyWorld({
   function labelFor(tg: Target | null): string | null {
     if (!tg) return null
     if (tg.kind === 'hero') return stateRef.current.heroes[tg.id as OwnedHero['id']]?.name.split(/\s+/)[0] ?? null
-    return tg.prop.place ? tr(PLACE_LABEL[tg.prop.place]) : null
+    const place = tg.prop.place
+    if (!place) return null
+    return isPlaceOpen(stateRef.current, place) ? tr(PLACE_LABEL[place]) : `🔒 ${tr(PLACE_LABEL[place])}`
   }
 
   /** Walk next to `target` then use it. */
@@ -767,6 +772,22 @@ export function LobbyWorld({
         ctx.fillStyle = 'rgba(8,4,16,0.55)'
         ctx.fillRect(r.x * TILE - camX, r.y * TILE - camY, r.w * TILE, r.h * TILE)
       }
+      // places the campus has not opened yet: a boarded sign outside (spec S3)
+      const sign = cachedCanvas('shell|lock-sign', drawLockSign)
+      if (sign) {
+        const drawn = new Set<string>()
+        for (const place of LOCKABLE_PLACES) {
+          if (isPlaceOpen(st, place)) continue
+          const at = signTileFor(place)
+          const key = `${at.x},${at.y}`
+          if (drawn.has(key)) continue
+          drawn.add(key)
+          const sx = at.x * TILE + (TILE - SIGN_W) / 2 - camX
+          const sy = (at.y + 1) * TILE - SIGN_H - camY
+          if (sx < -SIGN_W || sy < -SIGN_H || sx > VW || sy > VH) continue
+          ctx.drawImage(sign, Math.round(sx), Math.round(sy))
+        }
+      }
 
       // y-sorted props, graves, characters and roofs
       type Drawable = { y: number; draw: () => void }
@@ -1007,6 +1028,39 @@ export function LobbyWorld({
     setFollowing(id)
   }
 
+  /** "Show me": walk the Master to a place and open it on arrival (or jump if no path).
+   *  A long way is shortened: the Master appears a couple of seconds' walk out and walks
+   *  in, so the player sees the building and its door without a long wait. */
+  function showPlace(place: PlaceId) {
+    const prop = propForPlace(place)
+    const m = world.current.master
+    let path = findPath({ x: m.x, y: m.y }, (x, y) => isAdjacentTo(prop, x, y))
+    if (!path || path.length === 0) return travel(place)
+    const WALK_IN = 12
+    if (path.length > WALK_IN + 2) {
+      const from = path[path.length - WALK_IN - 1]!
+      Object.assign(m, newWalker(from, dirBetween(from, path[path.length - WALK_IN]!)))
+      path = path.slice(path.length - WALK_IN)
+    }
+    setFollowing(null)
+    m.path = path
+    world.current.pending = { kind: 'prop', prop }
+  }
+
+  /** A click on the goal tracker: travel to the place, or go and see the hero. */
+  function followGoal(target: GoalTarget) {
+    if (target.kind === 'hero') {
+      if (target.action === 'profile') return setProfile(target.heroId)
+      const hw = world.current.heroes.get(target.heroId)
+      if (hw && !hw.hidden) goTo({ kind: 'hero', id: target.heroId })
+      else talkTo(target.heroId)
+      return
+    }
+    const place = target.place
+    if (place === 'tower' || place === 'summon' || place === 'party' || place === 'roster') onNavigate(place)
+    else travel(place)
+  }
+
   const ml = state.meta.masterLevel
   const xpPct = (state.meta.masterXp / masterXpToNext(ml)) * 100
   const living = Object.values(state.heroes).filter((h) => h.alive).length
@@ -1065,7 +1119,7 @@ export function LobbyWorld({
         </button>
       </div>
 
-      <FirstSteps state={state} store={store} />
+      <GoalTracker state={state} store={store} variant="hud" onGo={followGoal} />
 
       {showMap && (
         <div className="hud hud-mini">
@@ -1122,6 +1176,17 @@ export function LobbyWorld({
         />
       )}
       {dialog && <DialogBox script={dialog} onDone={() => setDialog(null)} />}
+      {fanfare && (
+        <UnlockBanner
+          places={fanfare}
+          icons={PLACE_ICON}
+          onClose={() => setFanfare(null)}
+          onShow={(place) => {
+            setFanfare(null)
+            showPlace(place)
+          }}
+        />
+      )}
     </div>
   )
 }

@@ -2,13 +2,13 @@ import { useEffect, useState, type ReactNode } from 'react'
 import '@fontsource/pixelify-sans/400.css'
 import '@fontsource/pixelify-sans/600.css'
 import './ui.css'
-import { useGame, getStore } from './useGame'
+import { useGame, getStore, BROKEN_SAVE_KEY } from './useGame'
 import { TitleScreen, SummonScreen, RosterScreen, PartyScreen } from './screens'
 import { TowerScreen } from './TowerScreen'
 import { BattleScene } from './battle/BattleScene'
 import { DevGallery } from './DevGallery'
 import { ReturnLayer } from './return/ReturnLayer'
-import { LobbyWorld, MENU_PLACES, PLACE_ICON, type WorldView } from './world/LobbyWorld'
+import { LobbyWorld, PLACE_ICON, type WorldView } from './world/LobbyWorld'
 import { PLACE_LABEL, type PlaceId } from './world/lobbyMap'
 import { PixelWindow } from './kit'
 import { attemptFloorWithResult } from '../engine/store'
@@ -18,6 +18,10 @@ import { playMusic, sfx, unlockAudio } from './audio/sound'
 import { useMuted } from './audio/useSound'
 import { useLocale } from './i18n/useLocale'
 import { t } from './i18n/i18n'
+import { GoalTracker } from './shell/GoalTracker'
+import { menuGroups, nextUnlock, placeAccess, shortCondition } from './shell/unlocks'
+import { DEFAULT_SAVE_KEY } from '../engine/account'
+import './shell/shell.css'
 
 type View = 'lobby' | WorldView
 
@@ -51,15 +55,19 @@ function Coins({ state }: { state: GameState }) {
 /** Non-lobby scenes: a slim title bar with the way back to the waiting room. */
 function Scene({
   title,
+  view,
   state,
   onBack,
   onMenu,
+  onGo,
   children,
 }: {
   title: string
+  view: WorldView
   state: GameState
   onBack: () => void
   onMenu: () => void
+  onGo: (p: PlaceId) => void
   children: ReactNode
 }) {
   return (
@@ -74,26 +82,110 @@ function Scene({
         <button className="pbtn" onClick={onMenu}>
           ☰ {t('Menu')}
         </button>
+        {/* After the Menu button in DOM order (smoke tests click the first "Menu"); it
+            never dispatches, so it is safe over the Tower view's mid-battle orders. */}
+        <GoalTracker
+          state={state}
+          variant="bar"
+          view={view}
+          onGo={(g) => {
+            if (g.kind === 'place') onGo(g.place)
+          }}
+        />
       </div>
       <div className="scene-body">{children}</div>
     </div>
   )
 }
 
-function GameMenu({ store, onGo, onClose }: { store: Store; onGo: (p: PlaceId) => void; onClose: () => void }) {
+/** One Menu tile. Every place stays a `button.menu-item` that opens its window; a locked
+ *  one opens it as a preview (spec 2026-10-12 S3). */
+function MenuTile({ place, state, kind, onGo }: { place: PlaceId; state: GameState; kind: 'now' | 'open' | 'next' | 'later'; onGo: (p: PlaceId) => void }) {
+  const access = kind === 'next' || kind === 'later' ? placeAccess(state, place) : null
+  const p = access?.progress
+  const cls = kind === 'now' ? 'menu-item now' : kind === 'next' ? 'menu-item next' : kind === 'later' ? 'menu-item locked' : 'menu-item'
+  return (
+    <button className={cls} onClick={() => onGo(place)} title={access?.reason ?? undefined} aria-label={access?.reason ? `${t(PLACE_LABEL[place])}: ${access.reason}` : undefined}>
+      <span className="menu-icon">{PLACE_ICON[place]}</span>
+      <span className="menu-text">
+        <span>
+          {t(PLACE_LABEL[place])}
+        </span>
+        {access?.reason && <span className="menu-sub">{kind === 'later' ? `🔒 ${shortCondition(access.rule)}` : access.reason}</span>}
+        {kind === 'next' && p && (
+          <span className="goal-bar" aria-hidden="true">
+            <span className="goal-bar-track">
+              <span className="goal-bar-fill" style={{ width: `${(p.cur / Math.max(1, p.need)) * 100}%` }} />
+            </span>
+            <span className="goal-bar-label">
+              {p.cur}/{p.need}
+            </span>
+          </span>
+        )}
+      </span>
+    </button>
+  )
+}
+
+function GameMenu({
+  state,
+  store,
+  onGo,
+  onClose,
+}: {
+  state: GameState
+  store: Store
+  onGo: (p: PlaceId) => void
+  onClose: () => void
+}) {
   // In-page confirmation (browser confirm() dialogs are blocked in embedded viewers).
   const [confirmReset, setConfirmReset] = useState(false)
   const [muted, setMuted] = useMuted()
   const [locale, setLocale] = useLocale()
+  const groups = menuGroups(state)
+  const nextAlso = groups.next ? (nextUnlock(state)?.also ?? []) : []
   return (
-    <PixelWindow title={t('Menu')} icon="☰" onClose={onClose}>
-      <div className="menu-grid">
-        {MENU_PLACES.map((p) => (
-          <button key={p} className="menu-item" onClick={() => onGo(p)}>
-            <span className="menu-icon">{PLACE_ICON[p]}</span>
-            {t(PLACE_LABEL[p])}
-          </button>
-        ))}
+    <PixelWindow title={t('Menu')} icon="☰" onClose={onClose} wide>
+      <div className="menu-groups">
+        <section className="menu-group menu-group-now">
+          <h4 className="menu-group-title">{t('Now')}</h4>
+          <div className="menu-grid">
+            {groups.now.map((p) => (
+              <MenuTile key={p} place={p} state={state} kind="now" onGo={onGo} />
+            ))}
+          </div>
+        </section>
+        {groups.campus.length > 0 && (
+          <section className="menu-group menu-group-campus">
+            <h4 className="menu-group-title">{t('Campus')}</h4>
+            <div className="menu-grid">
+              {groups.campus.map((p) => (
+                <MenuTile key={p} place={p} state={state} kind="open" onGo={onGo} />
+              ))}
+            </div>
+          </section>
+        )}
+        {groups.next && (
+          <section className="menu-group menu-group-next">
+            <h4 className="menu-group-title">{t('Next unlock')}</h4>
+            <MenuTile place={groups.next} state={state} kind="next" onGo={onGo} />
+            {/* Outside the tile: a menu-item's text names its own place only (the smoke
+                tests find places by the first menu-item whose text includes the name). */}
+            {nextAlso.length > 0 && (
+              <div className="menu-next-also">{t('Also: {places}', { places: nextAlso.map((a) => t(PLACE_LABEL[a])).join(', ') })}</div>
+            )}
+          </section>
+        )}
+        {groups.later.length > 0 && (
+          <section className="menu-group menu-group-later">
+            <h4 className="menu-group-title">{t('Later')}</h4>
+            <div className="menu-grid">
+              {groups.later.map((p) => (
+                <MenuTile key={p} place={p} state={state} kind="later" onGo={onGo} />
+              ))}
+            </div>
+          </section>
+        )}
       </div>
       <div className="menu-foot">
         <button className="pbtn ghost" onClick={() => setMuted(!muted)} title="Chiptune sound effects and music">
@@ -101,6 +193,17 @@ function GameMenu({ store, onGo, onClose }: { store: Store; onGo: (p: PlaceId) =
         </button>
         <button className="pbtn ghost" onClick={() => setLocale(locale === 'fr' ? 'en' : 'fr')} title="Language / Langue">
           {locale === 'fr' ? '🇬🇧 English' : '🇫🇷 Français'}
+        </button>
+        <button
+          className="pbtn ghost"
+          onClick={() => {
+            onClose()
+            // The save backup lives in the return layer (WP6); it listens for this event.
+            window.dispatchEvent(new CustomEvent('pmu:backup'))
+          }}
+          title={t('Export or import your save')}
+        >
+          💾 {t('Backup…')}
         </button>
         <button
           className="pbtn ghost"
@@ -133,6 +236,22 @@ function GameMenu({ store, onGo, onClose }: { store: Store; onGo: (p: PlaceId) =
       </div>
     </PixelWindow>
   )
+}
+
+/**
+ * Is there a save the title screen can Continue? Not when the stored save is the very
+ * one that already failed to load (useGame copied it to BROKEN_SAVE_KEY): Continue would
+ * only throw again. A new game then overwrites it; the broken copy stays put.
+ */
+export function continuableSave(): boolean {
+  try {
+    if (typeof window === 'undefined') return false
+    const raw = window.localStorage.getItem(DEFAULT_SAVE_KEY)
+    if (raw === null) return false
+    return raw !== window.localStorage.getItem(BROKEN_SAVE_KEY)
+  } catch {
+    return false
+  }
 }
 
 export function App() {
@@ -174,7 +293,7 @@ export function App() {
     return <DevGallery />
   }
 
-  const hasSave = typeof window !== 'undefined' && window.localStorage.getItem('pmu.save.v1') !== null
+  const hasSave = continuableSave()
 
   if (state === null) {
     return (
@@ -227,9 +346,9 @@ export function App() {
   return (
     <div className="app">
       {view === 'lobby' ? (
-        <LobbyWorld state={state} store={store} onNavigate={navigate} onMenu={openMenu} travelRequest={travel} />
+        <LobbyWorld state={state} store={store} onNavigate={navigate} onMenu={openMenu} travelRequest={travel} paused={menuOpen || demoLog !== null} />
       ) : (
-        <Scene title={t(SCENE_TITLE[view])} state={state} onBack={back} onMenu={openMenu}>
+        <Scene title={t(SCENE_TITLE[view])} view={view} state={state} onBack={back} onMenu={openMenu} onGo={go}>
           {view === 'tower' && <TowerScreen state={state} store={store} onGo={go} />}
           {view === 'summon' && <SummonScreen state={state} store={store} />}
           {view === 'party' && <PartyScreen state={state} store={store} />}
@@ -237,7 +356,7 @@ export function App() {
         </Scene>
       )}
 
-      {menuOpen && <GameMenu store={store} onGo={go} onClose={() => setMenuOpen(false)} />}
+      {menuOpen && <GameMenu state={state} store={store} onGo={go} onClose={() => setMenuOpen(false)} />}
       {demoLog && <BattleScene log={demoLog} state={state} onDone={() => setDemoLog(null)} />}
       <ReturnLayer state={state} store={store} view={view} onGo={go} />
     </div>
