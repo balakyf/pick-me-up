@@ -14,14 +14,20 @@ function ring(b: Bitmap, cx: number, cy: number, r: number, c: number, dotted = 
   }
 }
 
-/** A 96×56 flattened (perspective) summoning circle in `tint`. */
-export function drawSummonCircle(tint: string): Bitmap {
+/**
+ * A 96×56 flattened (perspective) summoning circle in `tint`. Given several tints (the
+ * Summon Theatre's rainbow tell), the two solid rings take the first two and the rune
+ * ticks cycle through all of them.
+ */
+export function drawSummonCircle(tint: string | readonly string[]): Bitmap {
+  const tints = (typeof tint === 'string' ? [tint] : tint.length > 0 ? tint : ['#fff6e0']).map(hex)
   const b = createBitmap(96, 56)
-  const c = hex(tint)
+  const c = tints[0]!
+  const c2 = tints[1 % tints.length]!
   const pale = hex('#fff6e0')
   ring(b, 48, 28, 44, c)
   ring(b, 48, 28, 38, pale, true)
-  ring(b, 48, 28, 26, c)
+  ring(b, 48, 28, 26, c2)
   ring(b, 48, 28, 12, pale)
   // rune ticks between the outer rings
   for (let i = 0; i < 16; i++) {
@@ -29,7 +35,7 @@ export function drawSummonCircle(tint: string): Bitmap {
     const x = 48 + Math.round(41 * Math.cos(t))
     const y = 28 + Math.round(20.5 * Math.sin(t))
     set(b, x, y, pale)
-    set(b, x + 1, y, c)
+    set(b, x + 1, y, tints[i % tints.length]!)
   }
   // the Mobius ∞ at the centre
   for (let i = 0; i < 20; i++) {

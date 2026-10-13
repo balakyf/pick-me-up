@@ -1,6 +1,6 @@
 /*
- * Summon & reveal — moved verbatim from ui.css (WP0). Owned by WP1.
- * Imported by screens.tsx; it loads after ui.css, so the shared tokens apply.
+ * Summon & reveal. Owned by WP1. Imported by screens.tsx and summon/RevealSequence.tsx;
+ * it loads after ui.css, so the shared tokens apply.
  */
 /* Summon */
 .summon-stage { display: flex; flex-direction: column; align-items: center; gap: 22px; padding: 20px; text-align: center; }
@@ -14,24 +14,145 @@
 .summon-buttons { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
 .pity { color: var(--ink-dim); font-size: 15px; }
 .pity b { color: var(--accent-2); }
-
-/* ── Summon ritual ──────────────────────────────────────────────────────────── */
-.ritual { position: fixed; inset: 0; z-index: 200; background: radial-gradient(circle at 50% 60%, #1a1030 0%, #06040c 70%); display: flex; align-items: center; justify-content: center; cursor: pointer; overflow: hidden; }
-.ritual-circle { position: absolute; top: 58%; animation: ritual-circle 2.9s steps(30) both; }
-@keyframes ritual-circle { 0% { transform: scale(0.2); opacity: 0; filter: brightness(1); } 30% { opacity: 1; } 55% { filter: brightness(2.2) drop-shadow(0 0 12px var(--beam)); } 100% { transform: scale(1.15); opacity: 1; filter: brightness(1.4) drop-shadow(0 0 8px var(--beam)); } }
-.ritual-beams { position: absolute; bottom: 30%; display: flex; gap: 6px; align-items: flex-end; height: 70vh; }
-.ritual-beam {
-  width: 22px; height: 0; opacity: 0.85; background: #fff6e0; box-shadow: 0 0 18px #fff6e0;
-  animation: ritual-beam 0.6s steps(8) forwards, ritual-color 0.45s steps(5) forwards;
-}
-.ritual-beam.rare { width: 30px; }
-@keyframes ritual-beam { to { height: 70vh; } }
-@keyframes ritual-color { to { background: var(--final); box-shadow: 0 0 24px var(--final); } }
-.ritual-flash { position: absolute; inset: 0; background: #fff6e0; opacity: 0; animation: ritual-flash 2.9s steps(14) forwards; pointer-events: none; }
 .btn.gold.pulse { animation: pulseGlow 1.2s steps(4) infinite; }
-@keyframes ritual-flash { 0%, 50% { opacity: 0; } 58% { opacity: 0.9; } 100% { opacity: 0; } }
-.ritual-stars { position: absolute; top: 18%; font-size: 48px; letter-spacing: 6px; text-shadow: 3px 3px 0 #06040c; }
-.ritual-star { display: inline-block; opacity: 0; animation: ritual-star 0.3s steps(4) forwards; }
-@keyframes ritual-star { from { opacity: 0; transform: scale(2.4); } to { opacity: 1; transform: scale(1); } }
 .flip-in { animation: flipIn 0.35s steps(5) both; }
 @keyframes flipIn { from { transform: rotateY(90deg) scale(0.9); filter: brightness(3); } to { transform: rotateY(0) scale(1); filter: none; } }
+
+/* Title: a save that could not be read */
+.save-broken { margin-top: 14px; padding: 6px 12px; color: var(--warn); border: 2px solid var(--warn); background: #2a1810; font-size: 15px; }
+
+/* ── Summon Theatre (spec 2026-10-12 S2) ─────────────────────────────────────
+ * The tell ladder: white → blue → gold → rainbow. `--tell` carries the colour;
+ * `.tell-3` (rainbow) animates its hue. Every motion is stepped, like the rest of the kit.
+ */
+.theatre {
+  --tell: #fff6e0;
+  /* Scrolls (never clips) when a tall card meets a short screen; the auto margins on the
+     stage wrapper (.theatre-main) centre it when it fits. The bottom padding keeps
+     the card clear of the fixed footer. */
+  position: fixed; inset: 0; z-index: 200; overflow-x: hidden; overflow-y: auto; cursor: pointer; outline: none;
+  display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+  padding: 12px 16px 64px;
+  background: radial-gradient(circle at 50% 62%, #1a1030 0%, #06040c 72%);
+  user-select: none;
+}
+.theatre-main { margin: auto 0; position: relative; z-index: 1; display: flex; flex-direction: column; align-items: center; max-width: 100%; }
+.theatre-glow {
+  position: absolute; inset: 0; pointer-events: none;
+  background: radial-gradient(ellipse 60% 45% at 50% 62%, var(--tell) 0%, transparent 70%);
+  opacity: 0.22; transition: background 0.3s steps(3);
+}
+.theatre.tell-3 .theatre-glow { animation: rainbowHue 1.6s steps(12) infinite; opacity: 0.3; }
+@keyframes rainbowHue { from { filter: hue-rotate(0deg); } to { filter: hue-rotate(360deg); } }
+
+.theatre-circle {
+  position: absolute; top: 58%; left: 50%; transform: translate(-50%, -50%);
+  filter: drop-shadow(0 0 10px var(--tell));
+  animation: circleWake 0.7s steps(7) both, circleBreath 2.4s steps(8) 0.7s infinite;
+}
+.theatre.is-cards .theatre-circle { opacity: 0.55; }
+.theatre.tell-3 .theatre-circle { animation: circleWake 0.7s steps(7) both, rainbowHue 1.6s steps(12) infinite; }
+@keyframes circleWake {
+  0% { transform: translate(-50%, -50%) scale(0.2); opacity: 0; filter: brightness(3) drop-shadow(0 0 16px var(--tell)); }
+  100% { transform: translate(-50%, -50%) scale(1); opacity: 1; filter: drop-shadow(0 0 10px var(--tell)); }
+}
+@keyframes circleBreath { 50% { transform: translate(-50%, -50%) scale(1.05); } }
+
+.theatre-beams { position: absolute; bottom: 36%; display: flex; gap: 6px; align-items: flex-end; height: 62vh; pointer-events: none; }
+.theatre-beam {
+  width: 20px; height: 0; opacity: 0.85;
+  background: var(--tell); box-shadow: 0 0 18px var(--tell);
+  animation: theatreBeam 0.6s steps(8) forwards;
+  transition: background 0.25s steps(3), box-shadow 0.25s steps(3);
+}
+.theatre.tell-3 .theatre-beam { animation: theatreBeam 0.6s steps(8) forwards, rainbowHue 1.6s steps(12) infinite; }
+@keyframes theatreBeam { to { height: 62vh; } }
+
+.theatre-stage { position: relative; z-index: 1; display: flex; justify-content: center; align-items: center; min-height: 420px; padding: 12px; }
+
+/* A face-down card glowing in its tell. */
+.card-back {
+  width: 180px; height: 260px; position: relative;
+  display: flex; align-items: center; justify-content: center;
+  background: repeating-linear-gradient(45deg, #1c1640 0 6px, #262054 6px 12px);
+  border: 3px solid var(--tell); border-radius: 4px;
+  box-shadow: 0 0 0 3px #0a0714, 0 0 22px 4px var(--tell);
+  animation: dealIn 0.24s steps(4) both, backPulse 0.5s steps(2) 0.24s infinite;
+}
+.card-back-sigil { font-size: 64px; color: var(--tell); text-shadow: 3px 3px 0 #0a0714; }
+.card-back.tell-3 { animation: dealIn 0.24s steps(4) both, rainbowHue 1s steps(10) infinite; }
+.card-back.upgraded { animation: upgradeFlash 0.4s steps(4) both, backPulse 0.5s steps(2) 0.4s infinite; }
+.card-back.upgraded.tell-3 { animation: upgradeFlash 0.4s steps(4) both, rainbowHue 1s steps(10) 0.4s infinite; }
+@keyframes dealIn { from { transform: translateY(40px) scale(0.85); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes backPulse { 50% { box-shadow: 0 0 0 3px #0a0714, 0 0 34px 8px var(--tell); } }
+@keyframes upgradeFlash { 0% { filter: brightness(4); transform: scale(1.12); } 100% { filter: none; transform: none; } }
+
+/* The face: the person first. */
+.person-card {
+  width: min(320px, 88vw); padding: 14px 16px 16px; text-align: center; position: relative; overflow: hidden;
+  background: linear-gradient(180deg, var(--win-top), var(--win-bot));
+  border: 2px solid var(--rim); border-radius: 3px;
+  box-shadow: 0 0 0 2px var(--rim-dark), inset 0 0 0 2px #4a3e8e, 0 0 28px 2px var(--tell);
+  animation: flipIn 0.35s steps(5) both; cursor: default;
+}
+.person-card::before { content: ''; position: absolute; left: 0; right: 0; top: 0; height: 5px; background: var(--rarity); }
+.person-art { height: 132px; display: flex; align-items: flex-end; justify-content: center; }
+.person-art img { animation: personHop 0.5s steps(3) 0.3s both; }
+@keyframes personHop { 0% { transform: translateY(8px); } 60% { transform: translateY(-6px); } 100% { transform: none; } }
+.person-name { font-size: 22px; font-weight: 700; margin-top: 6px; }
+.person-card .stars { font-size: 20px; letter-spacing: 2px; }
+.person-tags { justify-content: center; margin-top: 6px; }
+.person-facts { display: flex; flex-direction: column; gap: 2px; margin-top: 10px; color: var(--ink-dim); font-size: 14px; }
+.person-traits { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; margin-top: 8px; }
+.person-trait { font-size: 13px; padding: 1px 8px; color: var(--accent-2); border: 2px solid var(--line); background: #120e2c; }
+.person-intro { margin: 12px 0 0; padding: 8px 10px; font-size: 16px; font-style: italic; color: var(--ink); background: #120e2c; border-left: 3px solid var(--tell); text-align: left; }
+.person-skills { margin-top: 10px; text-align: left; }
+.person-skills-label { font-size: 13px; color: var(--gold); margin-bottom: 4px; }
+
+/* 4★+: a foil sheen sweeps the face. */
+.person-card.foil::after {
+  content: ''; position: absolute; inset: -40% -60%; pointer-events: none;
+  background: linear-gradient(115deg, transparent 40%, rgba(255, 255, 255, 0.28) 47%, rgba(183, 155, 255, 0.22) 50%, rgba(106, 216, 232, 0.2) 53%, transparent 60%);
+  animation: foilSweep 2.4s steps(16) 0.4s infinite;
+}
+@keyframes foilSweep { from { transform: translateX(-45%); } to { transform: translateX(45%); } }
+
+/* The dealt row along the bottom. */
+.theatre-deck { position: relative; z-index: 1; display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap; justify-content: center; max-width: 92vw; }
+.deck-slot { width: 30px; height: 40px; border: 2px solid #3e3478; background: repeating-linear-gradient(45deg, #1c1640 0 3px, #262054 3px 6px); display: inline-flex; align-items: center; justify-content: center; overflow: hidden; }
+.deck-slot.current { border-color: var(--tell); box-shadow: 0 0 8px var(--tell); }
+.deck-slot.shown { background: #120e2c; animation: pop 0.2s steps(3) both; }
+.deck-slot.shown img { width: 28px; height: 28px; }
+
+.theatre-foot {
+  position: fixed; bottom: 0; left: 0; right: 0; z-index: 2; padding: 10px 16px 14px;
+  display: flex; flex-wrap: wrap; gap: 6px 14px; justify-content: center; align-items: center;
+  color: var(--ink-dim); font-size: 14px;
+  background: linear-gradient(180deg, transparent, rgba(6, 4, 12, 0.85) 40%);
+  pointer-events: none;
+}
+.theatre-foot > * { pointer-events: auto; }
+.theatre-count { color: var(--ink); }
+.theatre-hint { opacity: 0.8; animation: blink 1.4s steps(2) infinite; }
+.theatre-skip { cursor: pointer; }
+.theatre.is-cards .theatre-hint { animation: none; }
+
+@media (max-width: 520px) {
+  .theatre-stage { min-height: 0; padding: 4px 0; }
+  .theatre-hint { display: none; }
+  .card-back { width: 150px; height: 216px; }
+  .theatre-beams { gap: 3px; }
+  .theatre-beam { width: 12px; }
+}
+
+/* Respect reduced motion (the OS setting or the game's own preference, `.reduced`):
+   keep the colours and the order, drop the movement. */
+@media (prefers-reduced-motion: reduce) {
+  .theatre-circle, .theatre-beam, .card-back, .card-back.upgraded, .person-card, .person-art img,
+  .person-card.foil::after, .theatre-glow, .theatre-hint, .deck-slot.shown { animation: none !important; }
+  .theatre-beam { height: 62vh; }
+}
+.theatre.reduced .theatre-circle, .theatre.reduced .theatre-beam, .theatre.reduced .card-back,
+.theatre.reduced .person-card, .theatre.reduced .person-art img, .theatre.reduced .person-card.foil::after,
+.theatre.reduced .theatre-glow, .theatre.reduced .theatre-hint, .theatre.reduced .deck-slot.shown { animation: none !important; }
+.theatre.reduced .theatre-beam { height: 62vh; }

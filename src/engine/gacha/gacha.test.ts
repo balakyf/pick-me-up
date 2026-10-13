@@ -18,10 +18,12 @@ import {
   summonMany,
   summonCost,
   mercySummonAvailable,
+  tutorialMinStar,
+  bestOfPull,
 } from './gacha'
 import { PVP_DEFAULTS } from '../account'
 import { TUNING, STAR_ENVELOPES } from '../tuning'
-import { CAMEO_HEROES, ENGRAVINGS } from '../content'
+import { CAMEO_HEROES, CLASS_SKILL, ENGRAVINGS } from '../content'
 import { makeSeed, rngFor, createRng } from '../rng/rng'
 import type { GameState, Seed, HeroId, Star } from '../types'
 
@@ -632,5 +634,165 @@ describe('the tutorial ten-pull and the crystal’s charge', () => {
     // A new world-day recharges it.
     const tomorrow = { ...s, meta: { ...s.meta, lastSeenAtWorld: s.meta.lastSeenAtWorld + 24 * 3_600_000 } }
     expect(() => summonMany(tomorrow, 'advanced', 10)).not.toThrow()
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// The guaranteed first pull (spec 2026-10-12 S1)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('tutorialMinStar — the deficit lift', () => {
+  it('leaves early pulls alone while the guarantees can still be met naturally', () => {
+    expect(tutorialMinStar(0, 10, [])).toBeUndefined()
+    expect(tutorialMinStar(6, 10, [1, 1, 1, 1, 1, 1])).toBeUndefined()
+  })
+
+  it('lifts to 2★ exactly when the 2★+ count could no longer reach the minimum', () => {
+    // pull 7 (0-based) with no 2★+ yet: 0 + 2 pulls left after it < 3 → must be 2★+.
+    expect(tutorialMinStar(7, 10, [1, 1, 1, 1, 1, 1, 1])).toBe(2)
+    // with one 2★ already, pull 7 can still wait (1 + 2 ≥ 3)…
+    expect(tutorialMinStar(7, 10, [1, 2, 1, 1, 1, 1, 1])).toBeUndefined()
+    // …but pull 8 cannot.
+    expect(tutorialMinStar(8, 10, [1, 2, 1, 1, 1, 1, 1, 1])).toBe(2)
+  })
+
+  it('lifts the last pull to the top star when none has appeared', () => {
+    expect(tutorialMinStar(9, 10, [2, 2, 2, 1, 1, 1, 1, 1, 1])).toBe(3)
+    expect(tutorialMinStar(9, 10, [2, 3, 2, 1, 1, 1, 1, 1, 1])).toBeUndefined()
+    // both guarantees at once: the higher wins.
+    expect(tutorialMinStar(9, 10, [2, 2, 1, 1, 1, 1, 1, 1, 1])).toBe(3)
+  })
+
+  it('reads its thresholds from TUNING by default and accepts overrides', () => {
+    expect(TUNING.ftue.tutorialMinTopStar).toBe(3)
+    expect(TUNING.ftue.tutorialMin2Plus).toBe(3)
+    expect(tutorialMinStar(9, 10, [3, 1, 1, 1, 1, 1, 1, 1, 1], 3, 1)).toBeUndefined()
+    expect(tutorialMinStar(4, 5, [1, 1, 1, 1], 2, 1)).toBe(2)
+  })
+})
+
+describe('the guaranteed tutorial ten-pull (S1)', () => {
+  async function tutorialPull(seed: number) {
+    const { createAccount } = await import('../account')
+    return summonMany(createAccount(seed), 'normal', 10)
+  }
+
+  it('over 200 seeds: ≥1 3★ that knows a skill, and ≥3 heroes of 2★+', async () => {
+    let topWithSkill = 0
+    let all1or2 = 0
+    for (let seed = 1; seed <= 200; seed++) {
+      const { heroes } = await tutorialPull(seed)
+      expect(heroes).toHaveLength(10)
+      const threes = heroes.filter((h) => h.star >= 3)
+      expect(threes.length).toBeGreaterThanOrEqual(1)
+      expect(threes.some((h) => h.heroClass !== null && h.skills.length >= 1)).toBe(true)
+      expect(heroes.filter((h) => h.star >= 2).length).toBeGreaterThanOrEqual(3)
+      if (threes.some((h) => h.skills.length >= 1)) topWithSkill++
+      all1or2 += heroes.filter((h) => h.star <= 2).length
+    }
+    expect(topWithSkill).toBe(200)
+    // The underdog flavour holds: most of the cards are still 1–2★.
+    expect(all1or2 / 2000).toBeGreaterThan(0.75)
+  })
+
+  it('the taught skill is the class signature, at Lv1, on exactly one hero', async () => {
+    for (let seed = 1; seed <= 40; seed++) {
+      const { state, heroes } = await tutorialPull(seed)
+      const taught = heroes.filter((h) => h.origin === 'procedural' && h.skills.length > 0)
+      expect(taught.length).toBeLessThanOrEqual(1)
+      for (const h of taught) {
+        expect(h.skills).toEqual([{ id: CLASS_SKILL[h.heroClass!], level: 1, xp: 0 }])
+        // the state holds the same hero the pull returns
+        expect(state.heroes[h.id]).toEqual(h)
+      }
+    }
+  })
+
+  it('teaches the best 3★ (highest true star, then CP, then id)', async () => {
+    for (let seed = 1; seed <= 60; seed++) {
+      const { heroes } = await tutorialPull(seed)
+      const threes = heroes.filter((h) => h.star >= 3 && h.heroClass !== null)
+      const best = bestOfPull(threes.map((h) => ({ ...h, skills: [] })))!
+      expect(heroes.find((h) => h.id === best.id)!.skills.some((s) => s.id === CLASS_SKILL[best.heroClass!])).toBe(true)
+    }
+  })
+
+  it('takes no extra draws: an un-lifted first pull is the hero a paid pull would give', async () => {
+    const { createAccount } = await import('../account')
+    for (const seed of [3, 17, 101]) {
+      const s0 = createAccount(seed)
+      const free = summonMany(s0, 'normal', 10).heroes
+      const paid = summonMany(
+        { ...s0, gold: TUNING.gacha.normalCostGold * 10, life: { ...s0.life, guide: { ...s0.life.guide, tutorialPull: true } } },
+        'normal',
+        10,
+      ).heroes
+      // The first pull is never lifted (the deficit cannot bite on pull 0 of 10).
+      expect(free[0]!.name).toBe(paid[0]!.name)
+      expect(free[0]!.star).toBe(paid[0]!.star)
+    }
+  })
+
+  it('every pull draws once from its own gacha slot: a lift only raises the star it already rolled', async () => {
+    const { createAccount } = await import('../account')
+    let lifted = 0
+    for (let seed = 1; seed <= 60; seed++) {
+      const s0 = createAccount(seed)
+      const out = summonMany(s0, 'normal', 10)
+      // Exactly ten slots of the 'gacha' stream are spent — no extra draws.
+      expect(out.state.gacha.pullCount).toBe(s0.gacha.pullCount + 10)
+      // Replay pull by pull from the same intermediate states: an un-lifted pull is the
+      // very hero a plain summon() would give, and a lifted one never lowers the roll.
+      let cur: GameState = {
+        ...s0,
+        gold: s0.gold + TUNING.gacha.normalCostGold * 10,
+        life: { ...s0.life, guide: { ...s0.life.guide, tutorialPull: true } },
+      }
+      const stars: Star[] = []
+      for (let i = 0; i < 10; i++) {
+        const minStar = tutorialMinStar(i, 10, stars)
+        const plain = summon(cur).hero
+        const res = summon(cur, minStar !== undefined ? { minStar } : undefined)
+        if (minStar === undefined || plain.star >= minStar) {
+          expect(res.hero.name).toBe(plain.name)
+          expect(res.hero.star).toBe(plain.star)
+        } else {
+          lifted++
+          expect(res.hero.star).toBe(minStar)
+        }
+        expect(res.hero.id).toBe(out.heroes[i]!.id)
+        stars.push(res.hero.star)
+        cur = res.state
+      }
+    }
+    // The guarantee does bite on some seeds (otherwise this test proves nothing).
+    expect(lifted).toBeGreaterThan(0)
+  })
+
+  it('is deterministic and pure', async () => {
+    const { createAccount } = await import('../account')
+    const s0 = createAccount(42)
+    const frozen = JSON.stringify(s0)
+    const a = summonMany(s0, 'normal', 10)
+    const b = summonMany(s0, 'normal', 10)
+    expect(JSON.stringify(s0)).toBe(frozen)
+    expect(a.heroes).toEqual(b.heroes)
+    expect(a.state).toEqual(b.state)
+  })
+
+  it('a paid ten-pull after the tutorial is untouched (no guarantee, no taught skill)', async () => {
+    const { createAccount } = await import('../account')
+    const s0 = createAccount(5)
+    const after = summonMany(s0, 'normal', 10).state
+    const funded = { ...after, gold: TUNING.gacha.normalCostGold * 10 }
+    let cur = funded
+    const plain: ReturnType<typeof summon>['hero'][] = []
+    for (let i = 0; i < 10; i++) {
+      const r = summon(cur)
+      plain.push(r.hero)
+      cur = r.state
+    }
+    expect(summonMany(funded, 'normal', 10).heroes).toEqual(plain)
+    for (const h of plain) if (h.star < 4 && h.origin === 'procedural') expect(h.skills).toEqual([])
   })
 })

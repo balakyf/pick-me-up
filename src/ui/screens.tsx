@@ -1,15 +1,15 @@
-import { useEffect, useState } from 'react'
-import { sfx } from './audio/sound'
-import { drawSummonCircle } from './pixel/summonFx'
-import { shownStar } from '../engine/shop'
+import { useState } from 'react'
 import { crystalChargeLeft, mercySummonAvailable, tutorialPullAvailable } from '../engine/gacha'
 import type { GameState, HeroId, Line, OwnedHero } from '../engine/types'
 import type { Store } from '../engine/store'
 import { TUNING } from '../engine/tuning'
 import { HeroCard } from './HeroCard'
 import { HeroBond } from './metaPanels'
-import { cpOf, Stars, Portrait, STAR_COLOR } from './bits'
-import { freshSeed } from './useGame'
+import { cpOf, Stars, Portrait } from './bits'
+import { BROKEN_SAVE_KEY, freshSeed } from './useGame'
+import { DEFAULT_SAVE_KEY } from '../engine/account'
+import { RevealSequence } from './summon/RevealSequence'
+import { revealOrder } from './summon/reveal'
 import { heroFrameUrl } from './pixel/sprites'
 import { cachedDataUrl } from './pixel/render'
 import { drawProp } from './pixel/props'
@@ -40,7 +40,38 @@ const PARADE: { heroClass: HeroClass | null; star: Star; element: Element }[] = 
   { heroClass: null, star: 2, element: 'physical' },
 ]
 
+/**
+ * Is the save on disk the one that already failed to load? useGame copies an unreadable
+ * save to BROKEN_SAVE_KEY and leaves the original in place, so the two match exactly
+ * until a new game overwrites the save. Storage errors read as "not broken".
+ */
+export function saveLooksBroken(): boolean {
+  try {
+    if (typeof window === 'undefined') return false
+    const broken = window.localStorage.getItem(BROKEN_SAVE_KEY)
+    return broken !== null && broken === window.localStorage.getItem(DEFAULT_SAVE_KEY)
+  } catch {
+    return false
+  }
+}
+
 export function TitleScreen({ store, hasSave }: { store: Store; hasSave: boolean }) {
+  // A save that could not be read gets no dead Continue button: say so, keep New Game.
+  const [broken, setBroken] = useState(() => hasSave && saveLooksBroken())
+  function resume() {
+    try {
+      store.load()
+    } catch (err) {
+      try {
+        const raw = window.localStorage.getItem(DEFAULT_SAVE_KEY)
+        if (raw !== null) window.localStorage.setItem(BROKEN_SAVE_KEY, raw)
+      } catch {
+        /* storage may be unavailable */
+      }
+      console.error('Could not load the save.', err)
+      setBroken(true)
+    }
+  }
   return (
     <div className="title-wrap">
       <div className="subtitle">{t('Infinite Gacha')}</div>
@@ -63,8 +94,8 @@ export function TitleScreen({ store, hasSave }: { store: Store; hasSave: boolean
         {t('Summon unique heroes from the Mobius gacha, build a party of five, and climb the permadeath tower. Every hero is one of a kind. Every death is forever.')}
       </div>
       <div className="btns">
-        {hasSave && (
-          <button className="btn big" onClick={() => store.load()}>
+        {hasSave && !broken && (
+          <button className="btn big" onClick={resume}>
             {t('Continue')}
           </button>
         )}
@@ -75,6 +106,11 @@ export function TitleScreen({ store, hasSave }: { store: Store; hasSave: boolean
           {hasSave ? t('New Game') : t('Begin')}
         </button>
       </div>
+      {broken && (
+        <div className="save-broken" role="alert">
+          {t('This save could not be read. A copy was kept.')}
+        </div>
+      )}
       {hasSave && <div className="muted" style={{ marginTop: 14 }}>{t('Starting a new game overwrites your save.')}</div>}
     </div>
   )
@@ -83,51 +119,11 @@ export function TitleScreen({ store, hasSave }: { store: Store; hasSave: boolean
 // ── Summon ───────────────────────────────────────────────────────────────────
 const ADV = TUNING.gacha.advanced
 
-/** The summoning ritual: the circle wakes, a pillar of light in the (shown) rarity's colour, a flash. */
-function SummonRitual({ heroes, masterLevel, onDone }: { heroes: OwnedHero[]; masterLevel: number; onDone: () => void }) {
-  const best = Math.max(...heroes.map((h) => shownStar(h, masterLevel))) as Star
-  const tint = STAR_COLOR[best]
-  useEffect(() => {
-    sfx('summon')
-    // The build-up: white light first, then each pillar takes its colour — the best last.
-    const reveal = setTimeout(() => sfx(best >= 5 ? 'legend' : best >= 4 ? 'rare' : 'levelup'), 1900)
-    const done = setTimeout(onDone, 2900)
-    return () => {
-      clearTimeout(reveal)
-      clearTimeout(done)
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-  const circle = cachedDataUrl(`circle|${tint}`, () => scale(drawSummonCircle(tint), 3))
-  return (
-    <div className="ritual" onClick={onDone} style={{ ['--beam' as string]: tint }} title={t('Click to skip')}>
-      <div className="ritual-beams">
-        {heroes.map((h, i) => {
-          const star = shownStar(h, masterLevel)
-          const isBest = star === best
-          return (
-            <span
-              key={h.id}
-              className={`ritual-beam ${isBest && best >= 4 ? 'rare' : ''}`}
-              style={{
-                ['--final' as string]: STAR_COLOR[star as Star],
-                animationDelay: `${0.5 + i * 0.05}s, ${1.2 + (isBest ? 0.5 : i * 0.04)}s`,
-              }}
-            />
-          )
-        })}
-      </div>
-      {circle && <img className="px ritual-circle" src={circle} width={288} height={168} alt="" />}
-      <div className="ritual-flash" />
-      <div className="ritual-stars" style={{ color: tint }}>
-        {Array.from({ length: best }, (_, i) => (
-          <span key={i} className="ritual-star" style={{ animationDelay: `${1.9 + i * 0.12}s` }}>
-            ★
-          </span>
-        ))}
-      </div>
-    </div>
-  )
+/** The summary grid after the theatre: the best of the pull first (the theatre's order, reversed). */
+function summaryOrder(heroes: OwnedHero[], masterLevel: number): OwnedHero[] {
+  return revealOrder(heroes, masterLevel)
+    .reverse()
+    .map((c) => c.hero)
 }
 
 export function SummonScreen({ state, store }: { state: GameState; store: Store }) {
@@ -181,7 +177,7 @@ export function SummonScreen({ state, store }: { state: GameState; store: Store 
       <div className="summon-stage">
         {revealed.length > 0 ? (
           <div className={`reveal ${revealed.length > 1 ? 'reveal-many' : ''}`}>
-            {revealed.map((h, i) => (
+            {summaryOrder(revealed, state.meta.masterLevel).map((h, i) => (
               <div key={h.id} className="flip-in" style={{ animationDelay: `${i * 0.12}s` }}>
                 <HeroCard hero={h} showStats={revealed.length === 1} masterLevel={state.meta.masterLevel} />
               </div>
@@ -237,7 +233,7 @@ export function SummonScreen({ state, store }: { state: GameState; store: Store 
         {err && <div className="muted" style={{ color: 'var(--bad)' }}>{err}</div>}
       </div>
       {ritual && (
-        <SummonRitual
+        <RevealSequence
           heroes={ritual}
           masterLevel={state.meta.masterLevel}
           onDone={() => {
