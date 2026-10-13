@@ -32,6 +32,8 @@ export type Sfx =
   | 'door'
   | 'stamp'
   | 'saved'
+  // WP2: the Decisive Moment's heartbeat.
+  | 'decisive'
 
 /** Optional per-call shaping. Omitted = the exact sound as before. */
 export interface SfxOpts {
@@ -40,6 +42,40 @@ export interface SfxOpts {
   /** Rarity of the thing being revealed (1..5); used by 'reveal'. Default 1. */
   star?: number
 }
+
+// ── Hit variation (WP2) ──────────────────────────────────────────────────────
+// A hit is layered: a bright transient (high-passed noise) plus a pitched body, and a
+// sub thump on crits. Each hit takes the next of 4 rotating variants (so the same one
+// never plays twice in a row) and a ±80-cent detune. Both come from a counter, not
+// Math.random, so the sequence is reproducible.
+
+/** Number of rotating hit/crit variants. */
+export const HIT_VARIANTS = 4
+/** Detune range, ± cents. */
+export const HIT_DETUNE_CENTS = 80
+
+/** The variant the n-th hit uses (0..HIT_VARIANTS-1); consecutive hits always differ. */
+export function hitVariant(n: number): number {
+  return ((Math.floor(n) % HIT_VARIANTS) + HIT_VARIANTS) % HIT_VARIANTS
+}
+
+/** The detune (cents, within ±80) the n-th hit uses. */
+export function hitDetune(n: number): number {
+  // A cheap integer hash of n, folded into [-80, 80].
+  let h = Math.imul(Math.floor(n) ^ 0x9e3779b9, 0x85ebca6b) >>> 0
+  h = Math.imul(h ^ (h >>> 13), 0xc2b2ae35) >>> 0
+  return (h % (2 * HIT_DETUNE_CENTS + 1)) - HIT_DETUNE_CENTS
+}
+
+/** Body shapes per variant: waveform, start and end notes (relative to the cue's root). */
+const HIT_BODY: readonly { type: OscillatorType; from: number; to: number; dur: number }[] = [
+  { type: 'square', from: 0, to: -12, dur: 0.08 },
+  { type: 'triangle', from: 2, to: -10, dur: 0.09 },
+  { type: 'square', from: -2, to: -13, dur: 0.07 },
+  { type: 'sawtooth', from: 0, to: -9, dur: 0.075 },
+]
+
+let hitCounter = 0
 
 export type Music = 'lobby' | 'battle' | 'none'
 
@@ -118,8 +154,8 @@ function tone(freq: number, dur: number, type: OscillatorType, at = 0, vol = 1, 
   osc.stop(t0 + dur + 0.02)
 }
 
-/** A burst of noise (hits, deaths). */
-function noise(dur: number, at = 0, vol = 0.6): void {
+/** A burst of noise (hits, deaths). `highpass` (Hz) thins it into a bright transient. */
+function noise(dur: number, at = 0, vol = 0.6, highpass?: number): void {
   const a = audio()
   if (!a || !master || muted) return
   const len = Math.max(1, Math.floor(a.sampleRate * dur))
@@ -130,8 +166,41 @@ function noise(dur: number, at = 0, vol = 0.6): void {
   const g = a.createGain()
   g.gain.value = vol
   src.buffer = buf
-  src.connect(g).connect(master)
+  if (highpass !== undefined && typeof a.createBiquadFilter === 'function') {
+    const f = a.createBiquadFilter()
+    f.type = 'highpass'
+    f.frequency.value = highpass
+    src.connect(f).connect(g).connect(master)
+  } else src.connect(g).connect(master)
   src.start(a.currentTime + at)
+}
+
+/** The layered hit: transient + body (+ sub on a crit), in the rotating variant. */
+function layeredHit(root: number, crit: boolean): void {
+  const n = hitCounter++
+  const v = HIT_BODY[hitVariant(n)]!
+  const keep = pitch
+  pitch = keep * 2 ** (hitDetune(n) / 1200)
+  try {
+    noise(0.015, 0, crit ? 0.8 : 0.55, 2400) // transient
+    tone(NOTE(root + v.from), v.dur, v.type, 0, crit ? 0.5 : 0.4, NOTE(root + v.to)) // body
+    if (crit) {
+      tone(NOTE(root + 24 + v.from), 0.06, 'square', 0.01, 0.35) // the crit's bright ring
+      tone(NOTE(root + 36 + v.from), 0.1, 'square', 0.05, 0.35)
+    }
+  } finally {
+    pitch = keep
+  }
+  // The sub thump carries weight; it is never transposed (a rising combo stays heavy).
+  if (crit) {
+    const p = pitch
+    pitch = 1
+    try {
+      tone(55, 0.15, 'sine', 0, 0.6, 35)
+    } finally {
+      pitch = p
+    }
+  }
 }
 
 const NOTE = (n: number) => 440 * 2 ** ((n - 69) / 12)
@@ -152,12 +221,9 @@ function play(name: Sfx, star: number): void {
     case 'click':
       return tone(NOTE(84), 0.04, 'square', 0, 0.3)
     case 'hit':
-      noise(0.06, 0, 0.5)
-      return tone(NOTE(52), 0.08, 'square', 0, 0.4, NOTE(40))
+      return layeredHit(52, false)
     case 'crit':
-      noise(0.1, 0, 0.7)
-      tone(NOTE(76), 0.06, 'square', 0, 0.5)
-      return tone(NOTE(88), 0.1, 'square', 0.05, 0.5)
+      return layeredHit(52, true)
     case 'miss':
       return tone(NOTE(72), 0.12, 'triangle', 0, 0.3, NOTE(60))
     case 'guard':
@@ -201,10 +267,22 @@ function play(name: Sfx, star: number): void {
     case 'coin':
       tone(NOTE(88), 0.05, 'square', 0, 0.3)
       return tone(NOTE(93), 0.12, 'square', 0.05, 0.3)
-    case 'heroFall':
-      noise(0.18, 0, 0.25)
-      tone(NOTE(55), 0.7, 'triangle', 0, 0.4, NOTE(36))
-      return tone(NOTE(62), 0.6, 'triangle', 0.18, 0.25, NOTE(43))
+    case 'heroFall': {
+      // A hero's permanent death: a low thud, then a slow minor bell that sinks.
+      // Nothing like the quick 'death' an enemy gets.
+      const p = pitch
+      pitch = 1
+      try {
+        tone(70, 0.35, 'sine', 0, 0.7, 38)
+      } finally {
+        pitch = p
+      }
+      noise(0.12, 0, 0.2)
+      tone(NOTE(57), 1.1, 'triangle', 0.12, 0.42, NOTE(52))
+      tone(NOTE(60), 1.0, 'triangle', 0.14, 0.3, NOTE(55))
+      tone(NOTE(64), 0.9, 'triangle', 0.5, 0.22, NOTE(57))
+      return tone(NOTE(45), 1.4, 'sine', 0.5, 0.35, NOTE(40))
+    }
     case 'unlock':
       ;[67, 72, 76, 79].forEach((n, i) => tone(NOTE(n), 0.1, 'square', i * 0.07, 0.35))
       return tone(NOTE(84), 0.35, 'triangle', 0.3, 0.4)
@@ -220,6 +298,21 @@ function play(name: Sfx, star: number): void {
     case 'saved':
       ;[79, 84, 91].forEach((n, i) => tone(NOTE(n), 0.08, 'square', i * 0.05, 0.4))
       return tone(NOTE(90), 0.3, 'triangle', 0.16, 0.45)
+    case 'decisive': {
+      // Two heartbeats under a held, uneasy fifth: time has stopped.
+      const p = pitch
+      pitch = 1
+      try {
+        tone(62, 0.12, 'sine', 0, 0.7, 45)
+        tone(58, 0.16, 'sine', 0.2, 0.6, 40)
+        tone(62, 0.12, 'sine', 0.75, 0.55, 45)
+        tone(58, 0.16, 'sine', 0.95, 0.45, 40)
+      } finally {
+        pitch = p
+      }
+      tone(NOTE(69), 0.9, 'triangle', 0.05, 0.18)
+      return tone(NOTE(75), 0.9, 'triangle', 0.05, 0.12)
+    }
   }
 }
 
