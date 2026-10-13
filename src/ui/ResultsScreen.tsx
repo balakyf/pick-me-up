@@ -230,7 +230,9 @@ export function ResultsScreen({
   ) : null
   const teaser = doorsHere ? null : nextTeaser(state)
   // Short of a summon, but the Sortie's purse would cover it: banking is the nudge.
-  const bankBuys = !progress.ready && !!sortieNow && sortieNow.purse > 0 && snap.gold + sortieNow.purse >= progress.cost
+  // A Sortie with nothing in its Purse and no Boons has nothing to bank: no "Bank +0".
+  const sortieStake = !!sortieNow && (sortieNow.purse > 0 || sortieNow.boons.length > 0)
+  const bankBuys = !progress.ready &&!!sortieNow && sortieNow.purse > 0 && snap.gold + sortieNow.purse >= progress.cost
 
   return (
     <div className={`overlay results-overlay ${reduced ? 'motion-off' : ''}`}>
@@ -435,19 +437,24 @@ export function ResultsScreen({
             <span className="gauge sb-gauge">
               <span style={{ width: `${Math.round(fill * 100)}%` }} />
             </span>
-            {progress.ready ? (
+            {(progress.ready || bankBuys) && onGo && sortieNow && sortieStake ? (
+              // Summoning leaves the Tower and ends the Sortie: the button says so, with the
+              // sum it banks, whether or not the purse is needed to pay for the summon.
+              <button
+                className="btn gold sm summon-cta"
+                title={t('The Sortie ends: its Boons fade and the next climb starts a new streak.')}
+                onClick={() => onGo('summon')}
+              >
+                ⌂ {t('Bank +{n} and summon ▸', { n: sortieNow.purse.toLocaleString() })}
+              </button>
+            ) : progress.ready ? (
               onGo ? (
                 <button className="btn gold sm summon-cta" onClick={() => onGo('summon')}>
                   ✦ {t('Summon now ▸')}
-                  {sortieNow && <span className="small"> {t('(banks the purse)')}</span>}
                 </button>
               ) : (
                 <span className="chip summon-ready">✦ {t('A summon is ready')}</span>
               )
-            ) : bankBuys && onGo ? (
-              <button className="btn gold sm summon-cta" onClick={() => onGo('summon')}>
-                ⌂ {t('Bank +{n} and summon ▸', { n: sortieNow!.purse.toLocaleString() })}
-              </button>
             ) : (
               <span className="muted small">{t('{n} more gold', { n: progress.missing.toLocaleString() })}</span>
             )}

@@ -109,7 +109,6 @@ export const FR_TOWER: Record<string, string> = {
   '{n} heroes on the bench grew stronger.': '{n} héros se sont renforcés sur le banc.',
   'Toward the next summon': 'Vers la prochaine invocation',
   'Summon now ▸': 'Invoquer ▸',
-  '(banks the purse)': '(encaisse la bourse)',
   'Bank +{n} and summon ▸': 'Encaisser +{n} et invoquer ▸',
   'A summon is ready': 'Une invocation est prête',
   '{n} more gold': 'encore {n} or',

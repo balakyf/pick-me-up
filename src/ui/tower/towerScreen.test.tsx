@@ -255,16 +255,16 @@ describe('TowerScreen — floor to floor', () => {
     expect(battles.at(-1)!.mode).toBe('full')
   })
 
-  it('sends "Summon now!" to the summon screen', () => {
+  it('sends the results card\'s summon button to the summon screen', () => {
     const onGo = vi.fn()
     mount(createAccount(7), onGo) // a fresh Master holds 15,000 gold
     click('Enter')
     wait(1250)
-    click('Summon now')
+    click('and summon') // the first clear opened a Sortie: "Bank +X and summon ▸"
     expect(onGo).toHaveBeenCalledWith('summon')
   })
 
-  it('banks a running Sortie before "Summon now" leaves the Tower', () => {
+  it('with a Sortie running, the summon button names the bank, and banks before it leaves the Tower', () => {
     let sentAtGo: string[] = []
     const s = atFloor(createAccount(7), { currentFloor: 1, highestCleared: 0, sortie: { startFloor: 1, floors: 0, purse: 200, boons: [] } })
     const onGo = vi.fn(() => {
@@ -273,8 +273,9 @@ describe('TowerScreen — floor to floor', () => {
     const h = mount(s, onGo)
     click('Enter')
     wait(1250)
-    expect(text()).toContain('(banks the purse)')
-    click('Summon now')
+    const purse = h.store.getState()!.tower.sortie!.purse
+    expect(buttons().some((b) => b.textContent?.includes('Summon now'))).toBe(false)
+    click(`Bank +${purse.toLocaleString()} and summon`)
     expect(onGo).toHaveBeenCalledWith('summon')
     expect(sentAtGo.at(-1)).toBe('RETURN_TO_CAMPUS')
   })
@@ -367,6 +368,24 @@ describe('TowerScreen — Doors, Boons and the Sortie', () => {
     expect(text()).toContain('+1 Promotion Stone')
     click('A summon is ready')
     expect(onGo).toHaveBeenCalledWith('summon')
+  })
+
+  it('a Cache door with a Sortie running offers to bank the purse and summon, and banks before it goes', () => {
+    const cost = TUNING.gacha.normalCostGold
+    let sentAtGo: string[] = []
+    const onGo = vi.fn(() => {
+      sentAtGo = h.sent.map((c) => c.type)
+    })
+    const base = atFloor(createAccount(12), {
+      doors: [{ kind: 'path', reward: 'gold' }, { kind: 'cache', reward: 'stones' }],
+      sortie: { startFloor: 3, floors: 2, purse: 450, boons: [] },
+    })
+    const h = mount({ ...base, gold: cost - 100 }, onGo)
+    click('Cache')
+    expect(text()).toContain('A summon is ready')
+    click('Bank +450 and summon')
+    expect(onGo).toHaveBeenCalledWith('summon')
+    expect(sentAtGo.at(-1)).toBe('RETURN_TO_CAMPUS')
   })
 
   it('a Cache door that leaves a summon out of reach offers nothing more', () => {

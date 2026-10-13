@@ -134,6 +134,28 @@ describe('ResultsScreen — the reward cascade (S11)', () => {
     expect(onGo).toHaveBeenCalledWith('summon')
   })
 
+  it('with a Sortie running, an affordable summon still says it banks the purse, and how much', () => {
+    const cost = TUNING.gacha.normalCostGold
+    const { state, result } = setup({}, { sortie: { startFloor: 3, floors: 2, purse: 600, boons: ['warChest'] } })
+    const onGo = vi.fn()
+    render({ state: { ...state, gold: cost + 10 }, result, goldBefore: cost - 470, onGo })
+    expect(buttons().some((b) => b.textContent?.includes('Summon now'))).toBe(false)
+    const cta = button('Bank +600 and summon')
+    expect(cta.getAttribute('title')).toContain('Boons fade')
+    act(() => cta.click())
+    expect(onGo).toHaveBeenCalledWith('summon')
+  })
+
+  it('an empty Sortie (a first-floor retreat: no purse, no Boons) keeps "Summon now", never "Bank +0"', () => {
+    const cost = TUNING.gacha.normalCostGold
+    const { state, result } = setup({}, { sortie: { startFloor: 3, floors: 0, purse: 0, boons: [] } })
+    const onGo = vi.fn()
+    render({ state: { ...state, gold: cost + 10 }, result, goldBefore: cost - 470, onGo })
+    expect(buttons().some((b) => b.textContent?.includes('Bank +0'))).toBe(false)
+    act(() => button('Summon now').click())
+    expect(onGo).toHaveBeenCalledWith('summon')
+  })
+
   it('does not offer the bank-and-summon when even the purse falls short', () => {
     const cost = TUNING.gacha.normalCostGold
     const { state, result } = setup({}, { sortie: { startFloor: 3, floors: 2, purse: 100, boons: [] } })

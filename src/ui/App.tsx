@@ -318,6 +318,13 @@ export function App() {
   }, [])
   const params = urlParams()
   const [view, setView] = useState<View>(params.view)
+  // A pending "Leave the Tower?" belongs to the Sortie it asked about: once that Sortie
+  // ends (banked by any button) or the Tower is left, drop it, so it can never pop up
+  // uninvited on a later Sortie.
+  const sortieLive = state?.tower.sortie ?? null
+  useEffect(() => {
+    if (view !== 'tower' || sortieLive === null) setLeaving(null)
+  }, [view, sortieLive])
   const [menuOpen, setMenuOpen] = useState(false)
   const [travel, setTravel] = useState<{ place: PlaceId; nonce: number } | null>(null)
 
@@ -371,8 +378,12 @@ export function App() {
     )
   }
 
-  /** Leaving the Tower with a Sortie running asks first (S15); everything else goes at once. */
-  const sortieAtRisk = (to: PlaceId | 'lobby') => view === 'tower' && to !== 'tower' && state.tower.sortie !== null
+  /**
+   * Leaving the Tower with a Sortie running asks first (S15); everything else goes at once.
+   * Reads the LIVE store, not this render's snapshot: a caller that banks the Sortie and
+   * then goes in the same click (TowerScreen's "Bank +X and summon") must go at once.
+   */
+  const sortieAtRisk = (to: PlaceId | 'lobby') => view === 'tower' && to !== 'tower' && (store.getState()?.tower.sortie ?? null) !== null
   function go(place: PlaceId) {
     setMenuOpen(false)
     if (sortieAtRisk(place)) {

@@ -584,10 +584,24 @@ export function TowerScreen({
           {notice.go && (
             <>
               {' '}
-              <button className="btn gold sm summon-cta" onClick={() => leaveTo(notice.go!.place)}>
-                ✦ {notice.go.label}
-                {sortie && <span className="small"> {t('(banks the purse)')}</span>} ▸
-              </button>
+              {sortie && (sortie.purse > 0 || sortie.boons.length > 0) ? (
+                // Leaving ends the Sortie: the button says so, with the sum it banks
+                // (an empty Sortie has nothing to bank and keeps the plain label: no "Bank +0").
+                <>
+                  <span className="chip summon-ready">✦ {notice.go.label}</span>{' '}
+                  <button
+                    className="btn gold sm summon-cta"
+                    title={t('The Sortie ends: its Boons fade and the next climb starts a new streak.')}
+                    onClick={() => leaveTo(notice.go!.place)}
+                  >
+                    ⌂ {t('Bank +{n} and summon ▸', { n: sortie.purse.toLocaleString() })}
+                  </button>
+                </>
+              ) : (
+                <button className="btn gold sm summon-cta" onClick={() => leaveTo(notice.go!.place)}>
+                  ✦ {notice.go.label} ▸
+                </button>
+              )}
             </>
           )}
         </div>
