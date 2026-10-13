@@ -3,7 +3,7 @@ import type { BattleOrder, FloorResult, GameState, OwnedHero, SkillProgress, Sor
 import type { Store } from '../engine/store'
 import { TUNING } from '../engine/tuning'
 import { HIDDEN_OBJECTIVES, SKILLS } from '../engine/content'
-import { t } from './i18n/i18n'
+import { inSentence, t } from './i18n/i18n'
 import { LegacySlot } from './legacy/LegacySlot'
 import { PLACE_LABEL, type PlaceId } from './world/lobbyMap'
 import { openPlaces } from './shell/unlocks'
@@ -193,7 +193,7 @@ export function ResultsScreen({
   for (const a of snap.avenged) {
     lines.push(
       <div key={`rev|${a.bane}`} className="bonus-line cascade-row" style={row(i++)}>
-        ⚔ {t('Revenge on {bane}: +{n} gold', { bane: a.bane, n: Math.round(TUNING.legacy.nemesis.rewardGoldPerFloor * result.floor * worldMultOf(state)).toLocaleString() })}
+        ⚔ {t('Revenge on {bane}: +{n} gold', { bane: inSentence(a.bane), n: Math.round(TUNING.legacy.nemesis.rewardGoldPerFloor * result.floor * worldMultOf(state)).toLocaleString() })}
       </div>,
     )
   }

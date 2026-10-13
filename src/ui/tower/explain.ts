@@ -5,7 +5,7 @@
  */
 import type { BattleOrder, CombatEvent, CombatLog, FloorResult, GameState } from '../../engine/types'
 import { TUNING } from '../../engine/tuning'
-import { t } from '../i18n/i18n'
+import { inSentence, t } from '../i18n/i18n'
 import { baneName, enemyName, firstName } from '../legacy/legacyText'
 import { KIND_ICON } from './kinds'
 
@@ -85,7 +85,7 @@ function protectReason(log: CombatLog, o: Extract<BattleOrder, { kind: 'protect'
 }
 
 function focusReason(log: CombatLog, o: Extract<BattleOrder, { kind: 'focus' }>): Reason {
-  const name = unitName(log, o.enemyId)
+  const name = inSentence(unitName(log, o.enemyId))
   const deathAt = log.events.findIndex((e) => e.kind === 'death' && e.unitId === o.enemyId && e.tick >= o.tick)
   let text: string
   if (deathAt < 0) {
@@ -187,7 +187,7 @@ export function explainFloor(
     out.push({
       kind: 'nemesis',
       icon: '⚔',
-      text: n ? t('Revenge: {bane} fell, and {hero} is avenged.', { bane: baneName(n), hero: firstName(n.heroName) }) : t('Revenge: a Bane fell today.'),
+      text: n ? t('Revenge: {bane} fell, and {hero} is avenged.', { bane: inSentence(baneName(n)), hero: firstName(n.heroName) }) : t('Revenge: a Bane fell today.'),
     })
   }
   return out

@@ -10,7 +10,7 @@ import { battlePose, idleStyle } from '../pixel/poses'
 import { enemyName } from '../legacy/legacyText'
 import type { LookSource } from '../pixel/look'
 import { ELEMENT_VIS, hpColor } from '../bits'
-import { t } from '../i18n/i18n'
+import { inSentence, t } from '../i18n/i18n'
 import { getPrefs, setPrefs, usePrefs } from '../prefs'
 import {
   HOLD_1X,
@@ -303,7 +303,7 @@ export function BattleScene({
             o.kind === 'retreat'
               ? t('The Master sounds the retreat!')
               : o.kind === 'focus'
-                ? t('The Master: “Everyone on {name}!”', { name: nameOf(o.enemyId) })
+                ? t('The Master: “Everyone on {name}!”', { name: inSentence(nameOf(o.enemyId)) })
                 : t('The Master: “Cover {name}!”', { name: nameOf(o.allyId) })
           break
         }

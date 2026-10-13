@@ -27,7 +27,8 @@ import {
 import { hashString } from '../pixel/rand'
 import { toWorldTime } from '../../engine/time'
 import { slotOf } from '../../engine/life'
-import { t } from '../i18n/i18n'
+import { inSentence, t } from '../i18n/i18n'
+import { enemyName } from '../legacy/legacyText'
 
 type Vars = Record<string, string | number>
 type ByVoice = Partial<Record<Voice, string[]>> & { any?: string[] }
@@ -695,7 +696,7 @@ export function chronicleLine(state: GameState, e: ChronicleEntry): string {
       // detail = the Nemesis id (WP5); older entries may carry the Bane's name instead.
       const n = e.detail ? state.life.legacy.nemeses.find((x) => x.id === e.detail) : undefined
       if (n) return t('{a} struck down the {enemy} that killed {b}. {b} is avenged.', { a: A, enemy: t(n.name), b: first(n.heroName) })
-      return e.detail ? t('{a} struck down {bane}. The fallen are avenged.', { a: A, bane: e.detail }) : t('{a} avenged a fallen friend.', { a: A })
+      return e.detail ? t('{a} struck down {bane}. The fallen are avenged.', { a: A, bane: inSentence(enemyName(e.detail)) }) : t('{a} avenged a fallen friend.', { a: A })
     }
   }
 }

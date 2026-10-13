@@ -50,30 +50,61 @@ export function t(en: string, vars?: Record<string, string | number>): string {
   const s = DICTS[locale][en] ?? en
   if (!vars) return s
   const out = s.replace(/\{(\w+)\}/g, (m, k: string) => (k in vars ? String(vars[k]) : m))
-  return locale === 'fr' ? elideFr(s, out, vars) : out
+  return locale === 'fr' ? joinFr(s, out, vars) : out
+}
+
+/** A leading article, per locale ("Le Fléau de Mira", "Un Fléau", "L’Œuf"; "A Bane"). */
+const LEADING_ARTICLE: Record<Locale, RegExp> = {
+  en: /^(?:A|An|The) /,
+  fr: /^(?:(?:Le|La|Les|Un|Une|Des) |L[’'])/,
+}
+
+/**
+ * A name as it reads in the middle of a sentence: a leading article loses its capital.
+ * "Le Fléau de Mira" is a heading; "Vengeance sur le Fléau de Mira" is a sentence (and
+ * English "A Bane" becomes "Revenge on a Bane"). Anything without an article is unchanged.
+ * Interpolated through `t()`, a French "de"/"à" before it then contracts ("du Fléau…").
+ */
+export function inSentence(name: string): string {
+  return LEADING_ARTICLE[locale].test(name) ? name.charAt(0).toLowerCase() + name.slice(1) : name
 }
 
 /** A vowel a French "de" elides before (h is left alone: aspirated or not, it varies). */
 const FR_VOWEL = /^[AEIOUYÀÂÄÆÉÈÊËÎÏÔŒÙÛÜaeiouyàâäæéèêëîïôœùûü]/
 
+/** "de"/"à" + a mid-sentence "le …"/"les …" (see `inSentence`). */
+const FR_CONTRACT: Record<string, Record<string, string>> = { de: { le: 'du', les: 'des' }, à: { le: 'au', les: 'aux' } }
+
 /**
- * French elision before an interpolated name: "Écho de {name}" with Islat reads
- * "Écho d’Islat", "Le Fléau de {name}" with Aaron "Le Fléau d’Aaron". Only a "de" written
- * right before a placeholder is touched (the template's own words are already correct).
+ * French "de"/"à" written right before an interpolated name. Elision: "Écho de {name}"
+ * with Islat reads "Écho d’Islat", "Le Fléau de {name}" with Aaron "Le Fléau d’Aaron".
+ * Contraction, for a name `inSentence` gave a lowercase article: "de" + "le Fléau de Mira"
+ * reads "du Fléau de Mira", "à" + it "au Fléau de Mira". The template's own words are
+ * already correct and are left alone; a capitalised (heading) name is never contracted.
  */
-function elideFr(template: string, out: string, vars: Record<string, string | number>): string {
-  if (!/\bde \{\w+\}/i.test(template)) return out
+function joinFr(template: string, out: string, vars: Record<string, string | number>): string {
+  const re = /(?<!\p{L})([Dd]e|[Àà]) \{(\w+)\}/gu
+  const fill = (s: string) => s.replace(/\{(\w+)\}/g, (mm, k: string) => (k in vars ? String(vars[k]) : mm))
   let res = ''
   let last = 0
-  const re = /\b([Dd])e \{(\w+)\}/g
   let m: RegExpExecArray | null
   while ((m = re.exec(template))) {
+    const prep = m[1]!
     const k = m[2]!
-    if (!(k in vars) || !FR_VOWEL.test(String(vars[k]))) continue
-    res += template.slice(last, m.index) + `${m[1]}’{${k}}`
+    if (!(k in vars)) continue
+    const v = String(vars[k])
+    const lower = prep.toLowerCase()
+    const art = /^(les?) /.exec(v)
+    let joined: string
+    if (art) {
+      const c = FR_CONTRACT[lower]![art[1]!]!
+      joined = (prep === lower ? c : c.charAt(0).toUpperCase() + c.slice(1)) + v.slice(art[1]!.length)
+    } else if (lower === 'de' && FR_VOWEL.test(v)) {
+      joined = `${prep.charAt(0)}’${v}`
+    } else continue
+    res += fill(template.slice(last, m.index)) + joined
     last = m.index + m[0].length
   }
-  if (last === 0) return out
-  res += template.slice(last)
-  return res.replace(/\{(\w+)\}/g, (mm, k: string) => (k in vars ? String(vars[k]) : mm))
+  return last === 0 ? out : res + fill(template.slice(last))
 }
+

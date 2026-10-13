@@ -4,7 +4,7 @@
  * only holds "while anyone else stands", and a Focus may not land in time.
  */
 import type { CSSProperties } from 'react'
-import { t } from '../i18n/i18n'
+import { inSentence, t } from '../i18n/i18n'
 import { iselCoach } from '../world/lines'
 import type { Decisive } from './decisive'
 
@@ -84,7 +84,7 @@ export function DecisiveMoment({
         {canFocus && killerName !== null && (
           <button type="button" className="pbtn decisive-choice focus" onClick={() => onChoose('focus')}>
             <span className="decisive-key">F</span>
-            <span className="decisive-label">🎯 {t('Focus {name}', { name: killerName })}</span>
+            <span className="decisive-label">🎯 {t('Focus {name}', { name: inSentence(killerName) })}</span>
             <span className="decisive-hint">{t('Everyone strikes it — it may not fall in time')}</span>
           </button>
         )}

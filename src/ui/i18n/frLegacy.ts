@@ -10,7 +10,7 @@ export const FR_LEGACY: Record<string, string> = {
   '{a} now carries the echo of {b}.': '{a} porte désormais l’écho de {b}.',
   '{a} struck down {bane}. The fallen are avenged.': '{a} a abattu {bane}. Les morts sont vengés.',
   '{a} avenged a fallen friend.': '{a} a vengé un ami tombé.',
-  '{a} struck down the {enemy} that killed {b}. {b} is avenged.': '{a} a abattu {enemy}, qui avait tué {b}. {b} est vengé.',
+  '{a} struck down the {enemy} that killed {b}. {b} is avenged.': '{a} a abattu l’ennemi qui avait tué {b} ({enemy}). {b} est vengé.',
 
   // ── Engine refusals ────────────────────────────────────────────────────────
   'That echo has already been passed on.': 'Cet écho a déjà été transmis.',
@@ -46,7 +46,7 @@ export const FR_LEGACY: Record<string, string> = {
   // ── Results: what they leave behind ────────────────────────────────────────
   'What they leave behind': 'Ce qu’ils laissent derrière eux',
   'The {enemy} that struck {name} down is marked now: {bane}. It waits on floor {n}.':
-    '{enemy}, qui a abattu {name}, est désormais marqué : {bane}. Il attend à l’étage {n}.',
+    'L’ennemi qui a abattu {name} ({enemy}) est désormais marqué : {bane}. Il attend à l’étage {n}.',
   'The tower remembers: +{pct}% to every stat.': 'La tour se souvient : +{pct} % à toutes les stats.',
   'Also waiting for an heir: {names}. One at a time, or later in the Memorial.':
     'Attendent aussi un héritier : {names}. Un à la fois, ou plus tard au Mémorial.',
@@ -77,7 +77,7 @@ export const FR_LEGACY: Record<string, string> = {
   'Echoes waiting for an heir': 'Échos en attente d’un héritier',
   'Echoes carried': 'Échos portés',
   'How they died': 'Sa mort',
-  'struck down by the {enemy} (Lv{level})': 'tombé sous les coups de {enemy} (Niv.{level})',
+  'struck down by the {enemy} (Lv{level})': 'tombé face à l’ennemi « {enemy} » (Niv.{level})',
   'What it taught': 'La leçon',
   'Their echo': 'Son écho',
   'carried by {name}': 'porté par {name}',

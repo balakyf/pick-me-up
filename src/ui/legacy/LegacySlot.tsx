@@ -1,7 +1,7 @@
 import type { FloorResult, GameState, HeroId } from '../../engine/types'
 import type { Store } from '../../engine/store'
 import { legacyPct } from '../../engine/legacy'
-import { t } from '../i18n/i18n'
+import { inSentence, t } from '../i18n/i18n'
 import { BequestCard, heirOf } from './BequestCard'
 import { RecruitBell } from './RecruitBell'
 import { baneName, firstName, pctNum } from './legacyText'
@@ -50,7 +50,7 @@ export function LegacySlot({ state, store, result }: LegacySlotProps) {
           {t('The {enemy} that struck {name} down is marked now: {bane}. It waits on floor {n}.', {
             enemy: t(n.name),
             name: firstName(n.heroName),
-            bane: baneName(n),
+            bane: inSentence(baneName(n)),
             n: n.revengeFloor,
           })}
         </div>

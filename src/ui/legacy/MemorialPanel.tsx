@@ -9,7 +9,7 @@ import { accountDay, eulogy, lastWords, shortName } from '../life/speech'
 import { BequestCard, heirOf } from './BequestCard'
 import { EchoList } from './EchoList'
 import { RecruitBell } from './RecruitBell'
-import { baneName, baneWhere, firstName, lessonLine, pctNum } from './legacyText'
+import { baneName, baneWhere, enemyName, firstName, lessonLine, pctNum } from './legacyText'
 import './legacy.css'
 
 /**
@@ -143,7 +143,7 @@ export function GraveList({ state }: { state: GameState }) {
             </div>
             {killer && (
               <div className="plaque-line">
-                <span className="pl-k">{t('How they died')}</span> {t('struck down by the {enemy} (Lv{level})', { enemy: t(killer.name), level: killer.level })}
+                <span className="pl-k">{t('How they died')}</span> {t('struck down by the {enemy} (Lv{level})', { enemy: enemyName(killer.name), level: killer.level })}
               </div>
             )}
             {killer && lessonLine(killer) && (

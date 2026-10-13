@@ -9,6 +9,7 @@ import { DoorPicker, DOORS_GUIDE_STEP, previewDoor } from './DoorPicker'
 import { BoonPicker } from './BoonPicker'
 import { SortieBar } from './SortieBar'
 import { ScoutCard } from './ScoutCard'
+import { boonText } from './kinds'
 import { atFloor } from './fixtures'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
@@ -127,6 +128,16 @@ describe('SortieBar (S15)', () => {
     expect(container.querySelector('.boon-icon')?.textContent).toBe('🏹')
     act(() => button('Return to campus (bank +1,250)').click())
     expect(onReturn).toHaveBeenCalled()
+  })
+
+  it('names each held Boon to screen readers, not by its emoji (review finding #20)', () => {
+    act(() => root.render(<SortieBar sortie={{ startFloor: 3, floors: 2, purse: 0, boons: ['volley'] }} onReturn={() => {}} />))
+    const icon = container.querySelector('.boon-icon')!
+    const { name, description } = boonText('volley')
+    // aria-label is ignored on a generic span: the icon must be an image named by the Boon.
+    expect(icon.getAttribute('role')).toBe('img')
+    expect(icon.getAttribute('aria-label')).toBe(description ? `${name}: ${description}` : name)
+    expect(icon.getAttribute('aria-label')).toContain(name)
   })
 })
 

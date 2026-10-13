@@ -15,8 +15,10 @@ export function BoonIcons({ boons }: { boons: readonly BoonId[] }) {
     <span className="boon-icons">
       {boons.map((b) => {
         const { name, description } = boonText(b)
+        const label = description ? `${name}: ${description}` : name
+        // role="img": a generic span's aria-label is ignored, and the emoji would be read.
         return (
-          <span key={b} className="boon-icon" title={description ? `${name}: ${description}` : name} aria-label={name}>
+          <span key={b} className="boon-icon" role="img" title={label} aria-label={label}>
             {boonIcon(b)}
           </span>
         )
