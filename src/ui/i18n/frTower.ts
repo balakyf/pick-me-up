@@ -149,4 +149,6 @@ export const FR_TOWER: Record<string, string> = {
     'Dernier rempart : +{p} % à toutes les stats, car les rangs sont clairsemés.',
   'Revenge: {bane} fell, and {hero} is avenged.': 'Vengeance : {bane} est tombé, et {hero} est vengé.',
   'Revenge: a Bane fell today.': 'Vengeance : un Fléau est tombé aujourd’hui.',
+  // The tower list's floor tag (and the chronicle's).
+  'F{n}': 'É{n}',
 }

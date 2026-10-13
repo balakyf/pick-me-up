@@ -185,7 +185,7 @@ function Chronicle({ state }: { state: GameState }) {
       </div>
       {HIDDEN_OBJECTIVES.map((h) => (
         <div key={h.id} className={`chron-row ${found.has(h.id) ? 'found' : ''}`}>
-          <span className="chron-floor">F{h.floor}</span>
+          <span className="chron-floor">{t('F{n}', { n: h.floor })}</span>
           {found.has(h.id) ? (
             <span>
               <b>{t(h.name)}</b> — <i>{t(h.lore)}</i>
@@ -644,7 +644,7 @@ export function TowerScreen({
           const enemyCount = isCurrent && preview ? preview.waves.reduce((n, w) => n + w.units.length, 0) : null
           return (
             <div key={f} className={cls} ref={isCurrent ? currentRef : undefined}>
-              <div className="fnum">{cleared ? '✓' : `F${f}`}</div>
+              <div className="fnum">{cleared ? '✓' : t('F{n}', { n: f })}</div>
               <div className="fdesc">
                 <div className="ft">
                   {t('Floor {n}', { n: f })} {anchor && <span className="anchor-badge">{t('ANCHOR')}</span>}

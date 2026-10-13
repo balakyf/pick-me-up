@@ -64,6 +64,7 @@ function audit(screen: string) {
   const hits = new Set<string>()
   for (const f of fragments) if (text.includes(f.frag)) hits.add(f.frag)
   for (const m of text.match(/\{[a-zA-Z]\w*\}|undefined|NaN|\[object|\bnem_\w+|\bh_\d{6}\b/g) ?? []) hits.add(`RAW:${m}`)
+  for (const m of text.match(/\bF\d{1,3}\b/g) ?? []) hits.add(`EN floor tag:${m}`)
   // English-looking residue: words common in English UI copy, not French.
   for (const m of text.match(/\b(the|your|waits|floor|while|you|and|with|from|Floor|Your|The)\b [a-z]+/g) ?? []) hits.add(`EN?:${m}`)
   found[screen] = hits
