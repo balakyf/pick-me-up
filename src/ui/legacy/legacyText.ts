@@ -6,7 +6,7 @@
 import type { Echo, EchoStat, Element, GameState, HeroId, Nemesis, OwnedHero, PendingEcho } from '../../engine/types'
 import { SKILLS } from '../../engine/content'
 import { bondOf, relationKey } from '../../engine/life'
-import { counterElement, fragmentTakes, type FallenKiller } from '../../engine/legacy'
+import { counterElement, fragmentTakes, parseRevenantName, type FallenKiller } from '../../engine/legacy'
 import { getLocale, t } from '../i18n/i18n'
 
 /** Stat names, reusing the hero card's labels (already translated). */
@@ -102,6 +102,15 @@ export function lessonLine(killer: Pick<FallenKiller, 'family' | 'element' | 'na
   const hint = counterHint(killer.name, killer.element)
   if (hint) parts.push(hint)
   return parts.join(' ')
+}
+
+/**
+ * An enemy's display name: a revenant ("Mira's Bane", as the engine names the unit) through
+ * the translated `baneName`, anything else through `t()` (content strings).
+ */
+export function enemyName(name: string): string {
+  const hero = parseRevenantName(name)
+  return hero !== null ? baneName({ heroName: hero }) : t(name)
 }
 
 /** Where a waiting Bane is: "waits on floor 14", or "still at large" once the climb passed it. */

@@ -26,6 +26,8 @@ import { PLACE_LABEL, type PlaceId } from '../world/lobbyMap'
 import { nextUnlock, type NextUnlock } from './unlocks'
 import { isPlaceOpen } from '../../engine/unlocks'
 import { t } from '../i18n/i18n'
+import { baneName, enemyName } from '../legacy/legacyText'
+import { waitingNemeses } from '../../engine/legacy'
 
 export type GoalTarget = { kind: 'place'; place: PlaceId } | { kind: 'hero'; heroId: string; action: 'talk' | 'profile' }
 
@@ -148,7 +150,7 @@ function floorGoal(state: GameState): Goal {
   const report = scoutFloor(state)
   const threat: Threat = report?.threat ?? 'fair'
   const kind = kindOf(state, f)
-  const detail = report?.nemesis ? t('{name} waits here', { name: report.nemesis }) : rewardText(state, f, kind)
+  const detail = report?.nemesis ? t('{name} waits here', { name: enemyName(report.nemesis) }) : rewardText(state, f, kind)
   return {
     id: 'floor',
     icon: kind === 'boss' ? '☠' : '🗼',
@@ -291,6 +293,9 @@ function summonProgress(state: GameState): Goal {
   }
 }
 
+/** A waiting Bane this many floors up (or fewer) takes the medium line. */
+const BANE_NEAR = 2
+
 function mediumGoal(state: GameState, heroes: OwnedHero[], nowWorld: number): Goal | null {
   const legacy = state.life.legacy
   if (legacy && legacy.recruitTokens > 0) {
@@ -312,6 +317,21 @@ function mediumGoal(state: GameState, heroes: OwnedHero[], nowWorld: number): Go
       detail: t('Choose who carries it, at the Memorial'),
       tone: 'reward',
       go: place('memorial'),
+    }
+  }
+  // A Bane a floor or two up (S22): the rematch is close. On its own floor the short
+  // line already names it.
+  const bane = waitingNemeses(state)
+    .filter((n) => n.revengeFloor > state.tower.currentFloor && n.revengeFloor - state.tower.currentFloor <= BANE_NEAR)
+    .sort((a, b) => a.revengeFloor - b.revengeFloor || a.id.localeCompare(b.id))[0]
+  if (bane) {
+    return {
+      id: `bane:${bane.id}`,
+      icon: '☠',
+      text: t('{bane} waits on floor {n}', { bane: baneName(bane), n: bane.revengeFloor }),
+      detail: t('Avenge the fallen for a reward.'),
+      tone: 'reward',
+      go: place('tower'),
     }
   }
   const nu = nextUnlock(state)

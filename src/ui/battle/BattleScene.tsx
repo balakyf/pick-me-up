@@ -1,13 +1,14 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { playMusic, sfx } from '../audio/sound'
 import type { BattleOrder, CombatEvent, CombatLog, CombatUnitInit, GameState, HeroId, Line } from '../../engine/types'
 import { lastWords } from '../life/speech'
-import { SKILLS } from '../../engine/content'
+import { ENEMY_TEMPLATES, SKILLS } from '../../engine/content'
 import { drawBattleBg, BG_H, BG_W } from '../pixel/battleBg'
 import { cachedDataUrl } from '../pixel/render'
-import { allyBustUrl, allyFrameUrl, enemyPoseUrl, enemySize, heroBustUrl, heroPoseUrl, iselBustUrl, type Pose } from '../pixel/sprites'
+import { allyBustUrl, allyPoseUrl, enemyPoseUrl, enemySize, heroBlinkUrl, heroBustUrl, heroPoseUrl, iselBustUrl } from '../pixel/sprites'
+import { battlePose, idleStyle } from '../pixel/poses'
+import { enemyName } from '../legacy/legacyText'
 import type { LookSource } from '../pixel/look'
-import { hashString } from '../pixel/rand'
 import { ELEMENT_VIS, hpColor } from '../bits'
 import { t } from '../i18n/i18n'
 import { getPrefs, setPrefs, usePrefs } from '../prefs'
@@ -144,6 +145,15 @@ export interface BattleSceneProps {
   onSaved?: (heroId: string) => void
   /** Enemy unit ids that are nemeses (WP5): marked with a skull. */
   nemesisIds?: string[]
+  /** The scripted first Decisive Moment actually opened with Isel's coaching on it
+   *  (called once). The tower marks the tutorial done only then. */
+  onTutorialShown?: () => void
+}
+
+/** The name a unit's art is drawn from: its template's (a Bane is named for the hero it
+ *  killed, but it is still a Goblin to the sprite sheet). */
+function artName(u: CombatUnitInit): string {
+  return (u.templateId !== undefined ? ENEMY_TEMPLATES[u.templateId]?.name : undefined) ?? u.name
 }
 
 export function BattleScene({
@@ -155,6 +165,7 @@ export function BattleScene({
   tutorialPrompt = false,
   onSaved,
   nemesisIds,
+  onTutorialShown,
 }: BattleSceneProps) {
   const [prefs] = usePrefs()
   /** The little effects panel (shake strength, reduced motion) is open. */
@@ -187,7 +198,7 @@ export function BattleScene({
   const unit = (id: string): CombatUnitInit | undefined => byId[id]
   const nameOf = (id: string) => {
     const u = byId[id]
-    return u ? (u.side === 'enemy' || u.isNpc ? t(u.name) : u.name) : id
+    return u ? (u.side === 'enemy' || u.isNpc ? enemyName(u.name) : u.name) : id
   }
   /** How the party is named on screen: a hero by first name (full name when two share
    *  it), an escort by its translated name without "Princess" (never "→ Princess" or
@@ -195,7 +206,7 @@ export function BattleScene({
   const shortName = (id: string): string => {
     const u = byId[id]
     if (!u) return id
-    if (u.side === 'enemy') return t(u.name)
+    if (u.side === 'enemy') return enemyName(u.name)
     if (u.isNpc) return t(u.name).replace(/^(Princess|Princesse) /, '')
     const first = firstName(u.name)
     return log.unitsInit.filter((o) => o.side === 'hero' && !o.isNpc && firstName(o.name) === first).length > 1 ? u.name : first
@@ -386,6 +397,17 @@ export function BattleScene({
     setAim(null)
     sfx('decisive')
   }, [cursor, pending, decisive])
+
+  // The coaching is on screen when the tutorial moment's card shows it (a standing Protect
+  // can drop it): only then is the tutorial done.
+  const coached = useRef(false)
+  const tutorialCoachShown = isTutorialMoment && canProtectDoomed
+  useEffect(() => {
+    if (!tutorialCoachShown || coached.current) return
+    coached.current = true
+    onTutorialShown?.()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tutorialCoachShown])
 
   // The card takes keys only after a short grace: a Space or S pressed to pause or skip
   // just as time stops must not be read as "Let fate decide" (that choice is final).
@@ -671,7 +693,7 @@ export function BattleScene({
   const enemies = log.unitsInit.filter((u) => u.side === 'enemy')
   const liveEnemies = enemies.filter((u) => snap.visible[u.id] && snap.dead[u.id] === undefined)
   const enemyCounts = new Map<string, number>()
-  for (const u of liveEnemies) enemyCounts.set(u.name, (enemyCounts.get(u.name) ?? 0) + 1)
+  for (const u of liveEnemies) enemyCounts.set(enemyName(u.name), (enemyCounts.get(enemyName(u.name)) ?? 0) + 1)
   const nemeses = new Set(nemesisIds ?? [])
 
   const liveIntents = reel || atEnd ? [] : intentsAt(intents, cursor)
@@ -710,7 +732,7 @@ export function BattleScene({
     const p = pos[id]
     const u = byId[id]
     if (p && u) {
-      const h = u.side === 'hero' ? 32 : enemySize(u.name, u.element).h
+      const h = u.side === 'hero' ? 32 : enemySize(artName(u), u.element).h
       const color =
         current.kind === 'death'
           ? '#b07adb'
@@ -789,15 +811,24 @@ export function BattleScene({
                 const diedAt = snap.dead[u.id]
                 const dead = diedAt !== undefined
                 const grave = party && dead && diedAt! < cursor
-                const pose: Pose = dead ? 'ko' : hurt ? 'hurt' : acting ? (snap.skill?.caster === u.id && snap.skill.magic ? 'cast' : 'attack') : 'idle'
-                const size = isHero ? { w: 24, h: 32 } : enemySize(u.name, u.element)
+                // WP8's poses: the act frame is the wind-up (S7 anticipation), the blow the strike.
+                const pose = battlePose({
+                  dead,
+                  hurt,
+                  acting,
+                  casting: snap.skill?.caster === u.id && snap.skill.magic,
+                  windingUp: acting && current?.kind === 'act',
+                })
+                const size = isHero ? { w: 24, h: 32 } : enemySize(artName(u), u.element)
                 const src = u.isNpc
-                  ? allyFrameUrl(u.name, acting ? 1 : 0)
+                  ? allyPoseUrl(u.name, pose)
                   : isHero
                     ? heroPoseUrl(heroSrc(u), pose)
-                    : enemyPoseUrl(u.name, u.element, pose)
-                // Until real KO poses arrive (WP8), a fallen hero tips over in CSS.
+                    : enemyPoseUrl(artName(u), u.element, pose)
+                // A hero with no drawn KO frame (a frame identical to idle) still tips over in CSS.
                 const koTip = party && dead && heroPoseUrl(heroSrc(u), 'ko') === heroPoseUrl(heroSrc(u), 'idle')
+                // Idle life: party heroes blink on their own rhythm while standing idle.
+                const blink = party && pose === 'idle' && !calm ? heroBlinkUrl(heroSrc(u)) : null
                 const hpNow = Math.max(0, snap.hp[u.id] ?? u.maxHP)
                 const hpPct = (hpNow / u.maxHP) * 100
                 const cls = [
@@ -834,7 +865,6 @@ export function BattleScene({
                       width: size.w,
                       height: size.h,
                       zIndex: p.y,
-                      ['--idle-delay' as string]: `-${hashString(u.id) % 1000}ms`,
                       ...(hurt ? { ['--hs' as string]: `${hs}ms` } : {}),
                       ...(acting ? { ['--act-ms' as string]: `${actMs}ms` } : {}),
                       ...(skillHit ? { ['--skill-color' as string]: snap.skill!.color } : {}),
@@ -847,7 +877,14 @@ export function BattleScene({
                       </div>
                     )}
                     <div className="bshadow" style={{ width: size.w * 0.7 }} />
-                    <div className="bpose">{src && <img className="px bsprite" src={src} width={size.w} height={size.h} alt={u.name} />}</div>
+                    <div className="bpose">
+                      {src && (
+                        <span className="bsprite blink-stack" style={idleStyle(u.id) as CSSProperties}>
+                          <img className="px" src={src} width={size.w} height={size.h} alt={nameOf(u.id)} draggable={false} />
+                          {blink && <img className="px blink" src={blink} width={size.w} height={size.h} alt="" aria-hidden="true" draggable={false} />}
+                        </span>
+                      )}
+                    </div>
                     {grave && <div className="grave-marker" title={u.name} />}
                     {!dead && (
                       <div className={`bhp ${isHero ? 'mine' : ''}`}>
@@ -866,7 +903,7 @@ export function BattleScene({
                 const p = pos[it.actorId]
                 const u = byId[it.actorId]
                 if (!p || !u) return null
-                const h = enemySize(u.name, u.element).h
+                const h = enemySize(artName(u), u.element).h
                 return (
                   <div key={`i-${it.actorId}-${it.actCursor}`} className={`intent ${it.kind}`} style={{ left: p.x, top: p.y - h - 22 }}>
                     {it.kind === 'skill' ? `✦ ${skillName(it.skillId)}` : `⚠ ${t('HEAVY')}`} → {shortName(it.targetId)}
@@ -905,7 +942,7 @@ export function BattleScene({
           </div>
 
           {atEnd && (
-            <div className={`battle-banner ${outcome === 'win' ? 'win' : 'lose'}`}>
+            <div className={`battle-banner ${outcome === 'win' ? 'win' : 'lose'}`} data-battle-end={outcome}>
               {outcome === 'win'
                 ? t('VICTORY')
                 : outcome === 'wipe'
@@ -979,7 +1016,7 @@ export function BattleScene({
                   >
                     <span className="foe-name">
                       {nemeses.has(u.id) && '☠ '}
-                      {t(u.name)} <span className="muted small">Lv{u.level}</span>
+                      {enemyName(u.name)} <span className="muted small">Lv{u.level}</span>
                     </span>
                     <span className="gauge foe-hp">
                       <span style={{ width: `${pct}%`, background: hpColor(pct) }} />
@@ -989,7 +1026,7 @@ export function BattleScene({
               })
             : [...enemyCounts.entries()].map(([name, n]) => (
                 <div key={name} className="foe-row">
-                  <span>{t(name)}</span>
+                  <span>{name}</span>
                   {n > 1 && <span className="muted">×{n}</span>}
                 </div>
               ))}

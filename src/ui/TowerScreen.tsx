@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { GameState, FloorResult, CombatLog, BattleOrder, BoonId, HeroId, Sortie } from '../engine/types'
 import { scoutFloor, suggestParty } from '../engine/scout'
-import { ordersAllowed } from '../engine/tower'
+import { nemesesOnFloor, nemesisUnitId, ordersAllowed } from '../engine/tower'
 import type { Store } from '../engine/store'
 import { attemptFloorWithResult, resolveEventWithResult } from '../engine/store'
 import { buildEncounter } from '../engine/tower'
@@ -9,6 +9,7 @@ import { ACTS, ANCHORS, HIDDEN_OBJECTIVES, actForFloor } from '../engine/content
 import { TUNING } from '../engine/tuning'
 import { EVENT_OPTION_LABEL, merchantPrice, treasureGold, type EventOutcome } from '../engine/events'
 import { BattleScene, type BattleOrders } from './battle/BattleScene'
+import { DECISIVE_TUTORIAL_STEP, decisiveTutorialDue } from './battle/decisive'
 import { ResultsScreen } from './ResultsScreen'
 import type { PlaceId } from './world/lobbyMap'
 import { HeroCard } from './HeroCard'
@@ -24,7 +25,6 @@ import { ScoutCard, KindBadge } from './tower/ScoutCard'
 import { DoorPicker, DOORS_GUIDE_STEP } from './tower/DoorPicker'
 import { BoonPicker } from './tower/BoonPicker'
 import { SortieBar } from './tower/SortieBar'
-import { useVictoryAutoAdvance } from './tower/autoAdvance'
 import { currentKind, boonText, isFightKind } from './tower/kinds'
 import { doorOutcome, levelsOf, sweepMode } from './tower/rewards'
 import './tower/tower.css'
@@ -251,6 +251,10 @@ interface FightContext {
   preSortie: Sortie | null
   /** Full replay or a Sweep highlight (S6). */
   mode: 'full' | 'highlights'
+  /** This fight carries the scripted first Decisive Moment (S5). */
+  tutorial: boolean
+  /** The Banes fighting on this floor, by unit id (skull and red nameplate). */
+  nemesisIds: string[]
 }
 
 /** A short line that confirms a choice made outside battle (a Door, a Boon, a bank). */
@@ -289,7 +293,10 @@ export function TowerScreen({
   const [orders, setOrders] = useState<BattleOrders | null>(null)
   const [openActs, setOpenActs] = useState<Set<string>>(() => new Set([actForFloor(state.tower.currentFloor).id]))
   const [prefs, setPrefs] = usePrefs()
-  const battleRef = useRef<HTMLDivElement>(null)
+  /** Heroes an order pulled back from death in the fight in flight (the "Because…" lines). */
+  const [saved, setSaved] = useState<string[]>([])
+  /** The fight in flight showed Isel's Decisive coaching (marked done once it closes). */
+  const tutorialShown = useRef(false)
 
   const current = state.tower.currentFloor
   const currentRef = useRef<HTMLDivElement>(null)
@@ -331,8 +338,8 @@ export function TowerScreen({
     return () => clearTimeout(id)
   }, [notice])
 
-  // VICTORY → results after 1.2 s: one click per floor, not two (S11).
-  useVictoryAutoAdvance(battleRef, combat !== null, combatDone)
+  // VICTORY → results after 1.2 s (S11) is BattleScene's own: it moves a clean tower win
+  // on by itself and leaves a costly one for the Master. Nothing here adds a second one.
 
   const deployable = state.party.slots.some((id) => {
     const h = id ? state.heroes[id] : undefined
@@ -366,12 +373,20 @@ export function TowerScreen({
     const { result } = attemptFloorWithResult(pre, undefined, ballista, subvert) // capture the log for playback
     store.dispatch({ type: 'ATTEMPT_FLOOR', ballista, subvert }) // advance the store identically (deterministic)
     setPending(result)
+    // The scripted first Decisive Moment (S5) needs the whole fight, so it is never swept.
+    const tutorial = decisiveTutorialDue(pre, result.result.log)
     setFightCtx({
       preLevels: levelsOf(pre),
       goldBefore: pre.gold,
       preSortie: pre.tower.sortie,
-      mode: sweepMode({ report: preReport ? { threat: preReport.threat, kind: currentKind(pre) } : null, result, autoSweep: prefs.autoSweep }),
+      mode: tutorial
+        ? 'full'
+        : sweepMode({ report: preReport ? { threat: preReport.threat, kind: currentKind(pre) } : null, result, autoSweep: prefs.autoSweep }),
+      tutorial,
+      nemesisIds: nemesesOnFloor(pre, pre.tower.currentFloor).map(nemesisUnitId),
     })
+    setSaved([])
+    tutorialShown.current = false
     setGiven([])
     setResultSeen(false)
     setCombat(result.result.log)
@@ -489,6 +504,12 @@ export function TowerScreen({
   function combatDone() {
     setCombat(null)
     setShowResult(true)
+    // The replay is closed, so no order can `revise` the attempt any more: mark the
+    // Decisive tutorial seen, if its coaching actually showed.
+    if (tutorialShown.current) {
+      tutorialShown.current = false
+      if (!store.getState()?.life.guide.done.includes(DECISIVE_TUTORIAL_STEP)) store.dispatch({ type: 'GUIDE_STEP', step: DECISIVE_TUTORIAL_STEP })
+    }
   }
   function resultDone() {
     setShowResult(false)
@@ -636,7 +657,7 @@ export function TowerScreen({
               </div>
               {isCurrent && f <= MAX_FLOOR && (
                 <button
-                  className="btn primary"
+                  className="btn primary cta"
                   onClick={enter}
                   disabled={!deployable || event !== null}
                   title={doorsPending ? t('No door chosen: the party takes the first one.') : undefined}
@@ -674,8 +695,20 @@ export function TowerScreen({
         />
       )}
       {combat && (
-        <div ref={battleRef} className="battle-host">
-          <BattleScene log={combat} state={state} onDone={combatDone} orders={orders ?? undefined} mode={fightCtx?.mode ?? 'full'} />
+        <div className="battle-host">
+          <BattleScene
+            log={combat}
+            state={state}
+            onDone={combatDone}
+            orders={orders ?? undefined}
+            mode={fightCtx?.mode ?? 'full'}
+            tutorialPrompt={fightCtx?.tutorial ?? false}
+            onTutorialShown={() => {
+              tutorialShown.current = true
+            }}
+            onSaved={(id) => setSaved((s) => (s.includes(id) ? s : [...s, id]))}
+            nemesisIds={fightCtx?.nemesisIds}
+          />
         </div>
       )}
       {showResult && pending && (
@@ -687,6 +720,7 @@ export function TowerScreen({
           preLevels={fightCtx?.preLevels}
           goldBefore={fightCtx?.goldBefore}
           orders={given}
+          saved={saved}
           preSortie={fightCtx?.preSortie ?? null}
           swept={fightCtx?.mode === 'highlights' && pending.cleared && pending.fallenHeroIds.length === 0}
           instant={resultSeen}
@@ -709,6 +743,7 @@ export function TowerScreen({
           log={replay.log}
           state={state}
           mode="full"
+          nemesisIds={replay.back === 'results' ? fightCtx?.nemesisIds : undefined}
           onDone={() => {
             if (replay.back === 'results' && pending) setShowResult(true)
             setReplay(null)

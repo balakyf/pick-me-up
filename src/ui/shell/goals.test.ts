@@ -224,6 +224,29 @@ describe('legacy and timers on the medium line', () => {
     expect(nextGoals(echo, 0).medium!.text).toBe('Mira’s echo waits for an heir')
   })
 
+  it('a Bane a floor or two up takes the medium line, translated; one further off does not', () => {
+    const s = at(5) // currentFloor 6
+    const nem = (revengeFloor: number) => ({
+      id: 'nem_h_9',
+      templateId: 'goblin',
+      name: 'Goblin',
+      element: 'fire' as const,
+      level: 3,
+      heroId: 'h_9' as HeroId,
+      heroName: 'Mira Vey',
+      diedFloor: 4,
+      revengeFloor,
+      status: 'waiting' as const,
+    })
+    const near = { ...s, life: { ...s.life, legacy: { ...s.life.legacy, nemeses: [nem(8)] } } }
+    expect(nextGoals(near, 0).medium).toMatchObject({ id: 'bane:nem_h_9', text: 'Mira’s Bane waits on floor 8', go: { kind: 'place', place: 'tower' } })
+    setLocale('fr')
+    expect(nextGoals(near, 0).medium!.text).toBe('Le Fléau de Mira attend à l’étage 8')
+    setLocale('en')
+    const far = { ...s, life: { ...s.life, legacy: { ...s.life.legacy, nemeses: [nem(12)] } } }
+    expect(nextGoals(far, 0).medium!.id).not.toMatch(/^bane:/)
+  })
+
   it('with nothing else to chase, the soonest timer shows its real-time ETA', () => {
     const now = 1_000_000
     const s = withStarter(allOpen(at(20)), {

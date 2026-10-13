@@ -75,6 +75,28 @@ describe('Lights Out: the next floor and the goals', () => {
     expect(nextFloorTeaser({ ...s, tower: { ...s.tower, worldEnded: true } })).toBeNull()
   })
 
+  it('teases the nearest Bane still waiting further up (S22)', () => {
+    const s = roster()
+    expect(nextFloorTeaser(s)!.laterBane).toBeNull()
+    const nem = (id: string, revengeFloor: number, status: 'waiting' | 'avenged' = 'waiting') => ({
+      id,
+      templateId: 'goblin',
+      name: 'Goblin',
+      element: 'fire' as const,
+      level: 3,
+      heroId: `h_${id}` as HeroId,
+      heroName: `Hero${id} Smith`,
+      diedFloor: 1,
+      revengeFloor,
+      status,
+    })
+    const banes: GameState = {
+      ...s,
+      life: { ...s.life, legacy: { ...s.life.legacy, nemeses: [nem('a', 14), nem('b', 9), nem('c', 6, 'avenged')] } },
+    }
+    expect(nextFloorTeaser(banes)!.laterBane).toEqual({ heroName: 'Herob Smith', floor: 9 })
+  })
+
   it('shows goal-gradient bars that are honest numbers', () => {
     const s = { ...roster(), gold: 1200, tower: { ...roster().tower, highestCleared: 7, currentFloor: 8 } }
     const bars = goalBars(s)

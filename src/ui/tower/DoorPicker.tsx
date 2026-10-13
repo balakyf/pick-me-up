@@ -10,6 +10,7 @@ import { useMemo } from 'react'
 import type { Door, GameState } from '../../engine/types'
 import { scoutFloor, type ScoutReport } from '../../engine/scout'
 import { t } from '../i18n/i18n'
+import { enemyName } from '../legacy/legacyText'
 import { iselCoach } from '../world/lines'
 import { iselBustUrl } from '../pixel/sprites'
 import { DOOR_TITLE, KIND_ICON, REWARD_ICON, REWARD_LABEL, doorBlurb, isFightKind, worldMultOf } from './kinds'
@@ -85,7 +86,7 @@ export function DoorPicker({
                 <span className="door-scout">
                   <span style={{ color: THREAT_COLOR[p.threat] }}>{t(THREAT_LABEL[p.threat])}</span>
                   <span className="muted"> · {t('party ×{r}', { r: p.ratio.toFixed(1) })}</span>
-                  {p.nemesis && <span className="door-nemesis"> · ☠ {p.nemesis}</span>}
+                  {p.nemesis && <span className="door-nemesis"> · ☠ {enemyName(p.nemesis)}</span>}
                 </span>
               ) : (
                 <span className="door-scout door-safe">✓ {t('No fight on this floor.')}</span>

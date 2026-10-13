@@ -54,6 +54,8 @@ export interface ResultsScreenProps {
   goldBefore?: number
   /** The orders the Master gave in this battle (for the "Because…" lines). */
   orders?: readonly BattleOrder[]
+  /** Heroes an order pulled back from death in this battle (BattleScene's `onSaved`). */
+  saved?: readonly string[]
   /** The Sortie as it stood before the attempt (to report a rout's banked share). */
   preSortie?: Sortie | null
   /** The fight played as a Sweep highlight. */
@@ -80,6 +82,7 @@ export function ResultsScreen({
   preLevels,
   goldBefore,
   orders = [],
+  saved = [],
   preSortie = null,
   swept = false,
   instant = false,
@@ -100,7 +103,7 @@ export function ResultsScreen({
     gold: state.gold,
     ups: levelUps(preLevels, state),
     avenged: avengedNames(result, state),
-    reasons: explainFloor(result, orders, state),
+    reasons: explainFloor(result, orders, state, saved),
     mvp: win || retreated ? mvpOf(result.result.log) : null,
     sortie: state.tower.sortie,
     rested: state.meta.rested?.charges ?? 0,

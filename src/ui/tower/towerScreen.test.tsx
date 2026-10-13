@@ -11,7 +11,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { createAccount, DEFAULT_SAVE_KEY, MemoryStorage, saveState } from '../../engine/account'
 import { attemptFloorWithResult, createStore, reduce, type Store } from '../../engine/store'
 import { scoutFloor, suggestParty } from '../../engine/scout'
-import type { Command, GameState } from '../../engine/types'
+import type { Command, GameState, HeroId, Nemesis } from '../../engine/types'
 import { TUNING } from '../../engine/tuning'
 import { TowerScreen } from '../TowerScreen'
 import type { PlaceId } from '../world/lobbyMap'
@@ -19,25 +19,56 @@ import { setPrefs, PREFS_KEY } from '../prefs'
 import { ANCHORS } from '../../engine/content'
 import { floorKindBase } from '../../engine/climb'
 import { atFloor } from './fixtures'
+import { DECISIVE_TUTORIAL_STEP, decisiveTutorialDue } from '../battle/decisive'
+import { nemesisUnitId } from '../../engine/tower'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
-const battles: { mode?: string; hasOrders: boolean }[] = []
+const battles: { mode?: string; hasOrders: boolean; tutorialPrompt?: boolean; nemesisIds?: string[] }[] = []
 /** The orders hook of the battle on screen (to give an order mid-fight). */
 let liveOrders: { give: (o: { tick: number; kind: 'retreat' }) => unknown } | undefined
-vi.mock('../battle/BattleScene', () => ({
-  BattleScene: (p: { onDone: () => void; mode?: string; orders?: typeof liveOrders; log: { outcome: string } }) => {
-    battles.push({ mode: p.mode, hasOrders: p.orders !== undefined })
-    liveOrders = p.orders
-    const win = p.log.outcome === 'win'
-    return (
-      <div className="battle">
-        <div className={`battle-banner ${win ? 'win' : 'lose'}`}>{win ? 'VICTORY' : 'DEFEAT'}</div>
-        <button onClick={p.onDone}>Continue ▸</button>
-      </div>
-    )
-  },
-}))
+/** The battle's props on screen (to report a rescue or the tutorial coaching). */
+let liveBattle: { onSaved?: (id: string) => void; onTutorialShown?: () => void } | undefined
+/**
+ * A stand-in for BattleScene that keeps its contract without animating: it shows the
+ * banner of the log it is playing (an order swaps the log, as the real one does), and a
+ * clean tower win (orders given, no hero fallen) moves on by itself after VICTORY_AUTO_MS,
+ * exactly like BattleScene. Anything else waits for Continue.
+ */
+vi.mock('../battle/BattleScene', async (importOriginal) => {
+  const real = await importOriginal<typeof import('../battle/BattleScene')>()
+  type P = Parameters<typeof real.BattleScene>[0]
+  return {
+    ...real,
+    BattleScene: (p: P) => {
+      const [log, setLog] = useState(p.log)
+      battles.push({ mode: p.mode, hasOrders: p.orders !== undefined, tutorialPrompt: p.tutorialPrompt, nemesisIds: p.nemesisIds })
+      liveBattle = p
+      liveOrders = p.orders && {
+        give: (o) => {
+          const next = p.orders!.give(o)
+          if (next) setLog(next)
+          return next
+        },
+      }
+      const win = log.outcome === 'win'
+      const heroes = new Set(log.unitsInit.filter((u) => u.side === 'hero' && !u.isNpc).map((u) => u.id))
+      const clean = win && !log.events.some((e) => e.kind === 'death' && heroes.has(e.unitId))
+      useEffect(() => {
+        if (!p.orders || !clean) return
+        const tm = setTimeout(p.onDone, real.VICTORY_AUTO_MS)
+        return () => clearTimeout(tm)
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+      }, [clean])
+      return (
+        <div className="battle">
+          <div className={`battle-banner ${win ? 'win' : 'lose'}`}>{win ? 'VICTORY' : 'DEFEAT'}</div>
+          <button onClick={p.onDone}>Continue ▸</button>
+        </div>
+      )
+    },
+  }
+})
 
 // The climb engine (WP3) lands in parallel. Until it does, `chooseDoor` throws "not built
 // yet"; only then does this stand in a minimal choice (a Cache pays and advances, as the
@@ -148,6 +179,8 @@ function strongOnSafeFloor(seed: number): GameState {
   for (let i = 0; i < 6; i++) s = reduce(s, { type: 'SUMMON', count: 10 })
   const p = suggestParty(s)
   s = reduce(s, { type: 'SET_PARTY', slots: p.slots, lines: p.lines })
+  // A Master past F3 has had the scripted Decisive Moment (S5), which is never swept.
+  s = reduce(s, { type: 'GUIDE_STEP', step: DECISIVE_TUTORIAL_STEP })
   // A Path floor that scouts Safe, else the Breather after a guardian (Sweep-eligible
   // whatever its rating; the climb engine sets its budget low).
   for (const kind of ['path', 'breather'] as const) {
@@ -169,7 +202,7 @@ describe('TowerScreen — floor to floor', () => {
     const { result } = attemptFloorWithResult(s)
     const { store } = mount(s)
     click('Enter')
-    expect(battles.at(-1)).toEqual({ mode: 'full', hasOrders: true }) // F1 is a tutorial floor: never swept
+    expect(battles.at(-1)).toMatchObject({ mode: 'full', hasOrders: true }) // F1 is a tutorial floor: never swept
     expect(text()).not.toContain('FLOOR CLEARED')
     wait(1250)
     expect(text()).toContain('FLOOR CLEARED')
@@ -206,6 +239,9 @@ describe('TowerScreen — floor to floor', () => {
       liveOrders!.give({ tick: 1, kind: 'retreat' })
     })
     wait(1250)
+    // A retreat is not a clean win: the battle waits for the Master.
+    expect(text()).not.toContain('RETREATED')
+    click('Continue')
     expect(text()).toContain('RETREATED')
     expect(text()).not.toContain('Swept')
   })
@@ -241,6 +277,67 @@ describe('TowerScreen — floor to floor', () => {
     click('Summon now')
     expect(onGo).toHaveBeenCalledWith('summon')
     expect(sentAtGo.at(-1)).toBe('RETURN_TO_CAMPUS')
+  })
+})
+
+describe('TowerScreen — the battle wiring (S5, S18, S22)', () => {
+  /** A party on a floor whose fight carries the scripted first Decisive Moment. */
+  function tutorialFloor(): GameState {
+    let s = createAccount(7)
+    s = reduce(s, { type: 'SUMMON', count: 10 })
+    const p = suggestParty(s)
+    s = reduce(s, { type: 'SET_PARTY', slots: p.slots, lines: p.lines })
+    for (let f = 3; f <= 30; f++) {
+      const at: GameState = { ...s, tower: { ...s.tower, currentFloor: f, highestCleared: f - 1, kind: floorKindBase(f), doors: null, event: null } }
+      if (decisiveTutorialDue(at, attemptFloorWithResult(at).result.result.log)) return at
+    }
+    throw new Error('no tutorial-due floor in F3-F30')
+  }
+
+  it('passes the scripted first Decisive Moment, and marks it seen only after the battle closes', () => {
+    const { sent } = mount(tutorialFloor())
+    click('Enter')
+    expect(battles.at(-1)).toMatchObject({ tutorialPrompt: true, mode: 'full' })
+    act(() => liveBattle!.onTutorialShown!())
+    expect(sent.map((c) => c.type)).toEqual(['ATTEMPT_FLOOR'])
+    click('Continue')
+    expect(sent.at(-1)).toEqual({ type: 'GUIDE_STEP', step: DECISIVE_TUTORIAL_STEP })
+  })
+
+  it('never marks the tutorial seen when its coaching did not show', () => {
+    const { sent } = mount(tutorialFloor())
+    click('Enter')
+    click('Continue')
+    expect(sent.some((c) => c.type === 'GUIDE_STEP')).toBe(false)
+  })
+
+  it('a rescue reported by the battle becomes a "Because…" line', () => {
+    const s = createAccount(7)
+    const hero = s.party.slots.find((id) => id !== null)!
+    mount(s)
+    click('Enter')
+    act(() => liveBattle!.onSaved!(hero))
+    click('Continue')
+    expect(text()).toContain(`Saved: your order pulled ${s.heroes[hero]!.name.split(' ')[0]} back from the edge.`)
+  })
+
+  it('tells the battle which units are Banes', () => {
+    const base = atFloor(createAccount(12), { currentFloor: 6, highestCleared: 5, doors: null })
+    const nem: Nemesis = {
+      id: 'nem_h_x',
+      templateId: 'goblin',
+      name: 'Goblin',
+      element: 'fire',
+      level: 3,
+      heroId: 'h_x' as HeroId,
+      heroName: 'Mira Vey',
+      diedFloor: 2,
+      revengeFloor: 6,
+      status: 'waiting',
+    }
+    mount({ ...base, life: { ...base.life, legacy: { ...base.life.legacy, nemeses: [nem] } } })
+    click('Enter')
+    expect(battles.at(-1)!.nemesisIds).toEqual([nemesisUnitId(nem)])
   })
 })
 

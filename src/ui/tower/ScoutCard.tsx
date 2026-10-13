@@ -6,6 +6,7 @@
 import type { GameState, FloorKind } from '../../engine/types'
 import type { ScoutReport } from '../../engine/scout'
 import { t } from '../i18n/i18n'
+import { enemyName } from '../legacy/legacyText'
 import { ELEMENT_VIS } from '../bits'
 import { KIND_ICON, KIND_LABEL } from './kinds'
 
@@ -89,7 +90,7 @@ export function ScoutCard({
       </div>
       {report.nemesis && (
         <div className="scout-nemesis">
-          ☠ {t('{name} waits here.', { name: report.nemesis })} <span className="muted small">{t('Avenge the fallen for a reward.')}</span>
+          ☠ {t('{name} waits here.', { name: enemyName(report.nemesis) })} <span className="muted small">{t('Avenge the fallen for a reward.')}</span>
         </div>
       )}
       <div className="threat-row">
@@ -112,7 +113,7 @@ export function ScoutCard({
         <ul className="scout-threats">
           {threats.map((th) => (
             <li key={`${th.name}|${th.why}`}>
-              <b>{t(th.name)}</b>: {t(th.why)}
+              <b>{enemyName(th.name)}</b>: {t(th.why)}
             </li>
           ))}
         </ul>
@@ -134,7 +135,7 @@ export function ScoutCard({
           return (
             <div key={`${e.name}|${e.level}`} className="scout-enemy">
               <span className="el-dot" style={{ background: ELEMENT_VIS[e.element].color }} title={t(ELEMENT_VIS[e.element].label)} />
-              <b>{t(e.name)}</b>
+              <b>{enemyName(e.name)}</b>
               {e.count > 1 && <span className="muted">×{e.count}</span>}
               <span className="muted small">Lv{e.level}</span>
               {e.target && <span className="chip">{t('target')}</span>}
@@ -148,7 +149,7 @@ export function ScoutCard({
       {report.immune.magic && <div className="scout-warn">⚠ {t('Most of this floor shrugs off magic — bring blades.')}</div>}
       <div className="scout-actions">
         {onFight && (
-          <button className="btn primary scout-fight" onClick={onFight} disabled={fightDisabled}>
+          <button className="btn primary cta scout-fight" onClick={onFight} disabled={fightDisabled}>
             ⚔ {t('Fight floor {n} ▸', { n: report.floor })}
           </button>
         )}

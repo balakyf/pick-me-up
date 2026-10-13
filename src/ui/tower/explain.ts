@@ -6,9 +6,10 @@
 import type { BattleOrder, CombatEvent, CombatLog, FloorResult, GameState } from '../../engine/types'
 import { TUNING } from '../../engine/tuning'
 import { t } from '../i18n/i18n'
+import { baneName, enemyName, firstName } from '../legacy/legacyText'
 import { KIND_ICON } from './kinds'
 
-export type ReasonKind = 'protect' | 'focus' | 'retreat' | 'door' | 'rout' | 'wipe' | 'lastStand' | 'nemesis'
+export type ReasonKind = 'saved' | 'protect' | 'focus' | 'retreat' | 'door' | 'rout' | 'wipe' | 'lastStand' | 'nemesis'
 
 export interface Reason {
   kind: ReasonKind
@@ -33,7 +34,7 @@ function isHit(e: CombatEvent): e is CombatEvent & Hit {
 function unitName(log: CombatLog, id: string): string {
   const u = log.unitsInit.find((x) => x.id === id)
   if (!u) return id
-  return u.side === 'enemy' || u.isNpc ? t(u.name) : u.name.split(/\s+/)[0]!
+  return u.side === 'enemy' || u.isNpc ? enemyName(u.name) : u.name.split(/\s+/)[0]!
 }
 
 /** Who landed the last hit on each unit that died, by the dead unit's id. */
@@ -103,13 +104,23 @@ function focusReason(log: CombatLog, o: Extract<BattleOrder, { kind: 'focus' }>)
 }
 
 /**
- * The reasons behind a floor's outcome, most decisive first: the Master's orders, the
+ * The reasons behind a floor's outcome, most decisive first: the heroes an order pulled
+ * back from death (`saved`, reported by the battle's "Saved!"), the Master's orders, the
  * Door taken, a rout or wipe, Last Stand, revenge. Empty when nothing notable happened.
  */
-export function explainFloor(result: FloorResult, orders: readonly BattleOrder[] = [], state?: GameState): Reason[] {
+export function explainFloor(
+  result: FloorResult,
+  orders: readonly BattleOrder[] = [],
+  state?: GameState,
+  saved: readonly string[] = [],
+): Reason[] {
   const log = result.result.log
   const fallen = new Set<string>(result.fallenHeroIds)
   const out: Reason[] = []
+  for (const id of new Set(saved)) {
+    if (fallen.has(id)) continue
+    out.push({ kind: 'saved', icon: '✚', text: t('Saved: your order pulled {name} back from the edge.', { name: unitName(log, id) }) })
+  }
   const seen = new Set<string>()
   for (const o of orders) {
     const key = o.kind === 'focus' ? `f|${o.enemyId}` : o.kind === 'protect' ? `p|${o.allyId}` : 'r'
@@ -174,7 +185,7 @@ export function explainFloor(result: FloorResult, orders: readonly BattleOrder[]
     out.push({
       kind: 'nemesis',
       icon: '⚔',
-      text: n ? t('Revenge: {bane} fell, and {hero} is avenged.', { bane: n.name, hero: n.heroName }) : t('Revenge: a Bane fell today.'),
+      text: n ? t('Revenge: {bane} fell, and {hero} is avenged.', { bane: baneName(n), hero: firstName(n.heroName) }) : t('Revenge: a Bane fell today.'),
     })
   }
   return out

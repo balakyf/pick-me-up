@@ -128,6 +128,7 @@ export const FR_RETURN: Record<string, string> = {
   'looks deadly': 's’annonce mortel',
   '{bane} waits there.': '{bane} y attend.',
   '{enemy} waits there.': '{enemy} y attend.',
+  '{bane} waits on floor {n}.': '{bane} attend à l’étage {n}.',
   '{enemy} ×{n} wait there.': '{enemy} ×{n} y attendent.',
   Brewing: 'En cours',
   '{a}’s promotion': 'Promotion de {a}',

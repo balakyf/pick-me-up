@@ -104,6 +104,7 @@ export const FR_SHELL: Record<string, string> = {
   'Boss in {n} floors': 'Boss dans {n} étages',
   'Next summon': 'Prochaine invocation',
   'A new face answers the bell': 'Un nouveau visage répond à l’appel',
+  '{bane} waits on floor {n}': '{bane} attend à l’étage {n}',
   'A free summon waits at the Memorial': 'Une invocation gratuite vous attend au Mémorial',
   '{name}’s echo waits for an heir': 'L’écho de {name} attend un héritier',
   'Choose who carries it, at the Memorial': 'Choisissez qui le portera, au Mémorial',

@@ -12,6 +12,7 @@ import { masterXpToNext } from '../../engine/master'
 import { lifeOf } from '../../engine/life'
 import { SKILLS } from '../../engine/content'
 import { stampCard } from '../../engine/return'
+import { waitingNemeses } from '../../engine/legacy'
 import { nextRestedChargeIn } from '../../engine/return'
 import type { FacilityId, GameState, HeroId, OwnedHero } from '../../engine/types'
 import type { PlaceId } from '../world/lobbyMap'
@@ -113,6 +114,8 @@ export interface FloorTeaser {
   /** A Nemesis waiting on that floor, or a named threat from the scout. */
   nemesis: string | null
   namedThreat: { name: string; why: string } | null
+  /** The nearest Bane waiting further up (S22 teaser), when none waits on the next floor. */
+  laterBane: { heroName: string; floor: number } | null
 }
 
 /** The real scouting report for the floor the party will climb next (S12). */
@@ -128,7 +131,16 @@ export function nextFloorTeaser(state: GameState): FloorTeaser | null {
     headline: top ? { name: top.name, count: top.count } : null,
     nemesis: r.nemesis,
     namedThreat: r.threats[0] ?? null,
+    laterBane: r.nemesis ? null : laterBane(state),
   }
+}
+
+/** The nearest Bane still waiting above the next floor ("Mira’s Bane waits on floor 16"). */
+function laterBane(state: GameState): FloorTeaser['laterBane'] {
+  const next = waitingNemeses(state)
+    .filter((n) => n.revengeFloor > state.tower.currentFloor)
+    .sort((a, b) => a.revengeFloor - b.revengeFloor || a.id.localeCompare(b.id))[0]
+  return next ? { heroName: next.heroName, floor: next.revengeFloor } : null
 }
 
 export interface GoalBar {

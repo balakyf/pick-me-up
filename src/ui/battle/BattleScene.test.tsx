@@ -329,13 +329,28 @@ describe('BattleScene', () => {
     }
     expect(found).not.toBeNull()
     const pre = atFloor(found!.seed, 3)
-    act(() => root.render(<BattleScene log={found!.log} state={pre} onDone={() => {}} orders={ordersFor(pre)} tutorialPrompt />))
+    const shown = vi.fn()
+    act(() =>
+      root.render(<BattleScene log={found!.log} state={pre} onDone={() => {}} orders={ordersFor(pre)} tutorialPrompt onTutorialShown={shown} />),
+    )
     until(() => !!q('.decisive-card'))
     expect(text()).toContain('Your orders change fate. Try Protect.')
+    expect(shown).toHaveBeenCalledTimes(1)
     expect(text()).toContain('is in danger!')
     expect(q('.decisive-card .protect.coach')).toBeTruthy()
     click(button('Let fate decide'))
     expect(q('.decisive-card')).toBeNull()
+    expect(shown).toHaveBeenCalledTimes(1)
+  })
+
+  it('the coaching is not reported shown when the card cannot offer Protect (no orders left)', () => {
+    const { pre, log } = deadlyFight()
+    const shown = vi.fn()
+    const spent = { ...ordersFor(pre), left: 0 }
+    act(() => root.render(<BattleScene log={log} state={pre} onDone={() => {}} orders={spent} tutorialPrompt onTutorialShown={shown} />))
+    until(() => !!q('.decisive-card'))
+    expect(text()).not.toContain('Your orders change fate. Try Protect.')
+    expect(shown).not.toHaveBeenCalled()
   })
 
   it('a portrait tap gives the Protect order; a foe tap gives Focus (one order on a fresh account)', () => {

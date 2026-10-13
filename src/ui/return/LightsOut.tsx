@@ -6,6 +6,7 @@ import { iselBustUrl } from '../pixel/sprites'
 import { PLACE_LABEL, type PlaceId } from '../world/lobbyMap'
 import { shortName } from '../life/speech'
 import { t } from '../i18n/i18n'
+import { baneName, enemyName } from '../legacy/legacyText'
 import { brewingTimers, edgeRelation, goalBars, iselSignoff, nextFloorTeaser, restedOutlook, skillName, type Brewing, type GoalBar } from './lightsOut'
 import { clockAt, countdown } from './format'
 import './return.css'
@@ -87,17 +88,22 @@ export function LightsOut({
                 <b>{t('Floor {n}', { n: teaser.floor })}</b> · {t(teaser.mission)}
                 {teaser.threat && ` · ${t(THREAT_PHRASE[teaser.threat]!)}`}
                 {teaser.nemesis ? (
-                  <span className="lo-hook"> {t('{bane} waits there.', { bane: teaser.nemesis })}</span>
+                  <span className="lo-hook"> {t('{bane} waits there.', { bane: enemyName(teaser.nemesis) })}</span>
                 ) : teaser.namedThreat ? (
-                  <span className="lo-hook"> {t(teaser.namedThreat.name)} — {t(teaser.namedThreat.why)}.</span>
+                  <span className="lo-hook"> {enemyName(teaser.namedThreat.name)} — {t(teaser.namedThreat.why)}.</span>
                 ) : teaser.headline ? (
                   <span className="lo-hook">
                     {' '}
                     {teaser.headline.count > 1
-                      ? t('{enemy} ×{n} wait there.', { enemy: t(teaser.headline.name), n: teaser.headline.count })
-                      : t('{enemy} waits there.', { enemy: t(teaser.headline.name) })}
+                      ? t('{enemy} ×{n} wait there.', { enemy: enemyName(teaser.headline.name), n: teaser.headline.count })
+                      : t('{enemy} waits there.', { enemy: enemyName(teaser.headline.name) })}
                   </span>
                 ) : null}
+                {teaser.laterBane && (
+                  <span className="lo-hook lo-bane">
+                    {' '}☠ {t('{bane} waits on floor {n}.', { bane: baneName(teaser.laterBane), n: teaser.laterBane.floor })}
+                  </span>
+                )}
               </span>
               <span className="wb-go" aria-hidden="true">›</span>
             </button>

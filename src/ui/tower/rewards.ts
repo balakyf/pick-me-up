@@ -8,6 +8,7 @@ import type { ScoutReport } from '../../engine/scout'
 import { ANCHORS } from '../../engine/content'
 import { TUNING } from '../../engine/tuning'
 import { t } from '../i18n/i18n'
+import { baneName, firstName } from '../legacy/legacyText'
 import { ELEMENT_VIS } from '../bits'
 import { DOOR_TITLE, KIND_ICON, KIND_LABEL, currentKind } from './kinds'
 
@@ -189,10 +190,10 @@ export function doorOutcome(before: GameState, after: GameState, kind: FloorKind
 
 // ── Revenge ──────────────────────────────────────────────────────────────────
 
-/** The names of the Banes a result avenged ("Mira's Bane"), from the legacy records. */
+/** The names of the Banes a result avenged ("Mira’s Bane", translated), from the legacy records. */
 export function avengedNames(result: FloorResult, state: GameState): { bane: string; hero: string }[] {
   return (result.nemesisDefeated ?? []).map((id) => {
     const n = state.life.legacy.nemeses.find((x) => x.id === id)
-    return n ? { bane: n.name, hero: n.heroName } : { bane: t('A Bane'), hero: '' }
+    return n ? { bane: baneName(n), hero: firstName(n.heroName) } : { bane: t('A Bane'), hero: '' }
   })
 }
