@@ -360,7 +360,8 @@ export function LobbyWorld({
   onMenu: () => void
   /** Fast-travel request from the app menu; a new nonce re-triggers it. */
   travelRequest?: { place: PlaceId; nonce: number } | null
-  /** Something app-level (the Menu, a battle replay) covers the lobby: hold the fanfare. */
+  /** Something app-level (the Menu, a battle replay, a return-layer window) covers the
+   *  lobby: hold the fanfare and every lobby input (keys, pointer, walking). */
   paused?: boolean
   /** A lobby window (a place, a dialogue, the unlock fanfare…) opened or closed: the App
    *  keeps its own small prompts (the backup nudge) from stacking on top of it. */
@@ -400,13 +401,21 @@ export function LobbyWorld({
   stateRef.current = state
   const modalRef = useRef(false)
   const modalUp = openPlace !== null || dialog !== null || profile !== null || tracker || letter || fanfare !== null
-  modalRef.current = modalUp
+  // An app-level window (`paused`) is as modal as the lobby's own: without it, the lobby's
+  // window keydown listener ate Enter/Space on the window's buttons, walked the Master
+  // behind it, and opened the Menu on the same Escape that closed it. (onModalChange still
+  // reports only the lobby's own windows, so it never feeds back into `paused`.)
+  modalRef.current = paused || modalUp
   const modalCb = useRef(onModalChange)
   modalCb.current = onModalChange
   useEffect(() => {
     modalCb.current?.(modalUp)
   }, [modalUp])
   useEffect(() => () => modalCb.current?.(false), [])
+  // A key held as a window opens must not keep walking once it closes (its keyup is lost).
+  useEffect(() => {
+    if (paused) world.current.held = []
+  }, [paused])
 
   // The unlock fanfare (spec 2026-10-12 S3): when a place has opened and its fanfare has
   // not been seen, play it once the Master is free (no window or dialog open). It is

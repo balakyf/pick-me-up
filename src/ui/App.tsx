@@ -2,7 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react'
 import '@fontsource/pixelify-sans/400.css'
 import '@fontsource/pixelify-sans/600.css'
 import './ui.css'
-import { useGame, getStore, BROKEN_SAVE_KEY } from './useGame'
+import { useGame, getStore, BROKEN_SAVE_KEY, bootLoadFailed } from './useGame'
 import { TitleScreen, SummonScreen, RosterScreen, PartyScreen } from './screens'
 import { TowerScreen } from './TowerScreen'
 import { BattleScene } from './battle/BattleScene'
@@ -248,14 +248,15 @@ function GameMenu({
 
 /**
  * Is there a save the title screen can Continue? Not when the stored save is the very
- * one that already failed to load (useGame copied it to BROKEN_SAVE_KEY): Continue would
- * only throw again. A new game then overwrites it; the broken copy stays put.
+ * one that already failed to load (useGame copied it to BROKEN_SAVE_KEY, or failed to and
+ * flagged the boot): Continue would only throw again. A new game then overwrites it; the
+ * broken copy stays put.
  */
 export function continuableSave(): boolean {
   try {
     if (typeof window === 'undefined') return false
     const raw = window.localStorage.getItem(DEFAULT_SAVE_KEY)
-    if (raw === null) return false
+    if (raw === null || bootLoadFailed()) return false
     return raw !== window.localStorage.getItem(BROKEN_SAVE_KEY)
   } catch {
     return false

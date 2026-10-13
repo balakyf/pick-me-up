@@ -6,7 +6,8 @@ import { TUNING } from '../engine/tuning'
 import { HeroCard } from './HeroCard'
 import { HeroBond } from './metaPanels'
 import { cpOf, Stars, Portrait } from './bits'
-import { BROKEN_SAVE_KEY, freshSeed } from './useGame'
+import { BROKEN_SAVE_KEY, bootLoadFailed, freshSeed, keepBrokenCopy } from './useGame'
+import { downloadText } from './return/saveTransfer'
 import { DEFAULT_SAVE_KEY } from '../engine/account'
 import { RevealSequence } from './summon/RevealSequence'
 import { revealOrder } from './summon/reveal'
@@ -59,7 +60,11 @@ export function TitleScreen({ store, hasSave }: { store: Store; hasSave: boolean
   // A save that could not be read gets no dead Continue button: say so, keep New Game.
   // App passes hasSave=false for it (continuableSave()), so the title checks the kept copy
   // itself: the broken save is still on disk, and a new game will overwrite it.
-  const [broken, setBroken] = useState(() => saveLooksBroken())
+  const [broken, setBroken] = useState(() => saveLooksBroken() || bootLoadFailed())
+  /** The unreadable save is safe under BROKEN_SAVE_KEY. Only then may the title say so, and
+   *  only then does New Game overwrite the save without asking. */
+  const [copyKept, setCopyKept] = useState(() => saveLooksBroken())
+  const [confirmNew, setConfirmNew] = useState(false)
   /** Canon rules (S25): opt in to Interference decaying while away. */
   const [hardcore, setHardcore] = useState(false)
   const canContinue = hasSave && !broken
@@ -67,14 +72,30 @@ export function TitleScreen({ store, hasSave }: { store: Store; hasSave: boolean
     try {
       store.load()
     } catch (err) {
-      try {
-        const raw = window.localStorage.getItem(DEFAULT_SAVE_KEY)
-        if (raw !== null) window.localStorage.setItem(BROKEN_SAVE_KEY, raw)
-      } catch {
-        /* storage may be unavailable */
-      }
-      console.error('Could not load the save.', err)
+      const kept = keepBrokenCopy()
+      console.error(kept ? 'Could not load the save; a copy was kept.' : 'Could not load the save, and no copy of it could be kept.', err)
+      setCopyKept(kept)
       setBroken(true)
+    }
+  }
+  function newGame(confirmed = false) {
+    // The only copy of an unreadable save is never overwritten silently: try once more to
+    // keep it (storage may have room now), else ask first.
+    if (broken && !copyKept && !confirmed) {
+      if (keepBrokenCopy()) setCopyKept(true)
+      else {
+        setConfirmNew(true)
+        return
+      }
+    }
+    store.dispatch({ type: 'NEW_ACCOUNT', seed: freshSeed(), now: Date.now(), ...(hardcore ? { hardcore: true } : {}) })
+  }
+  function downloadBroken() {
+    try {
+      const raw = window.localStorage.getItem(DEFAULT_SAVE_KEY)
+      if (raw !== null) downloadText(raw, 'pick-me-up-unreadable-save.json')
+    } catch {
+      /* storage may be unavailable */
     }
   }
   return (
@@ -104,19 +125,39 @@ export function TitleScreen({ store, hasSave }: { store: Store; hasSave: boolean
             {t('Continue')}
           </button>
         )}
-        <button
-          className="btn primary big"
-          onClick={() => store.dispatch({ type: 'NEW_ACCOUNT', seed: freshSeed(), now: Date.now(), ...(hardcore ? { hardcore: true } : {}) })}
-        >
+        <button className="btn primary big" onClick={() => newGame()}>
           {hasSave || broken ? t('New Game') : t('Begin')}
         </button>
       </div>
       <label className="title-hardcore" title={t('Interference fades while you are away, and six months away greys the world for good. Off by default.')}>
         <input type="checkbox" checked={hardcore} onChange={(e) => setHardcore(e.target.checked)} /> {t('Canon rules (Hardcore)')}
       </label>
-      {broken && (
+      {broken && copyKept && (
         <div className="save-broken" role="alert">
           {t('This save could not be read. A copy was kept.')}
+        </div>
+      )}
+      {broken && !copyKept && (
+        <div className="save-broken" role="alert">
+          <div>{t('This save could not be read, and no copy could be kept (the browser’s storage is full or blocked). Download it before starting over.')}</div>
+          <div className="btns">
+            <button className="btn" onClick={downloadBroken}>
+              ⬇ {t('Download the unreadable save')}
+            </button>
+          </div>
+          {confirmNew && (
+            <div>
+              <div>{t('A new game permanently replaces the unreadable save.')}</div>
+              <div className="btns">
+                <button className="btn" onClick={() => setConfirmNew(false)}>
+                  {t('Keep it')}
+                </button>
+                <button className="btn primary" onClick={() => newGame(true)}>
+                  {t('Start over anyway')}
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
       {canContinue && <div className="muted" style={{ marginTop: 14 }}>{t('Starting a new game overwrites your save.')}</div>}

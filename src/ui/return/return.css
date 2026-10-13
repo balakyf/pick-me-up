@@ -105,6 +105,7 @@
 .backup-file { position: relative; overflow: hidden; display: inline-block; }
 .backup-file input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
 .backup-confirm { padding: 8px 10px; border: 2px solid var(--warn); background: var(--panel); display: flex; flex-direction: column; gap: 6px; }
+.backup-kept { border-color: var(--line); border-style: dashed; }
 
 /* ── Re-interference: the grey lobby, and the colour flooding back (S25) ─── */
 body.greyed .world-canvas, body.greyed .minimap { filter: grayscale(1) brightness(0.72) contrast(0.9); }

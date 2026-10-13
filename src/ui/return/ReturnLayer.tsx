@@ -14,7 +14,8 @@ import { WelcomeBack, type Arrival } from './WelcomeBack'
 import { LightsOut } from './LightsOut'
 import { BackupWindow } from './BackupWindow'
 import { heroLetter } from './heroLetters'
-import { accountKey, awayRealMs, isArrival, isFreshMaster, isGreyArrival, isLongHide, seenOnRealClock } from './arrival'
+import { accountKey, awayRealMs, idleRealMs, isArrival, isFreshMaster, isGreyArrival, isLongHide, seenOnRealClock } from './arrival'
+import { ACTIVE_WRITE_EVERY_MS, noteActive, readLastActive } from './activity'
 import { useHonestTabTitle } from './tabTitle'
 import { requestPersistentStorage } from './saveTransfer'
 import './return.css'
@@ -99,8 +100,9 @@ export function ReturnLayer({ state, store, view, onGo, onBusyChange, quiet = fa
   const viewRef = useRef(view)
   viewRef.current = view
 
-  /** The arrival: one TICK from `before` to now, then the ledger (after the grey, if any). */
-  function arrive(before: GameState, now: number, grey: boolean) {
+  /** The arrival: one TICK from `before` to now, then the ledger (after the grey, if any).
+   *  `away` is the real time the Master was gone (for the ledger's "You were away …"). */
+  function arrive(before: GameState, now: number, grey: boolean, away: number = awayRealMs(before, now)) {
     let after: GameState
     try {
       after = store.dispatch({ type: 'TICK' }, now)
@@ -110,7 +112,7 @@ export function ReturnLayer({ state, store, view, onGo, onBusyChange, quiet = fa
     const a: Arrival = {
       summary: summarizeAway(before, after),
       letter: heroLetter(before, after),
-      awayRealMs: awayRealMs(before, now),
+      awayRealMs: away,
       grey,
       accountId: accountKey(after),
       at: before.meta.lastSeenAtWorld,
@@ -152,8 +154,37 @@ export function ReturnLayer({ state, store, view, onGo, onBusyChange, quiet = fa
     judged.current = true
     const before = store.getState()
     const now = Date.now()
-    if (before && isArrival(before, now)) arrive(before, now, isGreyArrival(before, now))
+    // Judged from the later of the engine's last sight of the Master and their last real
+    // activity in this browser (a long climb, then a reload or a first lobby visit, is not
+    // an absence). This runs before the activity effect below starts noting this page.
+    const active = before ? readLastActive(before) : null
+    if (before && isArrival(before, now, active)) arrive(before, now, isGreyArrival(before, now, active), idleRealMs(before, now, active))
   }, [view])
+
+  // Note the Master's real activity (clicks, keys, commands, the tab shown again), throttled.
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    let last = -Infinity
+    const note = () => {
+      const now = Date.now()
+      if (now - last < ACTIVE_WRITE_EVERY_MS) return
+      last = now
+      noteActive(store.getState(), now)
+    }
+    const onVisibility = () => {
+      if (!document.hidden) note()
+    }
+    const unsubscribe = store.subscribe(note)
+    window.addEventListener('pointerdown', note, true)
+    window.addEventListener('keydown', note, true)
+    document.addEventListener('visibilitychange', onVisibility)
+    return () => {
+      unsubscribe()
+      window.removeEventListener('pointerdown', note, true)
+      window.removeEventListener('keydown', note, true)
+      document.removeEventListener('visibilitychange', onVisibility)
+    }
+  }, [store])
 
   // A tab hidden for hours and shown again is an arrival too.
   useEffect(() => {

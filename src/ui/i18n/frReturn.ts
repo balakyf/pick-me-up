@@ -203,8 +203,15 @@ export const FR_RETURN: Record<string, string> = {
   'Check this save': 'Vérifier cette sauvegarde',
   'Open a save file': 'Ouvrir un fichier de sauvegarde',
   'Found: Master Lv {ml} · floor {f} cleared · {n} heroes.': 'Trouvé : Maître Niv. {ml} · étage {f} franchi · {n} héros.',
-  'This replaces the save in this browser (the current one is kept aside, just in case).':
-    'Cela remplace la partie de ce navigateur (l’actuelle est mise de côté, au cas où).',
+  'This replaces the save in this browser. The current one is kept aside: you can bring it back from this window.':
+    'Cela remplace la partie de ce navigateur. L’actuelle est mise de côté : vous pourrez la récupérer depuis cette fenêtre.',
+  'Kept from before your last import: Master Lv {ml} · floor {f} cleared · {n} heroes.':
+    'Mise de côté avant votre dernière importation : Maître Niv. {ml} · étage {f} franchi · {n} héros.',
+  'Bring that save back': 'Récupérer cette partie',
+  'Your save from before the import is back. The other one is kept here in its place.':
+    'Votre partie d’avant l’importation est de retour. L’autre est mise de côté ici à sa place.',
+  'That save is damaged and cannot be played. Nothing was changed.': 'Cette sauvegarde est endommagée et ne peut pas être jouée. Rien n’a été modifié.',
+  'That save has greyed and cannot be restored.': 'Cette partie est devenue grise et ne peut pas être restaurée.',
   'Replace my save': 'Remplacer ma partie',
   'Finish the climb first: a save is restored from the waiting room.': 'Terminez d’abord l’ascension : une partie se restaure depuis la salle d’attente.',
   'Save restored. Welcome back, Master.': 'Partie restaurée. Bon retour, Maître.',

@@ -6,6 +6,12 @@
 export const FR_SUMMON: Record<string, string> = {
   // ── Title: an unreadable save ─────────────────────────────────────────────
   'This save could not be read. A copy was kept.': 'Cette sauvegarde est illisible. Une copie a été conservée.',
+  'This save could not be read, and no copy could be kept (the browser’s storage is full or blocked). Download it before starting over.':
+    'Cette sauvegarde est illisible, et aucune copie n’a pu être conservée (le stockage du navigateur est plein ou bloqué). Téléchargez-la avant de recommencer.',
+  'Download the unreadable save': 'Télécharger la sauvegarde illisible',
+  'A new game permanently replaces the unreadable save.': 'Une nouvelle partie remplace définitivement la sauvegarde illisible.',
+  'Keep it': 'La garder',
+  'Start over anyway': 'Recommencer quand même',
 
   // ── Summon Theatre ────────────────────────────────────────────────────────
   'Click, Space or Enter to continue': 'Clic, Espace ou Entrée pour continuer',

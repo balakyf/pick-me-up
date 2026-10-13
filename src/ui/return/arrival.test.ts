@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { awayRealMs, isArrival, isFreshMaster, isGreyArrival, isLongHide, REAL_CLOCK_EPOCH, seenOnRealClock } from './arrival'
+import { awayRealMs, idleRealMs, isArrival, isFreshMaster, isGreyArrival, isLongHide, REAL_CLOCK_EPOCH, seenOnRealClock } from './arrival'
 import { createAccount } from '../../engine/account'
 import { TUNING } from '../../engine/tuning'
 import type { GameState } from '../../engine/types'
@@ -41,5 +41,20 @@ describe('arrival gating', () => {
   it('a long-hidden tab counts like an arrival', () => {
     expect(isLongHide(3 * HOUR)).toBe(true)
     expect(isLongHide(10 * 60_000)).toBe(false)
+  })
+})
+
+describe('arrival and the real activity of the Master (review #17)', () => {
+  it('a stale lastSeen is no arrival when the Master was active a minute ago', () => {
+    const s = returning(10)
+    expect(isArrival(s, NOW, null)).toBe(true)
+    expect(isArrival(s, NOW, NOW - 60_000)).toBe(false)
+    expect(idleRealMs(s, NOW, NOW - 60_000)).toBe(60_000)
+  })
+
+  it('the later of the two wins: an old activity stamp never lengthens an absence', () => {
+    expect(idleRealMs(returning(3), NOW, NOW - 50 * HOUR)).toBe(3 * HOUR)
+    expect(isGreyArrival(returning(40 * 24), NOW, NOW - 3 * HOUR)).toBe(false)
+    expect(isArrival(returning(40 * 24), NOW, NOW - 3 * HOUR)).toBe(true)
   })
 })

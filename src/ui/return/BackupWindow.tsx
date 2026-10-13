@@ -4,13 +4,14 @@ import type { Store } from '../../engine/store'
 import { PixelWindow } from '../kit'
 import { t } from '../i18n/i18n'
 import { DEFAULT_SAVE_KEY } from '../../engine/account'
-import { BEFORE_IMPORT_KEY, commitImport, downloadSave, encodeSaveCode, exportSaveJson, parseImport, storageIsPersistent, type ImportResult } from './saveTransfer'
+import { BEFORE_IMPORT_KEY, IMPORTED_KEY, beforeImportSave, commitImport, downloadSave, encodeSaveCode, exportSaveJson, parseImport, storageIsPersistent, undoImport, type ImportResult } from './saveTransfer'
 import './return.css'
 
 /**
  * Back up or restore the save (spec 2026-10-12 S28). Export: a file, or a code to copy.
  * Import: a file or a pasted code, validated by the engine before anything is written,
- * then confirmed. The replaced save is kept under a backup key.
+ * then confirmed. The replaced save is kept under a backup key, and this window offers to
+ * bring it back (the two saves swap, so that can be undone too).
  */
 export function BackupWindow({
   state,
@@ -34,6 +35,14 @@ export function BackupWindow({
   const [pending, setPending] = useState<Extract<ImportResult, { ok: true }> | null>(null)
   const [err, setErr] = useState<string | null>(null)
   const [persisted, setPersisted] = useState(false)
+  // The save an import replaced (re-read after every restore or undo).
+  const kept = useMemo(() => {
+    try {
+      return beforeImportSave(window.localStorage)
+    } catch {
+      return null
+    }
+  }, [codeVersion])
 
   useEffect(() => {
     let live = true
@@ -80,30 +89,50 @@ export function BackupWindow({
     })
   }
 
-  function restore() {
-    if (!pending || !canRestore) return
+  /** Swap the storage keys a restore touches, then load; on any failure put every key back
+   *  exactly as it was (the promise is that nothing changed). */
+  function swapAndLoad(write: (ls: Storage) => void): boolean {
     const ls = window.localStorage
-    const previous = ls.getItem(DEFAULT_SAVE_KEY)
+    const keys = [DEFAULT_SAVE_KEY, BEFORE_IMPORT_KEY, IMPORTED_KEY]
+    const before = keys.map((k) => ls.getItem(k))
+    const putBack = () =>
+      keys.forEach((k, i) => {
+        const v = before[i]
+        if (v === null || v === undefined) ls.removeItem(k)
+        else ls.setItem(k, v)
+      })
     try {
-      commitImport(ls, pending.json)
-    } catch {
-      setErr(t('That save could not be read. Nothing was changed.'))
-      return
-    }
-    try {
+      write(ls)
       store.load()
     } catch {
-      // Put the old save back exactly as it was: the promise is that nothing changed.
-      if (previous !== null) ls.setItem(DEFAULT_SAVE_KEY, previous)
-      else ls.removeItem(DEFAULT_SAVE_KEY)
-      ls.removeItem(BEFORE_IMPORT_KEY)
+      try {
+        putBack()
+        store.load()
+      } catch {
+        /* the old save was already on screen; storage may be unavailable */
+      }
       setErr(t('That save could not be read. Nothing was changed.'))
-      return
+      return false
     }
+    setCodeVersion((v) => v + 1)
+    return true
+  }
+
+  function restore() {
+    if (!pending || !canRestore) return
+    const json = pending.json
+    if (!swapAndLoad((ls) => commitImport(ls, json))) return
     setPending(null)
     setPaste('')
-    setCodeVersion((v) => v + 1)
     setNote(t('Save restored. Welcome back, Master.'))
+  }
+
+  function bringBack() {
+    if (!kept || !canRestore) return
+    setErr(null)
+    setPending(null)
+    if (!swapAndLoad((ls) => undoImport(ls))) return
+    setNote(t('Your save from before the import is back. The other one is kept here in its place.'))
   }
 
   const p = pending?.state
@@ -157,7 +186,7 @@ export function BackupWindow({
                 n: Object.values(p.heroes).filter((h) => h.alive).length,
               })}
             </div>
-            <div className="muted">{t('This replaces the save in this browser (the current one is kept aside, just in case).')}</div>
+            <div className="muted">{t('This replaces the save in this browser. The current one is kept aside: you can bring it back from this window.')}</div>
             {!canRestore && <div className="muted">{t('Finish the climb first: a save is restored from the waiting room.')}</div>}
             <div className="backup-row">
               <button className="pbtn" onClick={() => setPending(null)}>
@@ -165,6 +194,22 @@ export function BackupWindow({
               </button>
               <button className="pbtn danger" onClick={restore} disabled={!canRestore}>
                 {t('Replace my save')}
+              </button>
+            </div>
+          </div>
+        )}
+        {kept && (
+          <div className="backup-confirm backup-kept">
+            <div>
+              {t('Kept from before your last import: Master Lv {ml} · floor {f} cleared · {n} heroes.', {
+                ml: kept.state.meta.masterLevel,
+                f: kept.state.tower.highestCleared,
+                n: Object.values(kept.state.heroes).filter((h) => h.alive).length,
+              })}
+            </div>
+            <div className="backup-row">
+              <button className="pbtn" onClick={bringBack} disabled={!canRestore}>
+                ↶ {t('Bring that save back')}
               </button>
             </div>
           </div>
