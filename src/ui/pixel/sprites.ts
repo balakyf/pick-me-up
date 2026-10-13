@@ -5,9 +5,9 @@
 import { iselLook, keyBearerLook, lookForHero, lookForMaster, priasisLook, type HeroLook, type LookSource } from './look'
 import { drawReliquary } from './enemySprite'
 import type { Bitmap } from './bitmap'
-import { drawHeroBust, drawHeroFrame, type Dir, type WalkFrame } from './heroSprite'
+import { drawHeroBust, drawHeroFrame, drawHeroPose, type Dir, type HeroPose, type WalkFrame } from './heroSprite'
 import { cachedCanvas, cachedDataUrl } from './render'
-import { drawEnemy } from './enemySprite'
+import { drawEnemy, drawEnemyPose } from './enemySprite'
 import { ENEMY_TEMPLATES } from '../../engine/content'
 import type { Element } from '../../engine/types'
 
@@ -96,19 +96,47 @@ export function enemySize(name: string, element: Element): { w: number; h: numbe
 
 // ── battle poses (WP0 contract; WP8 draws the real frames) ───────────────────
 
-/** A battle pose. WP0 stubs map every pose onto the existing walk frames. */
+/** A battle pose (the WP0 contract; WP2 maps battle events onto these). */
 export type Pose = 'idle' | 'attack' | 'cast' | 'hurt' | 'ko'
 
-/** Stub mapping: acting poses use walk frame 1 (the lunge BattleScene already shows), the rest frame 0. */
-const POSE_FRAME: Record<Pose, WalkFrame> = { idle: 0, attack: 1, cast: 1, hurt: 0, ko: 0 }
+/**
+ * Every pose the art can draw: the contract's five plus `windup` (the anticipation
+ * frame before `attack`) and `blink` (idle with shut eyes, for the idle-life overlay).
+ * A superset of `Pose`, so existing `heroPoseUrl(hero, pose)` callers are unaffected.
+ */
+export type ArtPose = HeroPose
 
-/** Battle frame for a hero (facing left, with the party) in a pose. Stub: the existing frame-0/1 URL. */
-export function heroPoseUrl(hero: LookSource, pose: Pose): string {
-  return heroFrameUrl(hero, 'left', POSE_FRAME[pose])
+/**
+ * Battle frame for a hero (facing left, with the party) in a pose. `idle` shares the
+ * walk-frame-0 cache entry (the pixels are identical); other poses cache under the
+ * `hp|` prefix: at most 6 entries per hero, never one per animation frame.
+ */
+export function heroPoseUrl(hero: LookSource, pose: ArtPose): string {
+  if (pose === 'idle') return heroFrameUrl(hero, 'left', 0)
+  return cachedDataUrl(`hp|${lookKey(hero)}|${pose}`, () => drawHeroPose(heroLook(hero), pose))
 }
 
-/** Battle frame for an enemy in a pose. Stub: enemies have one frame, so every pose is the existing art. */
-export function enemyPoseUrl(name: string, element: Element, pose: Pose): string {
-  void pose
-  return enemyUrl(name, element)
+/** Canvas variant of `heroPoseUrl` (for canvas scenes such as lobby sparring). */
+export function heroPoseCanvas(hero: LookSource, pose: ArtPose) {
+  if (pose === 'idle') return heroFrameCanvas(hero, 'left', 0)
+  return cachedCanvas(`hp|${lookKey(hero)}|${pose}`, () => drawHeroPose(heroLook(hero), pose))
+}
+
+/** The blink overlay for a hero's battle idle frame (see `poses.ts`, idle life). */
+export function heroBlinkUrl(hero: LookSource): string {
+  return heroPoseUrl(hero, 'blink')
+}
+
+/** Battle frame for an enemy in a pose (facing right). `idle` is exactly `enemyUrl`. */
+export function enemyPoseUrl(name: string, element: Element, pose: ArtPose): string {
+  if (pose === 'idle') return enemyUrl(name, element)
+  const id = enemyTemplateIdForName(name)
+  return cachedDataUrl(`en|${id}|${element}|${pose}`, () => drawEnemyPose(id, element, pose))
+}
+
+/** Battle frame for a mission NPC ally in a pose (objects such as the reliquary never move). */
+export function allyPoseUrl(name: string, pose: ArtPose): string {
+  if (pose === 'idle' || ALLY_OBJECTS[name]) return allyFrameUrl(name)
+  const make = ALLY_LOOKS[name] ?? priasisLook
+  return cachedDataUrl(`allyp|${name}|${pose}`, () => drawHeroPose(make(), pose))
 }

@@ -8,20 +8,27 @@
  */
 import type { Element } from '../../engine/types'
 import {
+  capSaturation,
+  CLEAR,
   createBitmap,
   ellipse,
+  flashWhite,
+  grade,
   flipX,
   hex,
   hline,
   line,
   outline,
   rect,
+  rimLight,
   roundRect,
   set,
+  shear,
+  squash,
   vline,
   type Bitmap,
 } from './bitmap'
-import { drawHeroFrame } from './heroSprite'
+import { drawHeroFrame, drawHeroPose, poseRig, type HeroPose } from './heroSprite'
 import type { HeroLook } from './look'
 import { BONE, ELEMENT_RAMP, GOLD, INK, LEATHER, STEEL, WOOD, ramp, type Ramp } from './palette'
 
@@ -54,12 +61,49 @@ function baseLook(over: Partial<HeroLook>): HeroLook {
   }
 }
 
-function humanoid(look: HeroLook, extra?: (b: Bitmap) => void): Bitmap {
-  // drawHeroFrame outlines already; extras (ears, tusks) are drawn on top then re-outlined
-  const b = drawHeroFrame(look, 'right', 0)
-  if (extra) {
-    extra(b)
-    return outline(b, INK)
+/** Where a pose has moved the head and the hips, in right-facing pixels (for extras). */
+export interface PartOffsets {
+  hx: number
+  hy: number
+  bx: number
+  by: number
+}
+const STILL: PartOffsets = { hx: 0, hy: 0, bx: 0, by: 0 }
+
+type Extra = (b: Bitmap, o: PartOffsets) => void
+
+/**
+ * The pose the current `drawEnemyPose` call is drawing. The registry closures take
+ * no arguments, so `humanoid()` reads it; `drawEnemyPose` sets and restores it
+ * synchronously around a single draw. `posedHumanoid` records whether the drawer
+ * went through `humanoid()` (bespoke monsters get generic transforms instead).
+ */
+let posing: HeroPose = 'idle'
+let posedHumanoid = false
+
+function humanoid(look: HeroLook, extra?: Extra, pose: HeroPose = posing): Bitmap {
+  posedHumanoid = true
+  if (pose === 'idle') {
+    // drawHeroFrame outlines already; extras (ears, tusks) are drawn on top then re-outlined
+    const b = drawHeroFrame(look, 'right', 0)
+    if (extra) {
+      extra(b, STILL)
+      return outline(b, INK)
+    }
+    return b
+  }
+  // Posed: mirror the hero rig. Extras go on their own layer and get their own ring,
+  // so the frame's weapon trail (light, not an object) is never outlined.
+  const b = flipX(drawHeroPose(look, pose))
+  if (!extra) return b
+  const r = poseRig(pose)
+  const ex = createBitmap(b.w, b.h)
+  extra(ex, { hx: -r.head.x, hy: r.head.y, bx: -r.body.x, by: r.body.y })
+  const ring = outline(ex, INK)
+  for (let i = 0; i < b.px.length; i++) {
+    const e = ex.px[i]!
+    if (e !== CLEAR) b.px[i] = e
+    else if (ring.px[i] === INK && b.px[i] === CLEAR) b.px[i] = INK
   }
   return b
 }
@@ -386,9 +430,11 @@ const ORDER_CLOTH = ramp('#6a6a7a', '#a8a8ba', '#e0e0ec')
 
 /** A lizardman: scaly skin plus a tail. */
 function lizard(over: Partial<HeroLook>): Bitmap {
-  return humanoid(baseLook({ skin: SCALY, hair: SCALY, hairStyle: 'buzz', eyes: hex('#ffd24a'), ...over }), (b) => {
-    line(b, 6, 24, 1, 29, SCALY.d)
-    line(b, 6, 25, 2, 30, SCALY.m)
+  return humanoid(baseLook({ skin: SCALY, hair: SCALY, hairStyle: 'buzz', eyes: hex('#ffd24a'), ...over }), (b, o) => {
+    // the tail rides the hips; on a KO slump it lies along the ground
+    const tip = Math.min(29 + o.by, 29)
+    line(b, 6 + o.bx, 24 + o.by, 1 + o.bx, tip, SCALY.d)
+    line(b, 6 + o.bx, 25 + o.by, 2 + o.bx, tip + 1, SCALY.m)
   })
 }
 
@@ -396,11 +442,11 @@ function lizard(over: Partial<HeroLook>): Bitmap {
 
 const DRAWERS: Record<string, () => Bitmap> = {
   goblin: () =>
-    humanoid(baseLook({}), (b) => {
+    humanoid(baseLook({}), (b, o) => {
       // pointy ears
-      set(b, 19, 8, GOBLIN_SKIN.m)
-      set(b, 20, 7, GOBLIN_SKIN.m)
-      set(b, 21, 6, GOBLIN_SKIN.l)
+      set(b, 19 + o.hx, 8 + o.hy, GOBLIN_SKIN.m)
+      set(b, 20 + o.hx, 7 + o.hy, GOBLIN_SKIN.m)
+      set(b, 21 + o.hx, 6 + o.hy, GOBLIN_SKIN.l)
     }),
   wolf: () => quadruped(ramp('#4a4a5a', '#7a7a8a', '#b0b0c0'), hex('#ffd24a'), false),
   beast: () => quadruped(ramp('#2a1a14', '#5a3424', '#8a5a3a'), RED_EYE, true),
@@ -417,9 +463,9 @@ const DRAWERS: Record<string, () => Bitmap> = {
         accent: ramp('#3a3a40', '#5a5a64', '#7a7a86'),
         weapon: 'sword',
       }),
-      (b) => {
-        hline(b, 13, 13, 4, INK) // jaw
-        set(b, 15, 11, INK)
+      (b, o) => {
+        hline(b, 13 + o.hx, 13 + o.hy, 4, INK) // jaw
+        set(b, 15 + o.hx, 11 + o.hy, INK)
       },
     ),
   soldier: () =>
@@ -514,9 +560,9 @@ const DRAWERS: Record<string, () => Bitmap> = {
   dark_knight: () =>
     humanoid(baseLook({ skin: PALE, eyes: RED_EYE, outfit: 'warrior', cloth: ramp('#0e0c14', '#1e1a28', '#34304a'), headgear: 'helm', weapon: 'sword', shield: true, accent: ramp('#3a0a14', '#6a1424', '#9a2a3a') })),
   demon_marksman: () =>
-    humanoid(baseLook({ skin: DEMON_SKIN, hair: ramp('#140a0a', '#2a1414', '#4a2424'), eyes: hex('#ffd24a'), outfit: 'archer', cloth: ramp('#2a0e0e', '#4a1a1a', '#7a2a2a'), weapon: 'bow' }), (b) => {
-      set(b, 12, 2, BONE.l) // horns
-      set(b, 17, 2, BONE.l)
+    humanoid(baseLook({ skin: DEMON_SKIN, hair: ramp('#140a0a', '#2a1414', '#4a2424'), eyes: hex('#ffd24a'), outfit: 'archer', cloth: ramp('#2a0e0e', '#4a1a1a', '#7a2a2a'), weapon: 'bow' }), (b, o) => {
+      set(b, 12 + o.hx, 2 + o.hy, BONE.l) // horns
+      set(b, 17 + o.hx, 2 + o.hy, BONE.l)
     }),
   order_mage: () => humanoid(baseLook({ skin: FAIR, eyes: INK, outfit: 'mage', cloth: ORDER_CLOTH, headgear: 'hat', weapon: 'staff', accent: GOLD, trim: true })),
   rodvick: () => humanoid(baseLook({ skin: FAIR, eyes: INK, outfit: 'warrior', cloth: ramp('#4a2a14', '#7a4a24', '#a8703a'), weapon: 'club', mark: 'beard' })),
@@ -602,7 +648,16 @@ export function drawEnemy(templateId: string, element: Element = 'physical'): Bi
   const hit = cache.get(key)
   if (hit) return hit
   const drawer = DRAWERS[templateId]
-  const bmp = drawer ? drawer() : humanoid(baseLook({ accent: ELEMENT_RAMP[element], cloth: ELEMENT_RAMP[element] }))
+  // The idle cache must never hold a posed frame, even if a drawer ever reaches
+  // drawEnemy while drawEnemyPose has `posing` set: pin idle for this draw.
+  const prevPose = posing
+  posing = 'idle'
+  let bmp: Bitmap
+  try {
+    bmp = drawer ? drawer() : humanoid(baseLook({ accent: ELEMENT_RAMP[element], cloth: ELEMENT_RAMP[element] }))
+  } finally {
+    posing = prevPose
+  }
   cache.set(key, bmp)
   return bmp
 }
@@ -613,3 +668,55 @@ export function enemyFacingLeft(templateId: string, element?: Element): Bitmap {
 }
 
 export const KNOWN_ENEMIES = Object.keys(DRAWERS)
+
+// ── battle poses (spec 2026-10-12 S10) ───────────────────────────────────────
+
+/**
+ * Generic motion for a bespoke monster (enemies face RIGHT, so +x is forward):
+ * a lean via shear, squash & stretch about the feet, a white flash, a spell rim.
+ * Bitmap sizes never change, so battle layout is unaffected.
+ */
+export function monsterPose(idle: Bitmap, pose: HeroPose, element: Element = 'physical'): Bitmap {
+  switch (pose) {
+    case 'idle':
+    case 'blink':
+      return idle
+    case 'windup': // rear back and crouch: the anticipation
+      return squash(shear(idle, -2), 1.06, 0.92)
+    case 'attack': // the top lunges forward, stretched
+      return squash(shear(idle, 3), 0.96, 1.04)
+    case 'cast': // rise and glow with the element's light
+      return rimLight(squash(idle, 0.97, 1.05), 'all', ELEMENT_RAMP[element].l, 0.5, INK)
+    case 'hurt': // knocked back, flashing white (the outline stays so it still reads)
+      return flashWhite(shear(idle, -2), 0.55, INK)
+    case 'ko': // flattened and drained of colour
+      return capSaturation(grade(squash(idle, 1.18, 0.6), hex('#6a6080'), 0.4), 0.18)
+  }
+}
+
+const poseCache = new Map<string, Bitmap>()
+
+/**
+ * An enemy battle frame in a pose (facing right). Humanoid foes get the hero rig
+ * (wind-up, strike, cast, recoil, slump); bespoke monsters get `monsterPose`.
+ * `idle` is exactly `drawEnemy`. Cached per template × element × pose (bounded).
+ */
+export function drawEnemyPose(templateId: string, element: Element = 'physical', pose: HeroPose = 'idle'): Bitmap {
+  if (pose === 'idle') return drawEnemy(templateId, element)
+  const key = `${templateId}|${element}|${pose}`
+  const hit = poseCache.get(key)
+  if (hit) return hit
+  const drawer = DRAWERS[templateId]
+  const prevPose = posing
+  posing = pose
+  posedHumanoid = false
+  let bmp: Bitmap
+  try {
+    bmp = drawer ? drawer() : humanoid(baseLook({ accent: ELEMENT_RAMP[element], cloth: ELEMENT_RAMP[element] }))
+  } finally {
+    posing = prevPose
+  }
+  if (!posedHumanoid) bmp = monsterPose(drawEnemy(templateId, element), pose, element)
+  poseCache.set(key, bmp)
+  return bmp
+}
