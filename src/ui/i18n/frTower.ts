@@ -23,7 +23,17 @@ export const FR_TOWER: Record<string, string> = {
   'The floor’s guardian waits.': 'Le gardien de l’étage attend.',
   'A gentle floor to learn the ropes.': 'Un étage tranquille pour apprendre les ficelles.',
   'No fight on this floor.': 'Pas de combat à cet étage.',
-  'party ×{r}': 'équipe ×{r}',
+  'won {w}/{n} trials': '{w}/{n} essais gagnés',
+
+  // ── The scout's trial runs (S12): the threat band comes from them ───────────
+  'In {n} trial runs: won {w}': 'Sur {n} essais — gagnés : {w}',
+  'nobody fell': 'personne n’est tombé',
+  'closest call: a hero at {p}% HP': 'de justesse : un héros à {p} % de PV',
+  'lost a hero in 1': 'un héros perdu dans 1 essai',
+  'lost heroes in {h}': 'des héros perdus dans {h} essais',
+  'worst: {d} fell': 'au pire : {d} tombés',
+  'the party broke once': 'l’équipe s’est débandée une fois',
+  'the party broke {r} times': 'l’équipe s’est débandée {r} fois',
   'No choice made? The party takes the {door}.': 'Pas de choix ? L’équipe prend la porte {door}.',
   'No door chosen: the party takes the first one.': 'Aucune porte choisie : l’équipe prend la première.',
   'Got it': 'Compris',

@@ -3,28 +3,31 @@
  * the party as it stands, and a suggested party that answers it. Pure reads — nothing
  * here changes state or consumes the floor's RNG.
  *
- * The threat bands were calibrated from the playtest bots (40 days × 6 runs): with party
- * CP ÷ floor budget at 1.6 or above no hero died; 1.0–1.6 won ~95% with ~0.5 deaths;
- * 0.6–1.0 won ~88% with ~0.8 deaths; below 0.6 the party lost more than it won and
- * ~3 heroes died an attempt.
- *
- * The scout is honest (spec 2026-10-12 S12): the ratio is the party's real battle units
- * (as playFloor builds them) over the CP of the encounter actually built for this attempt
- * (kind, Doors, mercy director and any Nemesis included), and it names the 1-2 threats
- * that matter and why. src/sim/metrics.test.ts holds the contract: a floor scouted Safe
- * never kills, and Fair floors almost never do.
+ * The scout is honest by construction (spec 2026-10-12 S12): the threat band is not read
+ * off a CP ratio (combat mitigation is level-scaled and tempo matters, so a party of fresh
+ * recruits can out-CP a floor that kills them) but from TRIAL RUNS — the real encounter
+ * this attempt would face (kind, Doors, mercy director, Nemesis, Ballista default), fought
+ * by the party's real battle units (Sanity, favor, gear, echoes, Last Stand, Boons) with
+ * the real combat engine, `SCOUT_TRIALS` times, each on its own scout RNG stream. Nothing
+ * here changes state or consumes any game RNG. The CP ratio is still reported, as a hint.
+ * It also names the 1-2 threats that matter and why. src/sim/metrics.test.ts and
+ * src/sim/scoutHonesty.test.ts hold the contract: a floor scouted Safe essentially never
+ * kills, Fair floors seldom do, and Deadly floors really are.
  */
 import { TUNING } from '../tuning'
 import { combatPowerForHero } from '../stats'
 import { skillCp } from '../skills'
 import { engravingCp } from '../engravings'
-import { buildEncounter, nemesesOnFloor, nemesisUnitId } from '../tower'
+import { attemptEncounter, buildEncounter, nemesesOnFloor, nemesisUnitId } from '../tower'
 import { ELEMENT_ADVANTAGE } from '../tuning'
 import { SKILLS } from '../content'
 import { buildCombatUnit } from '../unit'
 import { revenantName } from '../legacy/records'
-import { applyBoonsToUnits, climbExtraPct, isMercyCapped, kindForFloor, lastStandPct, sortieBoons } from '../climb'
-import type { CombatUnit, Element, EnemyFamily, FloorKind, GameState, HeroId, KeywordTag, Line, OwnedHero, SkillEffect } from '../types'
+import { runBattle, ROUT_NOTE } from '../combat'
+import { rebellionChance } from '../favor'
+import { chance, hash, rngFor } from '../rng/rng'
+import { applyBoonsToUnits, boonBattleMods, climbExtraPct, isMercyCapped, kindForFloor, lastStandPct, sortieBoons } from '../climb'
+import type { CombatUnit, Encounter, Element, EnemyFamily, FloorKind, GameState, HeroId, KeywordTag, Line, OwnedHero, Seed, SkillEffect } from '../types'
 
 export type Threat = 'safe' | 'fair' | 'risky' | 'deadly'
 
@@ -67,11 +70,20 @@ export interface ScoutReport {
   /** The floor's real strength: Σ CP of the encounter actually built (looming units,
    *  which are outlasted rather than fought, are left out). */
   budget: number
-  /** partyCp ÷ budget, the number the threat band reads. */
+  /** partyCp ÷ budget: a hint only — the threat band reads the trial runs. */
   ratio: number
+  /** The band the trial runs earn (`threatFromTrials`). */
   threat: Threat
-  /** Deaths an attempt at this ratio cost, on average (from the bots). */
+  /** The trial runs behind the band. */
+  trials: ScoutTrials
+  /** Share of trial runs won (0 when no one is sent). */
+  winRate: number
+  /** Heroes lost per trial run, on average. */
   expectedDeaths: number
+  /** The most heroes any one trial run lost. */
+  worstDeaths: number
+  /** Share of trial runs that ended with the party breaking (a rout). */
+  routChance: number
   /** The scholars (or an intervention) have read this floor: weaknesses are shown. */
   studied: boolean
   /** Damage types most of the floor shrugs off. */
@@ -122,11 +134,132 @@ export function canFight(h: OwnedHero): boolean {
   return h.alive && h.sanity > 0 && h.training === null && h.expedition === null && !h.captiveOf && h.promotion === null
 }
 
-export function threatFor(ratio: number): { threat: Threat; expectedDeaths: number } {
-  if (ratio >= 1.6) return { threat: 'safe', expectedDeaths: 0 }
-  if (ratio >= 1.2) return { threat: 'fair', expectedDeaths: 0.5 }
-  if (ratio >= 0.6) return { threat: 'risky', expectedDeaths: 0.8 }
-  return { threat: 'deadly', expectedDeaths: 3 }
+/** What the scout's trial runs saw (spec 2026-10-12 S12). */
+export interface ScoutTrials {
+  /** Trial runs fought (0 when no one is sent). */
+  runs: number
+  /** Runs the party won. */
+  won: number
+  /** Runs that cost at least one hero. */
+  hurt: number
+  /** Runs that ended in a rout (the party broke and came home). */
+  routed: number
+  /** Heroes lost across all runs. */
+  deaths: number
+  /** The most heroes one run lost. */
+  worstDeaths: number
+  /** The lowest any hero's HP fell in any run, as a share of its max HP (0 = one died). */
+  closestCall: number
+}
+
+/** How many trial runs a scout fights. Eight keeps a scout of a late floor with a full
+ *  party in single-digit milliseconds and, with the near-miss margin below, meets the
+ *  honesty bar (src/sim/scoutHonesty.test.ts). */
+export const SCOUT_TRIALS = 8
+
+/** The bands, from the trial runs (calibrated in src/sim/scoutHonesty.test.ts):
+ *  - Safe: every run won, nobody fell, and no hero dropped below `safeMargin` of its HP
+ *    (a near miss in eight runs is a death in the ninth);
+ *  - Fair: won at least `fairWin` of the runs and at most `fairHurt` of them cost a hero
+ *    (0: one death in eight runs is a death in one attempt of eight — that is Risky);
+ *  - Risky: won at least `riskyWin` of the runs (usually won, but heroes fall);
+ *  - Deadly: otherwise.
+ *  Measured on 3,120 attempts by rebuilt rosters (Lv1 recruits, mixed, under-, near- and
+ *  even-levelled parties, F3-F41): Safe 100% came back whole, Fair 97%, Deadly lost 99%. */
+export const THREAT_BANDS = { safeMargin: 0.25, fairWin: 0.75, fairHurt: 0, riskyWin: 0.35 } as const
+
+export function threatFromTrials(t: ScoutTrials): Threat {
+  const B = THREAT_BANDS
+  if (t.runs === 0) return 'deadly'
+  const win = t.won / t.runs
+  if (t.won === t.runs && t.hurt === 0 && t.closestCall >= B.safeMargin) return 'safe'
+  if (win >= B.fairWin && t.hurt / t.runs <= B.fairHurt) return 'fair'
+  if (win >= B.riskyWin) return 'risky'
+  return 'deadly'
+}
+
+const NO_TRIALS: ScoutTrials = { runs: 0, won: 0, hurt: 0, routed: 0, deaths: 0, worstDeaths: 0, closestCall: 0 }
+
+/**
+ * Fight the attempt `runs` times without consequence: `heroes` (as playFloor would field
+ * them — a Wary, broken hero may refuse, drawn on the scout's own stream) against the
+ * encounter this attempt would face, each run on its own stream `hash(seed, 'scout', floor,
+ * attemptIndex, i)`. Pure: no state changes, no game RNG consumed.
+ */
+export function scoutTrials(state: GameState, heroes: readonly OwnedHero[], runs: number = SCOUT_TRIALS, enc: Encounter = attemptEncounter(state)): ScoutTrials {
+  if (heroes.length === 0 || runs <= 0) return NO_TRIALS
+  const floor = state.tower.currentFloor
+  const attempt = state.tower.attemptIndex
+  const mods = boonBattleMods(sortieBoons(state))
+  // Sanity regenerates continuously, so a hero's exact Sanity differs every world tick.
+  // Combat reads it only for panic (none at or above the threshold) and the refusal draw
+  // only below `rebellionSanity`; the trials take it floored to a whole point (a hair
+  // pessimistic) and capped at the panic threshold (no change at all), so a regenerating
+  // roster keeps the same trial inputs — and the cache below keeps its answer.
+  const all = scoutUnits(state, [...heroes]).map((u) => (u.sanity === undefined ? u : { ...u, sanity: Math.min(PANIC_AT, Math.floor(u.sanity)) }))
+  const rebels = heroes.map((h) => rebellionChance({ ...h, sanity: Math.floor(h.sanity) }))
+  // The trials are a pure function of exactly these inputs (runBattle reads nothing else),
+  // so equal inputs reuse the answer: the lobby's clock ticks every second and each tick
+  // is a new state, which would otherwise re-fight the floor for the Goal tracker.
+  const key = JSON.stringify([state.seed, floor, attempt, runs, heroes.map((h) => h.id), rebels, mods, all, enc])
+  const cached = trialCache.get(key)
+  if (cached !== undefined) {
+    trialCache.delete(key)
+    trialCache.set(key, cached)
+    return cached
+  }
+  const out = fightTrials(state.seed, floor, attempt, runs, heroes, all, rebels, enc, mods)
+  trialCache.set(key, out)
+  if (trialCache.size > TRIAL_CACHE_SIZE) trialCache.delete(trialCache.keys().next().value!)
+  return out
+}
+
+/** Panic needs Sanity below this; the trials cap a unit's Sanity here (behaviour-neutral). */
+const PANIC_AT = TUNING.lobby.combat.panicThreshold
+/** Recent trial results by their exact battle inputs (least recently used dropped first). */
+const trialCache = new Map<string, ScoutTrials>()
+const TRIAL_CACHE_SIZE = 32
+
+function fightTrials(
+  seed: Seed,
+  floor: number,
+  attempt: number,
+  runs: number,
+  heroes: readonly OwnedHero[],
+  all: CombatUnit[],
+  rebels: number[],
+  enc: Encounter,
+  mods: ReturnType<typeof boonBattleMods>,
+): ScoutTrials {
+  const out: ScoutTrials = { runs, won: 0, hurt: 0, routed: 0, deaths: 0, worstDeaths: 0, closestCall: 1 }
+  for (let i = 0; i < runs; i++) {
+    const units = rebels.some((p) => p > 0)
+      ? all.filter((_, j) => !(rebels[j]! > 0 && chance(rngFor(seed, 'scout', 'rebel', floor, attempt, i, heroes[j]!.id), rebels[j]!).value))
+      : all
+    if (units.length === 0) {
+      out.closestCall = 0
+      continue
+    }
+    const res = runBattle(units, enc, hash(seed, 'scout', floor, attempt, i), mods)
+    const dead = res.fallenHeroIds.length
+    if (res.outcome === 'win') out.won++
+    if (dead > 0) out.hurt++
+    if (res.outcome === 'retreat' && res.log.events.some((e) => e.kind === 'mission' && e.note === ROUT_NOTE)) out.routed++
+    out.deaths += dead
+    out.worstDeaths = Math.max(out.worstDeaths, dead)
+    // The closest call: the lowest a hero's HP fell (a death is 0).
+    if (dead > 0) out.closestCall = 0
+    else if (out.closestCall > 0) {
+      const maxHp = new Map<string, number>()
+      for (const u of units) maxHp.set(u.id, u.stats.maxHP)
+      for (const e of res.log.events) {
+        if (e.kind !== 'hit') continue
+        const max = maxHp.get(e.targetId)
+        if (max !== undefined && max > 0) out.closestCall = Math.min(out.closestCall, e.hpAfter / max)
+      }
+    }
+  }
+  return out
 }
 
 function partyHeroes(state: GameState): OwnedHero[] {
@@ -248,9 +381,24 @@ export function namedThreats(enemies: readonly CombatUnit[], party: readonly Com
     }))
 }
 
-/** Scout the current floor for the current party (or `heroes`). The ratio is honest: the
- *  party's real battle units against the encounter actually built for this attempt. */
+/** Reports already scouted, per (immutable) state and the heroes sent. */
+const scouted = new WeakMap<GameState, Map<string, { heroes: readonly OwnedHero[]; report: ScoutReport | null }>>()
+
+/** Scout the current floor for the current party (or `heroes`). Honest by construction:
+ *  the threat band comes from `SCOUT_TRIALS` trial runs of the real attempt (see the module
+ *  note). Memoized on the state's identity and the heroes sent (the state is immutable). */
 export function scoutFloor(state: GameState, heroes: OwnedHero[] = partyHeroes(state)): ScoutReport | null {
+  const key = heroes.map((h) => h.id).join('|')
+  let byHeroes = scouted.get(state)
+  const hit = byHeroes?.get(key)
+  if (hit !== undefined && hit.heroes.length === heroes.length && hit.heroes.every((h, i) => h === heroes[i])) return hit.report
+  const report = scoutUncached(state, heroes)
+  if (byHeroes === undefined) scouted.set(state, (byHeroes = new Map()))
+  byHeroes.set(key, { heroes: [...heroes], report })
+  return report
+}
+
+function scoutUncached(state: GameState, heroes: OwnedHero[]): ScoutReport | null {
   const floor = state.tower.currentFloor
   if (floor > TUNING.tower.sliceTopFloor) return null
   const kind = kindForFloor(state, floor)
@@ -298,6 +446,8 @@ export function scoutFloor(state: GameState, heroes: OwnedHero[] = partyHeroes(s
   const ratio = foeCp > 0 ? partyCp / foeCp : 0
   const nemeses = nemesesOnFloor(state, floor)
   const routAt = enc.routAfterDeaths
+  const trials = scoutTrials(state, heroes)
+  const per = (n: number) => (trials.runs > 0 ? Math.round((n / trials.runs) * 100) / 100 : 0)
   return {
     floor,
     mission: enc.mission.type,
@@ -306,7 +456,12 @@ export function scoutFloor(state: GameState, heroes: OwnedHero[] = partyHeroes(s
     partyCp,
     budget: foeCp,
     ratio: Math.round(ratio * 100) / 100,
-    ...threatFor(ratio),
+    threat: threatFromTrials(trials),
+    trials,
+    winRate: per(trials.won),
+    expectedDeaths: per(trials.deaths),
+    worstDeaths: trials.worstDeaths,
+    routChance: per(trials.routed),
     studied,
     immune: { physical: immPhys > total / 2, magic: immMagic > total / 2 },
     kind,

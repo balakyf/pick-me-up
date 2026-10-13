@@ -531,6 +531,39 @@ export function ordersAllowed(state: GameState): number {
   return 1 + Math.floor(state.facilities.tacticalCenter.level / 2) + boonOrders(sortieBoons(state))
 }
 
+/**
+ * The Encounter one attempt at the current floor is fought against, exactly as playFloor
+ * builds it (orders aside): the floor's encounter with the focus directive, the Ballista's
+ * wound on anchors that declare it (the Master's play, or their tracked skill when the
+ * minigame is skipped), and the subverted Herald. Pure; the scout's trial runs use it.
+ */
+export function attemptEncounter(state: GameState, focus?: FocusDirective, ballista?: number, subvert?: boolean): Encounter {
+  const floor = state.tower.currentFloor
+  let enc = buildEncounter(state, floor, focus)
+  // BALLISTA (Layer 3 §C2): on anchors that declare it, the boss opens the fight wounded —
+  // by the Master's play, or by their tracked skill when the minigame is skipped.
+  if (ANCHORS[floor]?.minigame === 'ballista') {
+    const perf = ballista ?? state.meta.skill.ballista
+    const bossTag = enc.mission.objectives.find((o) => o.kind === 'defeat' || o.kind === 'acquire') as { targetTag: string } | undefined
+    enc = {
+      ...enc,
+      waves: enc.waves.map((w) => ({
+        units: w.units.map((u) => (bossTag !== undefined && u.targetTag === bossTag.targetTag ? woundBoss(u, perf) : u)),
+      })),
+    }
+  }
+  // SUBVERSION (Layer 4 §5.3): the truths strip the Herald's aegis — and the clear spares the world.
+  if (subvert) {
+    enc = {
+      ...enc,
+      waves: enc.waves.map((w) => ({
+        units: w.units.map((u) => (u.targetTag === 'herald_of_end' ? { ...u, keywords: u.keywords.filter((k) => k.kind !== 'aegis') } : u)),
+      })),
+    }
+  }
+  return enc
+}
+
 export function playFloor(
   state: GameState,
   focus?: FocusDirective,
@@ -584,31 +617,9 @@ export function playFloor(
   const combatSeed = hash(state.seed, 'combat', floor, state.tower.attemptIndex)
 
   // ── 3. Encounter + battle. ──────────────────────────────────────────────────
-  let enc = buildEncounter(state, floor, focus)
-  // BALLISTA (Layer 3 §C2): on anchors that declare it, the boss opens the fight wounded —
-  // by the Master's play, or by their tracked skill when the minigame is skipped.
-  const anchorDef = ANCHORS[floor]
+  let enc = attemptEncounter(state, focus, ballista, subvert)
   let meta = state.meta
-  if (anchorDef?.minigame === 'ballista') {
-    const perf = ballista ?? state.meta.skill.ballista
-    if (ballista !== undefined) meta = practice(meta, 'ballista')
-    const bossTag = enc.mission.objectives.find((o) => o.kind === 'defeat' || o.kind === 'acquire') as { targetTag: string } | undefined
-    enc = {
-      ...enc,
-      waves: enc.waves.map((w) => ({
-        units: w.units.map((u) => (bossTag !== undefined && u.targetTag === bossTag.targetTag ? woundBoss(u, perf) : u)),
-      })),
-    }
-  }
-  // SUBVERSION (Layer 4 §5.3): the truths strip the Herald's aegis — and the clear spares the world.
-  if (subvert) {
-    enc = {
-      ...enc,
-      waves: enc.waves.map((w) => ({
-        units: w.units.map((u) => (u.targetTag === 'herald_of_end' ? { ...u, keywords: u.keywords.filter((k) => k.kind !== 'aegis') } : u)),
-      })),
-    }
-  }
+  if (ANCHORS[floor]?.minigame === 'ballista' && ballista !== undefined) meta = practice(meta, 'ballista')
   if (orders && orders.length > 0) enc = { ...enc, orders }
   const res = runBattle(heroUnits, enc, combatSeed, boonBattleMods(boons))
 

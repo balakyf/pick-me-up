@@ -455,13 +455,16 @@ class Bot {
       // Retry a floor that beat us only once noticeably stronger (more so after a wipe) —
       // or, after a week stuck, at no weaker than last time. Nobody feeds a party to a wall
       // every other day. "Stronger" is the scout's ratio or the party itself: the mercy
-      // director holds a weak party's ratio steady while it grows.
+      // director holds a weak party's ratio steady while it grows. A scout whose trial
+      // runs now call the floor Safe or Fair is reason enough; one that still calls it
+      // Deadly is no time for a patient retry.
       const ll = this.lastLoss
       if (ll && ll.floor === floor) {
         const k = ll.wiped ? 1.2 : 1.1
         const stronger = ratio >= ll.ratio * k || partyCp >= ll.partyCp * k
-        const patient = day - ll.day >= 7 && (ratio >= ll.ratio || partyCp >= ll.partyCp)
-        if (!stronger && !patient) return
+        const patient = day - ll.day >= 7 && (ratio >= ll.ratio || partyCp >= ll.partyCp) && report?.threat !== 'deadly'
+        const scoutSaysGo = report?.threat === 'safe' || report?.threat === 'fair'
+        if (!stronger && !patient && !scoutSaysGo) return
       }
       const ballista = ANCHORS[floor]?.minigame === 'ballista' ? 0.6 : undefined
       const subvert = floor === 90 && this.s.tower.hiddenFound.length >= TUNING.lifecycle.subvertTruths ? true : undefined
@@ -506,15 +509,16 @@ class Bot {
     }
   }
 
-  /** Take the Skull door when the party would find the Path floor Safe (ratio ≥ 1.6);
-   *  otherwise leave the default (doors[0]). */
+  /** Take the Skull door when the scout's trial runs call the Skull floor itself Safe (as
+   *  the Door picker previews it); otherwise leave the default (doors[0]). */
   private chooseDoor(): void {
     const doors = this.s.tower.doors
     if (doors === null) return
     const skull = doors.findIndex((d) => d.kind === 'elite')
     if (skull < 0) return
-    const path = scoutFloor(reduce(this.s, { type: 'TICK' }, this.now))
-    if (path !== null && path.ratio >= 1.6) this.try({ type: 'CHOOSE_DOOR', index: skull })
+    const pre = reduce(this.s, { type: 'TICK' }, this.now)
+    const elite = scoutFloor({ ...pre, tower: { ...pre.tower, kind: 'elite', doors: null } })
+    if (elite !== null && elite.threat === 'safe') this.try({ type: 'CHOOSE_DOOR', index: skull })
   }
 
   private rift(): void {

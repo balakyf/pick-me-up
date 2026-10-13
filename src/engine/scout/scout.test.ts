@@ -3,7 +3,7 @@ import { createAccount } from '../account'
 import { createStore, reduce, attemptFloorWithResult } from '../store'
 import { TUNING } from '../tuning'
 import type { GameState } from '../types'
-import { scoutFloor, suggestParty, threatFor, canFight, scoutUnits, namedThreats, THREAT_REASONS } from '.'
+import { scoutFloor, suggestParty, threatFromTrials, scoutTrials, canFight, scoutUnits, namedThreats, THREAT_REASONS, THREAT_BANDS, SCOUT_TRIALS, type ScoutTrials } from '.'
 import { ordersAllowed, buildEncounter } from '../tower'
 import { floorKindBase } from '../climb'
 import { buildEnemyUnit } from '../unit'
@@ -26,11 +26,75 @@ describe('scouting', () => {
     expect(['safe', 'fair', 'risky', 'deadly']).toContain(r.threat)
   })
 
-  it('threat bands follow the bots’ calibration', () => {
-    expect(threatFor(2).threat).toBe('safe')
-    expect(threatFor(1.2).threat).toBe('fair')
-    expect(threatFor(0.7).threat).toBe('risky')
-    expect(threatFor(0.3).threat).toBe('deadly')
+  it('threat bands read the trial runs, not the CP ratio', () => {
+    const t = (o: Partial<ScoutTrials>): ScoutTrials => ({ runs: 8, won: 8, hurt: 0, routed: 0, deaths: 0, worstDeaths: 0, closestCall: 0.6, ...o })
+    expect(threatFromTrials(t({}))).toBe('safe')
+    // A near miss is not Safe: one more run and someone dies.
+    expect(threatFromTrials(t({ closestCall: THREAT_BANDS.safeMargin - 0.01 }))).toBe('fair')
+    expect(threatFromTrials(t({ won: 6, closestCall: 0.4 }))).toBe('fair')
+    // A run that cost a hero is a hero lost one attempt in eight: Risky, even all won.
+    expect(threatFromTrials(t({ hurt: 1, deaths: 1, worstDeaths: 1, closestCall: 0 }))).toBe('risky')
+    expect(threatFromTrials(t({ hurt: 2, deaths: 2, worstDeaths: 1, closestCall: 0 }))).toBe('risky')
+    // Too many runs lost: Risky, then Deadly.
+    expect(threatFromTrials(t({ won: 5, closestCall: 0.4 }))).toBe('risky')
+    expect(threatFromTrials(t({ won: 3, hurt: 5, deaths: 9, worstDeaths: 3, closestCall: 0 }))).toBe('risky')
+    expect(threatFromTrials(t({ won: 2, hurt: 6, deaths: 12, worstDeaths: 3, closestCall: 0 }))).toBe('deadly')
+    // Nobody sent: nothing to promise.
+    expect(threatFromTrials({ ...t({}), runs: 0, won: 0 })).toBe('deadly')
+  })
+
+  it('the trial runs are pure: no state change, no game RNG, the attempt plays out the same', () => {
+    const s0 = roster(8, 8)
+    const s = reduce(s0, { type: 'SET_PARTY', ...suggestParty(s0) })
+    const before = JSON.stringify(s)
+    const played = attemptFloorWithResult(s)
+    const r = scoutFloor(s)!
+    expect(JSON.stringify(s)).toBe(before)
+    expect(attemptFloorWithResult(s)).toEqual(played)
+    expect(r.trials.runs).toBe(SCOUT_TRIALS)
+    expect(r.winRate).toBe(Math.round((r.trials.won / r.trials.runs) * 100) / 100)
+    expect(r.expectedDeaths).toBe(Math.round((r.trials.deaths / r.trials.runs) * 100) / 100)
+    expect(r.worstDeaths).toBe(r.trials.worstDeaths)
+    expect(r.threat).toBe(threatFromTrials(r.trials))
+    // Deterministic, and memoized on the (immutable) state and the heroes sent.
+    expect(scoutFloor(s)).toBe(r)
+    expect(scoutFloor({ ...s })).toEqual(r)
+    expect(scoutTrials(s, Object.values(s.heroes).slice(0, 2))).toEqual(scoutTrials(s, Object.values(s.heroes).slice(0, 2)))
+    expect(scoutFloor(s, [])!.trials.runs).toBe(0)
+    expect(scoutFloor(s, [])!.threat).toBe('deadly')
+  })
+
+  it('the lobby clock does not re-fight the trials: a tick that only regenerates Sanity reuses them', () => {
+    const s0 = roster(8, 8)
+    const party = reduce(s0, { type: 'SET_PARTY', ...suggestParty(s0) })
+    // A rested-but-not-full party, so every tick regenerates a little Sanity.
+    const heroes = Object.fromEntries(Object.entries(party.heroes).map(([id, h]) => [id, { ...h, sanity: 70.25 }]))
+    const s: GameState = { ...party, heroes, meta: { ...party.meta, lastSeenAtWorld: 1_000_000 } }
+    const r = scoutFloor(s)!
+    const later = reduce(s, { type: 'TICK' }, 1_000_000 + 60_000)
+    expect(later).not.toBe(s)
+    const hero = later.heroes[later.party.slots.find((id) => id !== null)!]!
+    expect(hero.sanity).toBeGreaterThan(70.25)
+    // A new state (new report object), but the same trial inputs: the same trials, unfought.
+    const r2 = scoutFloor(later)!
+    expect(r2).not.toBe(r)
+    expect(r2.trials).toBe(r.trials)
+    // Anything the battle reads still counts: another attempt draws other trials.
+    const retry: GameState = { ...later, tower: { ...later.tower, attemptIndex: later.tower.attemptIndex + 1 } }
+    expect(scoutFloor(retry)!.trials).not.toBe(r.trials)
+  })
+
+  it('a strong CP ratio does not buy a Safe rating: fresh recruits on F41 are Deadly', () => {
+    const s0 = roster(9, 8)
+    const p = reduce(s0, { type: 'SET_PARTY', ...suggestParty(s0) })
+    const s: GameState = { ...p, tower: { ...p.tower, currentFloor: 41, highestCleared: 40, kind: floorKindBase(41) } }
+    const r = scoutFloor(s)!
+    // The mercy director holds the CP ratio near even…
+    expect(r.ratio).toBeGreaterThan(0.9)
+    // …but the trial runs know better, and so does the attempt.
+    expect(r.threat).toBe('deadly')
+    expect(r.winRate).toBeLessThan(0.35)
+    expect(attemptFloorWithResult(s).result.cleared).toBe(false)
   })
 
   it('suggests the strongest rested heroes, sturdy in front', () => {

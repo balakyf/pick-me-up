@@ -4,7 +4,7 @@
  * threshold, Last Stand and mercy notes, and a waiting Nemesis.
  */
 import type { GameState, FloorKind } from '../../engine/types'
-import type { ScoutReport } from '../../engine/scout'
+import { THREAT_BANDS, type ScoutReport } from '../../engine/scout'
 import { t } from '../i18n/i18n'
 import { enemyName } from '../legacy/legacyText'
 import { ELEMENT_VIS } from '../bits'
@@ -44,6 +44,20 @@ function keywordNote(k: ScoutReport['enemies'][number]['keywords'][number]): str
   }
 }
 
+/** What the scout's trial runs saw, honestly: "In 8 trial runs: won 7 · lost a hero in 1". */
+export function trialLine(tr: ScoutReport['trials']): string {
+  const parts = [t('In {n} trial runs: won {w}', { n: tr.runs, w: tr.won })]
+  if (tr.hurt === 0) {
+    parts.push(t('nobody fell'))
+    // Every run came home whole but someone nearly didn't: say so (that is why it isn't Safe).
+    if (tr.closestCall > 0 && tr.closestCall < THREAT_BANDS.safeMargin) parts.push(t('closest call: a hero at {p}% HP', { p: Math.max(1, Math.round(tr.closestCall * 100)) }))
+  } else if (tr.hurt === 1) parts.push(t('lost a hero in 1'))
+  else parts.push(t('lost heroes in {h}', { h: tr.hurt }))
+  if (tr.worstDeaths >= 2) parts.push(t('worst: {d} fell', { d: tr.worstDeaths }))
+  if (tr.routed > 0) parts.push(tr.routed === 1 ? t('the party broke once') : t('the party broke {r} times', { r: tr.routed }))
+  return parts.join(' · ')
+}
+
 /** A small pill naming a floor kind ("💀 Elite"). */
 export function KindBadge({ kind }: { kind: FloorKind }) {
   return (
@@ -75,7 +89,8 @@ export function ScoutCard({
   onFight?: () => void
   fightDisabled?: boolean
 }) {
-  const pct = Math.min(100, (report.ratio / 2) * 100)
+  // The gauge shows the trial runs' win rate (the CP ratio is only a hint now).
+  const pct = Math.round(report.winRate * 100)
   const k = kind ?? report.kind
   const threats = report.threats.slice(0, 2)
   return (
@@ -104,11 +119,7 @@ export function ScoutCard({
           {t('party {p} vs floor {f}', { p: Math.round(report.partyCp).toLocaleString(), f: Math.round(report.budget).toLocaleString() })}
         </span>
       </div>
-      <div className="muted small">
-        {report.expectedDeaths === 0
-          ? t('Parties this strong have come back whole.')
-          : t('Parties this strong lose about {n} heroes an attempt.', { n: report.expectedDeaths })}
-      </div>
+      {report.trials.runs > 0 && <div className="muted small scout-trials">{trialLine(report.trials)}</div>}
       {threats.length > 0 && (
         <ul className="scout-threats">
           {threats.map((th) => (

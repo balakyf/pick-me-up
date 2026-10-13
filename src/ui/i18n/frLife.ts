@@ -16,8 +16,6 @@ export const FR_LIFE: Record<string, string> = {
   '1 wave': '1 vague',
   '{n} waves': '{n} vagues',
   'party {p} vs floor {f}': 'équipe {p} contre étage {f}',
-  'Parties this strong have come back whole.': 'Les équipes de cette force sont revenues au complet.',
-  'Parties this strong lose about {n} heroes an attempt.': 'Les équipes de cette force perdent environ {n} héros par tentative.',
   target: 'cible',
   'Weaknesses unknown — a Scholar in the Library can study this floor.':
     'Faiblesses inconnues — un Érudit de la Bibliothèque peut étudier cet étage.',

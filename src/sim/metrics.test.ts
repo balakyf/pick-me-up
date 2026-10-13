@@ -1,8 +1,8 @@
 /**
  * The climb's success metrics (spec 2026-10-12 §3 "Success metrics", §4.4 Acceptance),
  * measured with the balance bots: casual and engaged free players, ten seeds each, from a
- * new account to F25. The bots scout every floor before they fight it, take the Skull
- * door when the Path would be Safe, take the first Boon, and go home when tired.
+ * new account to F25. The bots scout every floor before they fight it (trial runs), take the Skull
+ * door when the scout calls the Skull floor Safe, take the first Boon, and go home when tired.
  *
  *   - a floor scouted Safe never kills;
  *   - at most 5% of attempts on floors scouted Fair cost a hero;
@@ -82,14 +82,16 @@ describe('climb success metrics (20 bot runs, F1-F25)', () => {
 
   it('a floor scouted Safe never kills', () => {
     const safe = attempts.filter((a) => a.threat === 'safe')
-    expect(safe.length).toBeGreaterThan(20)
+    expect(safe.length).toBeGreaterThan(200)
     const deadly = safe.filter((a) => a.deaths > 0)
     expect(deadly.map(describeAttempt)).toEqual([])
   })
 
   it('at most 5% of attempts on Fair floors cost a hero', () => {
     const fair = attempts.filter((a) => a.threat === 'fair')
-    expect(fair.length).toBeGreaterThan(100)
+    // The trial-run scout calls most of a careful climb Safe; Fair is the narrow band of
+    // won-but-close floors (the big Fair sample lives in scoutHonesty.test.ts).
+    expect(fair.length).toBeGreaterThanOrEqual(10)
     const hurt = fair.filter((a) => a.deaths > 0)
     expect(hurt.length / fair.length, hurt.map(describeAttempt).join('\n')).toBeLessThanOrEqual(0.05)
   })

@@ -85,7 +85,7 @@ export function DoorPicker({
               {p ? (
                 <span className="door-scout">
                   <span style={{ color: THREAT_COLOR[p.threat] }}>{t(THREAT_LABEL[p.threat])}</span>
-                  <span className="muted"> · {t('party ×{r}', { r: p.ratio.toFixed(1) })}</span>
+                  {p.trials.runs > 0 && <span className="muted"> · {t('won {w}/{n} trials', { w: p.trials.won, n: p.trials.runs })}</span>}
                   {p.nemesis && <span className="door-nemesis"> · ☠ {enemyName(p.nemesis)}</span>}
                 </span>
               ) : (
