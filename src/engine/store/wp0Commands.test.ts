@@ -23,14 +23,14 @@ describe('new commands reach their stubs', () => {
     expect(() => reduce(fresh(), { type: 'CHOOSE_DOOR', index: 0 })).toThrow(/chooseDoor: No doors are open/)
   })
 
-  it('BEQUEATH_ECHO throws "not built yet"', () => {
+  it('BEQUEATH_ECHO reaches bequeathEcho (built by WP5: an unknown echo is refused)', () => {
     const s = fresh()
     const id = Object.keys(s.heroes)[0] as HeroId
-    expect(() => reduce(s, { type: 'BEQUEATH_ECHO', fallenId: 'h_999999' as HeroId, heirId: id })).toThrow(/bequeathEcho: not built yet/)
+    expect(() => reduce(s, { type: 'BEQUEATH_ECHO', fallenId: 'h_999999' as HeroId, heirId: id })).toThrow(/bequeathEcho: /)
   })
 
-  it('CLAIM_RECRUIT throws "not built yet"', () => {
-    expect(() => reduce(fresh(), { type: 'CLAIM_RECRUIT' })).toThrow(/claimRecruit: not built yet/)
+  it('CLAIM_RECRUIT reaches claimRecruit (built by WP5: refused without a token)', () => {
+    expect(() => reduce(fresh(), { type: 'CLAIM_RECRUIT' })).toThrow(/claimRecruit: /)
   })
 
   it('RETURN_TO_CAMPUS is identity', () => {

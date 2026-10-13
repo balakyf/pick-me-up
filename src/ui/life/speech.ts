@@ -215,6 +215,22 @@ const MEMORY: Partial<Record<Memory['kind'], ByVoice>> = {
   mourned: {
     any: ['I visited {fallen} yesterday. Told them about the new floors.'],
   },
+  // Legacy of the fallen (spec 2026-10-12 S21-S22).
+  inherited: {
+    any: ['I carry {fallen} with me. Every stair, every swing.', 'Sometimes my hands move the way {fallen}’s did. I let them.'],
+    cheerful: ['{fallen} would laugh at me for being this serious. So I laugh for them.'],
+    formal: ['I bear {fallen}’s echo, Master. I intend to be worthy of it.'],
+    grim: ['{fallen} paid for this strength. I will not waste it.'],
+    quiet: ['…{fallen} is still here. Right here.'],
+    rough: ['Got a bit of {fallen} in me now. Pity the next thing that tries me.'],
+  },
+  avenged: {
+    any: ['We found what took {fallen}. It will not take anyone else.', 'I told {fallen} at the Memorial: it is done.'],
+    cheerful: ['{fallen}, did you see that? We got it!'],
+    grim: ['Revenge does not bring {fallen} back. It helps. A little.'],
+    rough: ['That one was for {fallen}.'],
+    quiet: ['It is over, {fallen}. Rest now.'],
+  },
 }
 
 const FRIEND_LINE: ByVoice = {
@@ -608,6 +624,33 @@ export function lastWords(state: GameState, rec: Pick<FallenRecord, 'heroId' | '
   return t(choose(pool, `last|${rec.heroId}`), { friend: friend ? nameOf(state, friend) : '' })
 }
 
+const EULOGY: ByVoice = {
+  any: ['I will carry {fallen}’s name up every floor we climb.', 'Floor {floor} took {fallen}. It does not get to take what {fallen} taught us.'],
+  rough: ['{fallen} never backed down. Not once. Not even at the end.'],
+  formal: ['{fallen} served with honour. Let the obelisk say so.'],
+  cheerful: ['{fallen} made the bad days lighter. I am going to try to do that now.'],
+  quiet: ['I still set a place for {fallen}. I know. I know.'],
+  grim: ['The tower took {fallen}. One day we will take something back.'],
+}
+
+/**
+ * The words the closest living friend says at a fallen hero's plaque, in their own voice
+ * (null when nobody alive was close to them). The same every time the plaque is read.
+ */
+export function eulogy(state: GameState, rec: Pick<FallenRecord, 'heroId' | 'name' | 'floor' | 'cause'>): { by: HeroId; line: string } | null {
+  let by: HeroId | null = null
+  let best = 0
+  for (const [o, r] of relationsOf(state, rec.heroId)) {
+    if (!state.heroes[o]?.alive || !bondOf(r.affinity) || r.affinity <= best) continue
+    best = r.affinity
+    by = o
+  }
+  if (by === null || best <= 0) return null
+  const voice = personalityOf(state.heroes[by]!).voice
+  const pool = [...(EULOGY[voice] ?? []), ...(EULOGY.any ?? [])].filter((l) => rec.cause === 'battle' || !l.includes('{floor}'))
+  return { by, line: t(choose(pool, `eulogy|${rec.heroId}|${by}`), { fallen: first(rec.name), floor: rec.floor }) }
+}
+
 /** One line of Isel's letter for a chronicle entry. */
 export function chronicleLine(state: GameState, e: ChronicleEntry): string {
   const [a, b] = e.heroIds
@@ -648,8 +691,12 @@ export function chronicleLine(state: GameState, e: ChronicleEntry): string {
       return b ? t('{a} arrived through the crystal; {b} showed them around.', { a: A, b: B }) : t('{a} arrived through the crystal.', { a: A })
     case 'bequest':
       return t('{a} now carries the echo of {b}.', { a: A, b: B })
-    case 'revenge':
+    case 'revenge': {
+      // detail = the Nemesis id (WP5); older entries may carry the Bane's name instead.
+      const n = e.detail ? state.life.legacy.nemeses.find((x) => x.id === e.detail) : undefined
+      if (n) return t('{a} struck down the {enemy} that killed {b}. {b} is avenged.', { a: A, enemy: t(n.name), b: first(n.heroName) })
       return e.detail ? t('{a} struck down {bane}. The fallen are avenged.', { a: A, bane: e.detail }) : t('{a} avenged a fallen friend.', { a: A })
+    }
   }
 }
 

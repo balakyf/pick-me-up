@@ -244,3 +244,28 @@ describe('save', () => {
     expect(s.heroes[id]).toBeDefined()
   })
 })
+
+describe('legacy reactions (WP5, spec 2026-10-12 S21-S23)', () => {
+  it('a tower death leaves an Echo for a living heir and teaches a lesson', () => {
+    for (const seed of [61, 62, 63, 64, 65, 66]) {
+      let s = roster(seed)
+      const ids = living(s).map((h) => h.id).slice(0, 5)
+      s = reduce(s, { type: 'SET_PARTY', slots: ids, lines: ['front', 'front', 'mid', 'back', 'back'] })
+      s = { ...s, tower: { ...s.tower, currentFloor: 23, highestCleared: 22 } }
+      const after = reduce(s, { type: 'ATTEMPT_FLOOR' })
+      const fallen = ids.filter((id) => !after.heroes[id]!.alive)
+      if (fallen.length === 0) continue
+      expect(after.life.legacy.pending.map((p) => p.fallenId).sort()).toEqual([...fallen].sort())
+      for (const p of after.life.legacy.pending) for (const c of p.candidates) expect(after.heroes[c]!.alive).toBe(true)
+      expect(after.life.legacy.lessons.length).toBeGreaterThan(0)
+      expect([...after.life.legacy.lessons].sort()).toEqual(after.life.legacy.lessons)
+      return
+    }
+    throw new Error('no seed lost a hero on F23')
+  })
+
+  it('a quiet command leaves the legacy ledger alone', () => {
+    const s = roster(67)
+    expect(reduce(s, { type: 'TICK' }, 1).life.legacy).toEqual(s.life.legacy)
+  })
+})
