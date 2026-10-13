@@ -49,5 +49,31 @@ export function onLocaleChange(fn: () => void): () => void {
 export function t(en: string, vars?: Record<string, string | number>): string {
   const s = DICTS[locale][en] ?? en
   if (!vars) return s
-  return s.replace(/\{(\w+)\}/g, (m, k: string) => (k in vars ? String(vars[k]) : m))
+  const out = s.replace(/\{(\w+)\}/g, (m, k: string) => (k in vars ? String(vars[k]) : m))
+  return locale === 'fr' ? elideFr(s, out, vars) : out
+}
+
+/** A vowel a French "de" elides before (h is left alone: aspirated or not, it varies). */
+const FR_VOWEL = /^[AEIOUYÀÂÄÆÉÈÊËÎÏÔŒÙÛÜaeiouyàâäæéèêëîïôœùûü]/
+
+/**
+ * French elision before an interpolated name: "Écho de {name}" with Islat reads
+ * "Écho d’Islat", "Le Fléau de {name}" with Aaron "Le Fléau d’Aaron". Only a "de" written
+ * right before a placeholder is touched (the template's own words are already correct).
+ */
+function elideFr(template: string, out: string, vars: Record<string, string | number>): string {
+  if (!/\bde \{\w+\}/i.test(template)) return out
+  let res = ''
+  let last = 0
+  const re = /\b([Dd])e \{(\w+)\}/g
+  let m: RegExpExecArray | null
+  while ((m = re.exec(template))) {
+    const k = m[2]!
+    if (!(k in vars) || !FR_VOWEL.test(String(vars[k]))) continue
+    res += template.slice(last, m.index) + `${m[1]}’{${k}}`
+    last = m.index + m[0].length
+  }
+  if (last === 0) return out
+  res += template.slice(last)
+  return res.replace(/\{(\w+)\}/g, (mm, k: string) => (k in vars ? String(vars[k]) : mm))
 }

@@ -172,7 +172,9 @@ describe('the Memorial, from the real App', () => {
     const text = container.textContent ?? ''
     expect(text).toContain('La tour se souvient')
     expect(text).toContain('Échos en attente d’un héritier')
-    expect(text).toContain('Le Fléau de')
+    // "Le Fléau de Mira", or elided before a vowel: "Le Fléau d’Islat" (never "de Islat").
+    expect(text).toMatch(/Le Fléau (de [^AEIOUYÉÈ]|d’)/)
+    expect(text).not.toMatch(/Le Fléau de [AEIOUYÉÈ]/)
     expect(text).not.toContain('No one is visiting.')
     expect(text).not.toMatch(/\d\.\d %/) // "+2,5 %", never "+2.5 %"
   })

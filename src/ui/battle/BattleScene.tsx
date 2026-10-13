@@ -452,12 +452,13 @@ export function BattleScene({
   // A clean tower victory moves on by itself after 1.2 s (S11: one click per floor, not
   // two). Losses, and wins that cost a hero, wait for the Master: that is not rushed.
   const costly = useMemo(() => log.events.some((e) => e.kind === 'death' && partyIds.includes(e.unitId)), [log, partyIds])
+  // The ⚙ effects panel open means the Master is busy here: wait for them.
   useEffect(() => {
-    if (!atEnd || reel || !orders || log.outcome !== 'win' || costly || decisive) return
+    if (!atEnd || reel || !orders || log.outcome !== 'win' || costly || decisive || fxOpen) return
     const tm = setTimeout(finish, VICTORY_AUTO_MS)
     return () => clearTimeout(tm)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [atEnd, reel, log.outcome, costly, decisive])
+  }, [atEnd, reel, log.outcome, costly, decisive, fxOpen])
 
   // Battle music while the scene is up; the lobby theme returns after.
   useEffect(() => {

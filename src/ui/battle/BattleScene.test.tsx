@@ -139,6 +139,20 @@ describe('BattleScene', () => {
     expect(onDone).toHaveBeenCalledTimes(1)
   })
 
+  it('a clean win waits while the effects panel is open, then moves on once it closes', () => {
+    localStorage.setItem(PREFS_KEY, JSON.stringify({ battleSpeed: 8 }))
+    const { seed, floor, log } = quietWin()
+    const onDone = vi.fn()
+    act(() => root.render(<BattleScene log={log} state={null} onDone={onDone} orders={ordersFor(atFloor(seed, floor))} />))
+    click(q('.fx-prefs-toggle'))
+    until(() => !!button('Continue ▸'))
+    advance(VICTORY_AUTO_MS * 3)
+    expect(onDone).not.toHaveBeenCalled()
+    click(q('.fx-prefs-toggle'))
+    advance(VICTORY_AUTO_MS + 50)
+    expect(onDone).toHaveBeenCalledTimes(1)
+  })
+
   it('a win that cost a hero waits for the Master instead of moving on', () => {
     localStorage.setItem(PREFS_KEY, JSON.stringify({ battleSpeed: 8 }))
     const { pre, log } = costlyWin()

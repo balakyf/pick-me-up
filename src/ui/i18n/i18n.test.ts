@@ -23,6 +23,17 @@ describe('i18n', () => {
     expect(t('Halgiraf')).toBe('Halgiraf')
   })
 
+  it('French elides "de" before a name that starts with a vowel, and only there', () => {
+    setLocale('fr')
+    expect(t('{name}’s Bane', { name: 'Aaron' })).toBe('Le Fléau d’Aaron')
+    expect(t('Echo of {name}', { name: 'Islat' })).toBe('Écho d’Islat')
+    expect(t('Echo of {name}', { name: 'Mira' })).toBe('Écho de Mira')
+    expect(t('Echo of {name}', { name: 'Hugo' })).toBe('Écho de Hugo')
+    expect(t('{a} now carries the echo of {b}.', { a: 'Ilan', b: 'Émile' })).toBe('Ilan porte désormais l’écho d’Émile.')
+    setLocale('en')
+    expect(t('Echo of {name}', { name: 'Islat' })).toBe('Echo of Islat')
+  })
+
   it('notifies listeners when the locale changes', () => {
     let calls = 0
     const off = onLocaleChange(() => calls++)
