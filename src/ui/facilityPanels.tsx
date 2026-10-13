@@ -238,7 +238,7 @@ export function UpgradeControl({ state, store, facility }: { state: GameState; s
       <span className="lr-action-note">{note}</span>
       {!maxed && (
         <button className="btn sm" onClick={() => dispatch({ type: 'UPGRADE_FACILITY', facility })} disabled={!ok}>
-          {isBuild ? '🔨 Build' : '⬆ Upgrade'} · {cost.toLocaleString()} ◆
+          {isBuild ? t('🔨 Build') : t('⬆ Upgrade')} · {cost.toLocaleString()} ◆
         </button>
       )}
       {err && <div className="lr-action-note" style={{ color: 'var(--bad)' }}>{err}</div>}

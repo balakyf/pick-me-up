@@ -1091,7 +1091,7 @@ export function LobbyWorld({
         height={vp.h}
         style={{ width: vp.w * vp.zoom, height: vp.h * vp.zoom }}
         onPointerDown={onPointerDown}
-        aria-label="The waiting room"
+        aria-label={t('The waiting room')}
       />
 
       <div className="hud hud-tl">
@@ -1119,7 +1119,7 @@ export function LobbyWorld({
           </button>
         )}
         {!loginClaimed(state, toWorldTime(Date.now())) && (
-          <button className="pbtn gem" onClick={() => store.dispatch({ type: 'CLAIM_LOGIN' }, Date.now())} title="Daily login reward">
+          <button className="pbtn gem" onClick={() => store.dispatch({ type: 'CLAIM_LOGIN' }, Date.now())} title={t('Daily login reward')}>
             🎁 {t('Daily')}
           </button>
         )}

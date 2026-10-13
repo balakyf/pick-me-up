@@ -196,7 +196,7 @@ function GameMenu({
         )}
       </div>
       <div className="menu-foot">
-        <button className="pbtn ghost" onClick={() => setMuted(!muted)} title="Chiptune sound effects and music">
+        <button className="pbtn ghost" onClick={() => setMuted(!muted)} title={t('Chiptune sound effects and music')}>
           {muted ? `🔇 ${t('Sound off')}` : `🔊 ${t('Sound on')}`}
         </button>
         <button className="pbtn ghost" onClick={() => setLocale(locale === 'fr' ? 'en' : 'fr')} title="Language / Langue">

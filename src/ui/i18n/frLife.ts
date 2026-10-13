@@ -583,4 +583,18 @@ export const FR_LIFE: Record<string, string> = {
   'A hero has reached their star cap. The Promotion Chamber is on the north road.': 'Un héros a atteint son plafond d’étoiles. La Chambre de promotion est sur la route du nord.',
   'Idle hands, Master. Give someone a job — a cook in the Kitchen, a smith at the Forge. Open their Profile.': 'Des mains oisives, Maître. Donnez-leur un travail : un cuisinier à la Cuisine, un forgeron à la Forge. Ouvrez leur Profil.',
   'Some of them still visit the Memorial every day. Grief passes faster with a healer in the Infirmary.': 'Certains se rendent encore chaque jour au Mémorial. Le deuil passe plus vite avec un guérisseur à l’Infirmerie.',
+  // Living Lobby facility blurbs and the upgrade button (were missing: shown in English).
+  'Rows of narrow beds. Every hero who has one sleeps better; the rest make do on the hall floor.': 'Des rangées de lits étroits. Chaque héros qui en a un dort mieux ; les autres se contentent du sol de la Grande Salle.',
+  'Low beams, a long bar and too few chairs. Where heroes become friends — and rivals.': 'Des poutres basses, un long comptoir et trop peu de chaises. Ici, les héros deviennent amis — et rivaux.',
+  'Clean white cots. Broken nerves and heavy grief mend faster under a healer’s care.': 'Des lits blancs et propres. Les nerfs brisés et les deuils lourds guérissent plus vite sous les soins d’un guérisseur.',
+  'Neat rows in dark soil. Produce for the kitchen and a little gold at market.': 'Des rangs bien nets dans une terre sombre. Des légumes pour la cuisine et un peu d’or au marché.',
+  'A quiet lawn behind a hedge, an obelisk with an eternal flame, and a grave for every hero who fell.': 'Une pelouse paisible derrière une haie, un obélisque à la flamme éternelle, et une tombe pour chaque héros tombé.',
+  'Shelves of books no one remembers writing. Scholars study the floors ahead here.': 'Des étagères de livres que personne ne se souvient d’avoir écrits. Les érudits étudient ici les étages à venir.',
+  'A stone tower over the Crack of Time. Guards here see invaders coming.': 'Une tour de pierre au-dessus de la Faille du Temps. D’ici, les gardes voient venir les envahisseurs.',
+  'Stalls under striped awnings. Merchants trade the lobby’s surplus with other worlds.': 'Des étals sous des auvents rayés. Les marchands échangent le surplus du campus avec d’autres mondes.',
+  '🔨 Build': '🔨 Construire',
+  '⬆ Upgrade': '⬆ Améliorer',
+  'The waiting room': 'La salle d’attente',
+  'Daily login reward': 'Récompense de connexion quotidienne',
+  'Chiptune sound effects and music': 'Effets sonores et musique chiptune',
 }
