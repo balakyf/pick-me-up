@@ -19,8 +19,8 @@ function deepFreeze<T>(o: T): T {
 const fresh = (): GameState => createAccount(5, { now: 0 })
 
 describe('new commands reach their stubs', () => {
-  it('CHOOSE_DOOR throws "not built yet"', () => {
-    expect(() => reduce(fresh(), { type: 'CHOOSE_DOOR', index: 0 })).toThrow(/chooseDoor: not built yet/)
+  it('CHOOSE_DOOR reaches chooseDoor (built by WP3: refused with no Doors open)', () => {
+    expect(() => reduce(fresh(), { type: 'CHOOSE_DOOR', index: 0 })).toThrow(/chooseDoor: No doors are open/)
   })
 
   it('BEQUEATH_ECHO throws "not built yet"', () => {

@@ -82,6 +82,26 @@ function byId(a: MutUnit, b: MutUnit): number {
 /** Guard reductions only ever shave off this much in total (never full immunity). */
 const MIN_GUARD_MULT = 0.25
 
+/**
+ * In-battle Boon effects (spec 2026-10-12 S14), passed by the tower for the running
+ * Sortie. None of them draws RNG, so a battle without them replays byte-identically.
+ */
+export interface BattleMods {
+  /** Iron Vow: a Protected hero (overlooked by the enemy) takes ×(1 − this) damage. */
+  protectedReduction?: number
+  /** Hunter's Mark: the Focus target takes ×(1 + this) damage from heroes. */
+  focusVulnerability?: number
+  /** Second Wind: the first hero to drop below `below` of max HP (and live) heals `heal`
+   *  of it, once a battle. */
+  secondWind?: { below: number; heal: number }
+}
+
+/** The battle-log note (and caption) of a rout (spec 2026-10-12 S19). */
+export const ROUT_NOTE = 'The line breaks! The party retreats.'
+
+/** The battle-log note (and caption) of a Second Wind. */
+export const SECOND_WIND_NOTE = 'Second Wind!'
+
 /** elementMult per Layer 0 §2.5. */
 function elementMult(attackEl: Element, defEl: Element): number {
   if (ELEMENT_ADVANTAGE[attackEl] === defEl) return C.elementAdvantage
@@ -95,8 +115,9 @@ function elementMult(attackEl: Element, defEl: Element): number {
  * @param heroUnits already-built hero CombatUnits (read-only; never mutated)
  * @param encounter the wave/mission/focus definition
  * @param seed combat seed (folded into the Rng via createRng(makeSeed(seed)))
+ * @param mods in-battle Boon effects (none by default)
  */
-export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: number): BattleResult {
+export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: number, mods: BattleMods = {}): BattleResult {
   let rng: Rng = createRng(makeSeed(seed))
   let rngDraws = 0
 
@@ -156,6 +177,7 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
   const hasReach = encounter.mission.objectives.some((o) => o.kind === 'reach')
   let reachProgress = 0
   let outcome: CombatOutcome | null = null
+  let secondWindUsed = false
   // Focus / overlook start from the pre-battle directive; mid-battle orders may change them.
   let focusEnemyId: string | undefined = encounter.focus?.focusEnemyId
   let overlooked: string[] = encounter.focus?.overlookedAllyIds ?? []
@@ -226,6 +248,14 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
     ) {
       damage *= 1 + encounter.focusBonus
     }
+    // HUNTER'S MARK (Boon): the Focus target takes more damage from the party.
+    if (actor.side === 'hero' && mods.focusVulnerability !== undefined && focusEnemyId === target.id) {
+      damage *= 1 + mods.focusVulnerability
+    }
+    // IRON VOW (Boon): a Protected hero takes less damage.
+    if (target.side === 'hero' && mods.protectedReduction !== undefined && overlooked.includes(target.id)) {
+      damage *= 1 - mods.protectedReduction
+    }
 
     // Actor keywords: ENRAGE past its timer, FRENZY while low, OPENER on the first
     // action, BANE against a family. None draws RNG.
@@ -286,6 +316,24 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
           actor.currentHP += heal
           emit({ kind: 'heal', unitId: actor.id, amount: heal, hpAfter: actor.currentHP })
         }
+      }
+    }
+
+    // SECOND WIND (Boon): the first hero knocked below the line (and still standing) rallies.
+    if (
+      mods.secondWind !== undefined &&
+      !secondWindUsed &&
+      target.side === 'hero' &&
+      !target.ref.isNpc &&
+      target.currentHP > 0 &&
+      target.currentHP < target.ref.stats.maxHP * mods.secondWind.below
+    ) {
+      secondWindUsed = true
+      const heal = Math.min(Math.round(target.ref.stats.maxHP * mods.secondWind.heal), target.ref.stats.maxHP - target.currentHP)
+      if (heal > 0) {
+        target.currentHP += heal
+        emit({ kind: 'mission', note: SECOND_WIND_NOTE })
+        emit({ kind: 'heal', unitId: target.id, amount: heal, hpAfter: target.currentHP })
       }
     }
 
@@ -412,6 +460,16 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
         return defeatedTargetTags.includes(obj.targetTag)
     }
   }
+  /** Party heroes (not NPC allies) fallen so far. */
+  const heroDeaths = (): number => heroes.filter((h) => !h.alive && !h.ref.isNpc).length
+  /** Is the party losing: less HP left than the living, non-looming enemies of the current wave? */
+  const losing = (): boolean => {
+    const ours = livingHeroes().reduce((n, h) => n + Math.max(0, h.currentHP), 0)
+    const theirs = livingEnemiesInWave(currentWave)
+      .filter((e) => !isLooming(e))
+      .reduce((n, e) => n + Math.max(0, e.currentHP), 0)
+    return ours < theirs
+  }
   /** A protect objective whose NPC has fallen loses the mission outright. */
   const protectFailed = (): boolean =>
     encounter.mission.objectives.some((o) => o.kind === 'protect' && !allyAlive(o.targetTag))
@@ -430,6 +488,15 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
     }
     if (missionWon()) {
       outcome = 'win'
+      return
+    }
+    // ROUT (spec 2026-10-12 S19): once enough heroes have fallen and the fight is being
+    // lost — the living party has less HP left than the living (non-looming) enemies of the
+    // wave in front of it — the survivors break and flee. Only tower floors set this.
+    const routAt = encounter.routAfterDeaths
+    if (routAt !== undefined && heroDeaths() >= routAt && losing()) {
+      emit({ kind: 'mission', note: ROUT_NOTE })
+      outcome = 'retreat'
     }
   }
 

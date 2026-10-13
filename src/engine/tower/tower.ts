@@ -37,7 +37,7 @@ import type {
   SkillProgress,
 } from '../types'
 import { buildCombatUnit, buildEnemyUnit, buildAllyUnit } from '../unit'
-import { runBattle } from '../combat'
+import { runBattle, ROUT_NOTE } from '../combat'
 import { ENEMY_TEMPLATES, ALLY_TEMPLATES, ANCHORS, SKILLS, HIDDEN_OBJECTIVES, actForFloor } from '../content'
 import { applyXp, xpToNext } from '../stats'
 import { clampSanity } from '../kitchen'
@@ -49,7 +49,25 @@ import { rebellionChance, withFavor } from '../favor'
 import { addPi } from '../interference'
 import { practice, woundBoss } from '../minigames'
 import { hash, rngFor, nextInt, nextFloat, chance, pick, makeSeed, type Rng } from '../rng/rng'
-import type { HiddenObjective, LoopState, TowerEvent, TowerState, BattleResult } from '../types'
+import type { HiddenObjective, LoopState, TowerEvent, TowerState, BattleResult, FloorKind, Nemesis } from '../types'
+import { floorPower, mobLevel } from './power'
+import {
+  kindForFloor,
+  floorBudget,
+  climbExtraPct,
+  lastStandPct,
+  withFloorDoors,
+  applyBoonsToUnits,
+  boonBattleMods,
+  boonOrders,
+  boonGoldMult,
+  boonXpMult,
+  boonDrainMult,
+  boonOffer,
+  sortieBoons,
+  sortieAfterFloor,
+} from '../climb'
+import { consumeRested } from '../return'
 
 const T = TUNING.tower
 const ECON = TUNING.economy
@@ -60,51 +78,15 @@ const MD = TUNING.lobby.materialDrops
 // Floor power budget + enemy level
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** powerBase^f via an integer-exponent MULTIPLY LOOP (no Math.pow / `**`). */
-function powLoop(base: number, exp: number): number {
-  let acc = 1
-  for (let i = 0; i < exp; i++) acc *= base
-  return acc
-}
-
 /** XP each surviving hero earns for clearing a floor (see TUNING.economy.xpFloorShare). */
 export function floorXp(floor: number): number {
   const lvl = Math.max(1, Math.min(floor, TUNING.xp.maxLevel))
   return Math.max(ECON.xpPerFloor, Math.round(xpToNext(lvl) * ECON.xpFloorShare))
 }
 
-/**
- * The floor's target combat-power budget (Layer 2 §3):
- *   floorPower(f) = base * powerBase^f * (1 + stepBonus*floor(f/5)) * worldMult.
- * Used ONLY for the filler ±budgetTolerance comparison — never a combat input.
- * Strictly increasing in f (powerBase > 1, stepBonus >= 0, worldMult > 0).
- */
-export function floorPower(f: number, worldMult: number): number {
-  const early = Math.min(f, T.inflectionFloor)
-  const late = Math.max(0, f - T.inflectionFloor)
-  // The early climb is budgeted up (tapering to nothing at the inflection), so the first
-  // acts ask for a real party instead of falling in an afternoon.
-  const boost = 1 + (T.earlyBudgetBoost * Math.max(0, T.inflectionFloor - f)) / T.inflectionFloor
-  return (
-    T.base *
-    powLoop(T.powerBase, early) *
-    powLoop(T.latePowerBase, late) *
-    (1 + T.stepBonus * Math.floor(f / 5)) *
-    boost *
-    worldMult
-  )
-}
-
-/**
- * The enemy level for filler/anchor mobs on a floor: round(f × perFloor × worldMult),
- * plus `inflectionLevelPerFloor` per floor past the F70 inflection (the curve steepens).
- */
-export function mobLevel(f: number, worldMult: number): number {
-  const inflection = Math.max(0, f - T.inflectionFloor) * T.inflectionLevelPerFloor
-  // Canon: the difficulty "explodes" at the Wailing Wall (F80) and never comes back down.
-  const wall = f >= T.wallFloor ? T.wallLevelBonus : 0
-  return Math.round((f * T.mobLevelPerFloor + inflection + wall) * worldMult)
-}
+// floorPower / mobLevel live in ./power (so the climb director can read them without an
+// import cycle) and are re-exported here unchanged.
+export { floorPower, mobLevel } from './power'
 
 /**
  * Sanity lost by each DEPLOYED SURVIVOR on a floor attempt (Layer 3 §3.2):
@@ -263,27 +245,46 @@ function buildAnchorEncounter(
 }
 
 /**
- * Above F20 an anchor is raised to its floor: while its total CP is below
- * `floorPower × anchorBudgetMult`, every enemy grows elite (attributes ×elitePowerStep a
- * step; levels stay canon). Acts I–II keep their authored statlines exactly.
- * Deterministic; bounded.
+ * An anchor scaled to its budget (spec 2026-10-12 S13): the authored roster keeps its
+ * waves, counts, levels and keywords, and only its attributes move — by whole
+ * `elitePowerStep` steps — to the smallest multiplier whose total CP reaches `target`.
+ * An anchor short of its budget grows elite (as before above F20); one above it now
+ * shrinks too, at every depth, bounded below by `ANCHOR_MIN_STEPS` steps (the clamp) so a
+ * tiny mercy budget never reduces a boss to nothing. Deterministic; bounded.
  */
 function buildScaledAnchor(
   anchor: AnchorDef,
   floor: number,
   worldMult: number,
   extraLevels: number,
+  target: number,
 ): { waves: EnemyWave[]; mission: Mission; allies: CombatUnit[] } {
+  const cpOf = (b: { waves: EnemyWave[] }) => b.waves.reduce((n, w) => n + w.units.reduce((m, u) => m + (isLoomingUnit(u) ? 0 : u.cp), 0), 0)
   let built = buildAnchorEncounter(anchor, floor, worldMult, extraLevels)
-  if (floor <= 20) return built
-  const target = floorPower(floor, worldMult) * T.anchorBudgetMult
-  const cpOf = (b: { waves: EnemyWave[] }) => b.waves.reduce((n, w) => n + w.units.reduce((m, u) => m + u.cp, 0), 0)
+  if (!(target > 0)) return built
   let mult = 1
-  for (let i = 0; i < 400 && cpOf(built) < target; i++) {
-    mult *= T.elitePowerStep
-    built = buildAnchorEncounter(anchor, floor, worldMult, extraLevels, mult)
+  if (cpOf(built) < target) {
+    for (let i = 0; i < 400 && cpOf(built) < target; i++) {
+      mult *= T.elitePowerStep
+      built = buildAnchorEncounter(anchor, floor, worldMult, extraLevels, mult)
+    }
+    return built
+  }
+  for (let i = 0; i < ANCHOR_MIN_STEPS; i++) {
+    const lower = buildAnchorEncounter(anchor, floor, worldMult, extraLevels, mult / T.elitePowerStep)
+    if (cpOf(lower) < target) break
+    mult /= T.elitePowerStep
+    built = lower
   }
   return built
+}
+
+/** The anchor clamp: at most this many `elitePowerStep` steps down (1.08^-30 ≈ ×0.10). */
+const ANCHOR_MIN_STEPS = 30
+
+/** A looming unit is outlasted, not fought: it never counts toward a floor's CP. */
+function isLoomingUnit(u: CombatUnit): boolean {
+  return u.keywords.some((k) => k.kind === 'looming')
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -292,7 +293,8 @@ function buildScaledAnchor(
 
 /**
  * Build a single-wave filler encounter by power-budget filling:
- *   budget = floorPower(floor)
+ *   budget = floorPower(floor) by default; the tower passes the climb's
+ *   `floorBudget(state, floor, kind)` (dailies keep the plain curve)
  *
  * Repeatedly pick a biome enemy (deterministically from the floor rng) at
  * mobLevel(floor) and add it, summing CP, until the running total lands within
@@ -313,9 +315,9 @@ export function buildFillerEncounter(
   worldMult: number,
   rng: Rng,
   extraLevels = 0,
+  budget: number = floorPower(floor, worldMult),
 ): { waves: EnemyWave[]; mission: Mission } {
   const pool = fillerPoolForFloor(floor)
-  const budget = floorPower(floor, worldMult)
   const lowerBound = budget * (1 - T.budgetTolerance)
 
   // Fill one wave; a wave that hits the unit cap still short of budget is refilled with
@@ -421,8 +423,12 @@ function fillWave(
  * Build the Encounter for a floor, deterministically from
  * rngFor(state.seed, 'floor', floor) and the account's worldGrade.
  *
- * F5/F10 are authored anchors (ANCHORS[floor]); everything else is a
- * power-budget-filled Subjugation against the floor's biome pool. The optional
+ * Authored anchors (every 5th floor, F41/F42) keep their rosters, scaled to the floor's
+ * Boss budget; everything else is a power-budget-filled mission against the floor's biome
+ * pool, filled to `floorBudget(state, floor, kind)` — the kind the floor is fought as (the
+ * chosen Door), capped by the mercy director (spec 2026-10-12 S13). A Nemesis waiting on
+ * this (non-anchor) floor joins the wave as a named revenant and takes its share of the
+ * budget (S22). The encounter carries its kind and the rout threshold (S19). The optional
  * focus directive is attached so combat can honor it.
  */
 export function buildEncounter(state: GameState, floor: number, focus?: FocusDirective): Encounter {
@@ -431,19 +437,32 @@ export function buildEncounter(state: GameState, floor: number, focus?: FocusDir
   const seed = isWallFloor(floor) ? makeSeed(T.wallSeed) : state.seed
   const rng = rngFor(seed, 'floor', floor)
   const scar = loopScarLevels(floor, state.tower.loop)
+  const kind = kindForFloor(state, floor)
+  const budget = floorBudget(state, floor, kind)
 
   const anchor = ANCHORS[floor]
-  const built: { waves: EnemyWave[]; mission: Mission; allies?: CombatUnit[] } =
-    anchor !== undefined
-      ? buildScaledAnchor(anchor, floor, worldMult, scar)
-      : buildFillerEncounter(floor, worldMult, rng, scar)
+  let built: { waves: EnemyWave[]; mission: Mission; allies?: CombatUnit[] }
+  if (anchor !== undefined) {
+    built = buildScaledAnchor(anchor, floor, worldMult, scar, budget)
+  } else {
+    const revenants = nemesisUnits(state, floor, mobLevel(floor, worldMult) + scar)
+    const theirCp = revenants.reduce((n, u) => n + u.cp, 0)
+    built = buildFillerEncounter(floor, worldMult, rng, scar, Math.max(0, budget - theirCp))
+    if (revenants.length > 0) {
+      const [first, ...rest] = built.waves
+      built = { ...built, waves: [{ units: [...first!.units, ...revenants] }, ...rest] }
+    }
+  }
 
   const enc: Encounter = {
     floor,
     mission: built.mission,
     waves: built.waves,
     encounterContext: 'tower',
+    kind,
   }
+  const rout = TUNING.climb.rout[kind]
+  if (rout !== undefined && rout > 0) enc.routAfterDeaths = rout
   if (built.allies !== undefined && built.allies.length > 0) enc.allies = built.allies
   if (focus !== undefined) {
     enc.focus = focus
@@ -451,6 +470,32 @@ export function buildEncounter(state: GameState, floor: number, focus?: FocusDir
     enc.focusBonus = tacticalFocusBonus(state.facilities.tacticalCenter.level)
   }
   return enc
+}
+
+/** The unit id a Nemesis fights under. */
+export function nemesisUnitId(n: Nemesis): string {
+  return `nem_${n.id}`
+}
+
+/** The Nemeses waiting on `floor` (never an anchor floor): each waits on its revenge
+ *  floor, and one the climb got past without killing it (a Rest or Cache Door taken on
+ *  that floor, an anchor, a Survival clear that outlasted it) follows the party to every
+ *  later non-anchor floor until it is avenged. */
+export function nemesesOnFloor(state: GameState, floor: number): Nemesis[] {
+  if (ANCHORS[floor] !== undefined) return []
+  return (state.life.legacy?.nemeses ?? []).filter(
+    (n) => n.status === 'waiting' && n.revengeFloor <= floor && ENEMY_TEMPLATES[n.templateId] !== undefined,
+  )
+}
+
+/** The revenants waiting on `floor`: the killer's template at the floor's level, ×powerMult,
+ *  under the Nemesis's name ("Mira's Bane"). Unknown templates are skipped. */
+function nemesisUnits(state: GameState, floor: number, level: number): CombatUnit[] {
+  return nemesesOnFloor(state, floor).map((n) => ({
+    ...buildEnemyUnit(ENEMY_TEMPLATES[n.templateId]!, level, nemesisUnitId(n), { powerMult: TUNING.legacy.nemesis.powerMult }),
+    name: n.name,
+    element: n.element,
+  }))
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -472,9 +517,9 @@ export function buildEncounter(state: GameState, floor: number, focus?: FocusDir
  *   6. Advance position on a clear; else bump attemptIndex (position unchanged).
  */
 /** Mid-battle orders (focus / protect) the Master may give per battle: one, plus one per
- *  two Tactical Center levels. Retreat is always possible. */
+ *  two Tactical Center levels, plus the Quartermaster Boon. Retreat is always possible. */
 export function ordersAllowed(state: GameState): number {
-  return 1 + Math.floor(state.facilities.tacticalCenter.level / 2)
+  return 1 + Math.floor(state.facilities.tacticalCenter.level / 2) + boonOrders(sortieBoons(state))
 }
 
 export function playFloor(
@@ -497,7 +542,12 @@ export function playFloor(
   }
 
   // ── 1. Build deployed hero units (skip empty slots, dead, and Sanity-0). ────
-  const heroUnits: CombatUnit[] = []
+  // Every deployed hero carries the climb's all-stat aids (Last Stand, the Memorial's
+  // plaques), then the Sortie's stat Boons (spec 2026-10-12 S14, S20, S23).
+  const kind = kindForFloor(state, floor)
+  const boons = sortieBoons(state)
+  const extraPct = climbExtraPct(state, floor)
+  let heroUnits: CombatUnit[] = []
   const deployedIds: HeroId[] = []
   const refusedHeroIds: HeroId[] = []
   const { slots, lines } = state.party
@@ -516,9 +566,10 @@ export function playFloor(
       continue
     }
     const line: Line = lines[s] ?? 'front'
-    heroUnits.push(buildCombatUnit(hero, line, SKILLS, state.inventory))
+    heroUnits.push(buildCombatUnit(hero, line, SKILLS, state.inventory, extraPct))
     deployedIds.push(heroId)
   }
+  heroUnits = applyBoonsToUnits(state, heroUnits, boons)
 
   // ── 2. Combat seed (folds the retry counter). ───────────────────────────────
   const combatSeed = hash(state.seed, 'combat', floor, state.tower.attemptIndex)
@@ -550,23 +601,40 @@ export function playFloor(
     }
   }
   if (orders && orders.length > 0) enc = { ...enc, orders }
-  const res = runBattle(heroUnits, enc, combatSeed)
+  const res = runBattle(heroUnits, enc, combatSeed, boonBattleMods(boons))
 
   // ── 4. Interpret. ───────────────────────────────────────────────────────────
   const cleared = res.outcome === 'win'
   const firstClear = cleared && floor > state.tower.highestCleared
-  const goldAwarded = cleared
-    ? Math.round(ECON.goldPerFloor * floor * worldMult) * (firstClear ? ECON.firstClearMult : 1)
+  const routed = res.outcome === 'retreat' && res.log.events.some((e) => e.kind === 'mission' && e.note === ROUT_NOTE)
+  const CL = TUNING.climb
+  // Floor gold: the floor's pay (×firstClearMult on a first clear), doubled on a Skull
+  // floor, lifted by War Chest. The base formula is unchanged for a plain Path floor.
+  const floorGold = cleared
+    ? Math.round(
+        Math.round(ECON.goldPerFloor * floor * worldMult) *
+          (firstClear ? ECON.firstClearMult : 1) *
+          (kind === 'elite' ? CL.reward.eliteGoldMult : 1) *
+          boonGoldMult(boons),
+      )
     : 0
-  const xpAwarded = cleared ? floorXp(floor) : 0
+  // A Nemesis felled on a clear is avenged: revenge gold and a stone (spec S22).
+  const avenged = cleared
+    ? nemesesOnFloor(state, floor).filter((n) => res.log.events.some((e) => e.kind === 'death' && e.unitId === nemesisUnitId(n)))
+    : []
+  const NM = TUNING.legacy.nemesis
+  const goldAwarded = floorGold + avenged.length * Math.round(NM.rewardGoldPerFloor * floor * worldMult)
+  const xpAwarded = cleared ? Math.round(floorXp(floor) * boonXpMult(boons)) : 0
 
   // ── 5. Build the next heroes map (permadeath + XP + Sanity), never mutating inputs. ──
   const fallenSet = new Set<string>(res.fallenHeroIds as string[])
   const survivorSet = new Set<string>(res.survivorHeroIds as string[])
 
-  // Sanity drain hits only DEPLOYED SURVIVORS (heroes left in the lobby don't fight).
+  // Sanity drain hits only DEPLOYED SURVIVORS (heroes left in the lobby don't fight). It
+  // reads the floor's real budget (kind and mercy included); Calm Mind softens it.
   const partyCp = heroUnits.reduce((sum, u) => sum + u.cp, 0)
-  const drain = sanityDrain(floorPower(floor, worldMult), partyCp, cleared, fallenSet.size > 0)
+  const baseDrain = sanityDrain(floorBudget(state, floor, kind), partyCp, cleared, fallenSet.size > 0)
+  const drain = Math.round(baseDrain * boonDrainMult(boons))
 
   const highestAfter = cleared ? Math.max(state.tower.highestCleared, floor) : state.tower.highestCleared
   const nextHeroes: Record<HeroId, OwnedHero> = {}
@@ -622,18 +690,26 @@ export function playFloor(
       materialsAwarded[id] = (materialsAwarded[id] ?? 0) + firstDrops[id]!
     }
   }
+  // A Skull floor guarantees Promotion Stones; avenging a Nemesis pays one too.
+  const bonusStones = (cleared && kind === 'elite' ? CL.reward.eliteStones : 0) + avenged.length * NM.rewardStones
+  if (bonusStones > 0) materialsAwarded.promotionStone = (materialsAwarded.promotionStone ?? 0) + bonusStones
   const nextMaterials: Record<MaterialId, number> = { ...state.materials }
   for (const id of Object.keys(materialsAwarded)) {
     nextMaterials[id] = (nextMaterials[id] ?? 0) + materialsAwarded[id]!
   }
 
-  // ── 6. Advance tower position (the F40 loop gate is the one rollback). ──────
+  // ── 6. Advance tower position (the F40 loop gate is the one rollback), then set the
+  //       new floor's kind and roll its Doors (spec S13). A failed floor re-offers its
+  //       Doors, so a beaten Skull can be swapped for the Path. ────────────────────
   const tower = nextTowerState(state.tower, floor, cleared)
-  const nextTower: TowerState = tower.state
+  const nextTower: TowerState = withFloorDoors(state, tower.state)
 
   // ── 6b. Hidden objectives found on this attempt pay out once (Layer 2 §5.3). ───
   const found = cleared ? hiddenObjectivesMet(floor, res, state.tower.hiddenFound) : []
-  let gold = state.gold + goldAwarded
+  // Pent-up Interference (spec S24): one charge doubles this clear's floor gold.
+  const rested = cleared ? consumeRested(meta, floorGold) : { meta, bonus: 0 }
+  meta = rested.meta
+  let gold = state.gold + goldAwarded + rested.bonus
   let gems = state.gems
   for (const h of found) {
     gold += h.reward.gold ?? 0
@@ -643,7 +719,8 @@ export function playFloor(
   if (found.length > 0) nextTower.hiddenFound = [...nextTower.hiddenFound, ...found.map((h) => h.id)].sort()
 
   // ── 6c. Event floors: a bonus after an anchor's first clear, the tournament after
-  //        F41, a recovery event after a battle that cost the main team (§5.1). ─────
+  //        F41, a recovery event after a battle that cost the main team (§5.1). A Boon
+  //        choice (S14) follows an Elite or Boss clear — see 6g. ─────────────────────
   let event: TowerEvent | null = null
   const E = TUNING.events
   if (fallenSet.size >= E.recoveryDeaths) event = { kind: 'recovery', floor, options: ['reinforcement', 'rest'] }
@@ -668,7 +745,20 @@ export function playFloor(
   let nextMeta = masterXpGain > 0 ? addMasterXp(meta, masterXpGain) : meta
   if (cleared) nextMeta = addPi(nextMeta, PI.perClear + (firstClear ? PI.perFirstClear : 0))
 
-  const nextState: GameState = {
+  // ── 6f. Avenged Nemeses (S22) are marked under `life` (fresh objects). ─────────
+  let life = state.life
+  if (avenged.length > 0) {
+    const ids = new Set(avenged.map((n) => n.id))
+    life = {
+      ...life,
+      legacy: {
+        ...life.legacy,
+        nemeses: life.legacy.nemeses.map((n) => (ids.has(n.id) ? { ...n, status: 'avenged' as const } : n)),
+      },
+    }
+  }
+
+  let nextState: GameState = {
     ...state,
     gold,
     gems,
@@ -676,9 +766,10 @@ export function playFloor(
     heroes: nextHeroes,
     tower: nextTower,
     meta: nextMeta,
+    life,
   }
 
-  const result: FloorResult = {
+  let result: FloorResult = {
     floor,
     cleared,
     firstClear,
@@ -694,6 +785,25 @@ export function playFloor(
     worldSaved,
     refusedHeroIds,
     result: res,
+    kind,
+    routed,
+    lastStandPct: lastStandPct(state, floor),
+    restedBonus: rested.bonus,
+    nemesisDefeated: avenged.map((n) => n.id),
+    doors: nextTower.doors,
+  }
+
+  // ── 6g. The Sortie (S15): start it, grow its Purse, or break it. Then a Boon choice
+  //        after an Elite clear, or a Boss clear that opened no other event (a Boss's
+  //        first clear chains it after the bonus event — see events.resolveEvent). ──
+  ;({ state: nextState, result } = sortieAfterFloor(nextState, result))
+  if (cleared && event === null && floor < T.sliceTopFloor && ((kind === 'elite' && CL.reward.eliteBoon) || kind === 'boss')) {
+    const offer = boonOffer(nextState, floor)
+    if (offer.length > 0) {
+      const boonEvent: TowerEvent = { kind: 'boon', floor, options: offer }
+      nextState = { ...nextState, tower: { ...nextState.tower, event: boonEvent } }
+      result = { ...result, event: boonEvent }
+    }
   }
 
   return { state: nextState, result }

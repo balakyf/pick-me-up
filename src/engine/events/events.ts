@@ -22,6 +22,7 @@ import { clampSanity } from '../kitchen'
 import { summon } from '../gacha'
 import { rngFor, hash, chance, pick, type Rng } from '../rng'
 import { TOURNAMENT_FORMATS } from '../tower'
+import { BOONS, boonOffer, isBoon, newSortie } from '../climb'
 
 const E = TUNING.events
 const TT = E.tournament
@@ -40,6 +41,8 @@ export const EVENT_OPTION_LABEL: Record<string, string> = {
   team: 'Team Game',
   pair: 'Pair Game',
   deathmatch: 'Deathmatch',
+  // Boon choices (spec 2026-10-12 S14) show the Boon's name.
+  ...Object.fromEntries(Object.values(BOONS).map((b) => [b.id, b.name])),
 }
 
 /** One tournament round's outcome (its log is kept for replay). */
@@ -223,6 +226,9 @@ export function resolveEvent(state: GameState, option: string): { state: GameSta
   const outcome: EventOutcome = { option, gold: 0, gems: 0, materials: {}, sanity: 0, note: '' }
   let next: GameState = state
 
+  // A Boon choice (spec 2026-10-12 S14): the pick joins the running Sortie.
+  if (ev.kind === 'boon') return resolveBoon(state, option, outcome)
+
   switch (option) {
     case 'rest':
       next = addSanity(next, 'all', E.restSanity)
@@ -281,5 +287,17 @@ export function resolveEvent(state: GameState, option: string): { state: GameSta
 
   if (option !== 'merchant') next = { ...next, gold: next.gold + outcome.gold }
   next = { ...addMaterials(next, outcome.materials), gems: next.gems + outcome.gems }
-  return { state: { ...next, tower: { ...next.tower, event: null } }, outcome }
+  // A Boss's first clear opens its bonus first; the Boon choice it earned follows.
+  const boons = ev.kind === 'bonus' ? boonOffer(next, floor) : []
+  const after = boons.length > 0 ? { kind: 'boon' as const, floor, options: boons } : null
+  return { state: { ...next, tower: { ...next.tower, event: after } }, outcome }
+}
+
+/** Resolve a Boon choice: add the Boon to the running Sortie (sorted, no duplicates). */
+function resolveBoon(state: GameState, option: string, outcome: EventOutcome): { state: GameState; outcome: EventOutcome } {
+  if (!isBoon(option)) throw new Error(`resolveEvent: '${option}' is not a boon`)
+  const sortie = state.tower.sortie ?? newSortie(state.tower.currentFloor)
+  const boons = [...new Set([...sortie.boons, option])].sort()
+  outcome.note = 'The tower grants a boon for this sortie.'
+  return { state: { ...state, tower: { ...state.tower, sortie: { ...sortie, boons }, event: null } }, outcome }
 }

@@ -7,6 +7,7 @@
 import { defaultLifeState } from '../life'
 import { floorPower, mobLevel, buildEncounter, playFloor, sanityDrain, rollMaterialDrops, floorXp } from './tower'
 import { tacticalFocusBonus } from '../tactical'
+import { floorBudget, kindForFloor } from '../climb'
 import { addMasterXp } from '../master'
 import { PVP_DEFAULTS } from '../account'
 import { TUNING } from '../tuning'
@@ -307,36 +308,35 @@ describe('buildEncounter determinism', () => {
 describe('buildEncounter filler power budget', () => {
   const FILLER_FLOORS = [1, 2, 3, 4, 6, 7, 8, 9]
 
-  // The fill is a CLOSEST-REACHABLE best-fit to budget (always >= 1 enemy). Under
-  // the first-pass tuning a single Prairie enemy's CP already exceeds the whole
-  // floorPower budget on these low floors, so the closest reachable total is one
-  // enemy that sits ABOVE the +10% band — a tuning/scale gap (floorPower vs
-  // combatPower), not a logic bug. We therefore assert the algorithm's true
-  // guarantee: the chosen ΣCP is the closest reachable to budget (no single
-  // add/remove gets strictly closer) and there is at least one enemy.
+  // The fill is a best-fit to budget (always >= 1 enemy): it adds enemies until ΣCP
+  // is inside the tolerance band or the next one would move it further away.
+  // Since the climb (spec 2026-10-12 S13) a filler fills to `floorBudget` — the kind's
+  // static curve capped by the mercy director — not raw floorPower. F1-F2 (tutorial) are
+  // still exactly floorPower. These fixtures have no heroes, so the director stays out.
   for (const f of FILLER_FLOORS) {
-    it(`floor ${f} ΣCP is the closest reachable filler total to floorPower`, () => {
-      const enc = buildEncounter(makeState({ seed: 31337 }), f)
+    it(`floor ${f} ΣCP is the closest reachable filler total to floorBudget`, () => {
+      const state = makeState({ seed: 31337 })
+      const enc = buildEncounter(state, f)
       // Filler is a single wave.
       expect(enc.waves.length).toBe(1)
       const units = enc.waves[0]!.units
       expect(units.length).toBeGreaterThanOrEqual(1)
 
       const totalCp = units.reduce((s, u) => s + u.cp, 0)
-      const budget = floorPower(f, C_MULT)
+      const budget = floorBudget(state, f, kindForFloor(state, f))
+      if (f <= 2) expect(budget).toBe(floorPower(f, C_MULT))
       const distNow = Math.abs(budget - totalCp)
 
-      // The cheapest available Prairie enemy at this floor's level.
+      // The fill's guarantee: it lands inside the ±tolerance band, or it stopped because
+      // the next enemy would have overshot further (so the gap is under half the dearest
+      // Prairie enemy), or a single enemy already outweighs the budget.
       const lvl = mobLevel(f, C_MULT)
-      const cheapest = Math.min(
+      const dearest = Math.max(
         ...['goblin', 'wolf', 'harpy'].map(
           (id) => buildEnemyUnit(ENEMY_TEMPLATES[id]!, lvl, 'probe', {}).cp,
         ),
       )
-
-      // No further add gets strictly closer (we stopped at the closest point).
-      const distAfterAdd = Math.abs(budget - (totalCp + cheapest))
-      expect(distAfterAdd).toBeGreaterThanOrEqual(distNow)
+      if (units.length > 1) expect(distNow).toBeLessThanOrEqual(Math.max(budget * TUNING.tower.budgetTolerance, dearest / 2))
 
       // If more than one enemy, dropping the last one must NOT be strictly closer.
       if (units.length > 1) {
@@ -352,19 +352,20 @@ describe('buildEncounter filler power budget', () => {
     // discrete fill can land inside the tolerance band. Confirm the band logic
     // works whenever the granularity permits it. (Floor 9 / S-grade is comfortably
     // multi-enemy.)
-    const enc = buildEncounter(makeState({ seed: 4242, worldGrade: 'S' }), 9)
+    const sGrade = makeState({ seed: 4242, worldGrade: 'S' })
+    const enc = buildEncounter(sGrade, 9)
     const totalCp = enc.waves[0]!.units.reduce((s, u) => s + u.cp, 0)
-    const budget = floorPower(9, TUNING.tower.worldMult.S)
+    const budget = floorBudget(sGrade, 9, 'path')
     const distNow = Math.abs(budget - totalCp)
+    // Multi-enemy budgets land inside the band (or within half an enemy of it).
     const lvl = mobLevel(9, TUNING.tower.worldMult.S)
-    const cheapest = Math.min(
+    const dearest = Math.max(
       ...['goblin', 'wolf', 'harpy'].map(
         (id) => buildEnemyUnit(ENEMY_TEMPLATES[id]!, lvl, 'probe', {}).cp,
       ),
     )
-    // Closest-reachable invariant holds at S-grade too.
-    expect(Math.abs(budget - (totalCp + cheapest))).toBeGreaterThanOrEqual(distNow)
-    expect(enc.waves[0]!.units.length).toBeGreaterThanOrEqual(1)
+    expect(enc.waves[0]!.units.length).toBeGreaterThan(1)
+    expect(distNow).toBeLessThanOrEqual(Math.max(budget * TUNING.tower.budgetTolerance, dearest / 2))
   })
 
   it('uses the Subjugation / annihilate mission for filler', () => {

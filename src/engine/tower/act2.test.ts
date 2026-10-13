@@ -100,7 +100,8 @@ describe('F15 — Escort Princess Priasis', () => {
 
 describe('F20 — Halgiraf, the half black dragon', () => {
   it('guards first, then the light-vulnerable, enraging dragon as the Defeat target', () => {
-    const enc = buildEncounter(onFloor(20, {}), 20)
+    // A strong roster keeps the mercy director out, so the authored statlines show.
+    const enc = buildEncounter(onFloor(20, crusher), 20)
     expect(enc.mission.objectives).toEqual([{ kind: 'defeat', targetTag: 'halgiraf' }])
     expect(enc.waves).toHaveLength(2)
     const dragon = enc.waves[1]!.units.find((u) => u.targetTag === 'halgiraf')!

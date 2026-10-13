@@ -11,7 +11,8 @@
  * who uses every system, and a whale. Everything is seeded, so a run is repeatable.
  */
 import { TUNING } from '../engine/tuning'
-import type { GameState, HeroId, Line, OwnedHero, EquipmentSlot, Command, FloorResult } from '../engine/types'
+import type { GameState, HeroId, Line, OwnedHero, EquipmentSlot, Command, FloorResult, FloorKind, CombatOutcome } from '../engine/types'
+import { scoutFloor, type ScoutReport, type Threat } from '../engine/scout'
 import { reduce, attemptFloorWithResult } from '../engine/store'
 import { toWorldTime } from '../engine/time'
 import { combatPowerForHero } from '../engine/stats'
@@ -120,10 +121,21 @@ export interface DaySample {
 export interface AttemptLog {
   day: number
   floor: number
-  /** Deployed party CP ÷ the floor's power budget. */
+  /** The scout's honest ratio for the attempt: the party's battle units ÷ the encounter's CP. */
   ratio: number
+  /** The scout's threat band for that ratio. */
+  threat: Threat
+  /** The kind of floor fought (Path, Skull/Elite, Breather, Boss, tutorial). */
+  kind: FloorKind
   won: boolean
   fallen: number
+  /** Heroes deployed. */
+  deployed: number
+  outcome: CombatOutcome
+  /** The party broke and fled (spec 2026-10-12 S19). */
+  routed: boolean
+  /** Doors offered for the next floor after this attempt (0 = none). */
+  doorsOffered: number
 }
 
 export interface SimResult {
@@ -171,12 +183,14 @@ class Bot {
   readonly res: SimResult
   private lastInvasionLog = 0
   /** After a loss, the party strength and day it happened (a person waits to get stronger). */
-  private lastLoss: { floor: number; ratio: number; day: number; wiped: boolean } | null = null
+  private lastLoss: { floor: number; ratio: number; partyCp: number; day: number; wiped: boolean } | null = null
 
   constructor(
     readonly p: Profile,
     seed: number,
     readonly onAttempt?: AttemptHook,
+    /** Stop climbing once this floor is cleared (metrics runs). */
+    readonly stopAt?: number,
   ) {
     this.s = reduce(null, { type: 'NEW_ACCOUNT', seed, now: REAL_EPOCH })
     this.res = {
@@ -255,7 +269,15 @@ class Bot {
     const ev = this.s.tower.event
     if (!ev) return
     const tired = this.avgSanity() < 60
-    const pref = ev.kind === 'tournament' ? ['team', 'party_raid', 'battle_royale', 'pair', 'deathmatch'] : tired ? ['rest', 'treasure'] : ['treasure', 'merchant', 'rest']
+    // A Boon choice: take the first one offered (spec 2026-10-12 §4.4).
+    const pref =
+      ev.kind === 'boon'
+        ? [ev.options[0]!]
+        : ev.kind === 'tournament'
+          ? ['team', 'party_raid', 'battle_royale', 'pair', 'deathmatch']
+          : tired
+            ? ['rest', 'treasure']
+            : ['treasure', 'merchant', 'rest']
     for (const o of [...pref, ...ev.options]) {
       if (ev.options.includes(o) && this.try({ type: 'RESOLVE_EVENT', option: o })) return
     }
@@ -284,6 +306,8 @@ class Bot {
     const cap = this.p.id === 'casual' ? 15 : 40
     let guard = 0
     if (!this.s.life.guide.tutorialPull) this.try({ type: 'SUMMON', pool: 'normal', count: 10 }) // the free tutorial draw
+    // New Arrival tokens (spec 2026-10-12 S23): a free pull each.
+    for (let k = 0; k < 3 && (this.s.life.legacy?.recruitTokens ?? 0) > 0; k++) if (!this.try({ type: 'CLAIM_RECRUIT' })) break
     if (living(this.s).length === 0) this.try({ type: 'SUMMON', pool: 'normal' }) // the mercy pull
     // Fill the party first; after that, keep a pull's worth of gold in hand.
     const reserve = (n: number) => (n < SIZE ? cost : cost * 2)
@@ -418,30 +442,37 @@ class Bot {
       if (this.s.tower.event) return
       const floor = this.s.tower.currentFloor
       if (floor > TUNING.tower.sliceTopFloor) return
+      if (this.stopAt !== undefined && this.s.tower.highestCleared >= this.stopAt) return
       this.setParty()
       // Wait for rest if the fit bench is thin (but a lone starter still climbs).
       if (this.bestFive().length < Math.min(3, living(this.s).filter(available).length) || this.bestFive().length === 0) return
-      const partyCp = this.bestFive().reduce((a, h) => a + heroCp(h), 0)
-      const ratio = partyCp / floorPower(floor, TUNING.tower.worldMult[this.s.worldGrade])
+      // Doors (spec 2026-10-12 S13): a party that would find the Path Safe takes the Skull.
+      this.chooseDoor()
+      const pre = reduce(this.s, { type: 'TICK' }, this.now)
+      const report = scoutFloor(pre)
+      const ratio = report?.ratio ?? 0
+      const partyCp = report?.partyCp ?? 0
       // Retry a floor that beat us only once noticeably stronger (more so after a wipe) —
       // or, after a week stuck, at no weaker than last time. Nobody feeds a party to a wall
-      // every other day.
+      // every other day. "Stronger" is the scout's ratio or the party itself: the mercy
+      // director holds a weak party's ratio steady while it grows.
       const ll = this.lastLoss
       if (ll && ll.floor === floor) {
-        const stronger = ratio >= ll.ratio * (ll.wiped ? 1.2 : 1.1)
-        const patient = day - ll.day >= 7 && ratio >= ll.ratio
+        const k = ll.wiped ? 1.2 : 1.1
+        const stronger = ratio >= ll.ratio * k || partyCp >= ll.partyCp * k
+        const patient = day - ll.day >= 7 && (ratio >= ll.ratio || partyCp >= ll.partyCp)
         if (!stronger && !patient) return
       }
       const ballista = ANCHORS[floor]?.minigame === 'ballista' ? 0.6 : undefined
       const subvert = floor === 90 && this.s.tower.hiddenFound.length >= TUNING.lifecycle.subvertTruths ? true : undefined
       let out
       try {
-        out = attemptFloorWithResult(reduce(this.s, { type: 'TICK' }, this.now), undefined, ballista, subvert)
+        out = attemptFloorWithResult(pre, undefined, ballista, subvert)
       } catch {
         this.res.refusals.ATTEMPT_FLOOR = (this.res.refusals.ATTEMPT_FLOOR ?? 0) + 1
         return
       }
-      this.onAttempt?.(this.s, out.result)
+      this.onAttempt?.(this.s, out.result, report)
       this.s = out.state
       const r = out.result
       this.res.attempts[floor] = (this.res.attempts[floor] ?? 0) + 1
@@ -449,13 +480,41 @@ class Bot {
       if (r.firstClear) this.res.firstClearDay[floor] = day
       if (r.worldEnded) this.res.worldEnded = true
       if (r.worldSaved) this.res.worldSaved = true
-      this.res.log.push({ day, floor, ratio: Math.round(ratio * 100) / 100, won: r.cleared, fallen: r.fallenHeroIds.length })
+      this.res.log.push({
+        day,
+        floor,
+        ratio: Math.round(ratio * 100) / 100,
+        threat: report?.threat ?? 'deadly',
+        kind: r.kind ?? 'path',
+        won: r.cleared,
+        fallen: r.fallenHeroIds.length,
+        deployed: r.result.log.unitsInit.filter((u) => u.side === 'hero' && !u.isNpc).length,
+        outcome: r.result.outcome,
+        routed: r.routed === true,
+        doorsOffered: r.doors?.length ?? 0,
+      })
       if (!r.cleared) {
-        this.lastLoss = { floor, ratio, day, wiped: r.result.outcome === 'wipe' }
+        this.lastLoss = { floor, ratio, partyCp, day, wiped: r.result.outcome === 'wipe' }
         return
       }
       this.lastLoss = null
+      // Press on, or bank it (S15): a tired party goes home with its purse.
+      if (this.s.tower.sortie !== null && this.avgSanity() < 45) {
+        this.try({ type: 'RETURN_TO_CAMPUS' })
+        return
+      }
     }
+  }
+
+  /** Take the Skull door when the party would find the Path floor Safe (ratio ≥ 1.6);
+   *  otherwise leave the default (doors[0]). */
+  private chooseDoor(): void {
+    const doors = this.s.tower.doors
+    if (doors === null) return
+    const skull = doors.findIndex((d) => d.kind === 'elite')
+    if (skull < 0) return
+    const path = scoutFloor(reduce(this.s, { type: 'TICK' }, this.now))
+    if (path !== null && path.ratio >= 1.6) this.try({ type: 'CHOOSE_DOOR', index: skull })
   }
 
   private rift(): void {
@@ -513,13 +572,19 @@ function gradeRank(g: string): number {
   return GRADES.indexOf(g)
 }
 
-/** Called with the state just before each floor attempt and what the attempt did (for analysis tools). */
-export type AttemptHook = (before: GameState, result: FloorResult) => void
+/** Called with the state just before each floor attempt, what the attempt did, and what the
+ *  scout reported beforehand (for analysis tools and the metrics test). */
+export type AttemptHook = (before: GameState, result: FloorResult, report: ScoutReport | null) => void
+
+/** Options for a run: stop once a floor is cleared (the run ends that day). */
+export interface SimOptions {
+  untilFloor?: number
+}
 
 /** Play `days` real days as `profile`. Deterministic for a given seed. */
-export function simulate(profileId: ProfileId, seed: number, days: number, onAttempt?: AttemptHook): SimResult {
+export function simulate(profileId: ProfileId, seed: number, days: number, onAttempt?: AttemptHook, opts: SimOptions = {}): SimResult {
   const p = PROFILES[profileId]
-  const bot = new Bot(p, seed, onAttempt)
+  const bot = new Bot(p, seed, onAttempt, opts.untilFloor)
   for (let d = 0; d < days; d++) {
     for (let k = 0; k < p.sessionsPerDay; k++) {
       // Sessions spread across the waking hours (08:00–23:00).
@@ -532,7 +597,7 @@ export function simulate(profileId: ProfileId, seed: number, days: number, onAtt
       bot.res.deleted = true
       break
     }
-    if (bot.s.tower.highestCleared >= TUNING.tower.sliceTopFloor) break
+    if (bot.s.tower.highestCleared >= (opts.untilFloor ?? TUNING.tower.sliceTopFloor)) break
   }
   bot.res.captiveLosses = bot.s.pvp.log.filter((l) => l.note.startsWith('synthesized')).length
   return bot.res
