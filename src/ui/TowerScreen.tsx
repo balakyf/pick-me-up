@@ -540,6 +540,13 @@ export function TowerScreen({
     setPending(null)
     setFightCtx(null)
   }
+  /** "Press on ▸" with nothing to decide: close the card and fight the next floor at once
+   *  (one click, not Press on then Enter). The fight replaces the results in one render. */
+  function pressOn() {
+    resultDone()
+    fighting.current = false
+    enter()
+  }
   const toggleAct = (id: string) =>
     setOpenActs((cur) => {
       const next = new Set(cur)
@@ -552,6 +559,19 @@ export function TowerScreen({
   const preview = current <= MAX_FLOOR ? buildEncounter(state, current) : null
   const report = current <= MAX_FLOOR && !event ? scoutFloor(state) : null
   const busy = combat !== null || showResult
+  // Press on skips the scout stop only where it adds little: no Door or Boon is waiting,
+  // the floor is no guardian or anchor (their scout and mission brief come first), no Bane
+  // waits there (the scout names it: "… waits here"), and the scout rates it Safe or Fair.
+  // Otherwise Press on stops at the scout, as after a Door.
+  const pressOnFights =
+    report !== null &&
+    deployable &&
+    !doorsPending &&
+    event === null &&
+    kind !== 'boss' &&
+    !ANCHORS[current] &&
+    report.nemesis === null &&
+    (report.threat === 'safe' || report.threat === 'fair')
 
   return (
     <div className={`screen tower-screen ${prefs.reducedMotion ? 'motion-off' : ''}`}>
@@ -774,6 +794,7 @@ export function TowerScreen({
           }}
           onSeenDoorGuide={seeDoorGuide}
           onReturnToCampus={returnToCampus}
+          onPressOn={pressOnFights ? pressOn : undefined}
         />
       )}
       {outcome && !replay && <EventOutcomeCard outcome={outcome} onReplay={(log) => setReplay({ log, back: 'event' })} onClose={() => setOutcome(null)} />}

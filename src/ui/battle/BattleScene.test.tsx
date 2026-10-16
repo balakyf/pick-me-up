@@ -333,16 +333,20 @@ describe('BattleScene', () => {
   })
 
   it('the scripted first Decisive Moment coaches, even in a fight nobody would lose (S5)', () => {
-    let found: { seed: number; log: CombatLog } | null = null
-    for (const seed of SEEDS) {
-      const log = floorLog(seed, 3)
-      if (!findDecisive(log, partyIdsOf(log)) && findDangerMoment(log, partyIdsOf(log))) {
-        found = { seed, log }
-        break
+    // A real threat (a blow taking 40%+ of a hero's life) with nobody falling: early
+    // floors only scratch this party, so look higher.
+    let found: { seed: number; floor: number; log: CombatLog } | null = null
+    for (let floor = 3; floor <= 15 && !found; floor++) {
+      for (const seed of SEEDS) {
+        const log = floorLog(seed, floor)
+        if (!findDecisive(log, partyIdsOf(log)) && findDangerMoment(log, partyIdsOf(log))) {
+          found = { seed, floor, log }
+          break
+        }
       }
     }
     expect(found).not.toBeNull()
-    const pre = atFloor(found!.seed, 3)
+    const pre = atFloor(found!.seed, found!.floor)
     const shown = vi.fn()
     act(() =>
       root.render(<BattleScene log={found!.log} state={pre} onDone={() => {}} orders={ordersFor(pre)} tutorialPrompt onTutorialShown={shown} />),

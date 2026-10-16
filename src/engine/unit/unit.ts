@@ -219,6 +219,23 @@ function enemyBasicAttack(template: EnemyTemplate): SkillEffect {
 }
 
 /**
+ * Template keywords, then per-group extras, with exact repeats dropped: keywords
+ * stack in combat (two identical enrages would multiply twice), so a group that
+ * re-lists its template's keyword must not double it.
+ */
+function mergeKeywords(base: readonly KeywordTag[], extra: readonly KeywordTag[]): KeywordTag[] {
+  const out: KeywordTag[] = []
+  const seen = new Set<string>()
+  for (const kw of [...base, ...extra]) {
+    const key = JSON.stringify(kw)
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push(kw)
+  }
+  return out
+}
+
+/**
  * Assemble a CombatUnit from an EnemyTemplate at a floor level.
  *
  * An enemy IS a Layer 0 unit: its primary attributes are round(attrMult × effLevel)
@@ -270,7 +287,7 @@ export function buildEnemyUnit(
     actionGauge: 0,
     alive: true,
     skills: [enemyBasicAttack(template)],
-    keywords: [...(template.keywords ?? []), ...(opts?.keywords ?? [])],
+    keywords: mergeKeywords(template.keywords ?? [], opts?.keywords ?? []),
     cp: combatPower(stats),
     targetTag: opts?.targetTag ?? template.id,
     templateId: template.id,

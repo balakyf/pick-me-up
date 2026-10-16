@@ -3,6 +3,7 @@ import { createAccount } from '../../engine/account'
 import { attemptFloorWithResult } from '../../engine/store'
 import type { CombatEvent, CombatLog, CombatUnitInit } from '../../engine/types'
 import {
+  DANGER_MIN_SHARE,
   DECISIVE_TUTORIAL_STEP,
   decisiveTutorialDue,
   findDangerMoment,
@@ -132,6 +133,33 @@ describe('findDangerMoment (the tutorial when nobody would die)', () => {
     expect(d.killerId).toBe('e_g')
     expect(d.cursorIndex).toBe(4) // after the NPC's death at tick 2; the blow comes at tick 4
     expect(findDangerMoment(noDeath, ['h_a', 'h_b'], 0, 0.9)).toBeNull()
+  })
+
+  it('does not coach on a small blow (28% of a fresh hero), only on a real threat', () => {
+    const small = mk([
+      { tick: 0, kind: 'battle-start', heroIds: ['h_a', 'h_b'], enemyIds: ['e_g'] },
+      { tick: 3, kind: 'hit', actorId: 'e_g', targetId: 'h_a', amount: 28, crit: false, hpAfter: 72 },
+      { tick: 5, kind: 'hit', actorId: 'e_g', targetId: 'h_b', amount: 20, crit: false, hpAfter: 80 },
+      { tick: 9, kind: 'end', outcome: 'win' },
+    ])
+    expect(DANGER_MIN_SHARE).toBeGreaterThanOrEqual(0.4)
+    expect(findDangerMoment(small, ['h_a', 'h_b'])).toBeNull()
+    expect(decisiveTutorialDue(createAccount(1), small)).toBe(false)
+  })
+
+  it('prefers the blow that leaves a hero lowest: 30 on a hurt hero beats 35 on a fresh one', () => {
+    const log = mk([
+      { tick: 0, kind: 'battle-start', heroIds: ['h_a', 'h_b'], enemyIds: ['e_g', 'e_o'] },
+      { tick: 2, kind: 'hit', actorId: 'e_g', targetId: 'h_b', amount: 30, crit: false, hpAfter: 70 },
+      { tick: 4, kind: 'hit', actorId: 'e_o', targetId: 'h_a', amount: 35, crit: false, hpAfter: 65 },
+      { tick: 6, kind: 'hit', actorId: 'e_o', targetId: 'h_b', amount: 30, crit: false, hpAfter: 40 },
+      { tick: 9, kind: 'end', outcome: 'win' },
+    ])
+    const d = findDangerMoment(log, ['h_a', 'h_b'])!
+    expect(d.heroId).toBe('h_b')
+    expect(d.deathTick).toBe(6)
+    expect(d.cursorIndex).toBe(3)
+    expect(decisiveTutorialDue(createAccount(1), log)).toBe(true)
   })
 })
 

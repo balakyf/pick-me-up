@@ -116,6 +116,18 @@ describe('stepLife', () => {
     expect(s.life.chronicle.length).toBeGreaterThan(0)
   })
 
+  it('chronicles a quarrel once per pair: a repeat replaces the older entry', () => {
+    let quarrels = 0
+    for (const seed of [1, 2, 3, 4, 5]) {
+      const s = stepLife(roster(seed, 12), 14 * DAY)
+      const args = s.life.chronicle.filter((e) => e.kind === 'argument')
+      quarrels += args.length
+      const pairs = args.map((e) => [...e.heroIds].sort().join('|'))
+      expect(new Set(pairs).size, `seed ${seed}`).toBe(pairs.length)
+    }
+    expect(quarrels).toBeGreaterThan(0)
+  })
+
   it('caps a long absence at the catch-up window', () => {
     const s = roster(17)
     const far = 100 * DAY

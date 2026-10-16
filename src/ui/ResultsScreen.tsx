@@ -73,6 +73,9 @@ export interface ResultsScreenProps {
   onSeenDoorGuide?: () => void
   /** End the Sortie and bank the purse. */
   onReturnToCampus?: () => void
+  /** "Press on ▸" fights the next floor at once (no Door or Boon to choose, and nothing
+   *  there the scout should show first). Absent: Press on stops at the scout. */
+  onPressOn?: () => void
   /** The campus places already open before the fight: the card names any this clear
    *  opened, at the moment it is earned (a long Sortie used to save them all up for one
    *  crowded fanfare back in the lobby). */
@@ -96,6 +99,7 @@ export function ResultsScreen({
   onChooseDoor,
   onSeenDoorGuide,
   onReturnToCampus,
+  onPressOn,
   preOpen,
 }: ResultsScreenProps) {
   const win = result.cleared
@@ -475,7 +479,15 @@ export function ResultsScreen({
           </div>
         ) : win && bank && state.tower.event === null ? (
           <div className="results-actions" ref={nextRef}>
-            <button className="btn primary big" onClick={onContinue}>
+            <button
+              className="btn primary big"
+              onClick={onPressOn ?? onContinue}
+              title={
+                onPressOn
+                  ? t('Straight into the fight on floor {n}.', { n: state.tower.currentFloor })
+                  : t('Floor {n} deserves a look first: the scout opens.', { n: state.tower.currentFloor })
+              }
+            >
               {t('Press on ▸')}
             </button>
             {bank}

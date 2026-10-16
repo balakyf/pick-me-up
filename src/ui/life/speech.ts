@@ -729,6 +729,13 @@ export function groupedChronicle(state: GameState, entries: ChronicleEntry[]): s
   if (rivals.length) out.push(t('Bad blood between {list}.', { list: rivals.join(', ') }))
   if (arrivals.length > 1) out.push(t('{n} newcomers came through the crystal: {list}.', { n: arrivals.length, list: arrivals.join(', ') }))
   const grouped = new Set(['friends', 'closeFriends', 'rivals', 'grudge', 'death', 'stalled', ...(arrivals.length > 1 ? ['arrival'] : [])])
-  for (const e of entries) if (!grouped.has(e.kind)) out.push(chronicleLine(state, e))
+  // Old saves may hold one quarrel twice ("A and B…", "B and A…"): the latest stands.
+  const quarrel = (e: ChronicleEntry) => (e.kind === 'argument' && e.heroIds.length === 2 ? [...e.heroIds].sort().join('|') : null)
+  for (const [i, e] of entries.entries()) {
+    if (grouped.has(e.kind)) continue
+    const q = quarrel(e)
+    if (q !== null && entries.slice(i + 1).some((o) => quarrel(o) === q)) continue
+    out.push(chronicleLine(state, e))
+  }
   return out
 }

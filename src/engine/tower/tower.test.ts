@@ -431,6 +431,15 @@ describe('buildEncounter anchors', () => {
     expect(priest!.level).toBe(baseLvl + 10)
   })
 
+  it('F10: the Lv999 enrages once (x5, not x25) and the priest is phased once', () => {
+    const finale = buildEncounter(makeState({ seed: 5 }), 10).waves[2]!.units
+    const lv999 = finale.find((u) => u.templateId === 'lv999_creature')!
+    expect(lv999.keywords.filter((k) => k.kind === 'enrage')).toHaveLength(1)
+    expect(lv999.keywords.filter((k) => k.kind === 'looming')).toHaveLength(1)
+    const priest = finale.find((u) => u.targetTag === 'black_priest')!
+    expect(priest.keywords.filter((k) => k.kind === 'phased')).toHaveLength(1)
+  })
+
   it('every anchor templateId exists in ENEMY_TEMPLATES (build never silently drops a group)', () => {
     for (const anchor of Object.values(ANCHORS)) {
       for (const wave of anchor.waves) {

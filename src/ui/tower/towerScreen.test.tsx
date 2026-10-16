@@ -281,6 +281,91 @@ describe('TowerScreen — floor to floor', () => {
   })
 })
 
+describe('TowerScreen — Press on (one click to the next fight)', () => {
+  /** A strong roster with the tutorial seen, standing on floor `f` (Sortie running). */
+  function strongAt(seed: number, f: number): GameState {
+    let s = createAccount(seed)
+    s = reduce(s, { type: 'ADD_GOLD', amount: 300_000 })
+    for (let i = 0; i < 6; i++) s = reduce(s, { type: 'SUMMON', count: 10 })
+    const p = suggestParty(s)
+    s = reduce(s, { type: 'SET_PARTY', slots: p.slots, lines: p.lines })
+    s = reduce(s, { type: 'GUIDE_STEP', step: DECISIVE_TUTORIAL_STEP })
+    return atFloor(s, { currentFloor: f, highestCleared: f - 1, sortie: { startFloor: 1, floors: f - 1, purse: 100, boons: [] } })
+  }
+
+  it('with no Door or Boon to choose, Press on fights the next floor at once (F1 → F2)', () => {
+    const { store, sent } = mount(createAccount(7))
+    click('Enter')
+    wait(1250)
+    expect(store.getState()!.tower.currentFloor).toBe(2)
+    expect(store.getState()!.tower.doors ?? null).toBeNull()
+    const fights = battles.length
+    expect((button('Press on') as HTMLButtonElement).title).toContain('floor 2')
+    click('Press on')
+    expect(sent.filter((c) => c.type === 'ATTEMPT_FLOOR')).toHaveLength(2)
+    expect(battles.length).toBeGreaterThan(fights)
+    expect(text()).not.toContain('FLOOR CLEARED')
+    expect(text()).toContain('VICTORY')
+  })
+
+  it('stops at the scout when a Bane waits on the next floor (the scout names it first)', () => {
+    const base = createAccount(7)
+    const nem: Nemesis = {
+      id: 'nem_h_x',
+      templateId: 'goblin',
+      name: 'Goblin',
+      element: 'fire',
+      level: 1,
+      heroId: 'h_x' as HeroId,
+      heroName: 'Mira Vey',
+      diedFloor: 1,
+      revengeFloor: 2,
+      status: 'waiting',
+    }
+    const { store, sent } = mount({ ...base, life: { ...base.life, legacy: { ...base.life.legacy, nemeses: [nem] } } })
+    click('Enter')
+    wait(1250)
+    expect(store.getState()!.tower.currentFloor).toBe(2)
+    const report = scoutFloor(store.getState()!)!
+    expect(report.nemesis).not.toBeNull()
+    // Safe or Fair, so only the Bane keeps Press on from fighting at once.
+    expect(['safe', 'fair']).toContain(report.threat)
+    click('Press on')
+    expect(sent.filter((c) => c.type === 'ATTEMPT_FLOOR')).toHaveLength(1)
+    expect(text()).toContain('waits here')
+  })
+
+  it('stops at the scout before a guardian (F4 → F5)', () => {
+    const s = strongAt(31, 4)
+    const { result } = attemptFloorWithResult(s)
+    expect(result.cleared).toBe(true)
+    const { store, sent } = mount(s)
+    click('Enter')
+    wait(1250)
+    if (!/Press on/.test(text())) click('Continue')
+    expect(store.getState()!.tower.currentFloor).toBe(5)
+    click('Press on')
+    expect(sent.filter((c) => c.type === 'ATTEMPT_FLOOR')).toHaveLength(1)
+    expect(text()).not.toContain('FLOOR CLEARED')
+    expect((button('Enter') as HTMLButtonElement).disabled).toBe(false)
+  })
+
+  it('a Door taken from the card still stops at the scout', () => {
+    // F2 → F3: the first floor with Doors.
+    const s = strongAt(31, 2)
+    const { store, sent } = mount(s)
+    click('Enter')
+    wait(1250)
+    if (!/FLOOR CLEARED/.test(text())) click('Continue')
+    expect(store.getState()!.tower.doors?.length).toBeGreaterThan(0)
+    const door = container.querySelector<HTMLButtonElement>('.results-next .door-card, .results-next button.door')
+    expect(door).toBeTruthy()
+    act(() => door!.click())
+    expect(sent.filter((c) => c.type === 'ATTEMPT_FLOOR')).toHaveLength(1)
+    expect(text()).not.toContain('FLOOR CLEARED')
+  })
+})
+
 describe('TowerScreen — the battle wiring (S5, S18, S22)', () => {
   /** A party on a floor whose fight carries the scripted first Decisive Moment. */
   function tutorialFloor(): GameState {

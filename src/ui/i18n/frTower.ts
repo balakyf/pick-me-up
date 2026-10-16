@@ -88,6 +88,8 @@ export const FR_TOWER: Record<string, string> = {
   'Return to campus (bank +{n})': 'Rentrer au campus (encaisser +{n})',
   'Purse banked: +{n} gold. The party is home.': 'Bourse encaissée : +{n} or. L’équipe est rentrée.',
   'Press on ▸': 'Continuer ▸',
+  'Straight into the fight on floor {n}.': 'Droit au combat de l’étage {n}.',
+  'Floor {n} deserves a look first: the scout opens.': 'L’étage {n} mérite un coup d’œil d’abord : le rapport de reconnaissance s’ouvre.',
   'Look around first': 'Jeter un œil d’abord',
   'Streak bonus: +{n} into the purse': 'Bonus de série : +{n} dans la bourse',
   '◆ {n} at risk': '◆ {n} en jeu',

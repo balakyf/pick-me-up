@@ -249,6 +249,19 @@ describe('ANCHORS', () => {
     expect(ANCHORS[10].floor).toBe(10)
   })
 
+  it('no anchor group re-lists a keyword its template already carries (keywords would stack)', () => {
+    for (const anchor of Object.values(ANCHORS)) {
+      for (const wave of anchor.waves) {
+        for (const spec of wave) {
+          const own = (ENEMY_TEMPLATES[spec.templateId]?.keywords ?? []).map((k) => JSON.stringify(k))
+          for (const kw of spec.keywords ?? []) {
+            expect(own, `F${anchor.floor} ${spec.templateId}`).not.toContain(JSON.stringify(kw))
+          }
+        }
+      }
+    }
+  })
+
   it('F5 is a Survival mission with a survive objective + timer = f5SurviveTicks', () => {
     const f5 = ANCHORS[5]
     expect(f5.missionType).toBe('Survival')
@@ -278,8 +291,10 @@ describe('ANCHORS', () => {
     const bp = wave3.find((g) => g.templateId === 'black_priest')
     expect(lv, 'wave 3 has lv999_creature').toBeDefined()
     expect(bp, 'wave 3 has black_priest').toBeDefined()
-    expect(hasKeyword(lv!.keywords, 'enrage')).toBe(true)
-    expect(hasKeyword(bp!.keywords, 'phased')).toBe(true)
+    // Effective keywords = the template's plus the group's own.
+    const eff = (g: typeof lv) => [...(ENEMY_TEMPLATES[g!.templateId]!.keywords ?? []), ...(g!.keywords ?? [])]
+    expect(hasKeyword(eff(lv), 'enrage')).toBe(true)
+    expect(hasKeyword(eff(bp), 'phased')).toBe(true)
     expect(bp!.targetTag).toBe('black_priest')
   })
 

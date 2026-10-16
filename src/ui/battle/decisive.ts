@@ -76,21 +76,27 @@ export function killerOf(log: CombatLog, heroId: string, beforeIndex: number): s
 }
 
 /**
- * The tutorial's teaching moment for a fight in which nobody dies (S5, "F3 at the
- * latest"): just before the heaviest blow (by share of max HP) a foe lands on one of
- * the party, provided it takes more than `minShare` of that hero's life. Null when no
- * foe ever touches the party.
+ * The least share of a hero's remaining life a blow must take for the coaching pause
+ * (the playtest's first lesson paused on a 28%-of-HP scratch to a fresh hero).
  */
-export function findDangerMoment(log: CombatLog, heroIds: readonly string[], fromIndex = 0, minShare = 0): Decisive | null {
+export const DANGER_MIN_SHARE = 0.4
+
+/**
+ * The tutorial's teaching moment for a fight in which nobody dies (S5, "F3 at the
+ * latest"): just before the heaviest blow a foe lands on one of the party, measured as
+ * the share of the life the hero had left (so a blow on a hero already hurt outweighs a
+ * bigger one on a fresh hero), provided it takes more than `minShare` of it. Null when
+ * no foe lands a blow that heavy.
+ */
+export function findDangerMoment(log: CombatLog, heroIds: readonly string[], fromIndex = 0, minShare = DANGER_MIN_SHARE): Decisive | null {
   const heroes = new Set(heroIds)
-  const maxHP = new Map(log.unitsInit.map((u) => [u.id, u.maxHP]))
   const enemies = new Set(log.unitsInit.filter((u) => u.side === 'enemy').map((u) => u.id))
   let bestIndex = -1
   let bestShare = 0
   for (let i = Math.max(0, fromIndex); i < log.events.length; i++) {
     const e = log.events[i]!
     if (e.kind !== 'hit' || !heroes.has(e.targetId) || !enemies.has(e.actorId)) continue
-    const share = e.amount / Math.max(1, maxHP.get(e.targetId) ?? 1)
+    const share = e.amount / Math.max(1, e.hpAfter + e.amount)
     if (share > minShare && share > bestShare) {
       bestIndex = i
       bestShare = share
@@ -169,12 +175,15 @@ export const MAX_DECISIVE_PROMPTS = 2
 /** The `life.guide.done` step that marks the scripted first Decisive Moment as seen (S5). */
 export const DECISIVE_TUTORIAL_STEP = 'decisive-tutorial'
 
-/** Floor by which the scripted first Decisive Moment shows even if nobody would die. */
+/** Floor from which the scripted first Decisive Moment may also show on a real threat
+ *  (a blow of `DANGER_MIN_SHARE`+ of a hero's life) when nobody would die. Before the
+ *  playtest it showed here on any blow at all; a healthy party may now meet it later. */
 export const DECISIVE_TUTORIAL_BY_FLOOR = 3
 
 /**
  * Should this battle carry the scripted first Decisive Moment (S5)? True on the first
- * fight in which a hero would die, or on F3 at the latest, until the Master has seen it.
+ * fight in which a hero would die, or from F3 on the first fight with a real threat
+ * (`findDangerMoment`), until the Master has seen it.
  * The caller (TowerScreen) passes the answer as BattleScene's `tutorialPrompt` and, once
  * that battle closes, dispatches `GUIDE_STEP 'decisive-tutorial'` (never mid-battle).
  */
@@ -182,6 +191,6 @@ export function decisiveTutorialDue(state: GameState | null, log: CombatLog): bo
   if (!state || state.life.guide.done.includes(DECISIVE_TUTORIAL_STEP)) return false
   const heroIds = log.unitsInit.filter((u) => u.side === 'hero' && !u.isNpc).map((u) => u.id)
   if (findDecisive(log, heroIds) !== null) return true
-  // From F3 on, any fight with a blow to teach on (a fight no foe touches has nothing to show).
+  // From F3 on, a fight with a blow worth teaching on (a scratch, or no blow at all, is not).
   return log.floor >= DECISIVE_TUTORIAL_BY_FLOOR && findDangerMoment(log, heroIds) !== null
 }
