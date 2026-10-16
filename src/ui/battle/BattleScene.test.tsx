@@ -478,15 +478,18 @@ describe('BattleScene', () => {
     until(() => !!q('.decisive-card'))
     // The hero is already under a Protect order: offering it again would only burn an order.
     expect(q('.decisive-card .protect')).toBeNull()
-    expect(q('.decisive-card .focus')).toBeTruthy()
-    // The foe the card names is marked on stage.
+    // Focus on the killer is never on the card (it never landed in time), and Pull back
+    // needs a preview to prove it saves the hero (these orders have none).
+    expect(q('.decisive-card .focus')).toBeNull()
+    expect(q('.decisive-card .pullback')).toBeNull()
+    // The foe about to strike is still marked on stage.
     expect(q('.bunit.killer')?.getAttribute('data-unit')).toBe(E)
     advance(DECISIVE_KEY_GRACE_MS)
-    key('p')
+    for (const k of ['p', 'f', 'b']) key(k)
     expect(give).not.toHaveBeenCalled()
     expect(q('.decisive-card')).toBeTruthy()
-    key('f')
-    expect(give).toHaveBeenCalledWith({ tick: 3, kind: 'focus', enemyId: E })
+    key('r')
+    expect(give).toHaveBeenCalledWith({ tick: 3, kind: 'retreat' })
   })
 
   it('two rescues in one fight each get their "Saved!" (Protect, then Retreat)', () => {

@@ -85,6 +85,14 @@ describe('findDecisive', () => {
     expect(findDecisive(synthetic, ['h_b'], 9)).toBeNull()
   })
 
+  it('a death on a tick already under way is passed over for the next one (an order resumed mid-tick)', () => {
+    // Resumed at index 9 (tick 7 under way): Bo's death at 10 can no longer change, Ada's at 13 can.
+    const next = findDecisive(synthetic, ['h_a', 'h_b'], 9)!
+    expect(next).not.toBeNull()
+    expect(next.heroId).toBe('h_a')
+    expect(next.deathIndex).toBe(13)
+  })
+
   it('skips heroes already offered a moment (the re-arm looks for someone else)', () => {
     const next = findDecisive(synthetic, ['h_a', 'h_b'], 0, ['h_b'])!
     expect(next.heroId).toBe('h_a')

@@ -9,7 +9,7 @@ import { inSentence, t } from '../i18n/i18n'
 import { baneName, enemyName, firstName } from '../legacy/legacyText'
 import { KIND_ICON } from './kinds'
 
-export type ReasonKind = 'saved' | 'protect' | 'focus' | 'retreat' | 'door' | 'rout' | 'wipe' | 'lastStand' | 'nemesis'
+export type ReasonKind = 'saved' | 'withdraw' | 'protect' | 'focus' | 'retreat' | 'door' | 'rout' | 'wipe' | 'lastStand' | 'nemesis'
 
 export interface Reason {
   kind: ReasonKind
@@ -105,7 +105,8 @@ function focusReason(log: CombatLog, o: Extract<BattleOrder, { kind: 'focus' }>)
 
 /**
  * The reasons behind a floor's outcome, most decisive first: the heroes an order pulled
- * back from death (`saved`, reported by the battle's "Saved!"), the Master's orders, the
+ * back from death (`saved`, reported by the battle's "Saved!"), the Sanity a Pull back
+ * cost (`withdraw`, from `result.shaken`), the Master's other orders, the
  * Door taken, a rout or wipe, Last Stand, revenge. Empty when nothing notable happened.
  */
 export function explainFloor(
@@ -121,8 +122,19 @@ export function explainFloor(
     if (fallen.has(id)) continue
     out.push({ kind: 'saved', icon: '✚', text: t('Saved: your order pulled {name} back from the edge.', { name: unitName(log, id) }) })
   }
+  // Pull back's lasting cost (the engine's post-battle Sanity step reports it): the hero
+  // was saved (the line above), and came home shaken.
+  for (const x of result.shaken ?? []) {
+    out.push({
+      kind: 'withdraw',
+      icon: '↩',
+      text: t('Pulled back: {name} came home shaken (−{n} Sanity).', { name: unitName(log, x.heroId), n: Math.round(x.sanity) }),
+    })
+  }
   const seen = new Set<string>()
   for (const o of orders) {
+    // A hero pulled back is told by the "Saved" and "Pulled back" lines above.
+    if (o.kind === 'withdraw') continue
     const key = o.kind === 'focus' ? `f|${o.enemyId}` : o.kind === 'protect' ? `p|${o.allyId}` : 'r'
     if (seen.has(key)) continue
     seen.add(key)

@@ -363,8 +363,13 @@ export function TowerScreen({
   const say = (icon: string, text: string, go?: Notice['go']) => setNotice({ icon, text, key: ++noticeSeq.current, go })
   const errText = (e: unknown) => t(e instanceof Error ? e.message.replace(/^\w+: /, '') : 'That failed')
 
+  /** A fight is in flight (its replay or its results are up): nothing may start another.
+   *  A ref as well as state, so two activations before the next render cannot both get
+   *  through (fight() raises it; each render re-reads it from the state). */
+  const fighting = useRef(false)
+  fighting.current = combat !== null || showResult
   function enter() {
-    if (!deployable || current > MAX_FLOOR || event !== null) return
+    if (fighting.current || !deployable || current > MAX_FLOOR || event !== null) return
     // Anchors with a mission minigame (the ballista) are played first.
     if (ANCHORS[current]?.minigame === 'ballista') {
       setAiming(true)
@@ -373,6 +378,8 @@ export function TowerScreen({
     fight(undefined)
   }
   function fight(ballista: number | undefined, subvert?: boolean) {
+    if (fighting.current) return
+    fighting.current = true
     setAiming(false)
     setErr(null)
     const pre = store.getState()!
@@ -413,6 +420,14 @@ export function TowerScreen({
           setGiven([...sent])
           setPending(r.result)
           return r.result.result.log
+        } catch {
+          return null
+        }
+      },
+      // The same re-resolve without giving the order (the Decisive Moment's look ahead).
+      preview: (order) => {
+        try {
+          return attemptFloorWithResult(pre, undefined, ballista, subvert, [...sent, order]).result.result.log
         } catch {
           return null
         }
@@ -620,7 +635,7 @@ export function TowerScreen({
             autoSweep={prefs.autoSweep}
             onToggleSweep={() => setPrefs({ autoSweep: !prefs.autoSweep })}
             onFight={current === TUNING.tower.worldEndFloor ? undefined : enter}
-            fightDisabled={!deployable || event !== null}
+            fightDisabled={busy || !deployable || event !== null}
           />
         )
       )}
@@ -682,7 +697,7 @@ export function TowerScreen({
                 <button
                   className="btn primary cta"
                   onClick={enter}
-                  disabled={!deployable || event !== null}
+                  disabled={busy || !deployable || event !== null}
                   title={doorsPending ? t('No door chosen: the party takes the first one.') : undefined}
                 >
                   {f === TUNING.tower.worldEndFloor && !state.tower.worldSaved ? t('Clear it ▸') : t('Enter ▸')}
@@ -692,7 +707,7 @@ export function TowerScreen({
                 <button
                   className="btn gem"
                   onClick={() => fight(undefined, true)}
-                  disabled={!deployable || event !== null}
+                  disabled={busy || !deployable || event !== null}
                   title={t('You know what clearing this floor does. Refuse the win condition.')}
                 >
                   {t('Subvert ✦')}

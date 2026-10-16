@@ -137,6 +137,7 @@ export const FR_TOWER: Record<string, string> = {
   'Protect: {name} fell anyway, once the line around them broke.':
     'Protéger : {name} est tombé malgré tout, quand la ligne autour a cédé.',
   'Saved: your order pulled {name} back from the edge.': 'Sauvé : votre ordre a tiré {name} du bord du gouffre.',
+  'Pulled back: {name} came home shaken (−{n} Sanity).': 'Repli : {name} rentre sous le choc (−{n} de Santé mentale).',
   'Protect: no enemy touched {name} after your order.': 'Protéger : aucun ennemi n’a touché {name} après votre ordre.',
   'Protect: {name} took a single hit after your order and came home.':
     'Protéger : {name} n’a encaissé qu’un coup après votre ordre et est rentré.',

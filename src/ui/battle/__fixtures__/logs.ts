@@ -70,6 +70,7 @@ export function ordersFor(pre: GameState): BattleOrders & { given: BattleOrder[]
       if (next) given.push(order)
       return next
     },
+    preview: (order) => resolve(pre, [...given, order]),
   }
 }
 
@@ -146,7 +147,8 @@ export function decisiveOrder(d: Decisive, choice: 'protect' | 'retreat'): Battl
   return choice === 'protect' ? { tick: d.orderTick, kind: 'protect', allyId: d.heroId } : { tick: d.orderTick, kind: 'retreat' }
 }
 
-/** Where BattleScene resumes a re-resolved log (the first event at or past the order's tick). */
+/** The first event of a re-resolved log at or past the order's tick (BattleScene resumes at
+ *  its cursor, just before it; no hero death lies between the two that an order could change). */
 export function resumeIndex(next: CombatLog, order: BattleOrder): number {
   const i = next.events.findIndex((e) => e.tick >= order.tick)
   return i < 0 ? 0 : i

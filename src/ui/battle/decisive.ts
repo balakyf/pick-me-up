@@ -31,33 +31,38 @@ export interface Decisive {
  * and foes are not passed in) at or after event `fromIndex`, and return where to pause:
  * the last event whose tick is before the fatal tick, so an order given there
  * (at that event's tick + 1) lands no later than the fatal tick. Heroes in `exclude`
- * (already offered a moment this battle) are skipped. Null when no hero dies, or when
- * there is no moment left to pause on.
+ * (already offered a moment this battle) are skipped, and so is a death with no pause
+ * point left at or after `fromIndex` (its tick is already under way). Null when no hero
+ * dies, or when there is no moment left to pause on.
  */
 export function findDecisive(log: CombatLog, heroIds: readonly string[], fromIndex = 0, exclude: readonly string[] = []): Decisive | null {
   const heroes = new Set(heroIds.filter((id) => !exclude.includes(id)))
   const ev = log.events
-  const deathIndex = ev.findIndex((e, i) => i >= fromIndex && e.kind === 'death' && heroes.has(e.unitId))
-  if (deathIndex < 0) return null
-  const death = ev[deathIndex] as Extract<CombatEvent, { kind: 'death' }>
-  let eventIndex = -1
-  for (let i = deathIndex - 1; i >= 0; i--) {
-    if (ev[i]!.tick < death.tick) {
-      eventIndex = i
-      break
+  for (let deathIndex = Math.max(0, fromIndex); deathIndex < ev.length; deathIndex++) {
+    const death = ev[deathIndex]!
+    if (death.kind !== 'death' || !heroes.has(death.unitId)) continue
+    let eventIndex = -1
+    for (let i = deathIndex - 1; i >= 0; i--) {
+      if (ev[i]!.tick < death.tick) {
+        eventIndex = i
+        break
+      }
+    }
+    // A death on a tick already under way (the replay resumed mid-tick) cannot be changed
+    // any more: look past it for the next one.
+    if (eventIndex < 0 || eventIndex + 1 < fromIndex) continue
+    return {
+      eventIndex,
+      cursorIndex: eventIndex + 1,
+      heroId: death.unitId,
+      killerId: killerOf(log, death.unitId, deathIndex),
+      deathIndex,
+      deathTick: death.tick,
+      orderTick: ev[eventIndex]!.tick + 1,
+      kind: 'death',
     }
   }
-  if (eventIndex < 0 || eventIndex + 1 < fromIndex) return null
-  return {
-    eventIndex,
-    cursorIndex: eventIndex + 1,
-    heroId: death.unitId,
-    killerId: killerOf(log, death.unitId, deathIndex),
-    deathIndex,
-    deathTick: death.tick,
-    orderTick: ev[eventIndex]!.tick + 1,
-    kind: 'death',
-  }
+  return null
 }
 
 /** The enemy whose hit last struck `heroId` before event `beforeIndex` (null if none). */
@@ -110,6 +115,35 @@ export function findDangerMoment(log: CombatLog, heroIds: readonly string[], fro
     deathTick: hit.tick,
     orderTick: log.events[eventIndex]!.tick + 1,
     kind: 'danger',
+  }
+}
+
+/** A way out of a Decisive Moment, as its preview shows it. */
+export interface WayOut {
+  /** The fight as it would go. */
+  log: CombatLog
+  /** Party heroes who fall in it and did not in the fight as it stands (someone else
+   *  taking the doomed hero's place). */
+  fallsInstead: string[]
+  /** The fight as it stands is won, and this way out loses the floor. */
+  floorLost: boolean
+}
+
+/**
+ * Judge a previewed order for the Decisive Moment (review finding #13: every way out the
+ * card offers must really change fate). Null — not offered — unless the doomed hero lives
+ * through the whole previewed fight (not just past the fatal tick). Otherwise what it
+ * costs beyond the order itself: who falls in their place, and whether the floor is lost.
+ */
+export function wayOut(now: CombatLog, next: CombatLog | null, d: Decisive, partyIds: readonly string[]): WayOut | null {
+  if (!next || !survives(next, d.heroId)) return null
+  const party = new Set(partyIds)
+  const fell = (l: CombatLog) => new Set(l.events.flatMap((e) => (e.kind === 'death' && party.has(e.unitId) ? [e.unitId] : [])))
+  const before = fell(now)
+  return {
+    log: next,
+    fallsInstead: [...fell(next)].filter((id) => id !== d.heroId && !before.has(id)),
+    floorLost: now.outcome === 'win' && next.outcome !== 'win',
   }
 }
 

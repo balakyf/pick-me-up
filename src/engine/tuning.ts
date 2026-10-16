@@ -69,6 +69,21 @@ export const TUNING = {
     maxTicks: 5000,
     /** Damage multiplier a `vulnerable` keyword applies to hits of its element. */
     vulnerableMult: 1.5,
+    /** Pull back (the Decisive Moment's 'withdraw' order): for this many ticks the hero
+     *  stands behind the line, sits out its turns, and foes cannot reach it while anyone
+     *  else on its side stands. */
+    withdrawTicks: 8,
+    /** Damage a withdrawn hero still takes is ×(1 − this) (when no one else is left). */
+    withdrawReduction: 0.5,
+    /** Pull back's lasting cost: a hero pulled back comes home shaken and loses this much
+     *  Sanity after the fight, on top of the floor's drain (tower.playFloor). Measured on
+     *  the fights Pull back saves (sim casual + engaged, 40 seeds each, F1-30; the saved
+     *  hero averages 85 Sanity going in, 76 after the drain): at 20, 15 of 24 come home
+     *  under `lobby.combat.minorThreshold` (60, −5% to every stat until they rest; 4 of 24
+     *  without it) and 4 of 24 under `climb.restedSanity` (40: Suggest benches them); 1
+     *  under the panic line. The shake alone never breaks a hero (it stops at 1 Sanity).
+     *  Protect costs an order instead; Retreat costs the floor. */
+    withdrawSanityCost: 20,
   },
 
   cp: {

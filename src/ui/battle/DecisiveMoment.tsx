@@ -1,14 +1,19 @@
 /**
  * The Decisive Moment card (spec 2026-10-12, S16 + S5; WP2). Time stops just before a
- * hero's fatal blow and the Master chooses. The copy never promises survival: Protect
- * only holds "while anyone else stands", and a Focus may not land in time.
+ * hero's fatal blow and the Master chooses. Every way out the card offers really changes
+ * that hero's fate (BattleScene previews each order before offering it), and each says
+ * what it costs: Protect spends an order; Pull back costs the hero's next turns, and they
+ * come home shaken (TUNING.combat.withdrawSanityCost Sanity); Retreat costs the floor. A
+ * warning names anything worse a choice leads to (another hero falling in their place,
+ * the floor lost).
  */
 import type { CSSProperties } from 'react'
-import { inSentence, t } from '../i18n/i18n'
+import { TUNING } from '../../engine/tuning'
+import { t } from '../i18n/i18n'
 import { iselCoach } from '../world/lines'
 import type { Decisive } from './decisive'
 
-export type DecisiveChoice = 'protect' | 'focus' | 'retreat' | 'fate'
+export type DecisiveChoice = 'protect' | 'pullback' | 'retreat' | 'fate'
 
 /** "1 order left" / "3 orders left" (the dock and the card share it). */
 export function ordersLeftText(n: number): string {
@@ -23,12 +28,13 @@ export function decisiveHeadline(kind: Decisive['kind'], name: string): string {
 export function DecisiveMoment({
   decisive,
   heroName,
-  killerName,
   heroBust,
   iselBust,
   ordersLeft,
   canProtect = ordersLeft > 0,
-  canFocus = ordersLeft > 0 && killerName !== null,
+  canPullBack = false,
+  protectWarn = null,
+  pullBackWarn = null,
   tutorial,
   onChoose,
   wide = false,
@@ -36,16 +42,18 @@ export function DecisiveMoment({
 }: {
   decisive: Decisive
   heroName: string
-  killerName: string | null
   heroBust: string
   iselBust: string
-  /** Focus / Protect orders left this battle (Retreat is always available). */
+  /** Focus / Protect orders left this battle (Pull back and Retreat cost none). */
   ordersLeft: number
-  /** Protect is offered (an order is left and the hero is not already protected). */
+  /** Protect is offered (an order is left, the hero is not already protected, and it saves them). */
   canProtect?: boolean
-  /** Focus on the killer is offered (an order is left, a killer is known, it stands, and
-   *  it is not already the focus). */
-  canFocus?: boolean
+  /** Pull back is offered (it saves the hero: they sit out a few turns behind the line, and
+   *  come home shaken — the card states the Sanity it costs). */
+  canPullBack?: boolean
+  /** Anything worse Protect / Pull back would lead to (shown under its hint), or null. */
+  protectWarn?: string | null
+  pullBackWarn?: string | null
   /** The scripted first Decisive Moment: Isel coaches (S5). */
   tutorial: boolean
   onChoose: (choice: DecisiveChoice) => void
@@ -78,14 +86,17 @@ export function DecisiveMoment({
           <button type="button" className={`pbtn decisive-choice protect ${tutorial ? 'coach' : ''}`} onClick={() => onChoose('protect')}>
             <span className="decisive-key">P</span>
             <span className="decisive-label">🛡 {t('Protect {name}', { name: heroName })}</span>
-            <span className="decisive-hint">{t('Foes avoid them while anyone else stands')}</span>
+            <span className="decisive-hint">{t('Spends an order: foes avoid them while anyone else stands')}</span>
+            {protectWarn && <span className="decisive-warn">⚠ {protectWarn}</span>}
           </button>
         )}
-        {canFocus && killerName !== null && (
-          <button type="button" className="pbtn decisive-choice focus" onClick={() => onChoose('focus')}>
-            <span className="decisive-key">F</span>
-            <span className="decisive-label">🎯 {t('Focus {name}', { name: inSentence(killerName) })}</span>
-            <span className="decisive-hint">{t('Everyone strikes it — it may not fall in time')}</span>
+        {canPullBack && (
+          <button type="button" className="pbtn decisive-choice pullback" onClick={() => onChoose('pullback')}>
+            <span className="decisive-key">B</span>
+            <span className="decisive-label">↩ {t('Pull {name} back', { name: heroName })}</span>
+            <span className="decisive-hint">{t('No order spent: they sit out a few turns behind the line')}</span>
+            <span className="decisive-cost">{t('{name} comes home shaken: −{n} Sanity', { name: heroName, n: TUNING.combat.withdrawSanityCost })}</span>
+            {pullBackWarn && <span className="decisive-warn">⚠ {pullBackWarn}</span>}
           </button>
         )}
         <button type="button" className="pbtn danger decisive-choice retreat" onClick={() => onChoose('retreat')}>
@@ -96,10 +107,15 @@ export function DecisiveMoment({
         <button type="button" className="pbtn ghost decisive-choice fate" onClick={() => onChoose('fate')}>
           <span className="decisive-key">␣</span>
           <span className="decisive-label">{t('Let fate decide')}</span>
+          {decisive.kind === 'death' && <span className="decisive-hint">{t('{name} falls', { name: heroName })}</span>}
         </button>
       </div>
       <div className="decisive-foot muted small">
-        {canOrder ? ordersLeftText(ordersLeft) : t('No orders left this battle: only Retreat can change this.')}
+        {canOrder
+          ? ordersLeftText(ordersLeft)
+          : canPullBack
+            ? t('No orders left this battle.')
+            : t('No orders left this battle: only Retreat can change this.')}
       </div>
     </div>
   )

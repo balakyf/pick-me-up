@@ -36,15 +36,18 @@
 
 **Orders that matter (S16)**
 - A **portrait dock** under the stage shows each hero's bust, HP with a trail, a gold ring when tapping will Protect them, a 🛡 badge once protected, and a "!" when a telegraphed blow is aimed at them. Tapping a portrait gives Protect at once. Tapping a foe, on stage or in the foe list, gives Focus. A re-resolve took 1-11 ms on F10-F20 fixtures.
-- **The Decisive Moment.** BattleScene scans the already-known log for the first death of a party hero (not NPCs). It **pauses on the last event before the fatal tick**: the camera zooms 1.25× on the doomed hero, the stage dims, a heartbeat cue plays and a card appears. The choices are:
-  - "🛡 Protect {hero}" [P]
-  - "🎯 Focus {killer}" [F]
-  - "🏳 Retreat" [R]
-  - "Let fate decide" [Space/Esc]
-- The card's copy never promises survival ("Foes avoid them while anyone else stands", "it may not fall in time"). With no orders left, the card offers only Retreat or fate.
+- **The Decisive Moment.** BattleScene scans the already-known log for the first death of a party hero (not NPCs). It **pauses on the last event before the fatal tick**: the camera zooms 1.25× on the doomed hero, the stage dims, a heartbeat cue plays and a card appears ("{hero} is about to fall!"). *Updated after review finding #13 and the Pull back cost (fun/fix-battle):* the card offers only real choices, and each says what it costs:
+  - "🛡 Protect {hero}" [P]: *spends an order*; foes avoid the hero while anyone else stands.
+  - "↩ Pull {hero} back" [B]: *no order spent*; the hero sits out `TUNING.combat.withdrawTicks` (8) ticks behind the line (foes cannot reach them while anyone else on their side stands; a hit that still lands is halved). Its lasting cost is on the card: "{hero} comes home shaken: −20 Sanity" (`TUNING.combat.withdrawSanityCost`, applied once by the engine's post-battle Sanity step, never below 1; the results' "Because…" says "Pulled back: {hero} came home shaken (−N Sanity).").
+  - "🏳 Retreat" [R]: *costs the floor*; the fight ends now, the living come home, nothing is won. It always saves.
+  - "Let fate decide" [Space/Esc]: costs the hero ("{hero} falls"). Final.
+- **Every way out is previewed before it is offered.** `BattleOrders.preview(order)` re-resolves the fight with the order without giving it (no store call, no game RNG, no state change), and `wayOut()` offers Protect or Pull back only if the doomed hero lives through the *whole* previewed fight. When a way out has a worse side, the card warns under it: "{other} falls in their place", "{n} others fall in their place" or "The floor is lost".
+- **Focus is off the card.** Focusing the killer never saved the doomed hero (0 of 74 deadly fights: the order lands a tick or two before the blow). Focus is still an order on the dock (tap a foe, or F).
+- With no orders left, the card offers Pull back (when it saves), Retreat or fate.
 - Every choice re-resolves through `orders.give`, so it reaches the store through TowerScreen's `store.revise`. **BattleScene never dispatches.**
 - If the hero then lives, a gold **"Saved!"** callout plays at the moment they would have died, with the `saved` sting and an Isel line. `onSaved(heroId)` is called once.
 - The moment **re-arms** once (cap 2) after an order re-resolves the fight, for a *different* hero who is now doomed. In a wipe, for example, the second card offers Retreat. "Let fate decide" is final.
+- An order the fight would only receive after it is decided (the final blow is on screen) is refused: nothing is spent or recorded, and the replay never jumps back. An order mid-fight resumes the replay where it stands.
 - Skip never jumps past a choice that has not been made: it stops at the moment.
 
 **Intents and commentary (S17)**
@@ -56,7 +59,7 @@
 
 **Scripted first decision (S5, BattleScene side)**
 - With `tutorialPrompt`, the first moment carries Isel's coaching line: "Your orders change fate. Try Protect." The Protect choice glows.
-- If nobody would die (F3 at the latest), the moment opens before the heaviest blow on the party instead, worded "{name} is in danger!".
+- If nobody would die (F3 at the latest), the moment opens before the heaviest blow on the party instead, worded "A heavy blow is coming for {name}!".
 - `decisiveTutorialDue(state, log)` and `DECISIVE_TUTORIAL_STEP = 'decisive-tutorial'` are exported for TowerScreen (see the requests below).
 
 **Sound (sound.ts)**
@@ -72,8 +75,8 @@
   - F and P: aim Focus or Protect
   - R: retreat
   - Esc: cancel aim, close the panel, or let fate decide
-- At the Decisive Moment, P, F, R and Space choose.
-- The listener runs in the capture phase on `window` and stops every key's propagation while the battle is up, so the lobby (WASD, E) and windows behind it never react. Only the battle's own keys are `preventDefault`ed, and typing in the panel's inputs is left alone.
+- At the Decisive Moment, P (Protect), B (Pull back), R (Retreat) and Space (fate) choose, after a 400 ms grace.
+- The listener runs in the capture phase on `window` and stops every key's propagation while the battle is up, so the lobby (WASD, E) and windows behind it never react. The battle is modal: it takes the focus from the page behind it on open, and Enter and Space are always `preventDefault`ed (their default would press a button behind the battle, e.g. a second "Fight"). The exception is a battle button the player has Tabbed to: it keeps Enter and Space (Space on a focused "Protect" protects). Typing in the panel's inputs is left alone.
 
 ## Files
 

@@ -1030,6 +1030,11 @@ export type BattleOrder =
   | { tick: number; kind: 'focus'; enemyId: string }
   /** Enemies avoid this hero while anyone else stands. */
   | { tick: number; kind: 'protect'; allyId: string }
+  /** Pull this hero back behind the line for a few ticks (TUNING.combat.withdrawTicks): they
+   *  sit out their turns, foes cannot single them out while anyone else on their side
+   *  stands, and what still reaches them is reduced. Costs no order, but a hero pulled back
+   *  comes home shaken: TUNING.combat.withdrawSanityCost Sanity after the fight. */
+  | { tick: number; kind: 'withdraw'; allyId: string }
 
 // ── Combat log (one schema; the producer's; UI replays it) ───────────────────
 
@@ -1152,6 +1157,10 @@ export interface FloorResult {
   nemesisDefeated?: string[]
   /** Doors offered for the next floor after this attempt. */
   doors?: Door[] | null
+  /** Heroes pulled back mid-fight (a 'withdraw' order) who came home shaken, and the
+   *  Sanity each lost to it on top of the floor's drain (TUNING.combat.withdrawSanityCost).
+   *  Absent when nobody was pulled back. */
+  shaken?: { heroId: HeroId; sanity: number }[]
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

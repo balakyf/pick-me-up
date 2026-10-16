@@ -182,6 +182,9 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
   // Focus / overlook start from the pre-battle directive; mid-battle orders may change them.
   let focusEnemyId: string | undefined = encounter.focus?.focusEnemyId
   let overlooked: string[] = encounter.focus?.overlookedAllyIds ?? []
+  /** Heroes pulled back behind the line (a withdraw order) and the tick they return on. */
+  const withdrawnUntil: Record<string, number> = {}
+  const isWithdrawn = (u: MutUnit): boolean => (withdrawnUntil[u.id] ?? 0) > tick
 
   // ── Helpers over the live rosters ─────────────────────────────────────────
   /** Everyone alive on the hero side, NPC allies included (what enemies can target). */
@@ -208,8 +211,11 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
 
   /** Living, targetable units on the side OPPOSITE the actor. */
   const targetableFoes = (actor: MutUnit): MutUnit[] => {
-    const foes = actor.side === 'hero' ? livingEnemies() : livingHeroSide()
-    return foes.filter(isTargetable)
+    if (actor.side === 'hero') return livingEnemies().filter(isTargetable)
+    // A withdrawn hero is behind the line: out of reach while anyone else on its side stands.
+    const side = livingHeroSide()
+    const open = side.filter((h) => !isWithdrawn(h))
+    return open.length > 0 ? open : side
   }
 
   // ── Damage resolution against ONE target (pins crit→variance draw order) ──
@@ -257,6 +263,7 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
     if (target.side === 'hero' && mods.protectedReduction !== undefined && overlooked.includes(target.id)) {
       damage *= 1 - mods.protectedReduction
     }
+    if (target.side === 'hero' && isWithdrawn(target)) damage *= 1 - C.withdrawReduction
 
     // Actor keywords: ENRAGE past its timer, FRENZY while low, OPENER on the first
     // action, BANE against a family. None draws RNG.
@@ -520,6 +527,8 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
     if (!actor.alive || outcome !== null) return
     // Mission NPCs (escort targets) never act — they only need protecting.
     if (actor.ref.isNpc) return
+    // A withdrawn hero sits its turns out behind the line.
+    if (isWithdrawn(actor)) return
     // A looming unit sleeps until its enrage tick: it wakes, and then it is too late.
     if (isLooming(actor)) {
       const wake = actor.ref.keywords.find((k) => k.kind === 'enrage')
@@ -593,6 +602,7 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
       if (o.kind === 'retreat') outcome = 'retreat'
       else if (o.kind === 'focus') focusEnemyId = o.enemyId
       else if (o.kind === 'protect' && !overlooked.includes(o.allyId)) overlooked = [...overlooked, o.allyId]
+      else if (o.kind === 'withdraw') withdrawnUntil[o.allyId] = tick + C.withdrawTicks
     }
     if (outcome !== null) break
 

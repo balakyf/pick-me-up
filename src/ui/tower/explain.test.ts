@@ -147,3 +147,15 @@ describe('explainFloor', () => {
     expect(explainFloor(fixtureResult(log, { kind: 'path' }))).toEqual([])
   })
 })
+
+describe('Because… a Pull back (the withdraw order)', () => {
+  const pulled: BattleOrder = { tick: 3, kind: 'withdraw', allyId: 'h_a' }
+  it('says the hero came home shaken, with the Sanity the engine took, after the Saved line', () => {
+    const r = explainFloor(fixtureResult(log, { shaken: [{ heroId: 'h_a' as HeroId, sanity: 19.6 }] }), [pulled], undefined, ['h_a'])
+    expect(r.map((x) => x.kind)).toEqual(['saved', 'withdraw'])
+    expect(r[1]!.text).toBe('Pulled back: Mira came home shaken (−20 Sanity).')
+  })
+  it('says nothing of it when the engine reports no shaken hero', () => {
+    expect(explainFloor(fixtureResult(log), [pulled])).toEqual([])
+  })
+})

@@ -588,7 +588,8 @@ export function playFloor(
   orders?: BattleOrder[],
 ): { state: GameState; result: FloorResult } {
   const floor = state.tower.currentFloor
-  const commands = (orders ?? []).filter((o) => o.kind !== 'retreat').length
+  // Retreat and Pull back are the Master's own calls; Focus and Protect are relayed orders.
+  const commands = (orders ?? []).filter((o) => o.kind !== 'retreat' && o.kind !== 'withdraw').length
   if (commands > ordersAllowed(state)) throw new Error(`playFloor: the Tactical Center can relay only ${ordersAllowed(state)} orders a battle`)
   const worldMult = worldMultFor(state)
   if (state.tower.event !== null) {
@@ -672,6 +673,17 @@ export function playFloor(
   const partyCp = heroUnits.reduce((sum, u) => sum + u.cp, 0)
   const baseDrain = sanityDrain(encounterBudget(state, floor, kind), partyCp, cleared, fallenSet.size > 0)
   const drain = Math.round(baseDrain * boonDrainMult(boons))
+  // Pull back's lasting cost: a survivor whose 'withdraw' order landed (the log carries it)
+  // comes home shaken, once however many times they were pulled back. The shake alone
+  // never takes a hero below 1 Sanity (it shakes, it does not break).
+  const pulledBack = new Set<string>()
+  for (const e of res.log.events) {
+    if (e.kind !== 'order' || e.order.kind !== 'withdraw') continue
+    const allyId = e.order.allyId
+    const sid = heroUnits.find((u) => u.id === allyId)?.sourceHeroId
+    if (sid !== undefined && survivorSet.has(sid as string)) pulledBack.add(sid as string)
+  }
+  const shaken: { heroId: HeroId; sanity: number }[] = []
 
   const highestAfter = cleared ? Math.max(state.tower.highestCleared, floor) : state.tower.highestCleared
   const nextHeroes: Record<HeroId, OwnedHero> = {}
@@ -696,8 +708,14 @@ export function playFloor(
       skillProgress.push(...learned.progress)
       // Favor (Layer 3 §C1): a shared victory warms; watching an ally die chills.
       const favorDelta = (cleared ? TUNING.favor.perClear : 0) - (fallenSet.size > 0 ? TUNING.favor.witnessLoss : 0)
+      let sanity = clampSanity(hero.sanity - drain)
+      if (pulledBack.has(key as string)) {
+        const after = Math.max(Math.min(sanity, 1), sanity - TUNING.combat.withdrawSanityCost)
+        shaken.push({ heroId: key, sanity: sanity - after })
+        sanity = after
+      }
       nextHeroes[key] = withFavor(
-        { ...hero, xp, sanity: clampSanity(hero.sanity - drain), skills: learned.skills, blessed: false },
+        { ...hero, xp, sanity, skills: learned.skills, blessed: false },
         hero.favor + favorDelta,
       )
     } else if (xpAwarded > 0 && hero.alive && !hero.captiveOf) {
@@ -828,6 +846,7 @@ export function playFloor(
     restedBonus: rested.bonus,
     nemesisDefeated: avenged.map((n) => n.id),
     doors: nextTower.doors,
+    ...(shaken.length > 0 ? { shaken } : {}),
   }
 
   // ── 6g. The Sortie (S15): start it, grow its Purse, or break it. Then a Boon choice

@@ -3,6 +3,7 @@ import { playMusic, sfx } from '../audio/sound'
 import type { BattleOrder, CombatEvent, CombatLog, CombatUnitInit, GameState, HeroId, Line } from '../../engine/types'
 import { lastWords } from '../life/speech'
 import { ENEMY_TEMPLATES, SKILLS } from '../../engine/content'
+import { TUNING } from '../../engine/tuning'
 import { drawBattleBg, BG_H, BG_W } from '../pixel/battleBg'
 import { cachedDataUrl } from '../pixel/render'
 import { allyBustUrl, allyPoseUrl, enemyPoseUrl, enemySize, heroBlinkUrl, heroBustUrl, heroPoseUrl, iselBustUrl } from '../pixel/sprites'
@@ -28,7 +29,7 @@ import {
   traumaFor,
   type Speed,
 } from './fx'
-import { MAX_DECISIVE_PROMPTS, findDangerMoment, findDecisive, savedCursor, type Decisive } from './decisive'
+import { MAX_DECISIVE_PROMPTS, findDangerMoment, findDecisive, savedCursor, wayOut, type Decisive, type WayOut } from './decisive'
 import { findIntents, intentsAt, isAuthoredSkill } from './intents'
 import { BARK_SHOW_MS, barkLine, canBark, firstName, isPriorityBark, planBarks, type BarkKind } from './narrator'
 import { COMBO_MIN, comboSemis, comboSeries } from './combo'
@@ -114,6 +115,10 @@ export interface BattleOrders {
   left: number
   /** Re-resolve the fight with `order` (applied at its tick); returns the new log. */
   give: (order: BattleOrder) => CombatLog | null
+  /** The fight as it would go with `order` added to those given, without giving it (no
+   *  side effect). The Decisive Moment offers a way out only if it really saves the hero;
+   *  without a preview it offers Protect and Retreat only. */
+  preview?: (order: BattleOrder) => CombatLog | null
 }
 
 type Aim = 'focus' | 'protect' | null
@@ -304,7 +309,9 @@ export function BattleScene({
               ? t('The Master sounds the retreat!')
               : o.kind === 'focus'
                 ? t('The Master: “Everyone on {name}!”', { name: inSentence(nameOf(o.enemyId)) })
-                : t('The Master: “Cover {name}!”', { name: nameOf(o.allyId) })
+                : o.kind === 'withdraw'
+                  ? t('The Master: “Fall back, {name}!”', { name: nameOf(o.allyId) })
+                  : t('The Master: “Cover {name}!”', { name: nameOf(o.allyId) })
           break
         }
         case 'end':
@@ -350,11 +357,14 @@ export function BattleScene({
   // so the same Protect or Focus is never spent twice.
   const guarded = new Set<string>()
   let focusId: string | null = null
+  /** Heroes pulled back behind the line, and the tick each returns on. */
+  const backUntil = new Map<string, number>()
   for (let i = 0; i < log.events.length; i++) {
     const e = log.events[i]!
     if (i >= cursor && e.kind !== 'order') break
     if (e.kind === 'order' && e.order.kind === 'protect') guarded.add(e.order.allyId)
     if (e.kind === 'order' && e.order.kind === 'focus') focusId = e.order.enemyId
+    if (e.kind === 'order' && e.order.kind === 'withdraw') backUntil.set(e.order.allyId, e.tick + TUNING.combat.withdrawTicks)
   }
 
   /** Replay time elapsed (real ms the scheduler has spent), for overtime and the narrator's pace. */
@@ -380,14 +390,39 @@ export function BattleScene({
   const isTutorialMoment = tutorialPrompt && prompted.length <= 1 && decisive !== null && prompted[0] === decisive.heroId
   // What the card may offer: never an order that is already standing (a second Protect on
   // the same hero, or a Focus on the foe already focused, would only burn an order).
-  const canProtectDoomed = !!decisive && ordersLeft > 0 && !guarded.has(decisive.heroId)
-  const canFocusKiller =
-    !!decisive &&
-    ordersLeft > 0 &&
-    decisive.killerId !== null &&
-    focusId !== decisive.killerId &&
-    snap.dead[decisive.killerId] === undefined &&
-    !!snap.visible[decisive.killerId]
+  // Every way out the card offers must really change the doomed hero's fate: each order is
+  // previewed (re-resolved without being given) and offered only if the hero then lives
+  // through the whole fight. (Focus on the killer never made it in time — it stays on the
+  // dock, off the card.) Retreat lands before the fatal tick, so it always saves.
+  const outlook = useMemo(() => {
+    if (!decisive || decisive.kind !== 'death' || !orders?.preview) return null
+    const d = decisive
+    const look = (order: BattleOrder) => {
+      let next: CombatLog | null = null
+      try {
+        next = orders.preview!(order)
+      } catch {
+        next = null
+      }
+      const w = wayOut(log, next, d, partyIds)
+      return w ? { ...w, warn: warnOf(w) } : null
+    }
+    return {
+      protect: look({ tick: d.orderTick, kind: 'protect', allyId: d.heroId }),
+      pullBack: look({ tick: d.orderTick, kind: 'withdraw', allyId: d.heroId }),
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [decisive, log])
+  /** What a way out leads to that is worse than the fight as it stands (null: nothing). */
+  function warnOf(w: WayOut): string | null {
+    if (w.fallsInstead.length === 1) return t('{name} falls in their place', { name: shortName(w.fallsInstead[0]!) })
+    if (w.fallsInstead.length > 1) return t('{n} others fall in their place', { n: w.fallsInstead.length })
+    if (w.floorLost) return t('The floor is lost')
+    return null
+  }
+  const canProtectDoomed =
+    !!decisive && ordersLeft > 0 && !guarded.has(decisive.heroId) && (decisive.kind !== 'death' || !orders?.preview || !!outlook?.protect)
+  const canPullBack = !!outlook?.pullBack
 
   useEffect(() => {
     if (!pending || decisive || cursor !== pending.cursorIndex) return
@@ -558,29 +593,34 @@ export function BattleScene({
       return null
     }
     setNote(null)
-    // The new log replays the old one exactly up to the order's tick: resume there.
-    const resume = next.events.findIndex((e) => e.tick >= order.tick)
-    const at = resume < 0 ? 0 : resume
+    // The new log replays the old one exactly up to the order's tick, and every frame shown
+    // so far is from an earlier tick: resume right here (the rest of this tick still plays,
+    // and the replay never jumps back).
+    const at = Math.min(cursor, next.events.length - 1)
     setLog(next)
     setCursor(at)
     setResumeFrom(at)
     setPlaying(true)
     setArmed(true)
-    if (order.kind !== 'retreat') setGiven((n) => n + 1)
+    // Retreat and Pull back are the Master's own calls: they spend no order.
+    if (order.kind !== 'retreat' && order.kind !== 'withdraw') setGiven((n) => n + 1)
     return next
   }
   const orderTick = tick + 1
+  /** The fight is over by the time an order given now would land (the final blow is on
+   *  screen): no order is taken, spent or recorded. */
+  const decided = atEnd || !log.events.some((e) => e.tick >= orderTick && e.kind !== 'end')
   const protect = (heroId: string) => {
     // An already-protected hero is not protected twice (that would only burn an order).
-    if (ordersLeft <= 0 || atEnd || snap.dead[heroId] !== undefined || guarded.has(heroId)) return
+    if (ordersLeft <= 0 || decided || snap.dead[heroId] !== undefined || guarded.has(heroId)) return
     give({ tick: orderTick, kind: 'protect', allyId: heroId })
   }
   const focus = (enemyId: string) => {
-    if (ordersLeft <= 0 || atEnd || snap.dead[enemyId] !== undefined || !snap.visible[enemyId] || focusId === enemyId) return
+    if (ordersLeft <= 0 || decided || snap.dead[enemyId] !== undefined || !snap.visible[enemyId] || focusId === enemyId) return
     give({ tick: orderTick, kind: 'focus', enemyId })
   }
   const retreat = () => {
-    if (!orders || atEnd) return
+    if (!orders || decided) return
     give({ tick: orderTick, kind: 'retreat' })
   }
   /** A tap on a unit (sprite or row): a foe takes a Focus, a hero a Protect. */
@@ -598,15 +638,15 @@ export function BattleScene({
       setPlaying(true)
       return
     }
-    if ((choice === 'protect' && !canProtectDoomed) || (choice === 'focus' && !canFocusKiller)) {
+    if ((choice === 'protect' && !canProtectDoomed) || (choice === 'pullback' && !canPullBack)) {
       setPlaying(true)
       return
     }
     const order: BattleOrder =
       choice === 'protect'
         ? { tick: d.orderTick, kind: 'protect', allyId: d.heroId }
-        : choice === 'focus'
-          ? { tick: d.orderTick, kind: 'focus', enemyId: d.killerId! }
+        : choice === 'pullback'
+          ? { tick: d.orderTick, kind: 'withdraw', allyId: d.heroId }
           : { tick: d.orderTick, kind: 'retreat' }
     const next = give(order)
     if (next && d.kind === 'death') setRescues((r) => [...r, { heroId: d.heroId, deathTick: d.deathTick }])
@@ -628,24 +668,45 @@ export function BattleScene({
     setPlaying(true)
   }
 
-  // ── Keyboard: Space pause · 1-4 speed · S skip · F/P/R orders · Esc ─────────
+  // The battle takes the focus from the page behind it (the Fight button that started it,
+  // say), the way a modal dialog does: the stage root itself holds it, so Enter can never
+  // reach that page while the battle is up.
+  const rootEl = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    const a = document.activeElement
+    if (a instanceof HTMLElement && !rootEl.current?.contains(a)) {
+      a.blur()
+      rootEl.current?.focus({ preventScroll: true })
+    }
+  }, [])
+
+  // ── Keyboard: Space pause · 1-4 speed · S skip · F/P/R orders · B pull back · Esc
   // Capture phase on window, and every key stops there: the battle is modal, so the lobby
   // (walk, E to interact) and any window underneath never see a key while it is up.
-  // Only the keys the battle uses are prevented; Tab and the rest keep their defaults.
+  // Only the keys the battle uses are prevented, and Enter and Space always are: their
+  // default would press whatever button has focus behind the battle (a second "Fight").
+  // Tab and the rest keep their defaults. A button of the battle's own that has keyboard
+  // focus keeps Enter and Space (Space on a focused "Protect" protects; it is not fate).
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.ctrlKey || e.metaKey || e.altKey) return
       e.stopPropagation()
-      const tag = (e.target as HTMLElement | null)?.tagName
-      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return
+      const el = e.target instanceof Element ? e.target : null
+      const inside = !!el && !!rootEl.current?.contains(el)
       const k = e.key.length === 1 ? e.key.toLowerCase() : e.key
+      const activation = k === 'Enter' || k === ' '
+      if (inside) {
+        const tag = el!.tagName
+        if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return
+        if (activation && el!.closest('button, [role="button"]')) return
+      }
       let handled = true
       if (k === 'Escape' && fxOpen) setFxOpen(false)
       else if (decisive) {
         if (!cardKeys || e.repeat) {
           // swallowed: the grace period, or a key held down from before the card opened
         } else if (k === 'p' && canProtectDoomed) decide('protect')
-        else if (k === 'f' && canFocusKiller) decide('focus')
+        else if (k === 'b' && canPullBack) decide('pullback')
         else if (k === 'r') decide('retreat')
         else if (k === ' ' || k === 'Escape') decide('fate')
         else handled = false
@@ -664,7 +725,7 @@ export function BattleScene({
       } else if (k === 'r' && orders && !reel) retreat()
       else if (k === 'Escape' && aim) setAim(null)
       else handled = false
-      if (handled) e.preventDefault()
+      if (handled || activation) e.preventDefault()
     }
     window.addEventListener('keydown', onKey, true)
     return () => window.removeEventListener('keydown', onKey, true)
@@ -744,7 +805,7 @@ export function BattleScene({
   }
 
   const combo = !atEnd && !reel ? combos[cursor] ?? 0 : 0
-  const canTap = !!orders && ordersLeft > 0 && !atEnd && !decisive && !reel
+  const canTap = !!orders && ordersLeft > 0 && !decided && !decisive && !reel
   const outcome = log.outcome
   const camFocus = decisive ? pos[decisive.heroId] : undefined
 
@@ -768,7 +829,16 @@ export function BattleScene({
     .join(' ')
 
   return (
-    <div className={rootCls}>
+    <div
+      className={rootCls}
+      ref={rootEl}
+      tabIndex={-1}
+      // A click does not leave a battle button focused (Chrome would): Space still pauses
+      // after a click on 4×. Keyboard users Tab to a button and keep Enter / Space on it.
+      onMouseDown={(e) => {
+        if (e.target instanceof Element && e.target.closest('button')) e.preventDefault()
+      }}
+    >
       <div className="battle-caption pframe">
         {decisive ? decisiveHeadline(decisive.kind, shortName(decisive.heroId)) : snap.caption}
       </div>
@@ -841,6 +911,7 @@ export function BattleScene({
                   decisive?.killerId === u.id ? 'killer' : '',
                   focusId === u.id && !dead ? 'focused' : '',
                   guarded.has(u.id) && !dead ? 'guarded' : '',
+                  (backUntil.get(u.id) ?? 0) > tick && !dead ? 'withdrawn' : '',
                   nemeses.has(u.id) ? 'nemesis' : '',
                   canTap && !dead && ((u.side === 'enemy' && aim !== 'protect' && focusId !== u.id) || (party && aim !== 'focus' && !guarded.has(u.id)))
                     ? aim
@@ -982,12 +1053,13 @@ export function BattleScene({
         <DecisiveMoment
           decisive={decisive}
           heroName={shortName(decisive.heroId)}
-          killerName={decisive.killerId ? nameOf(decisive.killerId) : null}
           heroBust={byId[decisive.heroId] ? heroBustUrl(heroSrc(byId[decisive.heroId]!)) : ''}
           iselBust={iselBustUrl()}
           ordersLeft={ordersLeft}
           canProtect={canProtectDoomed}
-          canFocus={canFocusKiller}
+          canPullBack={canPullBack}
+          protectWarn={outlook?.protect?.warn ?? null}
+          pullBackWarn={outlook?.pullBack?.warn ?? null}
           tutorial={isTutorialMoment}
           onChoose={decide}
           wide={BG_W * zoom >= WIDE_STAGE_PX}

@@ -107,24 +107,26 @@ describe('French Bane and enemy names mid-sentence', () => {
     expect(container.textContent).not.toContain('sur Le Fléau')
   })
 
-  it('the Decisive card focuses "le Fléau de Mira"', () => {
+  it('the Decisive card names no foe (Focus left it); the Master\'s Focus call says "le Fléau de Mira"', () => {
     setLocale('fr')
     act(() =>
       root.render(
         <DecisiveMoment
           decisive={{ kind: 'death' } as Decisive}
           heroName="Ilan"
-          killerName={enemyName('Mira\'s Bane')}
           heroBust=""
           iselBust=""
           ordersLeft={1}
+          canPullBack
           tutorial={false}
           onChoose={() => {}}
         />,
       ),
     )
-    expect(container.textContent).toContain('Focaliser le Fléau de Mira')
+    expect(container.querySelector('.decisive-choice.focus')).toBeNull()
     expect(container.textContent).not.toContain('Le Fléau')
+    // BattleScene's caption for a Focus order puts the Bane mid-sentence.
+    expect(t('The Master: “Everyone on {name}!”', { name: inSentence(enemyName("Mira's Bane")) })).toBe('Le Maître : « Tous sur le Fléau de Mira ! »')
   })
 
   it('the Because… lines use the same verb as the Focus button, and the right article', () => {
