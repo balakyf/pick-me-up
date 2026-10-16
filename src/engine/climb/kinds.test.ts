@@ -11,6 +11,9 @@ import {
   kindRel,
   mercyBand,
   mercyCap,
+  anchorFeel,
+  directorCp,
+  levelLagMult,
   isMercyCapped,
   rosterCp,
   lastStandPct,
@@ -101,7 +104,8 @@ describe('static budget (the sawtooth)', () => {
   it('the Path lift is climb.earlyLift at the foot and fades to ×1 at the inflection floor', () => {
     const I = TUNING.tower.inflectionFloor
     expect(pathLift(0)).toBeCloseTo(TUNING.climb.earlyLift, 9)
-    // kindMult keeps its WP0 meaning: Path 1, Elite 1.45, Breather 0.6, Boss 1.
+    // kindMult keeps its WP0 meaning (Path 1 is the reference; Elite and Breather scale it,
+    // Boss 1 with each anchor's own feel); the 2026-10-16 tension pass set Elite to 1.6.
     expect(CL.kindMult.path).toBe(1)
     for (let f = 1; f <= I; f++) expect(pathLift(f), `F${f}`).toBeLessThanOrEqual(pathLift(f - 1))
     for (const f of [I, I + 1, 90, 100]) expect(pathLift(f)).toBe(1)
@@ -109,12 +113,17 @@ describe('static budget (the sawtooth)', () => {
     for (const f of [71, 77, 88, 99]) expect(pathBudget(f, wm)).toBeCloseTo(floorPower(f, wm), 6)
   })
 
-  it('a Boss is the uncapped Path target × its kind × anchorBudgetMult', () => {
+  it('a Boss is the uncapped Path target × its kind × anchorBudgetMult × its anchor feel', () => {
     for (const f of [5, 10, 25, 90]) {
-      expect(staticBudget(s, f, 'boss')).toBeCloseTo(pathTarget(f, wm) * kindRel('boss') * TUNING.tower.anchorBudgetMult, 6)
+      expect(staticBudget(s, f, 'boss')).toBeCloseTo(pathTarget(f, wm) * kindRel('boss') * TUNING.tower.anchorBudgetMult * anchorFeel(f), 6)
       expect(pathTarget(f, wm)).toBeCloseTo(floorPower(f, wm) * pathLift(f), 6)
     }
     expect(staticBudget(s, 90, 'boss')).toBeCloseTo(floorPower(90, wm) * kindRel('boss') * TUNING.tower.anchorBudgetMult, 6)
+  })
+
+  it('anchorFeel reads climb.anchorFeel and is 1 for an anchor it does not list (the late tower is untouched)', () => {
+    for (const [f, v] of Object.entries(CL.anchorFeel)) expect(anchorFeel(Number(f))).toBe(v)
+    for (const f of [30, 41, 42, 50, 90, 100]) expect(anchorFeel(f), `F${f}`).toBe(1)
   })
 
   it('consecutive Path floors step up by at most maxStepPct (anchors skipped), never down, never past the target', () => {
@@ -180,8 +189,30 @@ describe('the mercy director', () => {
 
   it('mercyBand reads the climb’s bands from TUNING.climb', () => {
     for (const k of KINDS) expect(mercyBand(k)).toBe(TUNING.climb.mercyBand[k])
-    // A mercy cap only: every fought kind's band is at most 1.
-    for (const k of KINDS) expect(mercyBand(k)).toBeLessThanOrEqual(1)
+    // The bands are relative to the roster (2026-10-16 tension pass): Path and the Breather
+    // sit under it, the Skull above it (the opt-in peak). The cap still never raises a
+    // floor above its static curve (floorBudget = min(static, cap)).
+    for (const k of ['path', 'breather'] as FloorKind[]) expect(mercyBand(k)).toBeLessThan(1)
+    expect(mercyBand('elite')).toBeGreaterThan(1)
+    expect(mercyBand('elite')).toBeGreaterThan(mercyBand('path') * 1.4)
+  })
+
+  it('reads under-levelled heroes at less than their CP (levelLag), only in the early climb', () => {
+    const L = CL.levelLag
+    // At or near the floor's mob level: full CP.
+    expect(levelLagMult(12, 12)).toBe(1)
+    expect(levelLagMult(12 - L.grace, 12)).toBe(1)
+    // Each level beyond the grace counts perLevel less, down to min.
+    expect(levelLagMult(12 - L.grace - 2, 12)).toBeCloseTo(1 - 2 * L.perLevel, 9)
+    expect(levelLagMult(1, L.untilFloor)).toBe(L.min)
+    // Past untilFloor the plain-CP director stands.
+    expect(levelLagMult(1, L.untilFloor + 1)).toBe(1)
+    // directorCp is the same five heroes rosterCp reads, never above it.
+    const r = roster(4, 8, 3)
+    expect(directorCp(r, 3)).toBeCloseTo(rosterCp(r), 6)
+    expect(directorCp(r, 24)).toBeLessThan(rosterCp(r))
+    expect(directorCp(r, L.untilFloor + 1)).toBeCloseTo(rosterCp(r), 6)
+    expect(mercyCap(r, 24, 'path')).toBeCloseTo(directorCp(r, 24) * mercyBand('path'), 6)
   })
 })
 

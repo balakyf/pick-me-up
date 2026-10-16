@@ -51,14 +51,16 @@ function at(s: GameState, floor: number, kind: FloorKind = floorKindBase(floor))
 const heroUnits = (r: ReturnType<typeof playFloor>) => r.result.result.log.unitsInit.filter((u) => u.side === 'hero' && !u.isNpc)
 
 describe('the encounter carries its kind and rout threshold', () => {
-  it('rout after 2 on Path and Elite, 1 on a Breather, 3 on a Boss', () => {
+  it('rout after 2 on Path, Elite and a Boss, 1 on a Breather', () => {
     const s = roster(3, 5)
     const enc = (f: number, k: FloorKind) => buildEncounter(at(s, f, k), f)
     expect(enc(7, 'path')).toMatchObject({ kind: 'path', routAfterDeaths: CL.rout.path })
     expect(enc(7, 'elite')).toMatchObject({ kind: 'elite', routAfterDeaths: CL.rout.elite })
     expect(enc(7, 'breather')).toMatchObject({ kind: 'breather', routAfterDeaths: CL.rout.breather })
     expect(enc(10, 'path')).toMatchObject({ kind: 'boss', routAfterDeaths: CL.rout.boss })
-    expect([CL.rout.path, CL.rout.elite, CL.rout.breather, CL.rout.boss]).toEqual([2, 2, 1, 3])
+    // Boss 3 → 2 in the 2026-10-16 tension pass: the early bosses are real peaks now, and a
+    // lost one should cost a rout, not a third hero (docs/superpowers/plans/2026-10-16-fun-tension-tuning.md).
+    expect([CL.rout.path, CL.rout.elite, CL.rout.breather, CL.rout.boss]).toEqual([2, 2, 1, 2])
   })
 
   it('only the tower sets routAfterDeaths (dailies, PvP and hand-built fights never rout)', () => {

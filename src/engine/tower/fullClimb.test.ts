@@ -10,7 +10,7 @@ import {
   isWallFloor,
 } from './tower'
 import { createAccount } from '../account'
-import { floorBudget, isMercyCapped, kindRel, pathTarget } from '../climb'
+import { anchorFeel, floorBudget, isMercyCapped, kindRel, pathTarget } from '../climb'
 import { resolveEvent } from '../events'
 import { ACTS, ANCHORS, ENEMY_TEMPLATES, ALLY_TEMPLATES, HIDDEN_OBJECTIVES, actForFloor } from '../content'
 import { TUNING } from '../tuning'
@@ -125,7 +125,7 @@ describe('anchors F25–F100', () => {
       const enc = buildEncounter(s, f)
       const cp = enc.waves.reduce((n, w) => n + w.units.reduce((m, u) => m + (u.keywords.some((k) => k.kind === 'looming') ? 0 : u.cp), 0), 0)
       const target = floorBudget(s, f, 'boss')
-      expect(target).toBeCloseTo(pathTarget(f, 1) * kindRel('boss') * T.anchorBudgetMult, 6)
+      expect(target).toBeCloseTo(pathTarget(f, 1) * kindRel('boss') * T.anchorBudgetMult * anchorFeel(f), 6)
       expect(cp, `F${f}`).toBeGreaterThanOrEqual(target * 0.99)
       // …and the smallest whole elite step that reaches it.
       expect(cp, `F${f}`).toBeLessThan(target * T.elitePowerStep * 1.02)

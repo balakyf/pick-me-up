@@ -62,8 +62,10 @@ describe('findIntents', () => {
   it('on real fights, every big blow on the party is flagged at least 2 actions ahead', () => {
     let checked = 0
     for (const seed of SEEDS) {
-      // A spread of floors, plus the seed's first deadly fight (where the big blows land).
-      for (const floor of new Set([3, 8, 12, 15, deadlyFight(seed).floor])) {
+      // A spread of floors (the bosses among them, and two past F25, where the mercy
+      // director stops sparing a Lv1 party), plus the seed's first deadly fight (where the
+      // big blows land).
+      for (const floor of new Set([3, 5, 8, 10, 12, 15, 27, 30, deadlyFight(seed).floor])) {
         const l = floorLog(seed, floor)
         const found = findIntents(l)
         const unit = new Map(l.unitsInit.map((u) => [u.id, u]))

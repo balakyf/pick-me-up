@@ -77,14 +77,16 @@ function veteran(seed: number): GameState {
   s = reduce(s, { type: 'SET_PARTY', slots: p.slots, lines: p.lines })
   for (let i = 0; i < 3; i++) s = attemptFloorWithResult(s).state
   // a death: pending echo, nemesis, recruit
-  for (const f of [11, 12, 13, 14, 16]) {
-    const at: GameState = { ...s, tower: { ...s.tower, currentFloor: f, highestCleared: f - 1, kind: 'path', doors: null, event: null } }
-    const r = attemptFloorWithResult(at)
-    if (r.result.fallenHeroIds.length > 0 && r.state.life.legacy.nemeses.length > 0) {
-      s = r.state
-      break
+  // (the first fight that kills: a Path floor, else the Skull behind it)
+  search: for (const f of [11, 12, 13, 14, 16, 17, 18, 19])
+    for (const kind of ['path', 'elite'] as const) {
+      const at: GameState = { ...s, tower: { ...s.tower, currentFloor: f, highestCleared: f - 1, kind, doors: null, event: null } }
+      const r = attemptFloorWithResult(at)
+      if (r.result.fallenHeroIds.length > 0 && r.state.life.legacy.nemeses.length > 0) {
+        s = r.state
+        break search
+      }
     }
-  }
   s = { ...s, life: { ...s.life, letterReadAt: toWorldTime(Date.now()) + 1e12, guide: { ...s.life.guide, done: ['welcome', 'decisive-tutorial'] } } }
   return s
 }

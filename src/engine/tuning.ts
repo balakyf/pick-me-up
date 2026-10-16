@@ -841,21 +841,44 @@ export const TUNING = {
   },
 
   /** The climb: floor kinds, the mercy director, Doors, rout, Last Stand, Boons, Sorties
-   *  (spec 2026-10-12 S13-S15, S19, S20). First-pass. */
+   *  (spec 2026-10-12 S13-S15, S19, S20). Kinds, bands, anchorFeel, levelLag and rout tuned
+   *  for a sawtooth over F1-F25 (docs/superpowers/plans/2026-10-16-fun-tension-tuning.md,
+   *  asserted in src/sim/feel.test.ts). */
   climb: {
     /** Budget multiplier by floor kind: budget = staticBudget(f) × kindMult[kind].
-     *  Rest and Cache have no fight (0). */
-    kindMult: { tutorial: 1.0, breather: 0.6, path: 1.0, elite: 1.45, rest: 0, cache: 0, boss: 1.0 } as Record<string, number>,
+     *  Rest and Cache have no fight (0). The Skull is 1.6× the Path (was 1.45): a strong
+     *  roster, which the director never caps, still finds it a real step up. */
+    kindMult: { tutorial: 1.0, breather: 0.6, path: 1.0, elite: 1.6, rest: 0, cache: 0, boss: 1.0 } as Record<string, number>,
+    /** Per-anchor Boss feel: × the Boss's static budget and its mercy cap alike (missing =
+     *  1, so F30+ is untouched). Authored bosses hit very differently for their CP (F5's
+     *  Survive is soft, Halgiraf on F20 hard); these even them out so each early Boss is the
+     *  sawtooth's peak: mostly Fair/Risky, a would-be death in ~1 first attempt of 3.
+     *  Steep: F5 goes from ~10% to ~65% would-be deaths between 1.55 and 1.76. A stronger
+     *  (summoning) roster meets the static curve where the naive one meets its mercy cap, so
+     *  these are tuned for both (feel.test.ts `typical`): 5/10 a peak for both, 15 (an
+     *  escort: more budget kills Priasis, not the party) and 20 (Halgiraf: at 1.22 a 78-80%
+     *  would-be death for the typical player, Protect saving a third) kept low; 25 at 1.4 keeps it a peak (~30% for the typical player). Was
+     *  { 5: 1.76, 10: 1.34, 15: 1.43, 20: 1.22, 25: 1.55 }. */
+    anchorFeel: { 5: 1.72, 10: 1.34, 15: 1.2, 20: 1.1, 25: 1.4 } as Record<number, number>,
     /** The early climb's lift over floorPower on a Path floor: ×earlyLift at the foot of the
      *  tower, fading quadratically to ×1 at the inflection floor (`tower.inflectionFloor`).
      *  It can't go into `tower.earlyBudgetBoost`: above ~4.2 that breaks floorPower's
      *  monotonicity near F69, and it would also move F1-F2 and the dailies (WP3 notes). */
     earlyLift: 2.42,
-    /** The director is a mercy cap ONLY: budget = min(staticBudget, rosterCp × mercyBand[kind]),
-     *  rosterCp = the top 5 unit CP among rested heroes and the party's fightable ones.
-     *  Never raises difficulty. A median roster meets a Path ratio of ~1.39 (Fair); Skull
-     *  and Boss floors stay a risk. */
-    mercyBand: { tutorial: 1.0, breather: 0.5, path: 0.72, elite: 0.9, rest: 0, cache: 0, boss: 0.85 } as Record<string, number>,
+    /** The director is a mercy cap ONLY: budget = min(staticBudget, directorCp × mercyBand[kind])
+     *  (× anchorFeel on a Boss), directorCp = the top 5 unit CP among rested heroes and the
+     *  party's fightable ones, under-levelled heroes discounted (levelLag). It never raises a
+     *  floor above its static curve. The bands are relative to the roster: the Path a little
+     *  under it (mostly Safe, sometimes Fair), the Skull above it (mostly Risky: it pays
+     *  more, so it hurts more), the Breather well under it. Was path 0.72 / elite 0.9 /
+     *  boss 0.85 / breather 0.5, which capped every kind below the roster: a flat climb. */
+    mercyBand: { tutorial: 1.0, breather: 0.42, path: 0.72, elite: 1.17, rest: 0, cache: 0, boss: 0.85 } as Record<string, number>,
+    /** The director reads a hero far under the floor's mob level at less than its CP
+     *  (combat mitigation is level-scaled; CP is not): past `grace` levels under, each level
+     *  counts `perLevel` less, down to `min` (climb/kinds.ts levelLagMult). Only up to
+     *  `untilFloor`: the free roster's 1★/2★ heroes hit their level caps (Lv10/Lv20) in the
+     *  first acts; past it the late climb keeps its plain-CP director (the act gates). */
+    levelLag: { grace: 3, perLevel: 0.04, min: 0.5, untilFloor: 25 },
     /** Rested: Sanity at or above this. `suggestParty` sends only rested heroes, and the
      *  director reads rested heroes plus whoever is actually in the party, so it never
      *  sizes a floor for tired heroes the game would leave on the bench (climb/kinds.ts). */
@@ -891,7 +914,7 @@ export const TUNING = {
       cacheStones: 1,
     },
     /** Rout (S19): survivors flee after this many heroes fall while losing, by kind. */
-    rout: { tutorial: 2, breather: 1, path: 2, elite: 2, boss: 3 } as Record<string, number>,
+    rout: { tutorial: 2, breather: 1, path: 2, elite: 2, boss: 2 } as Record<string, number>,
     /** Last Stand (S20): all-stat bonus with few living, fightable heroes on the roster. */
     lastStand: {
       rosterAtMost: 3,

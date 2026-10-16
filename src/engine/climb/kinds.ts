@@ -11,9 +11,11 @@
  *                          Path; a Boss anchor is the uncapped lifted target × its relative
  *                          kindMult × anchorBudgetMult; tutorial floors (F1-F2) are plain
  *                          floorPower, untouched.
- *   floorBudget(f, kind)   min(staticBudget, rosterCp × mercyBand[kind]) from
- *                          `directorFromFloor` on. The director is a MERCY CAP ONLY: it
- *                          never raises a floor for a strong roster.
+ *   floorBudget(f, kind)   min(staticBudget, directorCp × mercyBand[kind]) from
+ *                          `directorFromFloor` on (a Boss's both × its `anchorFeel`). The
+ *                          director is a MERCY CAP ONLY: it never raises a floor for a
+ *                          strong roster. Its bands are relative to the roster: Path a
+ *                          little under it, the Skull and the Boss above it (the peaks).
  *
  * Which kind a floor is fought as (`kindForFloor`): F1-F2 are tutorial floors, authored
  * anchors (every 5th, plus F41/F42) are bosses, and the current floor takes the Door the
@@ -24,7 +26,7 @@
  * PURE and DETERMINISTIC (no RNG at all here).
  */
 import { TUNING } from '../tuning'
-import { floorPower } from '../tower/power'
+import { floorPower, mobLevel } from '../tower/power'
 import { ANCHORS, SKILLS } from '../content'
 import { buildCombatUnit } from '../unit'
 import { legacyPct } from '../legacy'
@@ -138,6 +140,38 @@ export function rosterCp(state: GameState): number {
   return sum
 }
 
+/**
+ * How much of an under-levelled hero's CP the director counts on floor `f`: CP prices a
+ * hero's stats, but combat's mitigation is level-scaled (`combat.defenseKPerLevel`), so a
+ * hero far below the floor's mob level fights well under its CP — the 1★ capped at Lv10
+ * on F20, the New Arrival at Lv1. Beyond `levelLag.grace` levels under the mob level,
+ * each level counts `levelLag.perLevel` less, down to `levelLag.min`. 1 at or near level,
+ * and 1 past `levelLag.untilFloor` (the late climb keeps the plain-CP director).
+ */
+export function levelLagMult(level: number, f: number, worldMult = 1): number {
+  const L = CL.levelLag
+  if (f > L.untilFloor) return 1
+  const gap = mobLevel(f, worldMult) - level - L.grace
+  return gap <= 0 ? 1 : Math.max(L.min, 1 - L.perLevel * gap)
+}
+
+/**
+ * The strength the mercy director sizes floor `f` for: the same five heroes `rosterCp`
+ * reads (the strongest by unit CP), each counted at `levelLagMult` of its CP. A party of
+ * capped or freshly recruited heroes is read at what it can really do, so a roster that
+ * has bled (its carries dead, the bench promoted to the front) gets the relief the climb
+ * promises (spec S13, S20). Never above `rosterCp`.
+ */
+export function directorCp(state: GameState, f: number): number {
+  const wm = T.worldMult[state.worldGrade] ?? 1
+  const units: { cp: number; level: number }[] = []
+  for (const h of directorHeroes(state)) units.push({ cp: buildCombatUnit(h, 'front', SKILLS, state.inventory).cp, level: h.xp.level })
+  units.sort((a, b) => b.cp - a.cp)
+  let sum = 0
+  for (let i = 0; i < Math.min(TUNING.account.partySize, units.length); i++) sum += units[i]!.cp * levelLagMult(units[i]!.level, f, wm)
+  return sum
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Budgets
 // ─────────────────────────────────────────────────────────────────────────────
@@ -195,8 +229,8 @@ export function pathBudget(f: number, worldMult: number): number {
   return value
 }
 
-/** A kind's budget relative to Path (`kindMult[kind] / kindMult.path`): Elite ≈1.45×,
- *  Breather ≈0.6×, Boss 1×. */
+/** A kind's budget relative to Path (`kindMult[kind] / kindMult.path`): Elite 1.6×,
+ *  Breather 0.6×, Boss 1× (each anchor then × its `anchorFeel`). */
 export function kindRel(kind: FloorKind): number {
   const path = CL.kindMult.path ?? 1
   const mult = CL.kindMult[kind] ?? path
@@ -215,11 +249,20 @@ export function staticBudget(state: GameState, f: number, kind: FloorKind): numb
   const mult = CL.kindMult[kind] ?? 1
   if (!isFightKind(kind) || mult <= 0) return 0
   if (kind === 'tutorial' || f < CL.directorFromFloor) return floorPower(f, wm) * mult
-  if (kind === 'boss') return pathTarget(f, wm) * kindRel('boss') * T.anchorBudgetMult
+  if (kind === 'boss') return pathTarget(f, wm) * kindRel('boss') * T.anchorBudgetMult * anchorFeel(f)
   return pathBudget(f, wm) * kindRel(kind)
 }
 
-/** The director's mercy band for `kind`: budget ≤ rosterCp × mercyBand(kind). */
+/** The authored boss on floor `f`'s feel multiplier (`climb.anchorFeel[f]`, default 1):
+ *  authored anchors differ in how hard they hit for their CP (F5's Survive is soft,
+ *  Halgiraf on F20 is hard), so each Boss's budget — static curve and mercy cap alike — is
+ *  evened out by floor and every Boss reads as the sawtooth's peak. */
+export function anchorFeel(f: number): number {
+  return CL.anchorFeel[f] ?? 1
+}
+
+/** The director's mercy band for `kind`: budget ≤ directorCp × mercyBand(kind) (× the
+ *  anchor's `anchorFeel` on a Boss floor). */
 export function mercyBand(kind: FloorKind): number {
   return CL.mercyBand[kind] ?? 1
 }
@@ -230,8 +273,8 @@ export function mercyCap(state: GameState, f: number, kind: FloorKind): number |
   if (f < CL.directorFromFloor || kind === 'tutorial') return null
   const band = mercyBand(kind)
   if (band <= 0) return null
-  const cp = rosterCp(state)
-  return cp > 0 ? cp * band : null
+  const cp = directorCp(state, f)
+  return cp > 0 ? cp * band * (kind === 'boss' ? anchorFeel(f) : 1) : null
 }
 
 /** The budget a floor of `kind` is built to: the static curve × kind, capped by the

@@ -151,7 +151,9 @@ describe('the director reads the heroes the game would send (#3: tired heroes)',
       for (let i = 0; i < 5 && s.tower.event !== null; i++) s = reduce(s, { type: 'RESOLVE_EVENT', option: s.tower.event.options[0]! }, toWorldTime(real))
       s = reduce(s, { type: 'SET_PARTY', ...suggestParty(s) })
     }
-    while (s.tower.currentFloor < 20) {
+    // Bounded: a climb that stalls below F20 fails here instead of hanging the suite.
+    for (let guard = 0; s.tower.currentFloor < 20; guard++) {
+      expect(guard, `stalled on F${s.tower.currentFloor}`).toBeLessThan(200)
       step()
       s = attemptFloorWithResult(s).state
     }
