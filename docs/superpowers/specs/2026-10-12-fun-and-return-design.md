@@ -1,6 +1,6 @@
 # Pick Me Up! Infinite Gacha: making it fun, and making players come back
 
-> **Status:** In progress · **Date:** 2026-10-12 · Builds on the Living Lobby (2026-09-30) and the balance pass (2026-09-29). Answers the owner: "it is not fun, and when I quit nothing makes me wanna play it again" and "what about we change the art direction?"
+> **Status:** Built (see §6 "As built") · **Date:** 2026-10-12, built 2026-10-16 · Builds on the Living Lobby (2026-09-30) and the balance pass (2026-09-29). Answers the owner: "it is not fun, and when I quit nothing makes me wanna play it again" and "what about we change the art direction?"
 > **Inputs:** docs/research/fun-juice.md, fun-retention.md, fun-loop.md, fun-art.md, plus four internal codebase maps (engine, shell, presentation, conventions; not committed — their line refs are pinned to `63c30a4`), my playtest findings, and spot checks of `/home/user/pick-me-up` at `63c30a4`.
 > **Baseline:** `npm run typecheck` passes. `npm test` gives 40 files and 842 tests, all green.
 
@@ -1051,3 +1051,70 @@ Each module has an `index.ts` barrel. `store.ts` gets cases for the five new com
 - **A new music system** (boss and low-HP variants). Only the stings and hit layers change this round.
 - **Touching PvP, guilds, synthesis or equipment design.** They are gated later by S3 and otherwise left alone. Fewer systems in front of the player is part of the fix.
 - **Gaming the smoke tests.** Locked places stay real, usable panels in preview. Hiding them outright would need rewriting 13 smoke tests for little gain. That can be revisited once the unlock flow has been playtested.
+
+---
+
+## 6. As built (2026-10-16)
+
+All 28 changes shipped on `claude/amazing-shannon-682s6p`, built as planned: WP0 first, then WP1–WP8 in parallel worktrees, each followed by an independent review. After that came integration, a real-browser playtest, a five-lens adversarial review (21 confirmed findings, all fixed), a polish pass and a tension-tuning pass. `npm run typecheck`, `npm test` and `npm run build` are green: 129 files and 1,616 tests, up from 40 and 842.
+
+### What changed from the plan
+
+- **The scout fights the floor instead of comparing CP (S12).** The CP ratio could not be made honest: mitigation scales with the attacker's level, and CP underprices speed. Fresh Lv1 recruits lost a hero on 31 of 32 floors scouted Safe, and F41 (Versace) read Risky while killing three heroes every time.
+  - `scoutFloor` now runs 8 trial fights of the real attempt on its own hash-seeded streams, and never touches game RNG or state.
+  - The bands come from the trial outcomes: Safe means 8 of 8 won, nobody fell and nobody dropped below 25% HP; Fair means at least 6 of 8 won with no deaths.
+  - Trials are memoized by their exact battle inputs, so the lobby clock does not re-simulate.
+  - The card reports the trials themselves, e.g. "In 8 trial runs: won 7 · lost a hero in 1".
+- **The Decisive Moment (S16) offers only real choices, each with a stated cost.** "Focus the killer" saved nobody in 57 deadly fights, so it left the card; Focus stays on the dock. The card now offers:
+  - Protect: spends an order.
+  - Pull {name} back: a new `withdraw` order; the hero comes home shaken, −20 Sanity.
+  - Retreat: the floor is lost.
+  - Let fate decide: {name} falls.
+
+  Before Protect or Pull back is offered, a dry run (`BattleOrders.preview`) checks that it saves the hero. "Saved!" plays only if the hero is alive when the fight ends.
+- **The director (S13) has three additions:**
+  - A single deployability predicate, `isFightable`, used by the battle, the director, the scout, the dailies and the UI. Heroes mid-promotion used to be exploitable: the director left them out while they still fought.
+  - A level-aware roster figure through F25, which stops one boss death from spiralling.
+  - Per-boss `anchorFeel`, because one band could not make every authored boss a peak.
+- **The bosses rout after 2 deaths, not 3 (S19).** This means fewer permadeaths per lost boss fight.
+- **Tension was retuned once the honest scout showed the truth.** The planned mercy bands (all below 1) capped every floor under the roster's own strength: F1–F24 bosses were 100% Safe and the Decisive Moment almost never fired. Skull doors and bosses were retuned, and `src/sim/feel.test.ts` now guards the result for a naive player and a typical player. Details: `docs/superpowers/plans/2026-10-16-fun-tension-tuning.md`.
+- **Two smaller departures:**
+  - Sweep never applies to the tutorial floors, guardian floors or revenge fights.
+  - Summoning mid-Sortie is an explicit "Bank +X and summon ▸" button rather than a leave-confirm dialog.
+- **The playtest's fixes:**
+  - Pixelify Sans drew "fi"/"fl" as "A", so new players read "Take your Arst summon"; ligatures are now off.
+  - The Party board saves itself.
+  - The next decision on the results card is scrolled into view.
+  - The 31-day grey return really greys the lobby.
+  - Unlocks are named as they open, not saved up for one fanfare.
+
+### Success metrics: before → target → as built
+
+| Metric | Before | Target | As built |
+|---|---|---|---|
+| Meaningful decisions per floor from F3 | 0 | ≥ 1 | 2 Doors on every first clear. The Decisive Moment fires in 19–31% of early boss fights and about half of Skull fights. |
+| First pull has a 3★ that knows a skill | 39.5% have a 3★, 0% have the skill | 100% | 200 of 200 seeds |
+| Floor replay at default speed | 10–20 s (at 1×) | ≤ 15 s | about 6 s at 2×; Safe floors are swept in about 2.4 s |
+| Deaths on floors scouted Safe | ratings were cosmetic (fresh rosters: 31 of 32) | 0 | 0 in every probe (thousands of fights) |
+| Fair floors that cost a hero | n/a | ≤ 5% | about 1.4–2.9% |
+| Losses that are full wipes | 22 of 24 | ≤ 10% | about 0.3%; 88–96% of losses are routs with ≤ 2 dead |
+| Early bosses (F5, F10) as peaks | 0% at risk (all Safe) | a real peak | 30–50% of first tries put a hero at risk; Protect saves ≥ 75% |
+| First Decisive lesson (Isel's coaching) | F3, on a 1–3% scratch | on a real threat | F5 or F10, the first boss |
+| A welcome-back screen with ≥ 1 positive item after ≥ 8 h away | none | 100% | 100% |
+| Bot progress over 14 days (8 seeds, median) | casual F40, engaged F84.5 | about the same | casual F49.5, engaged F83, with fewer deaths (65 vs 74 and 146 vs 186) |
+
+### Where the evidence lives
+
+- **Each package:** `docs/superpowers/plans/2026-10-12-fun-wp{1..8}-notes.md`, with what was built, the deviations and a review section.
+- **The playtest:** `docs/superpowers/plans/2026-10-13-fun-playtest.md`, a real headless Chromium run on desktop, phone, French and a 10-hour / 31-day return.
+- **The tuning:** `docs/superpowers/plans/2026-10-16-fun-tension-tuning.md`.
+- **The research:** `docs/research/fun-{juice,retention,loop,art}.md`.
+
+### Still open
+
+- **F41 (Versace) is still the hardest early wall.** It is now honestly scouted Deadly. Making it fairer needs a tempo-aware CP or a lighter roster, which is a balance call.
+- **Act I Path floors (F3–F9) read Safe** for a player who never takes the Skull door. The early tension comes from the F5 and F10 bosses and the Skull offered on every floor.
+- **A few losses still cost 3 or more heroes.** A stricter rout rule turns about 10% of wins into retreats.
+- **French hero wording assumes the masculine** ("est vengé").
+- **Technical leftovers:** the build warns about a chunk over 500 kB, and `facilityPanels.tsx` and `legacy/MemorialPanel.tsx` import each other (only inside functions, so harmless for now).
+- **Phone layout:** the one-time "Back up your save?" nudge overlaps the goal tracker until it is dismissed.
