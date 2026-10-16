@@ -66,6 +66,7 @@ import {
   boonOffer,
   sortieBoons,
   sortieAfterFloor,
+  isFightable,
 } from '../climb'
 import { revenantName } from '../legacy/records'
 import { consumeRested } from '../return/rested' // the leaf, not the barrel: return/away → daily → tower would cycle
@@ -168,10 +169,25 @@ export function fillerPoolForFloor(floor: number): EnemyTemplate[] {
   return actForFloor(floor).pool.map((id) => ENEMY_TEMPLATES[id]!)
 }
 
-/** Extra enemy levels on the looped F36–40 floors: each scar hardens them. */
+/** Extra enemy levels on the looped F36–40 floors (with `loopScarBudgetMult`, each scar
+ *  hardens them). */
 export function loopScarLevels(floor: number, loop: LoopState | null): number {
   if (loop === null || floor < T.loop.start || floor > T.loop.gate) return 0
   return loop.scars * T.loop.scarLevels
+}
+
+/** The looped F36–40 floors' budget lift: ×(1 + scarBudgetPct) per scar (1 elsewhere).
+ *  Applied on top of `floorBudget` (after the mercy cap), so neither the director nor the
+ *  anchor's fit to its budget can cancel a scar — the F40 gate really hardens. */
+export function loopScarBudgetMult(floor: number, loop: LoopState | null): number {
+  if (loop === null || floor < T.loop.start || floor > T.loop.gate) return 1
+  return (1 + T.loop.scarBudgetPct) ** loop.scars
+}
+
+/** The budget floor `floor` is built to when fought as `kind`: the climb's
+ *  `floorBudget` (static curve, mercy-capped) × the loop scars' lift. */
+export function encounterBudget(state: GameState, floor: number, kind: FloorKind): number {
+  return floorBudget(state, floor, kind) * loopScarBudgetMult(floor, state.tower.loop)
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -426,10 +442,10 @@ function fillWave(
  *
  * Authored anchors (every 5th floor, F41/F42) keep their rosters, scaled to the floor's
  * Boss budget; everything else is a power-budget-filled mission against the floor's biome
- * pool, filled to `floorBudget(state, floor, kind)` — the kind the floor is fought as (the
- * chosen Door), capped by the mercy director (spec 2026-10-12 S13). A Nemesis waiting on
- * this (non-anchor) floor joins the wave as a named revenant and takes its share of the
- * budget (S22). The encounter carries its kind and the rout threshold (S19). The optional
+ * pool, filled to `encounterBudget(state, floor, kind)` — the kind the floor is fought as
+ * (the chosen Door), capped by the mercy director (spec 2026-10-12 S13), then lifted by the
+ * F36–40 loop's scars. A Nemesis waiting on this (non-anchor) floor joins the wave as a
+ * named revenant and takes its share of the budget (S22). The encounter carries its kind and the rout threshold (S19). The optional
  * focus directive is attached so combat can honor it.
  */
 export function buildEncounter(state: GameState, floor: number, focus?: FocusDirective): Encounter {
@@ -439,7 +455,7 @@ export function buildEncounter(state: GameState, floor: number, focus?: FocusDir
   const rng = rngFor(seed, 'floor', floor)
   const scar = loopScarLevels(floor, state.tower.loop)
   const kind = kindForFloor(state, floor)
-  const budget = floorBudget(state, floor, kind)
+  const budget = encounterBudget(state, floor, kind)
 
   const anchor = ANCHORS[floor]
   let built: { waves: EnemyWave[]; mission: Mission; allies?: CombatUnit[] }
@@ -597,9 +613,10 @@ export function playFloor(
     const heroId = slots[s]
     if (heroId === null || heroId === undefined) continue
     const hero = state.heroes[heroId]
-    // Skip empty slots, the dead, and the broken-down (Sanity 0 = cannot deploy).
-    // A hero in a Training Center drill is in the yard, one in the Ruins is away.
-    if (hero === undefined || !hero.alive || hero.sanity <= 0 || hero.training !== null || hero.expedition !== null || hero.captiveOf) continue
+    // Skip empty slots and anyone the one deployability predicate rules out (the dead, the
+    // broken-down at Sanity 0, heroes training, away, captive or mid-promotion) — the same
+    // predicate the mercy director reads, so the floor is sized for who actually fights.
+    if (hero === undefined || !isFightable(hero)) continue
     // REBELLION (Layer 3 §C1): a Wary, broken hero may refuse the order. The draw is
     // gated on a positive chance, so everyone else's replays are untouched.
     const rebel = rebellionChance(hero)
@@ -653,7 +670,7 @@ export function playFloor(
   // Sanity drain hits only DEPLOYED SURVIVORS (heroes left in the lobby don't fight). It
   // reads the floor's real budget (kind and mercy included); Calm Mind softens it.
   const partyCp = heroUnits.reduce((sum, u) => sum + u.cp, 0)
-  const baseDrain = sanityDrain(floorBudget(state, floor, kind), partyCp, cleared, fallenSet.size > 0)
+  const baseDrain = sanityDrain(encounterBudget(state, floor, kind), partyCp, cleared, fallenSet.size > 0)
   const drain = Math.round(baseDrain * boonDrainMult(boons))
 
   const highestAfter = cleared ? Math.max(state.tower.highestCleared, floor) : state.tower.highestCleared

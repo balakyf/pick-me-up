@@ -56,6 +56,24 @@ describe('DoorPicker (S13)', () => {
     expect(onChoose).toHaveBeenCalledWith(1)
   })
 
+  it('a Skull door never promises a Boon the full Sortie cannot take (review #21)', () => {
+    const doors = [
+      { kind: 'path' as const, reward: 'gold' as const },
+      // Rolled while the Sortie still had room: the card must read the Sortie live.
+      { kind: 'elite' as const, reward: 'boon' as const },
+    ]
+    const s0 = withDoors(doors, [DOORS_GUIDE_STEP])
+    const full: GameState = { ...s0, tower: { ...s0.tower, sortie: { startFloor: 3, floors: 4, purse: 0, boons: ['calmMind', 'ironVow', 'volley', 'warChest'] } } }
+    act(() => root.render(<DoorPicker state={full} onChoose={() => {}} />))
+    expect(text()).not.toMatch(/Boon\b(?! ?s full)/)
+    expect(text()).toContain('🪨 Stones')
+    expect(text()).toContain('(Boons full)')
+    const room: GameState = { ...full, tower: { ...full.tower, sortie: { ...full.tower.sortie!, boons: ['calmMind'] } } }
+    act(() => root.render(<DoorPicker state={room} onChoose={() => {}} />))
+    expect(text()).toContain('✦ Boon')
+    expect(text()).toContain('and a Boon.')
+  })
+
   it('has Isel explain the Skull door once, until acknowledged', () => {
     const seen = vi.fn()
     const doors = [

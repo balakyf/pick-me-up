@@ -10,7 +10,7 @@ import {
   isWallFloor,
 } from './tower'
 import { createAccount } from '../account'
-import { floorBudget, kindRel, pathTarget } from '../climb'
+import { floorBudget, isMercyCapped, kindRel, pathTarget } from '../climb'
 import { resolveEvent } from '../events'
 import { ACTS, ANCHORS, ENEMY_TEMPLATES, ALLY_TEMPLATES, HIDDEN_OBJECTIVES, actForFloor } from '../content'
 import { TUNING } from '../tuning'
@@ -189,6 +189,45 @@ describe('the F36–40 loop', () => {
     expect(result.cleared).toBe(false)
     expect(result.loopRollback).toBe(true)
     expect(state.tower.currentFloor).toBe(31)
+  })
+
+  it('every scar hardens F36–40 — the mercy cap and the anchor fit cannot take it back', () => {
+    // Review finding #5: the anchor shrank to its (scar-blind, mercy-capped) budget, so the
+    // scars' extra levels were fitted away and the F40 gate stayed flat (5289/5354/5360/5195).
+    const loop = (scars: number) => ({ loop: { attemptsLeft: 5, scars } })
+    const cp = (s: GameState, f: number) => buildEncounter(s, f).waves.reduce((n, w) => n + w.units.reduce((m, u) => m + u.cp, 0), 0)
+    const lv = (level: number) => ({ xp: { level, xpIntoLevel: 0, heldXp: 0, atCap: false } })
+    const god: Partial<OwnedHero> = { ...lv(150), star: 7, baseAttrs: { str: 400, agi: 400, vit: 400, int: 400, wil: 400 } }
+    const rosters = {
+      capped: (scars: number) => onFloor(40, lv(40), 11, loop(scars), lv(40)),
+      uncapped: (scars: number) => onFloor(40, god, 11, loop(scars), god),
+    }
+    expect(isMercyCapped(rosters.capped(0), 40, 'boss')).toBe(true)
+    expect(isMercyCapped(rosters.uncapped(0), 40, 'boss')).toBe(false)
+    for (const [name, at] of Object.entries(rosters)) {
+      for (const f of [36, 38, 40]) {
+        const onF = (scars: number) => ({ ...at(scars), tower: { ...at(scars).tower, currentFloor: f, highestCleared: f - 1 } })
+        const cps = [0, 1, 3, 6].map((s) => cp(onF(s), f))
+        for (let i = 1; i < cps.length; i++) expect(cps[i], `${name} F${f} scars: ${cps.join('/')}`).toBeGreaterThan(cps[i - 1]!)
+        // Each scar lifts the floor's budget by scarBudgetPct, on top of the mercy cap.
+        expect(cps[3]! / cps[0]!, `${name} F${f}`).toBeGreaterThan((1 + T.loop.scarBudgetPct) ** 6 * 0.85)
+      }
+    }
+    // Outside the loop nothing moves.
+    expect(cp(onFloor(41, lv(40), 11, loop(3), lv(40)), 41)).toBe(cp(onFloor(41, lv(40), 11, loop(0), lv(40)), 41))
+  })
+
+  it('a party that clears an unscarred F40 gate loses it once the loop is deeply scarred', () => {
+    const lv = { xp: { level: 30, xpIntoLevel: 0, heldXp: 0, atCap: false } }
+    const wins = (scars: number) => {
+      let n = 0
+      for (let seed = 1; seed <= 10; seed++) if (playFloor(onFloor(40, lv, seed, { loop: { attemptsLeft: 5, scars } }, lv)).result.cleared) n++
+      return n
+    }
+    const fresh = wins(0)
+    expect(fresh).toBeGreaterThanOrEqual(8)
+    // Before the fix the scars were fitted away: 10/10 at every scar count.
+    expect(wins(6)).toBeLessThanOrEqual(fresh - 5)
   })
 })
 

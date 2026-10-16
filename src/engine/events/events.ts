@@ -22,7 +22,7 @@ import { clampSanity } from '../kitchen'
 import { summon } from '../gacha'
 import { rngFor, hash, chance, pick, type Rng } from '../rng'
 import { TOURNAMENT_FORMATS } from '../tower'
-import { BOONS, boonOffer, isBoon, newSortie } from '../climb'
+import { BOONS, boonOffer, isBoon, isFightable, newSortie } from '../climb'
 
 const E = TUNING.events
 const TT = E.tournament
@@ -86,7 +86,7 @@ function deployable(state: GameState): { hero: OwnedHero; line: CombatUnit['line
   const out: { hero: OwnedHero; line: CombatUnit['line'] }[] = []
   state.party.slots.forEach((id, i) => {
     const h = id ? state.heroes[id] : undefined
-    if (h && h.alive && h.sanity > 0 && h.training === null && !h.expedition && !h.captiveOf) out.push({ hero: h, line: state.party.lines[i] ?? 'front' })
+    if (h && isFightable(h)) out.push({ hero: h, line: state.party.lines[i] ?? 'front' })
   })
   return out
 }

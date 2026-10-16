@@ -59,6 +59,14 @@ export function hasBoon(state: GameState, id: BoonId): boolean {
   return sortieBoons(state).includes(id)
 }
 
+/** Can a clear still earn a Boon? On campus, yes (the attempt starts a new, empty
+ *  Sortie); in a Sortie, only while it holds fewer than `boons.max`. The Skull Door's
+ *  promise reads this (`doorReward`), so it never advertises a Boon `boonOffer` won't give. */
+export function canEarnBoon(state: GameState): boolean {
+  const sortie = state.tower.sortie
+  return sortie === null || sortie.boons.length < CL.boons.max
+}
+
 /**
  * The Boon ids offered after clearing `floor`: `boons.offer` distinct Boons the Sortie
  * does not hold yet, drawn on the floor's own stream. None on campus (no Sortie) or once

@@ -181,8 +181,11 @@ export const TUNING = {
     f45DeliveryDistance: 60,
     f65SurviveTicks: 1000,
     f95SurviveTicks: 1200,
-    /** The looped mission (canon F36–40, 5 attempts; failing F40 drops the room to F31). */
-    loop: { start: 36, gate: 40, fallbackTo: 31, attempts: 5, scarLevels: 4 },
+    /** The looped mission (canon F36–40, 5 attempts; failing F40 drops the room to F31).
+     *  Each scar (5 failed gates) adds `scarLevels` enemy levels and lifts F36–40's budget
+     *  by `scarBudgetPct`, applied AFTER the mercy director's cap and the anchor fit, so
+     *  the fit cannot take the scar back off. */
+    loop: { start: 36, gate: 40, fallbackTo: 31, attempts: 5, scarLevels: 4, scarBudgetPct: 0.1 },
     /** F15 Escort anchor: canon 15-minute assassination window → tick budget. */
     f15SurviveTicks: 900,
     /** Ruins filler (F11–19): chance a floor rolls a Survival mission instead of Subjugation. */
@@ -834,9 +837,14 @@ export const TUNING = {
      *  monotonicity near F69, and it would also move F1-F2 and the dailies (WP3 notes). */
     earlyLift: 2.42,
     /** The director is a mercy cap ONLY: budget = min(staticBudget, rosterCp × mercyBand[kind]),
-     *  rosterCp = the top 5 fightable heroes' unit CP. Never raises difficulty. A median
-     *  roster meets a Path ratio of ~1.39 (Fair); Skull and Boss floors stay a risk. */
+     *  rosterCp = the top 5 unit CP among rested heroes and the party's fightable ones.
+     *  Never raises difficulty. A median roster meets a Path ratio of ~1.39 (Fair); Skull
+     *  and Boss floors stay a risk. */
     mercyBand: { tutorial: 1.0, breather: 0.5, path: 0.72, elite: 0.9, rest: 0, cache: 0, boss: 0.85 } as Record<string, number>,
+    /** Rested: Sanity at or above this. `suggestParty` sends only rested heroes, and the
+     *  director reads rested heroes plus whoever is actually in the party, so it never
+     *  sizes a floor for tired heroes the game would leave on the bench (climb/kinds.ts). */
+    restedSanity: 40,
     /** Max budget step between consecutive Path floors (fraction; +12%). */
     maxStepPct: 0.12,
     /** The director and Doors start on this floor (F1-F2 are tutorial floors, unchanged). */

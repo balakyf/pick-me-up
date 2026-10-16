@@ -109,3 +109,42 @@ describe('the scout is honest for rebuilt rosters (Lv1, mixed, under-levelled; F
     expect(lied.map(show)).toEqual([])
   })
 })
+
+describe('the scout is honest on mercy-capped Wailing Wall floors (review #1)', () => {
+  // Before the trial-run scout, a capped Path floor read partyCp / (~0.72 × rosterCp) ≈ 1.39
+  // (Fair) at any depth: a 4★ Lv60 party was scouted Safe on F88 and lost all five, a
+  // 7★ Lv150 party Fair on F83/F88 and lost a hero or two every time.
+  const CLASSES = ['warrior', 'spearman', 'mage', 'thief', 'archer'] as const
+  const capped = (seed: number, star: number, level: number, floor: number): GameState => {
+    const s0 = createAccount(seed)
+    const h0 = Object.values(s0.heroes)[0]!
+    const heroes: Record<string, OwnedHero> = {}
+    const slots = CLASSES.map((heroClass, i) => {
+      const id = `${h0.id}_${i}` as OwnedHero['id']
+      heroes[id] = { ...h0, id, star: star as OwnedHero['star'], heroClass, xp: { ...h0.xp, level } }
+      return id
+    })
+    return { ...s0, heroes, party: { ...s0.party, slots }, tower: { ...s0.tower, currentFloor: floor, highestCleared: floor - 1, kind: floorKindBase(floor) } }
+  }
+
+  it('a capped F83/F88 scouted Safe or Fair never costs a hero', () => {
+    const lied: string[] = []
+    let n = 0
+    for (const [star, level] of [[7, 150], [4, 60], [2, 40]] as const) {
+      for (const floor of [83, 88]) {
+        for (let seed = 1; seed <= 4; seed++) {
+          const s = capped(seed, star, level, floor)
+          const report = scoutFloor(s)!
+          expect(report.mercyCapped).toBe(true)
+          const r = attemptFloorWithResult(s).result
+          n++
+          if ((report.threat === 'safe' || report.threat === 'fair') && r.fallenHeroIds.length > 0) {
+            lied.push(`${star}★ Lv${level} F${floor} #${seed}: ${report.threat}, ${r.fallenHeroIds.length} fell`)
+          }
+        }
+      }
+    }
+    expect(n).toBe(24)
+    expect(lied).toEqual([])
+  })
+})

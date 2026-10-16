@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { GameState, FloorResult, CombatLog, BattleOrder, BoonId, HeroId, Sortie } from '../engine/types'
-import { scoutFloor, suggestParty } from '../engine/scout'
+import { canFight, scoutFloor, suggestParty } from '../engine/scout'
 import { nemesesOnFloor, nemesisUnitId, ordersAllowed } from '../engine/tower'
 import type { Store } from '../engine/store'
 import { attemptFloorWithResult, resolveEventWithResult } from '../engine/store'
@@ -347,9 +347,10 @@ export function TowerScreen({
   // VICTORY → results after 1.2 s (S11) is BattleScene's own: it moves a clean tower win
   // on by itself and leaves a costly one for the Master. Nothing here adds a second one.
 
+  // The one deployability predicate playFloor and the mercy director read.
   const deployable = state.party.slots.some((id) => {
     const h = id ? state.heroes[id] : undefined
-    return !!h && h.alive && h.sanity > 0 && h.training === null
+    return !!h && canFight(h)
   })
   const summit = state.tower.highestCleared >= MAX_FLOOR
   const event = state.tower.event

@@ -139,6 +139,9 @@ describe('nextGoals: short, medium and long for every stage', () => {
     expect(nextGoals(doors, 0).short.text).toBe('Floor 6: choose your door')
     // A chosen Elite door shows its reward.
     expect(nextGoals({ ...s, tower: { ...s.tower, kind: 'elite' } }, 0).short.detail).toBe('Reward: double ◆ gold, stones and a boon')
+    // With the Sortie's Boons full the Skull earns none, so the goal promises none (#21).
+    const sortie = { startFloor: 3, floors: 2, purse: 0, boons: ['calmMind', 'ironVow', 'volley', 'warChest'] }
+    expect(nextGoals({ ...s, tower: { ...s.tower, kind: 'elite', sortie } }, 0).short.detail).toBe('Reward: double ◆ gold and stones (boons full)')
   })
 
   it('no fighters: set the party; no heroes at all: summon', () => {

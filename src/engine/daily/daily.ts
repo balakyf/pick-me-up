@@ -17,6 +17,7 @@
 
 import { TUNING } from '../tuning'
 import { buildFillerEncounter } from '../tower'
+import { isFightable } from '../climb/kinds'
 import { buildCombatUnit } from '../unit'
 import { runBattle } from '../combat'
 import { SKILLS } from '../content'
@@ -188,8 +189,9 @@ export function attemptDaily(state: GameState, nowWorld: number): { state: GameS
     const heroId = slots[s]
     if (heroId === null || heroId === undefined) continue
     const hero = state.heroes[heroId]
-    // A hero in a Training Center drill is in the yard, not the party.
-    if (hero === undefined || !hero.alive || hero.sanity <= 0 || hero.training !== null || hero.expedition || hero.captiveOf) continue
+    // The one deployability predicate (climb isFightable): the dead, the broken-down, and
+    // heroes training, away, captive or mid-promotion stay out.
+    if (hero === undefined || !isFightable(hero)) continue
     heroUnits.push(buildCombatUnit(hero, lines[s] ?? 'front', SKILLS, state.inventory))
     deployedIds.push(heroId)
   }

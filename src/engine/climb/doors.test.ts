@@ -1,13 +1,14 @@
 /** Doors: player-chosen risk for the next floor (spec 2026-10-12 S13). */
 import { describe, it, expect } from 'vitest'
-import { rollDoors, chooseDoor, chooseDoorRefusal, doorsOfferedFor, cacheGold, DOOR_REWARD } from './doors'
+import { rollDoors, chooseDoor, chooseDoorRefusal, doorsOfferedFor, doorReward, cacheGold, DOOR_REWARD } from './doors'
+import { boonOffer, canEarnBoon } from './boons'
 import { floorKindBase } from './kinds'
 import { playFloor } from '../tower'
 import { createAccount } from '../account'
 import { reduce } from '../store'
 import { suggestParty } from '../scout'
 import { TUNING } from '../tuning'
-import type { Door, GameState, HeroId, OwnedHero } from '../types'
+import type { BoonId, Door, GameState, HeroId, OwnedHero } from '../types'
 
 const CL = TUNING.climb
 
@@ -60,6 +61,42 @@ describe('rollDoors', () => {
         expect(new Set(d.map((x) => x.kind)).size).toBe(d.length)
         for (const door of d) expect(door.reward).toBe(DOOR_REWARD[door.kind])
       }
+    }
+  })
+
+  it('the Skull promises a Boon only while the Sortie can still take one (review #21)', () => {
+    const full = ['ironVow', 'warChest', 'calmMind', 'volley'] as BoonId[]
+    expect(full).toHaveLength(CL.boons.max)
+    const withBoons = (boons: BoonId[] | null): GameState => ({
+      ...s,
+      tower: { ...s.tower, sortie: boons === null ? null : { startFloor: 3, floors: 1, purse: 0, boons } },
+    })
+    // On campus a new Sortie starts empty, so the Skull's Boon is real; so it is with room left.
+    for (const st of [withBoons(null), withBoons([]), withBoons(full.slice(0, 3))]) {
+      expect(canEarnBoon(st)).toBe(true)
+      expect(doorReward(st, 'elite')).toBe('boon')
+    }
+    // A full Sortie: no Boon can be offered, so the Door must not advertise one.
+    const capped = withBoons(full)
+    expect(canEarnBoon(capped)).toBe(false)
+    expect(boonOffer(capped, 7)).toEqual([])
+    expect(doorReward(capped, 'elite')).toBe('stones')
+    for (const f of [4, 7, 8, 9]) {
+      for (const d of rollDoors(capped, f)!) expect(d.reward, `F${f} ${d.kind}`).not.toBe('boon')
+    }
+    // Other Doors are untouched.
+    for (const k of ['path', 'breather', 'rest', 'cache'] as const) expect(doorReward(capped, k)).toBe(DOOR_REWARD[k])
+  })
+
+  it('a Skull cleared with a full Sortie opens no Boon, as its Door said', () => {
+    const full = ['ironVow', 'warChest', 'calmMind', 'volley'] as BoonId[]
+    for (const seed of [1, 2, 3]) {
+      const g = gods(seed)
+      const st: GameState = { ...g, tower: { ...g.tower, currentFloor: 4, highestCleared: 3, kind: 'elite', doors: null, event: null, sortie: { startFloor: 3, floors: 1, purse: 0, boons: full } } }
+      const r = playFloor(st).result
+      expect(r.cleared).toBe(true)
+      expect(r.event).toBeNull()
+      expect(doorReward(st, 'elite')).not.toBe('boon')
     }
   })
 

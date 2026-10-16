@@ -26,7 +26,7 @@ import { revenantName } from '../legacy/records'
 import { runBattle, ROUT_NOTE } from '../combat'
 import { rebellionChance } from '../favor'
 import { chance, hash, rngFor } from '../rng/rng'
-import { applyBoonsToUnits, boonBattleMods, climbExtraPct, isMercyCapped, kindForFloor, lastStandPct, sortieBoons } from '../climb'
+import { applyBoonsToUnits, boonBattleMods, climbExtraPct, isFightable, isMercyCapped, kindForFloor, lastStandPct, sortieBoons } from '../climb'
 import type { CombatUnit, Encounter, Element, EnemyFamily, FloorKind, GameState, HeroId, KeywordTag, Line, OwnedHero, Seed, SkillEffect } from '../types'
 
 export type Threat = 'safe' | 'fair' | 'risky' | 'deadly'
@@ -132,9 +132,9 @@ export function heroCp(h: OwnedHero): number {
   return combatPowerForHero(h, h.xp.level, skillCp(h.skills) + engravingCp(h.engraving))
 }
 
-export function canFight(h: OwnedHero): boolean {
-  return h.alive && h.sanity > 0 && h.training === null && h.expedition === null && !h.captiveOf && h.promotion === null
-}
+/** Can this hero be sent to fight? The one deployability predicate (`isFightable`), which
+ *  playFloor and the mercy director read too. */
+export const canFight: (h: OwnedHero) => boolean = isFightable
 
 /** What the scout's trial runs saw (spec 2026-10-12 S12). */
 export interface ScoutTrials {
@@ -494,11 +494,12 @@ function bulk(h: OwnedHero): number {
 
 /**
  * The party a careful Master would send: the strongest heroes fit to fight (rested — at
- * least `minSanity`), counter-picked against the floor (mages against the physically
+ * least `minSanity`, by default `climb.restedSanity`, the line the mercy director reads:
+ * a tired hero this leaves on the bench is not counted against the floor), counter-picked against the floor (mages against the physically
  * immune, blades against the magic-immune, element advantage as a tiebreak), sturdiest
  * in front and the frail at the back.
  */
-export function suggestParty(state: GameState, minSanity = 40): { slots: (HeroId | null)[]; lines: Line[] } {
+export function suggestParty(state: GameState, minSanity: number = TUNING.climb.restedSanity): { slots: (HeroId | null)[]; lines: Line[] } {
   const size = TUNING.account.partySize
   const report = scoutFloor(state, [])
   const elems = report ? report.enemies.flatMap((e) => Array.from({ length: e.count }, () => e.element)) : []

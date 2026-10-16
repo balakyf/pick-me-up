@@ -19,6 +19,7 @@ import { clampSanity } from '../kitchen'
 import { rngFor, chance } from '../rng'
 import type { Door, DoorReward, FloorKind, GameState, HeroId, OwnedHero, TowerState } from '../types'
 import { floorKindBase, isAnchorFloor, isFightKind } from './kinds'
+import { canEarnBoon } from './boons'
 
 const CL = TUNING.climb
 const T = TUNING.tower
@@ -66,8 +67,19 @@ export function doorsOfferedFor(floor: number): boolean {
   return true
 }
 
-function door(kind: FloorKind): Door {
-  return { kind, reward: DOOR_REWARD[kind] }
+/**
+ * The reward a Door of `kind` really pays in this state: `DOOR_REWARD`, except that the
+ * Skull promises a Boon only while one can be earned (`canEarnBoon`); with the Sortie's
+ * Boons full it shows its Promotion Stone instead. The Sortie can change after the Doors
+ * are rolled (a Boon picked, a return to campus), so the Door card reads this live.
+ */
+export function doorReward(state: GameState, kind: FloorKind): DoorReward {
+  if (kind === 'elite' && !canEarnBoon(state)) return 'stones'
+  return DOOR_REWARD[kind]
+}
+
+function door(state: GameState, kind: FloorKind): Door {
+  return { kind, reward: doorReward(state, kind) }
 }
 
 /**
@@ -89,7 +101,7 @@ export function rollDoors(state: GameState, nextFloor: number): Door[] | null {
   else if (cache.value) second = 'cache'
   const kinds: FloorKind[] = [first, second]
   for (const extra of ['elite', 'cache', 'rest'] as FloorKind[]) if (!kinds.includes(extra)) kinds.push(extra)
-  return kinds.slice(0, Math.max(1, D.offered)).map(door)
+  return kinds.slice(0, Math.max(1, D.offered)).map((k) => door(state, k))
 }
 
 /**

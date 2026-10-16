@@ -84,9 +84,21 @@ export function kindForFloor(state: GameState, f: number): FloorKind {
 // The roster the director reads
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** Can this hero be deployed right now (alive, not broken, not away)? */
+/**
+ * THE deployability predicate: can this hero be sent into a battle right now? Alive, not
+ * broken (Sanity 0), not training, not away on an expedition, not held captive and not
+ * mid-promotion. playFloor's deploy filter, the mercy director (`rosterCp`), the scout
+ * (`canFight`), `suggestParty`, the tournament and the UI's "deployable" checks all read
+ * this one predicate, so the director and the battle always see the same heroes.
+ */
 export function isFightable(h: OwnedHero): boolean {
   return h.alive && h.sanity > 0 && h.training === null && h.expedition === null && !h.captiveOf && h.promotion === null
+}
+
+/** Fightable and rested (Sanity at or above `climb.restedSanity`): a hero `suggestParty`
+ *  sends. A tired hero can still fight, but the game will not recommend it. */
+export function isRested(h: OwnedHero): boolean {
+  return isFightable(h) && h.sanity >= CL.restedSanity
 }
 
 /** Living, deployable heroes on the roster. */
@@ -97,16 +109,29 @@ export function fightableCount(state: GameState): number {
 }
 
 /**
- * The director's read of the roster: the summed unit CP of the top `partySize` fightable
- * heroes (as `buildCombatUnit` builds them, so Sanity, favor, gear, passives and echoes
- * count). Temporary aids (Last Stand, Boons) are left out, so the director never cancels
- * them. 0 for a roster with nobody fit to fight.
+ * The heroes the director reads: every RESTED hero (whom Suggest would send) plus every
+ * fightable hero actually in the party (a tired hero sent to fight does fight, so it
+ * counts). A tired hero left on the bench is not counted, so the director never sizes a
+ * floor for heroes the game itself will not send; and since rested heroes always count
+ * and the party only ever adds, fielding a weak party (or tiring the carries and sending
+ * them anyway) never lowers a floor.
+ */
+export function directorHeroes(state: GameState): OwnedHero[] {
+  const sent = new Set<string>()
+  for (const id of state.party.slots) if (id) sent.add(id)
+  return Object.values(state.heroes).filter((h) => isRested(h) || (sent.has(h.id) && isFightable(h)))
+}
+
+/**
+ * The director's read of the roster: the summed unit CP of the top `partySize` heroes it
+ * reads (`directorHeroes`: rested, or fightable and in the party), as `buildCombatUnit`
+ * builds them, so Sanity, favor, gear, passives and echoes count. Temporary aids (Last
+ * Stand, Boons) are left out, so the director never cancels them. 0 for a roster with
+ * nobody fit to fight.
  */
 export function rosterCp(state: GameState): number {
   const cps: number[] = []
-  for (const h of Object.values(state.heroes)) {
-    if (isFightable(h)) cps.push(buildCombatUnit(h, 'front', SKILLS, state.inventory).cp)
-  }
+  for (const h of directorHeroes(state)) cps.push(buildCombatUnit(h, 'front', SKILLS, state.inventory).cp)
   cps.sort((a, b) => b - a)
   let sum = 0
   for (let i = 0; i < Math.min(TUNING.account.partySize, cps.length); i++) sum += cps[i]!

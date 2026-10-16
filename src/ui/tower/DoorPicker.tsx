@@ -9,6 +9,7 @@
 import { useMemo } from 'react'
 import type { Door, GameState } from '../../engine/types'
 import { scoutFloor, type ScoutReport } from '../../engine/scout'
+import { canEarnBoon, doorReward } from '../../engine/climb'
 import { t } from '../i18n/i18n'
 import { enemyName } from '../legacy/legacyText'
 import { iselCoach } from '../world/lines'
@@ -72,16 +73,18 @@ export function DoorPicker({
       <div className="door-row">
         {doors.map((d, i) => {
           const p = previews[i]
+          // Read live: the Sortie may have filled its Boons since the Doors were rolled.
+          const reward = doorReward(state, d.kind)
           return (
             <button key={`${i}|${d.kind}`} className={`door-card door-${d.kind}`} onClick={() => onChoose(i)}>
               <span className="door-arch" aria-hidden="true">
                 {KIND_ICON[d.kind]}
               </span>
               <span className="door-title">{t(DOOR_TITLE[d.kind])}</span>
-              <span className="door-reward" title={t(REWARD_LABEL[d.reward])}>
-                {REWARD_ICON[d.reward]} {t(REWARD_LABEL[d.reward])}
+              <span className="door-reward" title={t(REWARD_LABEL[reward])}>
+                {REWARD_ICON[reward]} {t(REWARD_LABEL[reward])}
               </span>
-              <span className="door-blurb">{doorBlurb(d, floor, worldMultOf(state))}</span>
+              <span className="door-blurb">{doorBlurb(d, floor, worldMultOf(state), canEarnBoon(state))}</span>
               {p ? (
                 <span className="door-scout">
                   <span style={{ color: THREAT_COLOR[p.threat] }}>{t(THREAT_LABEL[p.threat])}</span>

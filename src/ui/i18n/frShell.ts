@@ -84,6 +84,7 @@ export const FR_SHELL: Record<string, string> = {
   'The top of the tower': 'Le sommet de la tour',
   'Reward: a boss, then a bonus room': 'Récompense : un boss, puis une salle bonus',
   'Reward: double ◆ gold, stones and a boon': 'Récompense : ◆ or doublé, pierres et une faveur',
+  'Reward: double ◆ gold and stones (boons full)': 'Récompense : ◆ or doublé et pierres (faveurs au complet)',
   'Reward: ◆ gold and Master XP': 'Récompense : ◆ or et XP de Maître',
   'Reward: ◆ gold': 'Récompense : ◆ or',
   'A rest: the party recovers Sanity': 'Une halte : le groupe récupère sa santé mentale',

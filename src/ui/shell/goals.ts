@@ -17,7 +17,7 @@ import type { GameState, HeroClass, Element, FacilityId, OwnedHero, FloorKind } 
 import { TUNING } from '../../engine/tuning'
 import { scoutFloor, canFight, type Threat } from '../../engine/scout'
 import { actForFloor } from '../../engine/content/acts'
-import { floorKindBase } from '../../engine/climb'
+import { canEarnBoon, floorKindBase } from '../../engine/climb'
 import { canPromote } from '../../engine/promotion'
 import { tutorialPullAvailable } from '../../engine/gacha'
 import { JOBS, JOB_FACILITY, jobFeeling, jobHolders, jobOpen, jobSeats } from '../../engine/life'
@@ -120,7 +120,8 @@ function rewardText(state: GameState, f: number, kind: FloorKind): string {
       r = firstClear ? t('Reward: a boss, then a bonus room') : t('Reward: ◆ gold')
       break
     case 'elite':
-      r = t('Reward: double ◆ gold, stones and a boon')
+      // A full Sortie earns no Boon from the Skull: don't promise one.
+      r = canEarnBoon(state) ? t('Reward: double ◆ gold, stones and a boon') : t('Reward: double ◆ gold and stones (boons full)')
       break
     case 'rest':
       r = t('A rest: the party recovers Sanity')

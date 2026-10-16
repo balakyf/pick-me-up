@@ -126,6 +126,11 @@ describe('attemptDaily', () => {
     expect(() => attemptDaily(dailyState({ highestCleared: 0 }), inDay(0))).toThrow(/lock/i)
   })
 
+  it('a hero mid-promotion sits out, as in the tower (one deployability predicate)', () => {
+    const promoting = { ...strongHero(), promotion: { completesAtWorld: 9e15 } }
+    expect(() => attemptDaily(dailyState({ hero: promoting }), inDay(0))).toThrow(/no deployable heroes/)
+  })
+
   it('grants the weekday reward and increments attemptsUsed on a win', () => {
     const before = dailyState({ highestCleared: 1 }) // floor-1 daily → crusher wins
     const { state: after, result } = attemptDaily(before, inDay(0)) // day 0 = Gold Vault

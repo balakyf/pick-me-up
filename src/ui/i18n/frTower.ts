@@ -17,6 +17,8 @@ export const FR_TOWER: Record<string, string> = {
   'Choose the next door': 'Choisissez la prochaine porte',
   'Hits much harder. ×{m} gold, +{s} Promotion Stone and a Boon.':
     'Frappe bien plus fort. Or ×{m}, +{s} Pierre de promotion et une Faveur.',
+  'Hits much harder. ×{m} gold, +{s} Promotion Stone (Boons full).':
+    'Frappe bien plus fort. Or ×{m}, +{s} Pierre de promotion (Faveurs au complet).',
   'An easy floor to catch your breath.': 'Un étage facile pour reprendre son souffle.',
   '+{n} Sanity for the party and a hot meal.': '+{n} de Santé mentale pour l’équipe et un repas chaud.',
   '{g} gold and +{s} Promotion Stone.': '{g} or et +{s} Pierre de promotion.',

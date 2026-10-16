@@ -86,11 +86,15 @@ export function cacheGold(floor: number, worldMult: number = 1): number {
   return Math.round(R.cacheGoldPerFloor * floor * worldMult)
 }
 
-/** One line on what a Door asks and what it pays, for the door card. Translated. */
-export function doorBlurb(door: Door, floor: number, worldMult: number = 1): string {
+/** One line on what a Door asks and what it pays, for the door card. Translated. `boon`:
+ *  can the clear still earn a Boon (engine `canEarnBoon`)? With the Sortie's Boons full
+ *  the Skull promises none. */
+export function doorBlurb(door: Door, floor: number, worldMult: number = 1, boon: boolean = true): string {
   switch (door.kind) {
     case 'elite':
-      return t('Hits much harder. ×{m} gold, +{s} Promotion Stone and a Boon.', { m: R.eliteGoldMult, s: R.eliteStones })
+      return boon
+        ? t('Hits much harder. ×{m} gold, +{s} Promotion Stone and a Boon.', { m: R.eliteGoldMult, s: R.eliteStones })
+        : t('Hits much harder. ×{m} gold, +{s} Promotion Stone (Boons full).', { m: R.eliteGoldMult, s: R.eliteStones })
     case 'breather':
       return t('An easy floor to catch your breath.')
     case 'rest':
