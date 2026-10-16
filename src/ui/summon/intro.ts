@@ -8,7 +8,7 @@
  * so the same hero always introduces themselves the same way. English is the source
  * text; French lives in frSummon.ts.
  */
-import type { OwnedHero } from '../../engine/types'
+import type { OwnedHero, Star } from '../../engine/types'
 import { personalityOf, type Personality, type Voice } from '../../engine/life'
 import { hashString } from '../pixel/rand'
 import { tradeName } from '../life/speech'
@@ -30,40 +30,112 @@ export const INTRO_LINES: Readonly<Record<IntroTier, Readonly<Record<Voice, read
     cheerful: [
       'Hello! I’m {name}! I’ve never been summoned before. Will there be {food}? I’d fight a goblin for {food}.',
       '{name}, at your service! I can’t fight yet, but I can learn. Probably!',
+      '{name}! Is that the tower? It’s so tall! I’ve only ever climbed trees.',
+      'Oh! Hi! I’m {name}. I meant to bring {food}, but I was too excited.',
+      '{name}, reporting! I don’t know which end of a sword is which, but I learn fast!',
     ],
     formal: [
       '{name}, Master. I was only the village {trade}, but I will not shame you.',
       'Back home my evenings were for {hobby}, not swords. Still — {name}, at your service.',
+      'I am {name}, Master. I have no great deeds to my name. Not yet.',
+      'Forgive my plain manners, Master. {name}. I will learn the rest.',
+      '{name}, Master. I know little of battle, but I know how to work until the work is done.',
     ],
     rough: [
       '{name}. Village {trade}. Don’t look at me like that — I’ve chased off wolves with a stick.',
       'Name’s {name}. No sword, no class, no problem. Point me at it.',
+      '{name}. I’m no hero. But I don’t run, either.',
+      'Oi. {name}. Somebody said there’d be {food}. Was that a lie?',
+      '{name}. These hands were made for work. Fighting’s just work with more yelling.',
     ],
-    quiet: ['…{name}. I’ll try not to be a burden.', 'I’m {name}. I don’t know what I can do here. But I’ll stay.'],
+    quiet: [
+      '…{name}. I’ll try not to be a burden.',
+      'I’m {name}. I don’t know what I can do here. But I’ll stay.',
+      '{name}… sorry. I’m not used to so many people looking at me.',
+      '…I’m {name}. I like {hobby}. I don’t think that helps here.',
+      '{name}. I’ll stand at the back. Unless you need me at the front.',
+    ],
     grim: [
       '{name}. The village {trade}, in a tower full of monsters. Someone up there is laughing.',
       '{name}. I know how this story usually ends for people like me. Let’s write a different one.',
+      '{name}. Nobody sings about people like me. Fine. I’ll just stay alive.',
+      '{name}. I had a quiet life. I suppose that was too much to ask.',
+      '{name}. If I fall, tell them I didn’t run.',
     ],
   },
   seasoned: {
     cheerful: [
       '{name}! {Trade} by trade, optimist by nature. Where do we start?',
       'Hi! {name}. Pay me in {food} and I’m yours for life.',
+      '{name}, at your service! I’ve seen a few towers. This one looks fun.',
+      '{name}! I fight better after {food}. Just so you know.',
+      'Oh, a summons! {name}, ready when you are. What are we hitting?',
     ],
     formal: [
       '{name}. {Trade} by trade. I have stood in worse places than this, Master.',
       'I served before, Master. I can serve again. {name}, at your command.',
+      '{name}, Master. My gear is in order and my word is good.',
+      '{name}. I ask only for clear orders and a fair share.',
+      '{name}, reporting for duty. Show me where the line is, and I will hold it.',
     ],
-    rough: ['{name}. I’ve been paid less to fight worse. Where’s the tower?', '{Trade}. Name’s {name}. Don’t make me regret this.'],
-    quiet: ['{name}. I watch, I listen, I hit when it counts.', '…{name}. I keep my blade clean and my mouth shut.'],
-    grim: ['{name}. I’ve buried friends before. I’d rather not here.', '{name}. Every job ends one way or another. Let’s make this one end well.'],
+    rough: [
+      '{name}. I’ve been paid less to fight worse. Where’s the tower?',
+      '{Trade}. Name’s {name}. Don’t make me regret this.',
+      '{name}. Coin first, questions later. Actually, skip the questions.',
+      '{name}. I’ve had worse bosses. Probably.',
+      'Name’s {name}. I don’t do speeches. I do results.',
+    ],
+    quiet: [
+      '{name}. I watch, I listen, I hit when it counts.',
+      '…{name}. I keep my blade clean and my mouth shut.',
+      '{name}. Point. I’ll handle it.',
+      '…{name}. I don’t talk much. My work does.',
+      '{name}. When it’s quiet, I like {hobby}. It’s rarely quiet.',
+    ],
+    grim: [
+      '{name}. I’ve buried friends before. I’d rather not here.',
+      '{name}. Every job ends one way or another. Let’s make this one end well.',
+      '{name}. I’ve seen how these climbs end. I’m still here.',
+      '{name}. Keep the healers close and the graves few.',
+      '{name}. I stopped counting my scars. Let’s not start on yours.',
+    ],
   },
   proud: {
-    cheerful: ['{name}, and yes, I’m as good as I look. Let’s climb!', '{name}! A real tower? With real monsters? Oh, this is wonderful.'],
-    formal: ['I am {name}. My blade and my oath are yours, Master.', '{Trade} {name}, answering your call. Let us not waste it.'],
-    rough: ['{name}. You got lucky, Master. Try to keep up.', '{name}. Show me the strongest thing in that tower.'],
-    quiet: ['{name}. Let the tower learn my name.', '…{name}. Where do you need me?'],
-    grim: ['{name}. Towers like this eat heroes. Not this one.', '{name}. I came a long way to die somewhere. It won’t be floor one.'],
+    cheerful: [
+      '{name}, and yes, I’m as good as I look. Let’s climb!',
+      '{name}! A real tower? With real monsters? Oh, this is wonderful.',
+      '{name}! Don’t worry, Master — the hard part’s over. You found me.',
+      '{name}, here at last! Let’s give the bards something to sing about.',
+      '{name}! I hope that tower is ready for me, because I am ready for it.',
+    ],
+    formal: [
+      'I am {name}. My blade and my oath are yours, Master.',
+      '{Trade} {name}, answering your call. Let us not waste it.',
+      '{name}. Many have called. Few were answered. You were, Master.',
+      'My name is {name}, and it has been spoken in grander halls than this. Let us add this tower to the tale.',
+      '{name}, at your command. Choose the hardest floor; I will meet it.',
+    ],
+    rough: [
+      '{name}. You got lucky, Master. Try to keep up.',
+      '{name}. Show me the strongest thing in that tower.',
+      '{name}. Don’t get used to winning this easily. Actually, do.',
+      '{name}. Strongest in the room. Next question.',
+      '{name}. I hope there’s something in that tower worth my time.',
+    ],
+    quiet: [
+      '{name}. Let the tower learn my name.',
+      '…{name}. Where do you need me?',
+      '{name}. I don’t miss.',
+      '…{name}. The tower will be quieter when I’m done.',
+      '{name}. Say the word, and it’s done.',
+    ],
+    grim: [
+      '{name}. Towers like this eat heroes. Not this one.',
+      '{name}. I came a long way to die somewhere. It won’t be floor one.',
+      '{name}. Death has chased me for years. It can follow me up the stairs.',
+      '{name}. I have outlived every tower I climbed. Let’s keep it that way.',
+      '{name}. Whatever waits at the top, I have seen worse.',
+    ],
   },
 }
 
@@ -103,15 +175,45 @@ export function introKey(hero: Pick<OwnedHero, 'id' | 'name' | 'star' | 'heroCla
   return bank[hashString(`intro|${hero.id}`) % bank.length]!
 }
 
+/**
+ * The intro keys for a whole pull, in the order given. Each hero starts from their own
+ * stable line (`introKey`); when an earlier hero of the same pull already spoke it, they
+ * take the next unused line of their bank instead, so a single pull never repeats a line
+ * until a bank runs out (more same-voice, same-tier heroes than it has lines).
+ */
+export function introKeysForPull(
+  cards: readonly { hero: Pick<OwnedHero, 'id' | 'name' | 'star' | 'heroClass' | 'portraitToken'>; star?: Star }[],
+): string[] {
+  const used = new Set<string>()
+  return cards.map(({ hero, star = hero.star }) => {
+    const bank = introBank(hero, star)
+    const own = introKey(hero, star)
+    const start = bank.indexOf(own)
+    let pick = own
+    for (let k = 0; k < bank.length; k++) {
+      const cand = bank[(start + k) % bank.length]!
+      if (!used.has(cand)) {
+        pick = cand
+        break
+      }
+    }
+    used.add(pick)
+    return pick
+  })
+}
+
 function capitalise(s: string): string {
   return s.length === 0 ? s : s[0]!.toLocaleUpperCase() + s.slice(1)
 }
 
-/** The hero's opening line, translated and filled. `star` is the shown star. */
-export function introLine(hero: OwnedHero, star = hero.star): string {
+/**
+ * The hero's opening line, translated and filled. `star` is the shown star; `key`
+ * overrides the line (a pull's de-duplicated pick from `introKeysForPull`).
+ */
+export function introLine(hero: OwnedHero, star = hero.star, key = introKey(hero, star)): string {
   const p = personalityOf(hero)
   const trade = tradeName(p.background)
-  return t(introKey(hero, star), {
+  return t(key, {
     name: hero.name,
     trade,
     Trade: capitalise(trade),
@@ -155,13 +257,13 @@ export interface Persona {
   intro: string
 }
 
-export function personaOf(hero: OwnedHero, star = hero.star): Persona {
+export function personaOf(hero: OwnedHero, star = hero.star, introKeyOverride?: string): Persona {
   const p = personalityOf(hero)
   return {
     trade: tradeName(p.background),
     food: t(p.food),
     hobby: t(p.hobby),
     traits: standoutTraits(p).map((k) => t(k)),
-    intro: introLine(hero, star),
+    intro: introLine(hero, star, introKeyOverride),
   }
 }

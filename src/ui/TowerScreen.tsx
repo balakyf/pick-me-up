@@ -17,7 +17,7 @@ import { TimingGame } from './metaPanels'
 import { cachedDataUrl } from './pixel/render'
 import { scale } from './pixel/bitmap'
 import { drawTowerExterior, TOWER_H, TOWER_W } from './pixel/towerMap'
-import { t } from './i18n/i18n'
+import { t, fmt } from './i18n/i18n'
 import { ELEMENT_VIS } from './bits'
 import { sfx } from './audio/sound'
 import { usePrefs } from './prefs'
@@ -28,6 +28,7 @@ import { SortieBar } from './tower/SortieBar'
 import { currentKind, boonText, isFightKind } from './tower/kinds'
 import { doorOutcome, levelsOf, sweepMode } from './tower/rewards'
 import { openPlaces } from './shell/unlocks'
+import { latching } from './life/FirstSteps'
 import './tower/tower.css'
 
 const MAX_FLOOR = TUNING.tower.sliceTopFloor
@@ -39,9 +40,9 @@ function optionBlurb(option: string, floor: number): string {
     case 'rest':
       return t('Every living hero recovers {n} Sanity.', { n: EV.restSanity })
     case 'treasure':
-      return t('A cache: {g} gold and {s} stones.', { g: treasureGold(floor).toLocaleString(), s: EV.treasureStones })
+      return t('A cache: {g} gold and {s} stones.', { g: fmt(treasureGold(floor)), s: EV.treasureStones })
     case 'merchant':
-      return t('Buy {n} Promotion Stones for {g} gold.', { n: EV.merchantStones, g: merchantPrice().toLocaleString() })
+      return t('Buy {n} Promotion Stones for {g} gold.', { n: EV.merchantStones, g: fmt(merchantPrice()) })
     case 'gamble':
       return t('A sealed door. {p}%: a vault worth ×{m} treasure. Otherwise the party loses {s} Sanity.', { p: Math.round(EV.gambleChance * 100), m: EV.gambleWinMult, s: EV.gambleSanity })
     case 'reinforcement':
@@ -120,7 +121,7 @@ function EventOutcomeCard({
           <div className="tourney-rounds">
             {outcome.rounds.map((r, i) => (
               <button key={i} className={`tr-round ${r.won ? 'won' : 'lost'}`} onClick={() => onReplay(r.log)} title={t('Watch this round')}>
-                {t('Round {n}', { n: i + 1 })} · {r.won ? t('won') : t('lost')} · {t('rival CP')} {r.rivalCp.toLocaleString()} ▸
+                {t('Round {n}', { n: i + 1 })} · {r.won ? t('won') : t('lost')} · {t('rival CP')} {fmt(r.rivalCp)} ▸
               </button>
             ))}
             <div className="tr-placing">{t('Placing: {n} / 8', { n: outcome.placing ?? 8 })}</div>
@@ -131,7 +132,7 @@ function EventOutcomeCard({
             <div className="r">
               <div className="n" style={{ color: 'var(--gold)' }}>
                 {outcome.gold > 0 ? '+' : ''}
-                {outcome.gold.toLocaleString()}
+                {fmt(outcome.gold)}
               </div>
               <div className="l">{t('Gold')}</div>
             </div>
@@ -437,7 +438,8 @@ export function TowerScreen({
 
   function suggest() {
     const p = suggestParty(state)
-    if (p.slots.some(Boolean)) store.dispatch({ type: 'SET_PARTY', slots: p.slots, lines: p.lines })
+    if (!p.slots.some(Boolean)) return
+    latching(store, 'party', () => store.dispatch({ type: 'SET_PARTY', slots: p.slots, lines: p.lines }))
   }
 
   function resolve(option: string) {
@@ -522,7 +524,7 @@ export function TowerScreen({
     setFightCtx(null)
     if (onHome) onHome()
     else if (onGo) onGo('fairy')
-    else say('⌂', t('Purse banked: +{n} gold. The party is home.', { n: purse.toLocaleString() }))
+    else say('⌂', t('Purse banked: +{n} gold. The party is home.', { n: fmt(purse) }))
   }
 
   function combatDone() {
@@ -630,7 +632,7 @@ export function TowerScreen({
                     title={t('The Sortie ends: its Boons fade and the next climb starts a new streak.')}
                     onClick={() => leaveTo(notice.go!.place)}
                   >
-                    ⌂ {t('Bank +{n} and summon ▸', { n: sortie.purse.toLocaleString() })}
+                    ⌂ {t('Bank +{n} and summon ▸', { n: fmt(sortie.purse) })}
                   </button>
                 </>
               ) : (

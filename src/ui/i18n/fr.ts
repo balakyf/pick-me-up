@@ -49,7 +49,7 @@ export const FR_UI: Record<string, string> = {
   'M.ATK': 'ATQ.M',
   'P.DEF': 'DÉF.P',
   'M.DEF': 'DÉF.M',
-  SPD: 'VIT',
+  SPD: 'RAP.', // rapidité — never "VIT", which is the vitality growth grade
   CRIT: 'CRIT',
   Classless: 'Sans classe',
   'No skills yet': 'Aucune compétence',

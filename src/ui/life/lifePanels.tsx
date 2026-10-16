@@ -25,7 +25,8 @@ import { forgeCost, forgeGrade, smithyUnlocked } from '../../engine/equipment'
 import { heroBustUrl } from '../pixel/sprites'
 import { JOB_NAME, shortName, statusLine } from './speech'
 import { JOB_BLURB, JOB_ICON } from './lifeWindows'
-import { t } from '../i18n/i18n'
+import { t, fmt } from '../i18n/i18n'
+import { latching } from './FirstSteps'
 
 const first = (n: string) => n.split(/\s+/)[0] ?? n
 
@@ -57,7 +58,7 @@ export function StaffSection({ state, store, job, onProfile }: { state: GameStat
   const dispatch = (heroId: OwnedHero['id'], j: JobId | null) => {
     setErr(null)
     try {
-      store.dispatch({ type: 'ASSIGN_JOB', heroId, job: j }, Date.now())
+      latching(store, 'job', () => store.dispatch({ type: 'ASSIGN_JOB', heroId, job: j }, Date.now()))
       setPick('')
     } catch (e) {
       setErr(t(e instanceof Error ? e.message.replace(/^\w+: /, '') : 'That failed'))
@@ -86,7 +87,7 @@ export function StaffSection({ state, store, job, onProfile }: { state: GameStat
             </button>
             <span className="chip">{t(TIER_NAMES[tier]!)}</span>
             <span className="muted small">
-              {t('aptitude {a}', { a: aptitude(h, job).toFixed(2) })}
+              {t('aptitude {a}', { a: fmt(aptitude(h, job), { minimumFractionDigits: 2, maximumFractionDigits: 2 }) })}
               {next !== undefined && ` · ${xp}/${next}`}
             </span>
             {feel !== 'neutral' && <span className={`chip ${feel}`}>{feel === 'likes' ? t('♥ enjoys it') : t('✗ resents it')}</span>}
@@ -105,7 +106,7 @@ export function StaffSection({ state, store, job, onProfile }: { state: GameStat
               const cur = lifeOf(h).job
               return (
                 <option key={h.id} value={h.id}>
-                  {`${h.name} · ${aptitude(h, job).toFixed(2)}${feel === 'likes' ? ' ♥' : feel === 'dislikes' ? ' ✗' : ''}${cur ? ` (${t(JOB_NAME[cur])})` : ''}`}
+                  {`${h.name} · ${fmt(aptitude(h, job), { minimumFractionDigits: 2, maximumFractionDigits: 2 })}${feel === 'likes' ? ' ♥' : feel === 'dislikes' ? ' ✗' : ''}${cur ? ` (${t(JOB_NAME[cur])})` : ''}`}
                 </option>
               )
             })}
@@ -152,7 +153,7 @@ export function ForgeOrderSection({ state, store }: { state: GameState; store: S
         ))}
       </div>
       <div className="muted small">
-        {t('Each piece: {grade}-grade · {gold} ◆ + {stones} Promotion Stones.', { grade, gold: cost.gold.toLocaleString(), stones: cost.promotionStone })}
+        {t('Each piece: {grade}-grade · {gold} ◆ + {stones} Promotion Stones.', { grade, gold: fmt(cost.gold), stones: cost.promotionStone })}
         {order === 'auto' && (auto ? ` ${t('Next: {slot}.', { slot: t(auto) })}` : ` ${t('The party is fully equipped — the smiths rest.')}`)}
       </div>
       {wip && (

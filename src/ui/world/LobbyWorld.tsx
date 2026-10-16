@@ -54,7 +54,7 @@ import { ROOF_LIFT, blanket, drawRoof, smoke } from '../pixel/campusProps'
 import { heroBustUrl, heroFrameCanvas, heroPoseCanvas, iselBustUrl, masterBustUrl, masterFrameCanvas } from '../pixel/sprites'
 import type { Dir, WalkFrame } from '../pixel/heroSprite'
 import { hashString } from '../pixel/rand'
-import { t, t as tr } from '../i18n/i18n'
+import { t, t as tr, fmt } from '../i18n/i18n'
 import { drawAmbience } from './ambience'
 
 /**
@@ -1146,8 +1146,8 @@ export function LobbyWorld({
         <button className="pbtn" onClick={() => setTracker(true)} title={t('Where is everyone? (H)')}>
           👥 {t('Heroes')}
         </button>
-        <span className="coin gold">◆ {state.gold.toLocaleString()}</span>
-        <span className="coin gem">♦ {state.gems.toLocaleString()}</span>
+        <span className="coin gold">◆ {fmt(state.gold)}</span>
+        <span className="coin gem">♦ {fmt(state.gems)}</span>
         <button className="pbtn" onClick={onMenu}>
           ☰ {t('Menu')}
         </button>

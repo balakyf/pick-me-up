@@ -5,7 +5,7 @@
  */
 import type { GameState, FloorKind } from '../../engine/types'
 import { THREAT_BANDS, type ScoutReport } from '../../engine/scout'
-import { t } from '../i18n/i18n'
+import { t, fmt } from '../i18n/i18n'
 import { enemyName } from '../legacy/legacyText'
 import { ELEMENT_VIS } from '../bits'
 import { KIND_ICON, KIND_LABEL } from './kinds'
@@ -116,7 +116,7 @@ export function ScoutCard({
           <span style={{ width: `${pct}%`, background: THREAT_COLOR[report.threat] }} />
         </span>
         <span className="muted small">
-          {t('party {p} vs floor {f}', { p: Math.round(report.partyCp).toLocaleString(), f: Math.round(report.budget).toLocaleString() })}
+          {t('party {p} vs floor {f}', { p: fmt(Math.round(report.partyCp)), f: fmt(Math.round(report.budget)) })}
         </span>
       </div>
       {report.trials.runs > 0 && <div className="muted small scout-trials">{trialLine(report.trials)}</div>}

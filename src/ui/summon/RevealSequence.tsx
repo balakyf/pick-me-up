@@ -18,7 +18,7 @@ import {
   type RevealCard,
   type TellTier,
 } from './reveal'
-import { personaOf } from './intro'
+import { introKeysForPull, personaOf } from './intro'
 import { usePrefs } from '../prefs'
 import './summon.css'
 
@@ -54,6 +54,8 @@ function circleUrl(tier: TellTier): string {
 export function RevealSequence({ heroes, masterLevel, onDone }: RevealSequenceProps) {
   const plan = useMemo(() => revealPlan(heroes, masterLevel), [heroes, masterLevel])
   const n = plan.cards.length
+  // One line per hero, never the same line twice in one pull.
+  const intros = useMemo(() => introKeysForPull(plan.cards), [plan])
   const [phase, setPhase] = useState<Phase>({ kind: 'ritual', step: 0 })
   const [prefs] = usePrefs()
   const rootRef = useRef<HTMLDivElement>(null)
@@ -214,7 +216,7 @@ export function RevealSequence({ heroes, masterLevel, onDone }: RevealSequencePr
         {phase.kind === 'card' && plan.cards[phase.index] && (
           <div className="theatre-stage" aria-live="polite">
             {phase.face ? (
-              <PersonCard key={`f${phase.index}`} card={plan.cards[phase.index]!} />
+              <PersonCard key={`f${phase.index}`} card={plan.cards[phase.index]!} introKey={intros[phase.index]} />
             ) : (
               <CardBack
                 key={`b${phase.index}`}
@@ -282,9 +284,9 @@ function DeckSlot({ card, state }: { card: RevealCard; state: 'shown' | 'current
 }
 
 /** The face of a card: the person first, then what they can do. */
-function PersonCard({ card }: { card: RevealCard }) {
+function PersonCard({ card, introKey }: { card: RevealCard; introKey?: string }) {
   const { hero, star, tier } = card
-  const persona = personaOf(hero, star)
+  const persona = personaOf(hero, star, introKey)
   const sprite = heroFrameUrl(hero, 'down', 0)
   const trade = persona.trade.length > 0 ? persona.trade[0]!.toLocaleUpperCase() + persona.trade.slice(1) : persona.trade
   return (

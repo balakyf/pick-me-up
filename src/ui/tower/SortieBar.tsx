@@ -5,7 +5,7 @@
  */
 import type { Sortie } from '../../engine/types'
 import { TUNING } from '../../engine/tuning'
-import { t } from '../i18n/i18n'
+import { t, fmt } from '../i18n/i18n'
 import { BoonIcons } from './BoonPicker'
 import { streakPct } from './rewards'
 
@@ -20,13 +20,13 @@ export function SortieBar({ sortie, onReturn, disabled = false }: { sortie: Sort
           {sortie.floors === 1 ? t('1 floor') : t('{n} floors', { n: sortie.floors })}
         </span>
         <span className="sortie-purse coin gold" title={t('A rout or wipe keeps only {p}% of the purse.', { p: keep })}>
-          ◆ {sortie.purse.toLocaleString()} <span className="muted small">{t('at risk')}</span>
+          ◆ {fmt(sortie.purse)} <span className="muted small">{t('at risk')}</span>
         </span>
         <span className="sortie-stat muted small">{t('next clear +{p}% gold', { p: next })}</span>
         <BoonIcons boons={sortie.boons} />
         <span className="spacer" />
         <button className="pbtn sm" onClick={onReturn} disabled={disabled}>
-          ⌂ {t('Return to campus (bank +{n})', { n: sortie.purse.toLocaleString() })}
+          ⌂ {t('Return to campus (bank +{n})', { n: fmt(sortie.purse) })}
         </button>
       </div>
       <div className="muted small">

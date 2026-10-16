@@ -17,7 +17,7 @@ import { hallRate } from '../engine/interference'
 import { crackRefusal, dispatchRefusal } from '../engine/rift'
 import { Portrait } from './bits'
 import { PvpPanel } from './pvpPanels'
-import { t } from './i18n/i18n'
+import { t, fmt } from './i18n/i18n'
 import { stampReady } from '../engine/return'
 import { StampCard, newcomerName } from './return/StampCard'
 import { sfx } from './audio/sound'
@@ -247,7 +247,7 @@ export function ShopPanel({ state, store }: { state: GameState; store: Store }) 
         <div className="ta-row">
           <span>{t('Monthly Package · {daysLeft} days left', { daysLeft: m.daysLeft })}</span>
           <button className="btn sm gem" disabled={m.lastClaimDay === day} onClick={() => run({ type: 'CLAIM_MONTHLY' })}>
-            {m.lastClaimDay === day ? t('Claimed today') : `${t('Claim')} +${SHOP.monthlyGems} ♦ +${SHOP.monthlyGold.toLocaleString()} ◆`}
+            {m.lastClaimDay === day ? t('Claimed today') : `${t('Claim')} +${SHOP.monthlyGems} ♦ +${fmt(SHOP.monthlyGold)} ◆`}
           </button>
         </div>
       )}
@@ -265,8 +265,8 @@ export function ShopPanel({ state, store }: { state: GameState; store: Store }) 
               <span className="skill-grade">{discounted ? '%' : '♦'}</span>
               <span className="drill-name">
                 {t(pkg.label)}
-                {pkg.gems > 0 && ` · ${pkg.gems.toLocaleString()} ♦`}
-                {pkg.gold > 0 && ` · ${pkg.gold.toLocaleString()} ◆`}
+                {pkg.gems > 0 && ` · ${fmt(pkg.gems)} ♦`}
+                {pkg.gold > 0 && ` · ${fmt(pkg.gold)} ◆`}
                 {discounted && <b className="today-tag"> {t('TODAY ONLY')}</b>}
               </span>
               <span className="muted">
@@ -297,7 +297,7 @@ export function HallOfMagicInfo({ state }: { state: GameState }) {
     <div className="lr-action">
       <div className="ta-row">
         <span>{t('Probability Interference')}</span>
-        <span className="ta-val">{state.meta.pi.toFixed(1)}</span>
+        <span className="ta-val">{fmt(state.meta.pi, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</span>
       </div>
       <div className="ta-row">
         <span>{t('Hall generation')}</span>
@@ -321,7 +321,7 @@ export function RiftPanel({ state, store }: { state: GameState; store: Store }) 
     return (
       <div className="lr-action">
         <div className="lr-action-note">
-          {t('A hairline crack in the air. Opening it needs Master Lv {masterLevel}, a {mageStar}★ mage to hold it, {gold} gold and {stones} Promotion Stones. Once open, the Ruins beyond pay in gems — and other Masters can come through.', { masterLevel: RIFT.masterLevel, mageStar: RIFT.mageStar, gold: RIFT.gold.toLocaleString(), stones: RIFT.stones })}
+          {t('A hairline crack in the air. Opening it needs Master Lv {masterLevel}, a {mageStar}★ mage to hold it, {gold} gold and {stones} Promotion Stones. Once open, the Ruins beyond pay in gems — and other Masters can come through.', { masterLevel: RIFT.masterLevel, mageStar: RIFT.mageStar, gold: fmt(RIFT.gold), stones: RIFT.stones })}
         </div>
         <button className="btn primary" disabled={why !== null} onClick={() => run({ type: 'OPEN_CRACK' })} title={why ? t(why) : undefined}>
           {t('Open the Crack of Time and Space')}

@@ -7,7 +7,7 @@ import type { FloorKind, FloorResult, GameState, HeroId, MaterialId, OwnedHero, 
 import type { ScoutReport } from '../../engine/scout'
 import { ANCHORS } from '../../engine/content'
 import { TUNING } from '../../engine/tuning'
-import { t } from '../i18n/i18n'
+import { t, fmt } from '../i18n/i18n'
 import { baneName, firstName } from '../legacy/legacyText'
 import { ELEMENT_VIS } from '../bits'
 import { DOOR_TITLE, KIND_ICON, KIND_LABEL, currentKind } from './kinds'
@@ -173,7 +173,7 @@ export function sortieActive(sortie: Sortie | null | undefined): sortie is Sorti
 export function doorOutcome(before: GameState, after: GameState, kind: FloorKind): string {
   const parts: string[] = []
   const gold = after.gold - before.gold
-  if (gold > 0) parts.push(t('+{n} gold', { n: gold.toLocaleString() }))
+  if (gold > 0) parts.push(t('+{n} gold', { n: fmt(gold) }))
   const stones = (after.materials.promotionStone ?? 0) - (before.materials.promotionStone ?? 0)
   if (stones > 0) parts.push(stones === 1 ? t('+1 Promotion Stone') : t('+{n} Promotion Stones', { n: stones }))
   let sanity = 0

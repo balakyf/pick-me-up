@@ -7,7 +7,7 @@ import type { BoonId, Door, DoorReward, FloorKind, GameState } from '../../engin
 import { floorKindBase } from '../../engine/climb'
 import { BOONS } from '../../engine/climb'
 import { TUNING } from '../../engine/tuning'
-import { t } from '../i18n/i18n'
+import { t, fmt } from '../i18n/i18n'
 
 const R = TUNING.climb.reward
 
@@ -100,7 +100,7 @@ export function doorBlurb(door: Door, floor: number, worldMult: number = 1, boon
     case 'rest':
       return t('+{n} Sanity for the party and a hot meal.', { n: R.restSanity })
     case 'cache':
-      return t('{g} gold and +{s} Promotion Stone.', { g: cacheGold(floor, worldMult).toLocaleString(), s: R.cacheStones })
+      return t('{g} gold and +{s} Promotion Stone.', { g: fmt(cacheGold(floor, worldMult)), s: R.cacheStones })
     case 'boss':
       return t('The floor’s guardian waits.')
     case 'tutorial':

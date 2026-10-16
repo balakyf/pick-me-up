@@ -28,9 +28,10 @@ import {
 import { PixelWindow, Gauge } from '../kit'
 import { heroBustUrl } from '../pixel/sprites'
 import { JOB_NAME, accountDay, chronicleLine, diaryLine, groupedChronicle, placeName, shortName, speak, statusLine, tradeName } from './speech'
-import { t } from '../i18n/i18n'
+import { t, fmt } from '../i18n/i18n'
 import { isArrival } from '../return/arrival'
 import { EchoList } from '../legacy/EchoList'
+import { latching } from './FirstSteps'
 
 const first = (n: string) => n.split(/\s+/)[0] ?? n
 
@@ -169,7 +170,7 @@ export function JobPicker({ state, store, hero }: { state: GameState; store: Sto
   const assign = (job: JobId | null) => {
     setErr(null)
     try {
-      store.dispatch({ type: 'ASSIGN_JOB', heroId: hero.id, job }, Date.now())
+      latching(store, 'job', () => store.dispatch({ type: 'ASSIGN_JOB', heroId: hero.id, job }, Date.now()))
     } catch (e) {
       setErr(t(e instanceof Error ? e.message.replace(/^\w+: /, '') : 'That failed'))
     }
@@ -195,7 +196,7 @@ export function JobPicker({ state, store, hero }: { state: GameState; store: Sto
               <span className="job-ic">{JOB_ICON[job]}</span>
               <span className="job-nm">{t(JOB_NAME[job])}</span>
               <span className="job-apt">
-                {feel === 'likes' ? '♥' : feel === 'dislikes' ? '✗' : '·'} {apt.toFixed(2)}
+                {feel === 'likes' ? '♥' : feel === 'dislikes' ? '✗' : '·'} {fmt(apt, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </span>
               <span className="job-seat muted small">
                 {!open ? t('{b} not built', { b: t(placeName(JOB_PLACE_OF[job])) }) : t('{n}/{m} seats', { n: taken + (mine ? 1 : 0), m: seats })}
@@ -371,8 +372,8 @@ export function LetterWindow({ state, onClose }: { state: GameState; onClose: ()
         <div className="letter-tally">
           {tl.forged > 0 && <span className="chip">⚒ {t('{n} items forged', { n: tl.forged })}</span>}
           {tl.meals > 0 && <span className="chip">🍲 {t('{n} meals served', { n: tl.meals })}</span>}
-          {tl.jobGold > 0 && <span className="chip">◆ {t('+{n} gold from work', { n: tl.jobGold.toLocaleString() })}</span>}
-          {tl.trainXp > 0 && <span className="chip">⚔ {t('{n} XP trained', { n: tl.trainXp.toLocaleString() })}</span>}
+          {tl.jobGold > 0 && <span className="chip">◆ {t('+{n} gold from work', { n: fmt(tl.jobGold) })}</span>}
+          {tl.trainXp > 0 && <span className="chip">⚔ {t('{n} XP trained', { n: fmt(tl.trainXp) })}</span>}
           {tl.research > 0 && <span className="chip">📚 {t('{n} floors studied', { n: tl.research })}</span>}
           {tl.healed > 0 && <span className="chip">✚ {t('{n} sanity mended', { n: tl.healed })}</span>}
           {invasions.length > 0 && <span className="chip">⟡ {t('{n} invasions', { n: invasions.length })}</span>}

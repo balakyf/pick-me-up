@@ -9,7 +9,7 @@
  * dispatch would invalidate mid-battle orders): a click only asks the shell to travel.
  * The one exception is the first-steps "I know my way" button, shown in the lobby only.
  */
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { GameState } from '../../engine/types'
 import type { Store } from '../../engine/store'
 import { toWorldTime } from '../../engine/time'
@@ -19,26 +19,39 @@ import { t } from '../i18n/i18n'
 import { usePrefs } from '../prefs'
 import './shell.css'
 
-const COLLAPSE_KEY = 'pmu.goals.collapsed'
+/** The player's fold choice while Isel's first steps run. */
+export const COLLAPSE_KEY = 'pmu.goals.collapsed'
+/** The player's fold choice once onboarding is done (a separate choice: see `initialFold`). */
+export const COLLAPSE_AFTER_KEY = 'pmu.goals.collapsed.onboarded'
 
-function readCollapsed(): boolean {
+function readFold(key: string): boolean | null {
   try {
-    const v = window.localStorage.getItem(COLLAPSE_KEY)
+    const v = window.localStorage.getItem(key)
     if (v === '1') return true
     if (v === '0') return false
   } catch {
     /* storage may be unavailable */
   }
-  // Phones start folded to the one line that matters.
-  return typeof window !== 'undefined' && window.innerWidth < 560
+  return null
 }
 
-function writeCollapsed(v: boolean): void {
+function writeFold(key: string, v: boolean): void {
   try {
-    window.localStorage.setItem(COLLAPSE_KEY, v ? '1' : '0')
+    window.localStorage.setItem(key, v ? '1' : '0')
   } catch {
     /* storage may be unavailable */
   }
+}
+
+/**
+ * Folded or open. While the first steps run the panel is open (phones start folded to the
+ * one line that matters). Once onboarding is done it folds to its header and the short
+ * goal, clear of the Great Hall (playtest 2026-10-13, 1280×800) — unless the player has
+ * opened (or folded) it themselves since, which is remembered.
+ */
+export function initialFold(onboarded: boolean): boolean {
+  if (onboarded) return readFold(COLLAPSE_AFTER_KEY) ?? true
+  return readFold(COLLAPSE_KEY) ?? (typeof window !== 'undefined' && window.innerWidth < 560)
 }
 
 function Bar({ goal }: { goal: Goal }) {
@@ -93,9 +106,12 @@ export function GoalTracker({
   onGo: (target: GoalTarget) => void
 }) {
   const stack = useMemo(() => nextGoals(state, toWorldTime(Date.now())), [state])
-  const [collapsed, setCollapsed] = useState(readCollapsed)
+  const onboarded = stack.onboarding === null
+  const [collapsed, setCollapsed] = useState(() => initialFold(onboarded))
   const [stepsOpen, setStepsOpen] = useState(false)
   const [prefs] = usePrefs()
+  // The last first step just got done: fold away (or keep the player's own choice).
+  useEffect(() => setCollapsed(initialFold(onboarded)), [onboarded])
 
   if (variant === 'bar') {
     const here = (g: Goal | null) => g?.go?.kind === 'place' && g.go.place === view
@@ -124,7 +140,7 @@ export function GoalTracker({
   }
 
   const toggle = () => {
-    writeCollapsed(!collapsed)
+    writeFold(onboarded ? COLLAPSE_AFTER_KEY : COLLAPSE_KEY, !collapsed)
     setCollapsed(!collapsed)
   }
   return (

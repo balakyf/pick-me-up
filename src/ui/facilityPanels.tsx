@@ -22,7 +22,7 @@ import { HallOfMagicInfo, RiftPanel, ShopPanel, TimingGame } from './metaPanels'
 import { GuildPanel } from './pvpPanels'
 import { upgradeCost as forgeUpgradeCost, upgradeOdds, upgradeRefusal } from '../engine/minigames'
 import { upgradeEquipmentWithResult } from '../engine/store'
-import { t } from './i18n/i18n'
+import { t, fmt } from './i18n/i18n'
 import { DormitoryInfo, ForgeOrderSection, HereNow, KitchenPantry, LibraryInfo, StaffSection, WatchtowerInfo } from './life/lifePanels'
 import { MemorialPanel } from './legacy/MemorialPanel'
 import { PlacePreview } from './shell/PlacePreview'
@@ -92,7 +92,7 @@ function BanquetAction({ state, store }: { state: GameState; store: Store }) {
   return (
     <div className="lr-action">
       <button className="btn gold sm" onClick={hold} disabled={disabled}>
-        {t('🍴 Banquet · {gold} ◆', { gold: BANQUET.gold.toLocaleString() })}
+        {t('🍴 Banquet · {gold} ◆', { gold: fmt(BANQUET.gold) })}
       </button>
       <div className="lr-action-note">
         {!canAfford
@@ -238,7 +238,7 @@ export function UpgradeControl({ state, store, facility }: { state: GameState; s
       <span className="lr-action-note">{note}</span>
       {!maxed && (
         <button className="btn sm" onClick={() => dispatch({ type: 'UPGRADE_FACILITY', facility })} disabled={!ok}>
-          {isBuild ? t('🔨 Build') : t('⬆ Upgrade')} · {cost.toLocaleString()} ◆
+          {isBuild ? t('🔨 Build') : t('⬆ Upgrade')} · {fmt(cost)} ◆
         </button>
       )}
       {err && <div className="lr-action-note" style={{ color: 'var(--bad)' }}>{err}</div>}
@@ -272,7 +272,7 @@ const matLabel = (id: string): string =>
 /** One-line summary of a daily reward bundle. */
 function rewardSummary(r: DailyReward): string {
   const parts: string[] = []
-  if (r.gold) parts.push(`+${r.gold.toLocaleString()} ◆`)
+  if (r.gold) parts.push(`+${fmt(r.gold)} ◆`)
   if (r.gems) parts.push(`+${r.gems} 💎`)
   if (r.heroXp) parts.push(`+${r.heroXp} XP`)
   for (const id of Object.keys(r.materials ?? {})) parts.push(`+${r.materials![id]} ${matLabel(id)}`)
@@ -596,7 +596,7 @@ function Armory({ state, store }: { state: GameState; store: Store }) {
       {/* Forge — one button per slot, each forging the best grade the Master Level allows. */}
       <div className="syn-section">
         <div className="syn-label">
-          Forge · grade {grade} · ◆ {cost.gold.toLocaleString()} + {cost.promotionStone} stone{cost.promotionStone === 1 ? '' : 's'}
+          Forge · grade {grade} · ◆ {fmt(cost.gold)} + {cost.promotionStone} stone{cost.promotionStone === 1 ? '' : 's'}
         </div>
         <div className="syn-modes">
           {EQUIP_SLOTS.map((slot) => (
@@ -649,7 +649,7 @@ function Armory({ state, store }: { state: GameState; store: Store }) {
                   {SLOT_GLYPH[it.slot]} {itemLabel(it.name)}
                   {cost && ` · ${Math.round(upgradeOdds(it.grade, state.meta.skill.blacksmith) * 100)}%`}
                 </span>
-                <span className="muted">{cost ? `${cost.gold.toLocaleString()} ◆ + ${cost.promotionStone} 🪨` : t('max')}</span>
+                <span className="muted">{cost ? `${fmt(cost.gold)} ◆ + ${cost.promotionStone} 🪨` : t('max')}</span>
                 <button className="btn sm" disabled={why !== null} onClick={() => setAnvil(it)}>
                   {t('⚒ Forge')}
                 </button>
@@ -805,7 +805,7 @@ function TrainingAction({ state, store }: { state: GameState; store: Store }) {
                 <span className="drill-name">
                   {o.mode === 'learn' ? t('Learn') : t('Refine')} {t(def.name)}
                 </span>
-                <span className="muted">{o.cost.toLocaleString()} ◆</span>
+                <span className="muted">{fmt(o.cost)} ◆</span>
                 <button
                   className="btn sm"
                   disabled={!o.ok}
@@ -894,7 +894,7 @@ function TransferAction({ state, store }: { state: GameState; store: Store }) {
                     <span className="drill-name">
                       {t('{name} Lv{level} → Lv{n}', { name: t(def.name), level: sk.level, n: transferredLevel(sk.level, level) })}
                     </span>
-                    <span className="muted">{transferCost(sk.id).toLocaleString()} ◆</span>
+                    <span className="muted">{fmt(transferCost(sk.id))} ◆</span>
                     <button
                       className="btn sm"
                       disabled={reason !== null}
@@ -924,7 +924,7 @@ function TransferAction({ state, store }: { state: GameState; store: Store }) {
                     <span className="drill-name">
                       {o.kind === 'evolve' ? t('Evolve') : t('Fuse')} {o.inputs.map((i) => t(SKILLS[i]?.name ?? i)).join(' + ')} → {t(def.name)}
                     </span>
-                    <span className="muted">{o.cost.toLocaleString()} ◆</span>
+                    <span className="muted">{fmt(o.cost)} ◆</span>
                     <button className="btn sm" disabled={!o.ok} onClick={() => run({ type: 'FUSE_SKILL', heroId: fuser.id, result: o.result })}>
                       {o.kind === 'evolve' ? t('Evolve') : t('Fuse')}
                     </button>

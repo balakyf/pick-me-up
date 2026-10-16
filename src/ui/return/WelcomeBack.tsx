@@ -9,7 +9,7 @@ import { hashString } from '../pixel/rand'
 import { PLACE_LABEL, type PlaceId } from '../world/lobbyMap'
 import { shortName } from '../life/speech'
 import { sfx } from '../audio/sound'
-import { t } from '../i18n/i18n'
+import { t, fmt } from '../i18n/i18n'
 import { StampCard, newcomerName } from './StampCard'
 import { facilityPlace } from './lightsOut'
 import { VIGNETTE_ICON, vignettePlace, vignetteText } from './vignettes'
@@ -146,7 +146,7 @@ export function WelcomeBack({
           <div className="letter-tally">
             {b.meals > 0 && <span className="chip">🍲 {t('{n} meals served', { n: b.meals })}</span>}
             {b.forged > 0 && <span className="chip">⚒ {t('{n} items forged', { n: b.forged })}</span>}
-            {b.trainXp > 0 && <span className="chip">⚔ {t('{n} XP trained', { n: b.trainXp.toLocaleString() })}</span>}
+            {b.trainXp > 0 && <span className="chip">⚔ {t('{n} XP trained', { n: fmt(b.trainXp) })}</span>}
             {b.research > 0 && <span className="chip">📚 {t('{n} floors studied', { n: b.research })}</span>}
             {b.healed > 0 && <span className="chip">✚ {t('{n} sanity mended', { n: b.healed })}</span>}
           </div>
@@ -182,7 +182,7 @@ export function WelcomeBack({
                 onGo={go}
               />
             )}
-            {c.gold > 0 && <Line icon="◆" text={t('+{n} gold from the heroes’ work — already in your purse.', { n: c.gold.toLocaleString() })} onGo={go} />}
+            {c.gold > 0 && <Line icon="◆" text={t('+{n} gold from the heroes’ work — already in your purse.', { n: fmt(c.gold) })} onGo={go} />}
             {loginOpen && (
               <div className="wb-claim">
                 <button className="pbtn gem" onClick={claim}>

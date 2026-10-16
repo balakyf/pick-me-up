@@ -14,7 +14,7 @@ import { hashString } from '../pixel/rand'
 import { JOB_NAME } from '../life/speech'
 import { TIER_NAMES } from '../../engine/life'
 import { GIFTS } from '../../engine/favor'
-import { t } from '../i18n/i18n'
+import { t, fmt } from '../i18n/i18n'
 
 type Vars = Record<string, string | number>
 
@@ -172,7 +172,7 @@ export function heroLetter(before: GameState, after: GameState): HeroLetter | nu
   }
   const jl = life.job ? JOB_LINE[life.job] : undefined
   const made = jl ? gained(before, after, jl.tally) : 0
-  if (jl && made > 0) lines.push(t(jl.line, { n: made.toLocaleString() }))
+  if (jl && made > 0) lines.push(t(jl.line, { n: fmt(made) }))
   else lines.push(t(HOBBY_LINE[p.hobby], { food: t(p.food) }))
   lines.push(t(pick(CLOSER[p.voice], `${seed}|${hero.id}|close`)))
   return { heroId: hero.id, lines, signoff: `— ${first(hero.name)}` }

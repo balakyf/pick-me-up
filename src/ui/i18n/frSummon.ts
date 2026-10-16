@@ -82,4 +82,83 @@ export const FR_SUMMON: Record<string, string> = {
   '{name}. Towers like this eat heroes. Not this one.': '{name}. Les tours comme celle-ci dévorent les héros. Pas celui-ci.',
   '{name}. I came a long way to die somewhere. It won’t be floor one.':
     '{name}. J’ai fait un long chemin pour mourir quelque part. Ce ne sera pas au premier étage.',
+
+  // ── Introductions, more lines so one pull never repeats itself ─────────────
+  // 1★
+  '{name}! Is that the tower? It’s so tall! I’ve only ever climbed trees.':
+    '{name} ! C’est ça, la tour ? Elle est si haute ! Moi, je n’ai jamais grimpé qu’aux arbres.',
+  'Oh! Hi! I’m {name}. I meant to bring {food}, but I was too excited.':
+    'Oh ! Salut ! Moi, c’est {name}. Je voulais apporter {food}, mais j’étais trop excité.',
+  '{name}, reporting! I don’t know which end of a sword is which, but I learn fast!':
+    '{name}, présent ! Je ne sais pas par quel bout on tient une épée, mais j’apprends vite !',
+  'I am {name}, Master. I have no great deeds to my name. Not yet.':
+    'Je suis {name}, Maître. Je n’ai encore accompli aucun haut fait. Pas encore.',
+  'Forgive my plain manners, Master. {name}. I will learn the rest.':
+    'Pardonnez mes manières simples, Maître. {name}. J’apprendrai le reste.',
+  '{name}, Master. I know little of battle, but I know how to work until the work is done.':
+    '{name}, Maître. Je connais peu la guerre, mais je sais travailler jusqu’à ce que le travail soit fait.',
+  '{name}. I’m no hero. But I don’t run, either.': '{name}. Je suis pas un héros. Mais je fuis pas non plus.',
+  'Oi. {name}. Somebody said there’d be {food}. Was that a lie?':
+    'Hé. {name}. On m’a dit qu’il y aurait {food}. C’était un mensonge ?',
+  '{name}. These hands were made for work. Fighting’s just work with more yelling.':
+    '{name}. Ces mains-là sont faites pour le travail. Se battre, c’est du travail avec plus de cris.',
+  '{name}… sorry. I’m not used to so many people looking at me.':
+    '{name}… pardon. Je n’ai pas l’habitude qu’on me regarde autant.',
+  '…I’m {name}. I like {hobby}. I don’t think that helps here.':
+    '…Je suis {name}. J’aime {hobby}. Je ne crois pas que ça serve, ici.',
+  '{name}. I’ll stand at the back. Unless you need me at the front.':
+    '{name}. Je resterai derrière. Sauf si vous avez besoin de moi devant.',
+  '{name}. Nobody sings about people like me. Fine. I’ll just stay alive.':
+    '{name}. Personne ne chante les gens comme moi. Soit. Je me contenterai de rester en vie.',
+  '{name}. I had a quiet life. I suppose that was too much to ask.':
+    '{name}. J’avais une vie tranquille. C’était sans doute trop demander.',
+  '{name}. If I fall, tell them I didn’t run.': '{name}. Si je tombe, dites-leur que je n’ai pas fui.',
+  // 2★
+  '{name}, at your service! I’ve seen a few towers. This one looks fun.':
+    '{name}, à votre service ! J’ai vu quelques tours. Celle-ci a l’air amusante.',
+  '{name}! I fight better after {food}. Just so you know.': '{name} ! Je me bats mieux après {food}. C’est dit.',
+  'Oh, a summons! {name}, ready when you are. What are we hitting?':
+    'Oh, une invocation ! {name}, prêt quand vous l’êtes. On tape sur quoi ?',
+  '{name}, Master. My gear is in order and my word is good.': '{name}, Maître. Mon équipement est en ordre et ma parole est sûre.',
+  '{name}. I ask only for clear orders and a fair share.': '{name}. Je ne demande que des ordres clairs et une part honnête.',
+  '{name}, reporting for duty. Show me where the line is, and I will hold it.':
+    '{name}, au rapport. Montrez-moi la ligne, et je la tiendrai.',
+  '{name}. Coin first, questions later. Actually, skip the questions.':
+    '{name}. L’argent d’abord, les questions après. En fait, oubliez les questions.',
+  '{name}. I’ve had worse bosses. Probably.': '{name}. J’ai eu de pires patrons. Sûrement.',
+  'Name’s {name}. I don’t do speeches. I do results.': 'Moi, c’est {name}. Je fais pas de discours. Je fais des résultats.',
+  '{name}. Point. I’ll handle it.': '{name}. Montrez du doigt. Je m’en occupe.',
+  '…{name}. I don’t talk much. My work does.': '…{name}. Je parle peu. Mon travail parle pour moi.',
+  '{name}. When it’s quiet, I like {hobby}. It’s rarely quiet.':
+    '{name}. Quand c’est calme, j’aime {hobby}. C’est rarement calme.',
+  '{name}. I’ve seen how these climbs end. I’m still here.': '{name}. J’ai vu comment finissent ces ascensions. Je suis toujours là.',
+  '{name}. Keep the healers close and the graves few.': '{name}. Gardez les soigneurs près de vous et les tombes peu nombreuses.',
+  '{name}. I stopped counting my scars. Let’s not start on yours.':
+    '{name}. J’ai arrêté de compter mes cicatrices. Ne commençons pas les vôtres.',
+  // 3★+
+  '{name}! Don’t worry, Master — the hard part’s over. You found me.':
+    '{name} ! Ne vous en faites pas, Maître — le plus dur est fait. Vous m’avez trouvé.',
+  '{name}, here at last! Let’s give the bards something to sing about.':
+    '{name}, enfin là ! Donnons aux bardes de quoi chanter.',
+  '{name}! I hope that tower is ready for me, because I am ready for it.':
+    '{name} ! J’espère que cette tour est prête pour moi, parce que moi, je suis prêt pour elle.',
+  '{name}. Many have called. Few were answered. You were, Master.':
+    '{name}. Beaucoup ont appelé. Peu ont eu de réponse. Vous, si, Maître.',
+  'My name is {name}, and it has been spoken in grander halls than this. Let us add this tower to the tale.':
+    'Je m’appelle {name}, et ce nom a résonné dans des salles plus grandes que celle-ci. Ajoutons cette tour au récit.',
+  '{name}, at your command. Choose the hardest floor; I will meet it.':
+    '{name}, à vos ordres. Choisissez l’étage le plus dur ; je l’affronterai.',
+  '{name}. Don’t get used to winning this easily. Actually, do.':
+    '{name}. Ne vous habituez pas à gagner aussi facilement. En fait, si.',
+  '{name}. Strongest in the room. Next question.': '{name}. Le plus fort de la salle. Question suivante.',
+  '{name}. I hope there’s something in that tower worth my time.':
+    '{name}. J’espère qu’il y a dans cette tour quelque chose qui vaut mon temps.',
+  '{name}. I don’t miss.': '{name}. Je ne rate jamais.',
+  '…{name}. The tower will be quieter when I’m done.': '…{name}. La tour sera plus calme quand j’en aurai fini.',
+  '{name}. Say the word, and it’s done.': '{name}. Un mot de vous, et c’est fait.',
+  '{name}. Death has chased me for years. It can follow me up the stairs.':
+    '{name}. La mort me poursuit depuis des années. Elle peut bien me suivre dans l’escalier.',
+  '{name}. I have outlived every tower I climbed. Let’s keep it that way.':
+    '{name}. J’ai survécu à chaque tour que j’ai gravie. Continuons ainsi.',
+  '{name}. Whatever waits at the top, I have seen worse.': '{name}. Quoi qui attende au sommet, j’ai vu pire.',
 }

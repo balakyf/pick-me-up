@@ -17,7 +17,7 @@ import type { Store } from '../engine/store'
 import { playMusic, sfx, unlockAudio } from './audio/sound'
 import { useMuted } from './audio/useSound'
 import { useLocale } from './i18n/useLocale'
-import { t } from './i18n/i18n'
+import { t, fmt } from './i18n/i18n'
 import { GoalTracker } from './shell/GoalTracker'
 import { menuGroups, nextUnlock, placeAccess, shortCondition } from './shell/unlocks'
 import { DEFAULT_SAVE_KEY } from '../engine/account'
@@ -47,8 +47,8 @@ function urlParams() {
 function Coins({ state }: { state: GameState }) {
   return (
     <>
-      <span className="coin gold">◆ {state.gold.toLocaleString()}</span>
-      <span className="coin gem">♦ {state.gems.toLocaleString()}</span>
+      <span className="coin gold">◆ {fmt(state.gold)}</span>
+      <span className="coin gem">♦ {fmt(state.gems)}</span>
     </>
   )
 }
@@ -272,7 +272,7 @@ function LeaveTowerConfirm({ purse, onBank, onStay }: { purse: number; onBank: (
   return (
     <PixelWindow title={t('Leave the Tower?')} icon="⛫" onClose={onStay}>
       <div className="leave-tower">
-        <p>{t('Return to campus and bank +{purse}?', { purse: purse.toLocaleString() })}</p>
+        <p>{t('Return to campus and bank +{purse}?', { purse: fmt(purse) })}</p>
         <p className="muted small">{t('The Sortie ends: its Boons fade and the next climb starts a new streak.')}</p>
         <div className="leave-tower-actions">
           <button className="pbtn primary" onClick={onBank}>

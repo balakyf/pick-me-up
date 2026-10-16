@@ -3,7 +3,7 @@ import type { BattleOrder, FloorResult, GameState, OwnedHero, SkillProgress, Sor
 import type { Store } from '../engine/store'
 import { TUNING } from '../engine/tuning'
 import { HIDDEN_OBJECTIVES, SKILLS } from '../engine/content'
-import { inSentence, t } from './i18n/i18n'
+import { inSentence, t, fmt } from './i18n/i18n'
 import { LegacySlot } from './legacy/LegacySlot'
 import { PLACE_LABEL, type PlaceId } from './world/lobbyMap'
 import { openPlaces } from './shell/unlocks'
@@ -186,7 +186,7 @@ export function ResultsScreen({
   if ((result.restedBonus ?? 0) > 0) {
     lines.push(
       <div key="rested" className="bonus-line cascade-row" style={row(i++)}>
-        ⚡ {t('Pent-up Interference: +{n} gold', { n: (result.restedBonus ?? 0).toLocaleString() })}
+        ⚡ {t('Pent-up Interference: +{n} gold', { n: fmt(result.restedBonus ?? 0) })}
         <span className="muted small">
           {' · '}
           {snap.rested === 0 ? t('no charges left') : snap.rested === 1 ? t('1 charge left') : t('{n} charges left', { n: snap.rested })}
@@ -197,22 +197,22 @@ export function ResultsScreen({
   for (const a of snap.avenged) {
     lines.push(
       <div key={`rev|${a.bane}`} className="bonus-line cascade-row" style={row(i++)}>
-        ⚔ {t('Revenge on {bane}: +{n} gold', { bane: inSentence(a.bane), n: Math.round(TUNING.legacy.nemesis.rewardGoldPerFloor * result.floor * worldMultOf(state)).toLocaleString() })}
+        ⚔ {t('Revenge on {bane}: +{n} gold', { bane: inSentence(a.bane), n: fmt(Math.round(TUNING.legacy.nemesis.rewardGoldPerFloor * result.floor * worldMultOf(state))) })}
       </div>,
     )
   }
   if (win && (result.sortieBonus ?? 0) > 0) {
     lines.push(
       <div key="sortie" className="bonus-line purse cascade-row" style={row(i++)}>
-        ⚑ {t('Streak bonus: +{n} into the purse', { n: (result.sortieBonus ?? 0).toLocaleString() })}
-        {snap.sortie && <span className="muted small"> · {t('◆ {n} at risk', { n: snap.sortie.purse.toLocaleString() })}</span>}
+        ⚑ {t('Streak bonus: +{n} into the purse', { n: fmt(result.sortieBonus ?? 0) })}
+        {snap.sortie && <span className="muted small"> · {t('◆ {n} at risk', { n: fmt(snap.sortie.purse) })}</span>}
       </div>,
     )
   }
   if (!win && preSortie && preSortie.purse > 0 && snap.sortie === null) {
     lines.push(
       <div key="sortie-end" className="bonus-line lost cascade-row" style={row(i++)}>
-        ⚑ {t('Sortie over: {kept} of the ◆ {purse} purse was saved.', { kept: keptOnRout(preSortie.purse).toLocaleString(), purse: preSortie.purse.toLocaleString() })}
+        ⚑ {t('Sortie over: {kept} of the ◆ {purse} purse was saved.', { kept: fmt(keptOnRout(preSortie.purse)), purse: fmt(preSortie.purse) })}
       </div>,
     )
   }
@@ -229,7 +229,7 @@ export function ResultsScreen({
   const sortieNow = state.tower.sortie
   const bank = sortieNow && onReturnToCampus ? (
     <button className={doorsHere ? 'pbtn sm' : 'pbtn'} onClick={onReturnToCampus}>
-      ⌂ {t('Return to campus (bank +{n})', { n: sortieNow.purse.toLocaleString() })}
+      ⌂ {t('Return to campus (bank +{n})', { n: fmt(sortieNow.purse) })}
     </button>
   ) : null
   const teaser = doorsHere ? null : nextTeaser(state)
@@ -279,13 +279,13 @@ export function ResultsScreen({
         <div className="reward-row">
           <div className="r">
             <div className="n" style={{ color: 'var(--gold)' }}>
-              +{gold.toLocaleString()}
+              +{fmt(gold)}
               {win && <CoinBurst gold={snap.gained} seed={`${result.floor}|${result.result.log.seed}`} enabled={animate} />}
             </div>
             <div className="l">{t('Gold')}</div>
           </div>
           <div className="r">
-            <div className="n" style={{ color: 'var(--accent-2)' }}>+{xp.toLocaleString()}</div>
+            <div className="n" style={{ color: 'var(--accent-2)' }}>+{fmt(xp)}</div>
             <div className="l">{t('XP each')}</div>
           </div>
         </div>
@@ -360,10 +360,10 @@ export function ResultsScreen({
               <div className="because-line mvp">
                 ★{' '}
                 {snap.mvp.kills === 0
-                  ? t('MVP: {name} · {dmg} damage', { name: snap.mvp.name, dmg: snap.mvp.damage.toLocaleString() })
+                  ? t('MVP: {name} · {dmg} damage', { name: snap.mvp.name, dmg: fmt(snap.mvp.damage) })
                   : snap.mvp.kills === 1
-                    ? t('MVP: {name} · {dmg} damage · 1 kill', { name: snap.mvp.name, dmg: snap.mvp.damage.toLocaleString() })
-                    : t('MVP: {name} · {dmg} damage · {k} kills', { name: snap.mvp.name, dmg: snap.mvp.damage.toLocaleString(), k: snap.mvp.kills })}
+                    ? t('MVP: {name} · {dmg} damage · 1 kill', { name: snap.mvp.name, dmg: fmt(snap.mvp.damage) })
+                    : t('MVP: {name} · {dmg} damage · {k} kills', { name: snap.mvp.name, dmg: fmt(snap.mvp.damage), k: snap.mvp.kills })}
               </div>
             )}
             {snap.reasons.map((r, k) => (
@@ -435,7 +435,7 @@ export function ResultsScreen({
             <div className="sb-head">
               <span>{t('Toward the next summon')}</span>
               <span className="coin-target">
-                ◆ {Math.min(shownGold, progress.cost).toLocaleString()} / {progress.cost.toLocaleString()}
+                ◆ {fmt(Math.min(shownGold, progress.cost))} / {fmt(progress.cost)}
               </span>
             </div>
             <span className="gauge sb-gauge">
@@ -449,7 +449,7 @@ export function ResultsScreen({
                 title={t('The Sortie ends: its Boons fade and the next climb starts a new streak.')}
                 onClick={() => onGo('summon')}
               >
-                ⌂ {t('Bank +{n} and summon ▸', { n: sortieNow.purse.toLocaleString() })}
+                ⌂ {t('Bank +{n} and summon ▸', { n: fmt(sortieNow.purse) })}
               </button>
             ) : progress.ready ? (
               onGo ? (
@@ -460,7 +460,7 @@ export function ResultsScreen({
                 <span className="chip summon-ready">✦ {t('A summon is ready')}</span>
               )
             ) : (
-              <span className="muted small">{t('{n} more gold', { n: progress.missing.toLocaleString() })}</span>
+              <span className="muted small">{t('{n} more gold', { n: fmt(progress.missing) })}</span>
             )}
           </div>
         )}

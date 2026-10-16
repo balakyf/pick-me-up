@@ -5,7 +5,7 @@ import { PixelWindow, Gauge } from '../kit'
 import { iselBustUrl } from '../pixel/sprites'
 import { PLACE_LABEL, type PlaceId } from '../world/lobbyMap'
 import { shortName } from '../life/speech'
-import { t } from '../i18n/i18n'
+import { t, fmt } from '../i18n/i18n'
 import { baneName, enemyName } from '../legacy/legacyText'
 import { brewingTimers, edgeRelation, goalBars, iselSignoff, nextFloorTeaser, restedOutlook, skillName, type Brewing, type GoalBar } from './lightsOut'
 import { clockAt, countdown } from './format'
@@ -37,7 +37,7 @@ function brewingText(state: GameState, b: Brewing): string {
 function goalText(g: GoalBar): string {
   switch (g.key) {
     case 'summon':
-      return t('Next summon: {n} gold to go', { n: g.vars.n!.toLocaleString() })
+      return t('Next summon: {n} gold to go', { n: fmt(g.vars.n!) })
     case 'boss':
       return g.vars.n === 1 ? t('F{floor} boss: the very next floor', { floor: g.vars.floor! }) : t('F{floor} boss: {n} floors to go', { floor: g.vars.floor!, n: g.vars.n! })
     case 'master':

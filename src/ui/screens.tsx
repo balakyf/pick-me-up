@@ -16,7 +16,8 @@ import { cachedDataUrl } from './pixel/render'
 import { drawProp } from './pixel/props'
 import { scale } from './pixel/bitmap'
 import type { Element, HeroClass, Star, SummonPool } from '../engine/types'
-import { t } from './i18n/i18n'
+import { t, fmt } from './i18n/i18n'
+import { latching } from './life/FirstSteps'
 import './summon/summon.css'
 
 /** Moved to ./ResultsScreen (WP0); re-exported for compatibility. */
@@ -216,10 +217,10 @@ export function SummonScreen({ state, store }: { state: GameState; store: Store 
       </div>
       <p className="sub">
         {pool === 'normal'
-          ? t('Normal pool · {gold} Gold per pull · every hero is unique, no duplicates.', { gold: SUMMON_COST.toLocaleString() })
+          ? t('Normal pool · {gold} Gold per pull · every hero is unique, no duplicates.', { gold: fmt(SUMMON_COST) })
           : t('Advanced pool · {gems} gems per pull ({ten} for ten) · 4★+ arrive with an exclusive weapon and an engraving.', {
               gems: ADV.costGems,
-              ten: ADV.tenPullGems.toLocaleString(),
+              ten: fmt(ADV.tenPullGems),
             })}
       </p>
 
@@ -254,12 +255,12 @@ export function SummonScreen({ state, store }: { state: GameState; store: Store 
             <>
               {/* One gold CTA per screen (V7): the ×10 while it is affordable, else the ×1. */}
               <button className={`btn big ${!canTenNormal && canOne ? 'cta' : ''}`} onClick={() => pull(1)} disabled={!canOne}>
-                {mercy ? t('Summon · free (the crystal takes pity)') : t('Summon · {SUMMON_COST} Gold', { SUMMON_COST: SUMMON_COST.toLocaleString() })}
+                {mercy ? t('Summon · free (the crystal takes pity)') : t('Summon · {SUMMON_COST} Gold', { SUMMON_COST: fmt(SUMMON_COST) })}
               </button>
               <button className={`btn big ${canTenNormal ? 'cta' : ''} ${tutorial ? 'pulse' : ''}`} onClick={() => pull(10)} disabled={!canTenNormal}>
                 {tutorial
                   ? t('Summon ×10 · free (your first summon)')
-                  : t('Summon ×10 · {gold} Gold', { gold: (SUMMON_COST * 10).toLocaleString() })}
+                  : t('Summon ×10 · {gold} Gold', { gold: fmt(SUMMON_COST * 10) })}
               </button>
             </>
           ) : (
@@ -268,7 +269,7 @@ export function SummonScreen({ state, store }: { state: GameState; store: Store 
                 {t('Summon · {costGems} ♦', { costGems: ADV.costGems })}
               </button>
               <button className="btn gem big" onClick={() => pull(10)} disabled={!canTen}>
-                {t('Summon ×10 · {tenPullGems} ♦', { tenPullGems: ADV.tenPullGems.toLocaleString() })}
+                {t('Summon ×10 · {tenPullGems} ♦', { tenPullGems: fmt(ADV.tenPullGems) })}
               </button>
             </>
           )}
@@ -345,7 +346,7 @@ export function PartyScreen({ state, store }: { state: GameState; store: Store }
 
   function commit(next: (HeroId | null)[]) {
     try {
-      store.dispatch({ type: 'SET_PARTY', slots: next, lines: PARTY_LINES })
+      latching(store, 'party', () => store.dispatch({ type: 'SET_PARTY', slots: next, lines: PARTY_LINES }))
       setSaved(true)
     } catch {
       /* the store refused it; the board shows what is saved */
@@ -373,7 +374,7 @@ export function PartyScreen({ state, store }: { state: GameState; store: Store }
   return (
     <div className="screen">
       <h2>{t('Party')}</h2>
-      <p className="sub">{t('Up to five heroes. Slots 1–2 stand front, 3 mid, 4–5 back. Total CP {partyCP}.', { partyCP: partyCP.toLocaleString() })}</p>
+      <p className="sub">{t('Up to five heroes. Slots 1–2 stand front, 3 mid, 4–5 back. Total CP {partyCP}.', { partyCP: fmt(partyCP) })}</p>
 
       <div className="party-slots">
         {draft.map((id, i) => {

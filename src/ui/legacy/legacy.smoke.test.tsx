@@ -139,6 +139,22 @@ describe('the Memorial, from the real App', () => {
     expect(container.textContent).toMatch(/answers the bell\./)
     const newcomer = Object.values(s.heroes).find((h) => !(h.id in withBell.heroes))!
     expect(newcomer.star).toBeGreaterThanOrEqual(TUNING.legacy.recruit.minStar)
+
+    // The newcomer is met through the Summon Theatre, one card, not on a plain card.
+    const theatre = () => document.body.querySelector<HTMLElement>('.theatre')
+    expect(theatre()).not.toBeNull()
+    expect(theatre()!.querySelector('.theatre-deck')).toBeNull() // a single card: no deck row
+    act(() => theatre()!.click()) // skip the ritual: the card is dealt face down
+    expect(theatre()!.querySelector('.card-back')).not.toBeNull()
+    act(() => theatre()!.click()) // turn it
+    const card = theatre()!.querySelector('.person-card')
+    expect(card?.textContent).toContain(newcomer.name)
+    expect(card?.querySelector('.person-intro')?.textContent).toContain(newcomer.name)
+    act(() => theatre()!.click()) // and move on
+    expect(theatre()).toBeNull()
+    expect(container.textContent).toContain(`${newcomer.name} answers the bell.`)
+    // Focus comes back to the bell, not to nowhere.
+    expect(container.querySelector('.recruit-bell')!.contains(document.activeElement)).toBe(true)
   })
 
   it('passes an Echo on from the Memorial, and lists who carries it', () => {

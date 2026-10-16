@@ -25,7 +25,7 @@ import { GUIDE_STEPS, guideComplete } from '../life/FirstSteps'
 import { PLACE_LABEL, type PlaceId } from '../world/lobbyMap'
 import { nextUnlock, type NextUnlock } from './unlocks'
 import { isPlaceOpen } from '../../engine/unlocks'
-import { t } from '../i18n/i18n'
+import { fmt, t } from '../i18n/i18n'
 import { baneName, enemyName } from '../legacy/legacyText'
 import { waitingNemeses } from '../../engine/legacy'
 
@@ -65,7 +65,6 @@ const place = (p: PlaceId): GoalTarget => ({ kind: 'place', place: p })
 const label = (p: PlaceId): string => t(PLACE_LABEL[p])
 const firstName = (h: OwnedHero): string => h.name.split(/\s+/)[0] ?? h.name
 const living = (s: GameState): OwnedHero[] => (Object.values(s.heroes) as OwnedHero[]).filter((h) => h.alive)
-const fmt = (n: number): string => n.toLocaleString('en-US')
 
 /** The place a facility's panel lives at. */
 export function placeOfFacility(f: FacilityId): PlaceId {

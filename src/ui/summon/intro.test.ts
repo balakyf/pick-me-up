@@ -4,7 +4,8 @@ import { summonMany } from '../../engine/gacha'
 import { personalityOf } from '../../engine/life'
 import { FR_SUMMON } from '../i18n/frSummon'
 import { setLocale } from '../i18n/i18n'
-import { INTRO_LINES, TRAIT_WORDS, introBank, introKey, introLine, introTier, personaOf, standoutTraits } from './intro'
+import { INTRO_LINES, TRAIT_WORDS, introBank, introKey, introKeysForPull, introLine, introTier, personaOf, standoutTraits } from './intro'
+import { revealPlan } from './reveal'
 import type { OwnedHero } from '../../engine/types'
 
 afterEach(() => setLocale('en'))
@@ -22,7 +23,8 @@ describe('meeting a person', () => {
   it('every voice has lines in every bank, and every line has a French translation', () => {
     for (const bank of Object.values(INTRO_LINES)) {
       for (const lines of Object.values(bank)) {
-        expect(lines.length).toBeGreaterThanOrEqual(2)
+        expect(lines.length).toBeGreaterThanOrEqual(4)
+        expect(new Set(lines).size).toBe(lines.length)
         for (const en of lines) {
           for (const ph of placeholders(en)) expect(ALLOWED.has(ph)).toBe(true)
           expect(placeholders(en)).toContain('name')
@@ -83,5 +85,51 @@ describe('meeting a person', () => {
         expect(introBank(h)).toEqual(INTRO_LINES.humble[personalityOf(h).voice])
       }
     }
+  })
+
+  it('one pull never repeats a line until a voice runs out of lines (playtest: two quiet 2★s, one line)', () => {
+    let groupsChecked = 0
+    for (let seed = 1; seed <= 60; seed++) {
+      const pull = summonMany(createAccount(seed), 'normal', 10).heroes
+      const cards = revealPlan(pull, 1).cards
+      const keys = introKeysForPull(cards)
+      expect(keys).toHaveLength(cards.length)
+      // Every line still comes from the hero's own bank, and the first speaker keeps their own line.
+      cards.forEach((c, i) => expect(introBank(c.hero, c.star)).toContain(keys[i]))
+      const groups = new Map<string, number[]>()
+      cards.forEach((c, i) => {
+        const g = `${introTier(c.star)}|${personalityOf(c.hero).voice}`
+        groups.set(g, [...(groups.get(g) ?? []), i])
+      })
+      for (const idx of groups.values()) {
+        expect(keys[idx[0]!]).toBe(introKey(cards[idx[0]!]!.hero, cards[idx[0]!]!.star))
+        const smallest = Math.min(...idx.map((i) => introBank(cards[i]!.hero, cards[i]!.star).length))
+        const lines = idx.map((i) => keys[i]!)
+        if (idx.length <= smallest) {
+          expect(new Set(lines).size).toBe(lines.length)
+          if (idx.length > 1) groupsChecked++
+        }
+      }
+      // Deterministic: the same pull meets the same people the same way.
+      expect(introKeysForPull(cards)).toEqual(keys)
+    }
+    expect(groupsChecked).toBeGreaterThan(0)
+  })
+
+  it('two same-voice heroes who would say the same line get different ones', () => {
+    const base = heroes.find((h) => h.star === 2) ?? { ...heroes[0]!, star: 2 }
+    const voice = personalityOf(base).voice
+    const own = introKey(base)
+    // Find another 2★ of the same voice whose own line collides.
+    let twin: OwnedHero | undefined
+    for (let i = 0; i < 4000 && !twin; i++) {
+      const h = { ...base, id: `twin-${i}`, star: 2 } as OwnedHero
+      if (personalityOf(h).voice === voice && introKey(h) === own) twin = h
+    }
+    expect(twin).toBeDefined()
+    const [a, b] = introKeysForPull([{ hero: base }, { hero: twin! }])
+    expect(a).toBe(own)
+    expect(b).not.toBe(own)
+    expect(personaOf(twin!, 2, b).intro).toContain(twin!.name)
   })
 })

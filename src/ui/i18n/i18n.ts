@@ -45,11 +45,40 @@ export function onLocaleChange(fn: () => void): () => void {
   return () => listeners.delete(fn)
 }
 
+const NUMBER_TAG: Record<Locale, string> = { en: 'en-US', fr: 'fr-FR' }
+const numberFormats = new Map<string, Intl.NumberFormat>()
+
+/**
+ * A number as the active locale writes it: "27,120" and "0.5" in English, "27 120" and
+ * "0,5" in French (narrow no-break space, decimal comma). Use it for every amount the
+ * player reads (gold, damage, CP…) instead of `toLocaleString()`, which follows the
+ * browser, not the game's language.
+ */
+export function fmt(n: number, opts?: Intl.NumberFormatOptions): string {
+  const key = `${locale}|${opts ? JSON.stringify(opts) : ''}`
+  let f = numberFormats.get(key)
+  if (!f) {
+    f = new Intl.NumberFormat(NUMBER_TAG[locale], opts)
+    numberFormats.set(key, f)
+  }
+  return f.format(n)
+}
+
+/**
+ * A placeholder value as text. A number with a fractional part takes the locale's decimal
+ * mark ("×1,5" in French); whole numbers are left as they are (floors, ranks and levels
+ * are not amounts — amounts go through `fmt` before they reach `t()`).
+ */
+function show(v: string | number): string {
+  if (typeof v === 'number' && locale === 'fr' && Number.isFinite(v) && !Number.isInteger(v)) return String(v).replace('.', ',')
+  return String(v)
+}
+
 /** Translate an English UI string (with optional `{var}` placeholders). */
 export function t(en: string, vars?: Record<string, string | number>): string {
   const s = DICTS[locale][en] ?? en
   if (!vars) return s
-  const out = s.replace(/\{(\w+)\}/g, (m, k: string) => (k in vars ? String(vars[k]) : m))
+  const out = s.replace(/\{(\w+)\}/g, (m, k: string) => (k in vars ? show(vars[k]!) : m))
   return locale === 'fr' ? joinFr(s, out, vars) : out
 }
 
@@ -84,7 +113,7 @@ const FR_CONTRACT: Record<string, Record<string, string>> = { de: { le: 'du', le
  */
 function joinFr(template: string, out: string, vars: Record<string, string | number>): string {
   const re = /(?<!\p{L})([Dd]e|[Àà]) \{(\w+)\}/gu
-  const fill = (s: string) => s.replace(/\{(\w+)\}/g, (mm, k: string) => (k in vars ? String(vars[k]) : mm))
+  const fill = (s: string) => s.replace(/\{(\w+)\}/g, (mm, k: string) => (k in vars ? show(vars[k]!) : mm))
   let res = ''
   let last = 0
   let m: RegExpExecArray | null
