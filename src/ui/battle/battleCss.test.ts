@@ -57,3 +57,17 @@ describe('damage numbers under reduced motion', () => {
       if (r.selectors.some((s) => /(calm|reduce-motion).*\.dmg$/.test(s))) expect(r.body).not.toMatch(/animation\s*:\s*(?!none)\w/)
   })
 })
+
+describe('battle styles stay in the battle', () => {
+  // The battle's hit sparks were a bare `.spark`, which also matched the title logo's "!"
+  // (`<span class="spark">` in screens.tsx) and hid it: 1x1 px, faded out by sparkFly.
+  it('battle.css never styles a bare .spark (the title logo owns that class)', () => {
+    const bare = rules(css).flatMap((r) => r.selectors).filter((sel) => /(^|[\s>+~,(])\.spark(?![\w-])/.test(sel))
+    expect(bare).toEqual([])
+  })
+  it('the sparks are drawn with the battle-scoped class', () => {
+    const sparks = readFileSync(fileURLToPath(new URL('./Sparks.tsx', import.meta.url)), 'utf8')
+    expect(sparks).toMatch(/className=\{`bspark /)
+    expect(rules(css).some((r) => r.selectors.includes('.bspark'))).toBe(true)
+  })
+})
