@@ -115,7 +115,7 @@ export const FR_SHELL: Record<string, string> = {
   'A free summon waits at the Memorial': 'Une invocation gratuite vous attend au Mémorial',
   '{name}’s echo waits for an heir': 'L’écho de {name} attend un héritier',
   'Choose who carries it, at the Memorial': 'Choisissez qui le portera, au Mémorial',
-  '{name} is promoted in {time}': '{name} est promu dans {time}',
+  '{name} is promoted in {time}': 'Promotion de {name} dans {time}',
   '{name}’s drill ends in {time}': 'L’exercice de {name} finit dans {time}',
   '{name} is back from the Ruins in {time}': '{name} revient des Ruines dans {time}',
   '{place} is built in {time}': '{place} est construit dans {time}',

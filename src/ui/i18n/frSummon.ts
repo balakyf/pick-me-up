@@ -18,22 +18,22 @@ export const FR_SUMMON: Record<string, string> = {
   'Arrives knowing': 'Arrive en sachant',
 
   // ── Standout traits (summon/intro.ts TRAIT_WORDS) ─────────────────────────
-  'Hard worker': 'Travailleur',
-  Easygoing: 'Insouciant',
+  'Hard worker': 'Infatigable',
+  Easygoing: 'Facile à vivre',
   'Life of the party': 'Boute-en-train',
   Shy: 'Timide',
   'Short fuse': 'Soupe au lait',
-  Calm: 'Posé',
-  Curious: 'Curieux',
-  'Set in their ways': 'Routinier',
+  Calm: 'Calme',
+  Curious: 'Avide de découvertes',
+  'Set in their ways': 'Fidèle à ses habitudes',
   Fearless: 'Intrépide',
-  Careful: 'Prudent',
-  'Warm-hearted': 'Chaleureux',
-  Guarded: 'Réservé',
+  Careful: 'Sur ses gardes',
+  'Warm-hearted': 'Au grand cœur',
+  Guarded: 'Sur la réserve',
 
   // ── Introductions: 1★ (summon/intro.ts INTRO_LINES.humble) ────────────────
   'Hello! I’m {name}! I’ve never been summoned before. Will there be {food}? I’d fight a goblin for {food}.':
-    'Bonjour ! Moi, c’est {name} ! On ne m’avait jamais invoqué. Vous avez {food} ? Je combattrais un gobelin pour {food}.',
+    'Bonjour ! Moi, c’est {name} ! C’est ma toute première invocation. Vous avez {food} ? Je combattrais un gobelin pour {food}.',
   '{name}, at your service! I can’t fight yet, but I can learn. Probably!':
     '{name}, à votre service ! Je ne sais pas encore me battre, mais j’apprendrai. Sans doute !',
   '{name}, Master. I was only the village {trade}, but I will not shame you.':
@@ -61,7 +61,7 @@ export const FR_SUMMON: Record<string, string> = {
   'I served before, Master. I can serve again. {name}, at your command.':
     'J’ai déjà servi, Maître. Je peux servir encore. {name}, à vos ordres.',
   '{name}. I’ve been paid less to fight worse. Where’s the tower?':
-    '{name}. On m’a déjà payé moins pour affronter pire. Elle est où, cette tour ?',
+    '{name}. J’ai déjà touché moins pour affronter pire. Elle est où, cette tour ?',
   '{Trade}. Name’s {name}. Don’t make me regret this.': '{Trade}. Moi, c’est {name}. Ne me le faites pas regretter.',
   '{name}. I watch, I listen, I hit when it counts.': '{name}. J’observe, j’écoute, je frappe quand ça compte.',
   '…{name}. I keep my blade clean and my mouth shut.': '…{name}. Je garde ma lame propre et ma bouche fermée.',
@@ -70,7 +70,7 @@ export const FR_SUMMON: Record<string, string> = {
     '{name}. Chaque contrat finit d’une façon ou d’une autre. Faisons que celui-ci finisse bien.',
 
   // ── Introductions: 3★+ (INTRO_LINES.proud) ────────────────────────────────
-  '{name}, and yes, I’m as good as I look. Let’s climb!': '{name}, et oui, je suis aussi doué que j’en ai l’air. Grimpons !',
+  '{name}, and yes, I’m as good as I look. Let’s climb!': '{name}, et oui, j’ai tout le talent que vous imaginez. Grimpons !',
   '{name}! A real tower? With real monsters? Oh, this is wonderful.':
     '{name} ! Une vraie tour ? Avec de vrais monstres ? Oh, c’est merveilleux.',
   'I am {name}. My blade and my oath are yours, Master.': 'Je suis {name}. Ma lame et mon serment sont à vous, Maître.',
@@ -79,7 +79,7 @@ export const FR_SUMMON: Record<string, string> = {
   '{name}. Show me the strongest thing in that tower.': '{name}. Montrez-moi ce qu’il y a de plus fort dans cette tour.',
   '{name}. Let the tower learn my name.': '{name}. Que la tour apprenne mon nom.',
   '…{name}. Where do you need me?': '…{name}. Où avez-vous besoin de moi ?',
-  '{name}. Towers like this eat heroes. Not this one.': '{name}. Les tours comme celle-ci dévorent les héros. Pas celui-ci.',
+  '{name}. Towers like this eat heroes. Not this one.': '{name}. Les tours comme celle-ci dévorent les héros. Pas moi.',
   '{name}. I came a long way to die somewhere. It won’t be floor one.':
     '{name}. J’ai fait un long chemin pour mourir quelque part. Ce ne sera pas au premier étage.',
 
@@ -88,16 +88,16 @@ export const FR_SUMMON: Record<string, string> = {
   '{name}! Is that the tower? It’s so tall! I’ve only ever climbed trees.':
     '{name} ! C’est ça, la tour ? Elle est si haute ! Moi, je n’ai jamais grimpé qu’aux arbres.',
   'Oh! Hi! I’m {name}. I meant to bring {food}, but I was too excited.':
-    'Oh ! Salut ! Moi, c’est {name}. Je voulais apporter {food}, mais j’étais trop excité.',
+    'Oh ! Salut ! Moi, c’est {name}. Je voulais apporter {food}, mais dans l’excitation, j’ai oublié.',
   '{name}, reporting! I don’t know which end of a sword is which, but I learn fast!':
-    '{name}, présent ! Je ne sais pas par quel bout on tient une épée, mais j’apprends vite !',
+    '{name}, me voilà ! Je ne sais pas par quel bout on tient une épée, mais j’apprends vite !',
   'I am {name}, Master. I have no great deeds to my name. Not yet.':
     'Je suis {name}, Maître. Je n’ai encore accompli aucun haut fait. Pas encore.',
   'Forgive my plain manners, Master. {name}. I will learn the rest.':
     'Pardonnez mes manières simples, Maître. {name}. J’apprendrai le reste.',
   '{name}, Master. I know little of battle, but I know how to work until the work is done.':
     '{name}, Maître. Je connais peu la guerre, mais je sais travailler jusqu’à ce que le travail soit fait.',
-  '{name}. I’m no hero. But I don’t run, either.': '{name}. Je suis pas un héros. Mais je fuis pas non plus.',
+  '{name}. I’m no hero. But I don’t run, either.': '{name}. J’ai rien d’une légende. Mais je fuis pas non plus.',
   'Oi. {name}. Somebody said there’d be {food}. Was that a lie?':
     'Hé. {name}. On m’a dit qu’il y aurait {food}. C’était un mensonge ?',
   '{name}. These hands were made for work. Fighting’s just work with more yelling.':
@@ -118,7 +118,7 @@ export const FR_SUMMON: Record<string, string> = {
     '{name}, à votre service ! J’ai vu quelques tours. Celle-ci a l’air amusante.',
   '{name}! I fight better after {food}. Just so you know.': '{name} ! Je me bats mieux après {food}. C’est dit.',
   'Oh, a summons! {name}, ready when you are. What are we hitting?':
-    'Oh, une invocation ! {name}, prêt quand vous l’êtes. On tape sur quoi ?',
+    'Oh, une invocation ! {name}, quand vous voulez. On tape sur quoi ?',
   '{name}, Master. My gear is in order and my word is good.': '{name}, Maître. Mon équipement est en ordre et ma parole est sûre.',
   '{name}. I ask only for clear orders and a fair share.': '{name}. Je ne demande que des ordres clairs et une part honnête.',
   '{name}, reporting for duty. Show me where the line is, and I will hold it.':
@@ -137,11 +137,11 @@ export const FR_SUMMON: Record<string, string> = {
     '{name}. J’ai arrêté de compter mes cicatrices. Ne commençons pas les vôtres.',
   // 3★+
   '{name}! Don’t worry, Master — the hard part’s over. You found me.':
-    '{name} ! Ne vous en faites pas, Maître — le plus dur est fait. Vous m’avez trouvé.',
+    '{name} ! Ne vous en faites pas, Maître — le plus dur est fait. Vous avez mis la main sur moi.',
   '{name}, here at last! Let’s give the bards something to sing about.':
     '{name}, enfin là ! Donnons aux bardes de quoi chanter.',
   '{name}! I hope that tower is ready for me, because I am ready for it.':
-    '{name} ! J’espère que cette tour est prête pour moi, parce que moi, je suis prêt pour elle.',
+    '{name} ! J’espère que cette tour est prête pour moi, parce que moi, je l’attends de pied ferme.',
   '{name}. Many have called. Few were answered. You were, Master.':
     '{name}. Beaucoup ont appelé. Peu ont eu de réponse. Vous, si, Maître.',
   'My name is {name}, and it has been spoken in grander halls than this. Let us add this tower to the tale.':
@@ -150,7 +150,7 @@ export const FR_SUMMON: Record<string, string> = {
     '{name}, à vos ordres. Choisissez l’étage le plus dur ; je l’affronterai.',
   '{name}. Don’t get used to winning this easily. Actually, do.':
     '{name}. Ne vous habituez pas à gagner aussi facilement. En fait, si.',
-  '{name}. Strongest in the room. Next question.': '{name}. Le plus fort de la salle. Question suivante.',
+  '{name}. Strongest in the room. Next question.': '{name}. La plus grande force de la salle. Question suivante.',
   '{name}. I hope there’s something in that tower worth my time.':
     '{name}. J’espère qu’il y a dans cette tour quelque chose qui vaut mon temps.',
   '{name}. I don’t miss.': '{name}. Je ne rate jamais.',

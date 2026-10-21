@@ -24,7 +24,7 @@ export const FR_BATTLE: Record<string, string> = {
   'No orders left this battle.': 'Plus d’ordres pour ce combat.',
   'No orders left this battle: only Retreat can change this.': 'Plus d’ordres pour ce combat : seule la retraite peut changer cela.',
   'The Master: “Fall back, {name}!”': 'Le Maître : « Repliez-vous, {name} ! »',
-  'Saved!': 'Sauvé !',
+  'Saved!': 'Sauvetage !',
   'The order could not reach the field.': 'L’ordre n’a pas pu atteindre le champ de bataille.',
 
   // ── Orders dock, intents, pacing (S16, S17, S6, S8) ────────────────────────
@@ -40,19 +40,19 @@ export const FR_BATTLE: Record<string, string> = {
   off: 'coupé',
 
   // ── Isel on commentary (S17) ───────────────────────────────────────────────
-  'A clean critical! They remember the drills.': 'Un critique net ! Ils se souviennent de l’entraînement.',
+  'A clean critical! They remember the drills.': 'Un critique net ! L’entraînement a payé.',
   'Oh, that one landed. Well struck!': 'Oh, celui-là a porté. Bien frappé !',
   'There — right where it hurts.': 'Là — exactement où ça fait mal.',
-  'Master… one left standing. Choose carefully.': 'Maître… il n’en reste qu’un debout. Choisissez bien.',
+  'Master… one left standing. Choose carefully.': 'Maître… il ne reste qu’un héros debout. Choisissez bien.',
   'The line is breaking. Pull them out, or trust them?': 'La ligne cède. Les rappeler, ou leur faire confiance ?',
   'Careful. I would rather not carve another name.': 'Prudence. Je préférerais ne pas graver un autre nom.',
   '{name}… I will light a lamp at the Memorial.': '{name}… J’allumerai une lampe au Mémorial.',
   'We lost {name}. The waiting room will feel it.': 'Nous avons perdu {name}. La salle d’attente le ressentira.',
   'Rest now, {name}. You were brave.': 'Repose en paix, {name}. Quel courage.',
-  'Saved! Your orders changed fate.': 'Sauvé ! Vos ordres ont changé le destin.',
+  'Saved! Your orders changed fate.': 'Sauvetage réussi ! Vos ordres ont changé le destin.',
   'You pulled {name} back from the edge.': 'Vous avez arraché {name} au gouffre.',
   '{name} lives — because you chose.': '{name} vit — parce que vous avez choisi.',
   'Flawless. Everyone comes home tonight.': 'Sans faute. Tout le monde rentre ce soir.',
   'Not a single scratch worth mourning. Well led.': 'Pas une égratignure à pleurer. Bien mené.',
-  'All of them, safe. That is how it should be.': 'Tous sains et saufs. C’est ainsi que ça doit être.',
+  'All of them, safe. That is how it should be.': 'Tout le monde est sain et sauf. C’est ainsi que ça doit être.',
 }

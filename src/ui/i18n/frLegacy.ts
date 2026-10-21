@@ -9,13 +9,13 @@ export const FR_LEGACY: Record<string, string> = {
   'Avenged {name}': 'A vengé {name}',
   '{a} now carries the echo of {b}.': '{a} porte désormais l’écho de {b}.',
   '{a} struck down {bane}. The fallen are avenged.': '{a} a abattu {bane}. Les morts sont vengés.',
-  '{a} avenged a fallen friend.': '{a} a vengé un ami tombé.',
-  '{a} struck down the {enemy} that killed {b}. {b} is avenged.': '{a} a abattu l’ennemi qui avait tué {b} ({enemy}). {b} est vengé.',
+  '{a} avenged a fallen friend.': '{a} a vengé la mort d’un être cher.',
+  '{a} struck down the {enemy} that killed {b}. {b} is avenged.': '{a} a abattu l’ennemi qui avait tué {b} ({enemy}). La mort de {b} est vengée.',
 
   // ── Engine refusals ────────────────────────────────────────────────────────
   'That echo has already been passed on.': 'Cet écho a déjà été transmis.',
   'Only the living can carry an echo.': 'Seuls les vivants peuvent porter un écho.',
-  'A captive cannot take an echo.': 'Un captif ne peut pas recevoir d’écho.',
+  'A captive cannot take an echo.': 'Un héros en captivité ne peut pas recevoir d’écho.',
   'That hero already carries all the echoes they can.': 'Ce héros porte déjà autant d’échos qu’il le peut.',
   'That hero is not among the suggested heirs.': 'Ce héros ne fait pas partie des héritiers proposés.',
   'No one is waiting at the bell.': 'Personne n’attend à la cloche.',
@@ -24,7 +24,7 @@ export const FR_LEGACY: Record<string, string> = {
   'Pass on {name}’s resolve': 'Transmettre la volonté de {name}',
   'Echo of {name}': 'Écho de {name}',
   '+{pct}% {stat}': '+{pct} % {stat}',
-  '{skill} +1 if known': '{skill} +1 s’il la connaît',
+  '{skill} +1 if known': '{skill} +1 si la compétence est déjà connue',
   '{skill} +1': '{skill} +1',
   'Choose an heir:': 'Choisissez un héritier :',
   'Choose an heir in the Memorial.': 'Choisissez un héritier au Mémorial.',
@@ -36,15 +36,15 @@ export const FR_LEGACY: Record<string, string> = {
   'An unclaimed echo waits in the Memorial. It never fades.': 'Un écho non transmis attend au Mémorial. Il ne s’efface jamais.',
   '{heir} now carries the echo of {fallen}.': '{heir} porte désormais l’écho de {fallen}.',
   'I carry {fallen} with me.': 'Je porte {fallen} avec moi.',
-  'Closest friend': 'Ami le plus proche',
-  'Their friend': 'Son ami',
-  'Their old rival': 'Son vieux rival',
+  'Closest friend': 'L’amitié la plus forte',
+  'Their friend': 'Une amitié',
+  'Their old rival': 'Une vieille rivalité',
   'Fought beside them': 'A combattu à ses côtés',
-  'A fellow hero': 'Un compagnon de la salle d’attente',
-  'Passed on by {name}, who fell in the tower.': 'Transmis par {name}, tombé dans la tour.',
+  'A fellow hero': 'De la même salle d’attente',
+  'Passed on by {name}, who fell in the tower.': 'Transmis par {name}, dont la tour a pris la vie.',
 
   // ── Results: what they leave behind ────────────────────────────────────────
-  'What they leave behind': 'Ce qu’ils laissent derrière eux',
+  'What they leave behind': 'Ce qui leur survit',
   'The {enemy} that struck {name} down is marked now: {bane}. It waits on floor {n}.':
     'L’ennemi qui a abattu {name} ({enemy}) est désormais marqué : {bane}. Il attend à l’étage {n}.',
   'The tower remembers: +{pct}% to every stat.': 'La tour se souvient : +{pct} % à toutes les stats.',
@@ -67,7 +67,7 @@ export const FR_LEGACY: Record<string, string> = {
   'Struck {name} down on floor {floor}.': 'A abattu {name} à l’étage {floor}.',
   'waits on floor {n}': 'attend à l’étage {n}',
   'still at large in the tower': 'rôde toujours dans la tour',
-  'Avenged at last': 'Enfin vengé',
+  'Avenged at last': 'Vengeance accomplie',
 
   // ── The Memorial's plaques ─────────────────────────────────────────────────
   'Each hero who fell in the climb lends the living +{each}%, up to +{cap}%.':
@@ -77,7 +77,7 @@ export const FR_LEGACY: Record<string, string> = {
   'Echoes waiting for an heir': 'Échos en attente d’un héritier',
   'Echoes carried': 'Échos portés',
   'How they died': 'Sa mort',
-  'struck down by the {enemy} (Lv{level})': 'tombé face à l’ennemi « {enemy} » (Niv.{level})',
+  'struck down by the {enemy} (Lv{level})': 'sous les coups de l’ennemi « {enemy} » (Niv.{level})',
   'What it taught': 'La leçon',
   'Their echo': 'Son écho',
   'carried by {name}': 'porté par {name}',
@@ -97,7 +97,7 @@ export const FR_LEGACY: Record<string, string> = {
   'I carry {fallen} with me. Every stair, every swing.': 'Je porte {fallen} avec moi. À chaque marche, à chaque coup.',
   'Sometimes my hands move the way {fallen}’s did. I let them.': 'Parfois mes mains bougent comme celles de {fallen}. Je les laisse faire.',
   '{fallen} would laugh at me for being this serious. So I laugh for them.':
-    '{fallen} se moquerait de me voir si sérieux. Alors je ris à sa place.',
+    '{fallen} se moquerait de me voir prendre tout ça tellement au sérieux. Alors je ris à sa place.',
   'I bear {fallen}’s echo, Master. I intend to be worthy of it.': 'Je porte l’écho de {fallen}, Maître. J’entends m’en montrer digne.',
   '{fallen} paid for this strength. I will not waste it.': '{fallen} a payé cette force. Je ne la gaspillerai pas.',
   '…{fallen} is still here. Right here.': '…{fallen} est encore là. Juste ici.',

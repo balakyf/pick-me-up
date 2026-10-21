@@ -1115,6 +1115,6 @@ All 28 changes shipped on `claude/amazing-shannon-682s6p`, built as planned: WP0
 - **F41 (Versace) is still the hardest early wall.** It is now honestly scouted Deadly. Making it fairer needs a tempo-aware CP or a lighter roster, which is a balance call.
 - **Act I Path floors (F3–F9) read Safe** for a player who never takes the Skull door. The early tension comes from the F5 and F10 bosses and the Skull offered on every floor.
 - **A few losses still cost 3 or more heroes.** A stricter rout rule turns about 10% of wins into retreats.
-- **French hero wording assumes the masculine** ("est vengé").
+- **French hero wording no longer assumes the masculine** (fixed). Heroes have no gender in the engine, so 136 French entries were rephrased to not agree with the hero ("La mort de {b} est vengée", "{a} a gagné en force", "je l’attends de pied ferme"), and trait and favor-tier tags became epicene or nouns ("Calme", "Dévouement"). `frGender.test.ts` guards this: it flags 71 entries in the pre-fix files and 0 now. Still masculine: job and tier nouns ("fermier", "Apprenti", in "{job} {tier}") and generic role nouns ("un héritier", "un cuisinier"). Fixing those needs either a gender field or a rename of every job to a form without gender.
 - **Technical leftovers:** the build warns about a chunk over 500 kB, and `facilityPanels.tsx` and `legacy/MemorialPanel.tsx` import each other (only inside functions, so harmless for now).
 - **Phone layout:** the one-time "Back up your save?" nudge overlaps the goal tracker until it is dismissed.

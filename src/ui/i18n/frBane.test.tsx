@@ -126,7 +126,7 @@ describe('French Bane and enemy names mid-sentence', () => {
     expect(container.querySelector('.decisive-choice.focus')).toBeNull()
     expect(container.textContent).not.toContain('Le Fléau')
     // BattleScene's caption for a Focus order puts the Bane mid-sentence.
-    expect(t('The Master: “Everyone on {name}!”', { name: inSentence(enemyName("Mira's Bane")) })).toBe('Le Maître : « Tous sur le Fléau de Mira ! »')
+    expect(t('The Master: “Everyone on {name}!”', { name: inSentence(enemyName("Mira's Bane")) })).toBe('Le Maître : « Tout le monde sur le Fléau de Mira ! »')
   })
 
   it('the Because… lines use the same verb as the Focus button, and the right article', () => {
@@ -144,7 +144,7 @@ describe('French Bane and enemy names mid-sentence', () => {
     for (const k of Object.keys(FR).filter((k) => k.startsWith('Focus: '))) expect(FR[k]).toMatch(/^Focaliser /)
 
     const r = explainFloor(fixtureResult(log, { nemesisDefeated: ['nem_1'] }), [], withBane())
-    expect(r.map((x) => x.text)).toContain('Vengeance : le Fléau de Mira est tombé, et Mira est vengé.')
+    expect(r.map((x) => x.text)).toContain('Vengeance : le Fléau de Mira est tombé, et la mort de Mira est vengée.')
   })
 
   it('the chronicle names the avenged killer with an article', () => {
@@ -152,7 +152,7 @@ describe('French Bane and enemy names mid-sentence', () => {
     const s = withBane()
     const ilan = Object.keys(s.heroes)[0] as HeroId
     const line = chronicleLine(s, { at: 0, kind: 'revenge', heroIds: [ilan], detail: 'nem_1' })
-    expect(line).toMatch(/ a abattu l’ennemi qui avait tué Mira \(Gobelin\)\. Mira est vengé\.$/)
+    expect(line).toMatch(/ a abattu l’ennemi qui avait tué Mira \(Gobelin\)\. La mort de Mira est vengée\.$/)
     // An old entry carries the Bane's English name: it is translated, and mid-sentence.
     const old = chronicleLine(s, { at: 0, kind: 'revenge', heroIds: [ilan], detail: "Mira's Bane" })
     expect(old).toMatch(/ a abattu le Fléau de Mira\. Les morts sont vengés\.$/)
@@ -160,7 +160,7 @@ describe('French Bane and enemy names mid-sentence', () => {
 
   it('the Memorial plaque and the Legacy slot keep enemy names grammatical', () => {
     setLocale('fr')
-    expect(t('struck down by the {enemy} (Lv{level})', { enemy: t('Goblin'), level: 3 })).toBe('tombé face à l’ennemi « Gobelin » (Niv.3)')
+    expect(t('struck down by the {enemy} (Lv{level})', { enemy: t('Goblin'), level: 3 })).toBe('sous les coups de l’ennemi « Gobelin » (Niv.3)')
     const base = withBane()
     const dead = Object.keys(base.heroes)[0] as HeroId
     const nem = { ...base.life.legacy.nemeses[0]!, heroId: dead }
