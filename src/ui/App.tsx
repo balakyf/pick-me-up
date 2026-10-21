@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { lazy, Suspense, useEffect, useState, type ReactNode } from 'react'
 import '@fontsource/pixelify-sans/400.css'
 import '@fontsource/pixelify-sans/600.css'
 import './ui.css'
@@ -6,7 +6,6 @@ import { useGame, getStore, BROKEN_SAVE_KEY, bootLoadFailed } from './useGame'
 import { TitleScreen, SummonScreen, RosterScreen, PartyScreen } from './screens'
 import { TowerScreen } from './TowerScreen'
 import { BattleScene } from './battle/BattleScene'
-import { DevGallery } from './DevGallery'
 import { ReturnLayer } from './return/ReturnLayer'
 import { LobbyWorld, PLACE_ICON, type WorldView } from './world/LobbyWorld'
 import { PLACE_LABEL, type PlaceId } from './world/lobbyMap'
@@ -23,6 +22,9 @@ import { menuGroups, nextUnlock, placeAccess, shortCondition } from './shell/unl
 import { DEFAULT_SAVE_KEY } from '../engine/account'
 import { usePrefs } from './prefs'
 import './shell/shell.css'
+
+/** Dev-only sprite sheet (?gallery): its own lazily-loaded chunk, never downloaded by a player. */
+const DevGallery = lazy(() => import('./DevGallery').then((m) => ({ default: m.DevGallery })))
 
 type View = 'lobby' | WorldView
 
@@ -345,7 +347,11 @@ export function App() {
   }, [wantFight, state, demoLog])
 
   if (typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('gallery')) {
-    return <DevGallery />
+    return (
+      <Suspense fallback={null}>
+        <DevGallery />
+      </Suspense>
+    )
   }
 
   const hasSave = continuableSave()

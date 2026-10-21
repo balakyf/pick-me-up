@@ -80,19 +80,33 @@
   position: fixed; left: 12px; bottom: 44px; z-index: 22;
   background: #1c1640; border-color: var(--rim-dark);
 }
-@media (max-width: 640px) { .rest-btn { bottom: 64px; } }
+/* Phones: just above the HUD bar (which wraps at the bottom); --hud-clear is its measured
+   height from the bottom edge (hudClearance.ts), 94px being its usual two rows at 390 px. */
+@media (max-width: 640px) { .rest-btn { bottom: calc(var(--hud-clear, 94px) + 8px); } }
 /* The lobby's stage is its own stacking context, so a window opened inside it would sit
    under these fixed buttons: hide them while any window is open. */
 .app:has(.pwin-backdrop) .rest-btn, .app:has(.pwin-backdrop) .backup-nudge,
 .app:has(.dialog) .rest-btn { display: none; }
 
 /* ── The backup nudge and window ─────────────────────────────────────────── */
+/* Where it sits never covers the lobby HUD (it used to sit top-centre, over the goal
+   tracker on phones and over the Master card between 721 and ~1000 px):
+   - wide screens: the right-hand column, under the top-right HUD bar and clear of the
+     left column (Master card + goal tracker, at most 310 px wide);
+   - phones (the HUD bar drops to the bottom and wraps): a bottom sheet just above that
+     bar (its measured height, --hud-clear), leaving a row for "Rest for now".
+   Checked at 360x640 (French), 390x844, 700x800, 844x390, 1024x768 and 1280x800 in Chromium. */
 .backup-nudge {
-  position: fixed; top: 84px; left: 50%; transform: translateX(-50%); z-index: 22;
+  position: fixed; top: 64px; right: 12px; z-index: 22;
   display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: center;
-  max-width: calc(100vw - 24px); padding: 6px 10px; font-size: 14px;
+  max-width: min(440px, calc(100vw - 332px)); padding: 6px 10px; font-size: 14px;
   background: #120e2cee; border: 2px solid var(--rim-dark); box-shadow: 0 0 0 2px var(--line);
 }
+@media (max-width: 640px) {
+  .backup-nudge { top: auto; bottom: calc(var(--hud-clear, 94px) + 54px); left: 8px; right: 8px; max-width: none; }
+}
+/* Following a hero puts its bar at the top centre: one prompt at a time. */
+.app:has(.hud-follow) .backup-nudge { display: none; }
 .backup { display: flex; flex-direction: column; gap: 6px; }
 .backup p { margin: 0; }
 .backup-ok { color: var(--good); font-size: 14px; }

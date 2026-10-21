@@ -18,6 +18,7 @@ import { accountKey, awayRealMs, idleRealMs, isArrival, isFreshMaster, isGreyArr
 import { ACTIVE_WRITE_EVERY_MS, noteActive, readLastActive } from './activity'
 import { useHonestTabTitle } from './tabTitle'
 import { requestPersistentStorage } from './saveTransfer'
+import { clearanceStyle, useHudClearance } from './hudClearance'
 import './return.css'
 
 export interface ReturnLayerProps {
@@ -278,18 +279,22 @@ export function ReturnLayer({ state, store, view, onGo, onBusyChange, quiet = fa
 
   const inLobby = view === 'lobby'
   const nowWorld = toWorldTime(Date.now())
+  const showRest = inLobby && restReady && !arrival && !lightsOut
+  const showNudge = inLobby && nudge && !backup && !quiet && !ceremony && !arrival && !lightsOut && !letterOpen
+  // Phones: both sit just above the lobby's HUD bar, however many rows it wraps to.
+  const dock = clearanceStyle(useHudClearance(showRest || showNudge))
   return (
     <>
       {ceremony && <div className="reinterference" aria-hidden="true">{t('✦ Re-interference ✦')}</div>}
 
-      {inLobby && restReady && !arrival && !lightsOut && (
-        <button className="pbtn rest-btn" onClick={() => setLightsOut(true)} title={t('A good place to stop: see what waits for next time')}>
+      {showRest && (
+        <button className="pbtn rest-btn" style={dock} onClick={() => setLightsOut(true)} title={t('A good place to stop: see what waits for next time')}>
           ☾ {t('Rest for now')}
         </button>
       )}
 
-      {inLobby && nudge && !backup && !quiet && !ceremony && !arrival && !lightsOut && !letterOpen && (
-        <div className="backup-nudge" role="status">
+      {showNudge && (
+        <div className="backup-nudge" role="status" style={dock}>
           <span>💾 {t('Back up your save? Browsers sometimes forget.')}</span>
           <button className="pbtn sm" onClick={() => closeNudge(true)}>
             {t('Back up')}

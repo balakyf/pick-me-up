@@ -6,7 +6,6 @@ import { banquetWouldHelp } from '../engine/kitchen'
 import { canPromote, canAfford, promotionCost, promotionPayment, promotionTargetStar } from '../engine/promotion'
 import { tacticalFocusBonus, tacticalOverlookSlots } from '../engine/tactical'
 import { masterXpToNext } from '../engine/master'
-import { upgradeCost, canUpgrade, unlockMasterLevel } from '../engine/facilities'
 import { worldDayIndex, dailyDungeonFor, dailyUnlocked, dailyAttemptsLeft } from '../engine/daily'
 import type { DailyReward } from '../engine/daily'
 import { attemptDailyWithResult } from '../engine/store'
@@ -25,6 +24,7 @@ import { upgradeEquipmentWithResult } from '../engine/store'
 import { t, fmt } from './i18n/i18n'
 import { DormitoryInfo, ForgeOrderSection, HereNow, KitchenPantry, LibraryInfo, StaffSection, WatchtowerInfo } from './life/lifePanels'
 import { MemorialPanel } from './legacy/MemorialPanel'
+import { UpgradeControl, timeLeft } from './UpgradeControl'
 import { PlacePreview } from './shell/PlacePreview'
 
 /**
@@ -108,14 +108,6 @@ function BanquetAction({ state, store }: { state: GameState; store: Store }) {
 
 const SKIP_GEMS = TUNING.lobby.promotion.skipGemCost
 
-/** Human-readable "time left" for a promotion countdown (cosmetic; whole units). */
-function timeLeft(ms: number): string {
-  if (ms <= 0) return t('finishing…')
-  const mins = Math.ceil(ms / 60_000)
-  if (mins < 60) return t('{m}m left', { m: mins })
-  return t('{h}h {m}m left', { h: Math.floor(mins / 60), m: mins % 60 })
-}
-
 /** The Promotion Chamber's actions: promote at-cap heroes, or skip a running timer. */
 function PromotionAction({ state, store }: { state: GameState; store: Store }) {
   const [err, setErr] = useState<string | null>(null)
@@ -177,70 +169,6 @@ function PromotionAction({ state, store }: { state: GameState; store: Store }) {
           </div>
         )
       })}
-      {err && <div className="lr-action-note" style={{ color: 'var(--bad)' }}>{err}</div>}
-    </div>
-  )
-}
-
-const FAC = TUNING.lobby.facilities
-
-/** Upgrade control shared by every facility room: build/skip + Master-Level gating. */
-export function UpgradeControl({ state, store, facility }: { state: GameState; store: Store; facility: FacilityId }) {
-  const [err, setErr] = useState<string | null>(null)
-  const f = state.facilities[facility]
-  const nowWorld = toWorldTime(Date.now())
-
-  function dispatch(cmd: Parameters<Store['dispatch']>[0]) {
-    setErr(null)
-    try {
-      store.dispatch(cmd, Date.now())
-    } catch (e) {
-      setErr(t(e instanceof Error ? e.message : 'Action failed'))
-    }
-  }
-
-  // Build in progress → countdown + gem skip.
-  if (f.build !== null) {
-    return (
-      <div className="lr-upgrade">
-        <span className="muted">{t('⏳ Lv {toLevel} · {n}', { toLevel: f.build.toLevel, n: timeLeft(f.build.completesAtWorld - nowWorld) })}</span>
-        <button
-          className="btn gem sm"
-          onClick={() => dispatch({ type: 'SKIP_TIMER', kind: 'facility', id: facility })}
-          disabled={state.gems < FAC.skipGemCost}
-        >
-          ⏩ {FAC.skipGemCost} 💎
-        </button>
-      </div>
-    )
-  }
-
-  const maxed = f.level >= FAC.maxLevel
-  const unlockAt = unlockMasterLevel(facility)
-  const chamberLocked = f.level === 0 && state.meta.masterLevel < unlockAt
-  const mlCapped = !maxed && f.level >= state.meta.masterLevel
-  const cost = upgradeCost(facility, f.level)
-  const ok = canUpgrade(state, facility)
-  const isBuild = f.level === 0
-
-  const note = maxed
-    ? t('Max level reached.')
-    : chamberLocked
-      ? t('Unlocks at Master Lv {unlockMasterLevel}.', { unlockMasterLevel: unlockAt })
-      : mlCapped
-        ? t('Raise Master Level to upgrade.')
-        : state.gold < cost
-          ? t('Not enough gold.')
-          : t('Lv {n}: faster/stronger effects.', { n: f.level + 1 })
-
-  return (
-    <div className="lr-upgrade">
-      <span className="lr-action-note">{note}</span>
-      {!maxed && (
-        <button className="btn sm" onClick={() => dispatch({ type: 'UPGRADE_FACILITY', facility })} disabled={!ok}>
-          {isBuild ? t('🔨 Build') : t('⬆ Upgrade')} · {fmt(cost)} ◆
-        </button>
-      )}
       {err && <div className="lr-action-note" style={{ color: 'var(--bad)' }}>{err}</div>}
     </div>
   )

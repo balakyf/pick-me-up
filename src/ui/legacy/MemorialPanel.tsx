@@ -3,7 +3,7 @@ import type { Store } from '../../engine/store'
 import { TUNING } from '../../engine/tuning'
 import { echoesOf, killerOf, legacyPct } from '../../engine/legacy'
 import { t } from '../i18n/i18n'
-import { UpgradeControl } from '../facilityPanels'
+import { UpgradeControl } from '../UpgradeControl'
 import { HereNow } from '../life/lifePanels'
 import { accountDay, eulogy, lastWords, shortName } from '../life/speech'
 import { BequestCard, heirOf } from './BequestCard'
@@ -17,9 +17,6 @@ import './legacy.css'
  * bonus, the Echoes waiting for an heir, the new faces at the bell, the Banes still in the
  * tower, who carries whom, and a plaque for every grave (how they died, what it taught,
  * what a friend says of them, their last words).
- *
- * Note: facilityPanels imports this module and this module imports UpgradeControl from
- * facilityPanels. The cycle is safe because each side only uses the other at render time.
  */
 export function MemorialPanel({ state, store, onProfile }: { state: GameState; store: Store; onProfile?: (id: string) => void }) {
   const legacy = state.life.legacy
