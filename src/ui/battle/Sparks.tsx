@@ -58,7 +58,7 @@ export function Sparks({ x, y, sparks }: { x: number; y: number; sparks: readonl
       {sparks.map((s) => (
         <span
           key={s.key}
-          className={`spark s${s.size}`}
+          className={`bspark s${s.size}`}
           style={{
             background: s.color,
             animationDelay: `${s.delay}ms`,
