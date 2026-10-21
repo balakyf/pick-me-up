@@ -164,12 +164,44 @@ export function levelLagMult(level: number, f: number, worldMult = 1): number {
  */
 export function directorCp(state: GameState, f: number): number {
   const wm = T.worldMult[state.worldGrade] ?? 1
-  const units: { cp: number; level: number }[] = []
-  for (const h of directorHeroes(state)) units.push({ cp: buildCombatUnit(h, 'front', SKILLS, state.inventory).cp, level: h.xp.level })
-  units.sort((a, b) => b.cp - a.cp)
   let sum = 0
-  for (let i = 0; i < Math.min(TUNING.account.partySize, units.length); i++) sum += units[i]!.cp * levelLagMult(units[i]!.level, f, wm)
+  for (const u of directorUnits(state)) sum += u.cp * levelLagMult(u.level, f, wm)
   return sum
+}
+
+/** The five heroes the director reads (`directorHeroes`, strongest unit CP first), as
+ *  `buildCombatUnit` builds them: CP, level and speed. */
+function directorUnits(state: GameState): { cp: number; level: number; spd: number }[] {
+  const units: { cp: number; level: number; spd: number }[] = []
+  for (const h of directorHeroes(state)) {
+    const u = buildCombatUnit(h, 'front', SKILLS, state.inventory)
+    units.push({ cp: u.cp, level: h.xp.level, spd: u.stats.spd })
+  }
+  units.sort((a, b) => b.cp - a.cp)
+  return units.slice(0, TUNING.account.partySize)
+}
+
+/** The mean speed of the heroes the director reads (0 for nobody fit to fight): the
+ *  tempo an enemy's speed is judged against (`tempoMult`). */
+export function directorSpd(state: GameState): number {
+  const units = directorUnits(state)
+  return units.length === 0 ? 0 : units.reduce((n, u) => n + u.spd, 0) / units.length
+}
+
+/**
+ * How much more an enemy of speed `spd` is worth than its CP says, against a party whose
+ * mean speed is `refSpd`. CP adds speed in (`cp.weights.spd`) like any other stat, but an
+ * ATB unit acts in proportion to its speed: Versace of Silver Lightning (F41) at ~3× the
+ * party's speed hits ~3× as often as a unit of the same CP at the party's pace, so CP
+ * prices him far under what he does. Past `climb.tempo.grace` × the party's speed, the
+ * excess counts as (spd / (refSpd × grace)) ^ exp — offense only, so a square root; 1 at
+ * or under it (the biome mobs never get there: p90 ≈ 1.2× the party). 1 for an empty party.
+ */
+export function tempoMult(spd: number, refSpd: number): number {
+  const { grace, exp } = CL.tempo
+  if (!(refSpd > 0)) return 1
+  const r = spd / (refSpd * grace)
+  return r <= 1 ? 1 : r ** exp
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -250,7 +282,7 @@ export function staticBudget(state: GameState, f: number, kind: FloorKind): numb
   if (!isFightKind(kind) || mult <= 0) return 0
   if (kind === 'tutorial' || f < CL.directorFromFloor) return floorPower(f, wm) * mult
   if (kind === 'boss') return pathTarget(f, wm) * kindRel('boss') * T.anchorBudgetMult * anchorFeel(f)
-  return pathBudget(f, wm) * kindRel(kind)
+  return pathBudget(f, wm) * kindRel(kind) * (kind === 'path' ? pathFeel(f) : 1)
 }
 
 /** The authored boss on floor `f`'s feel multiplier (`climb.anchorFeel[f]`, default 1):
@@ -261,8 +293,23 @@ export function anchorFeel(f: number): number {
   return CL.anchorFeel[f] ?? 1
 }
 
+/** The Path on floor `f`'s feel multiplier (`climb.pathFeel[f]`, default 1): × that Path
+ *  floor's static budget and its mercy cap alike, outside the step-capped Path curve (so it
+ *  never carries into the floors after it). Act I's Paths sat at ~0.75× the roster, under
+ *  every cap, and read 100% Safe; these give them a gentle sawtooth up to the F5 and F10
+ *  bosses. Only the Path: the Skull and the Breather keep their own curves. */
+export function pathFeel(f: number): number {
+  return CL.pathFeel[f] ?? 1
+}
+
+/** A kind's feel multiplier on floor `f`: the Boss's `anchorFeel`, the Path's `pathFeel`,
+ *  1 for every other kind. */
+export function kindFeel(f: number, kind: FloorKind): number {
+  return kind === 'boss' ? anchorFeel(f) : kind === 'path' ? pathFeel(f) : 1
+}
+
 /** The director's mercy band for `kind`: budget ≤ directorCp × mercyBand(kind) (× the
- *  anchor's `anchorFeel` on a Boss floor). */
+ *  floor's `kindFeel`: a Boss's `anchorFeel`, a Path's `pathFeel`). */
 export function mercyBand(kind: FloorKind): number {
   return CL.mercyBand[kind] ?? 1
 }
@@ -274,7 +321,7 @@ export function mercyCap(state: GameState, f: number, kind: FloorKind): number |
   const band = mercyBand(kind)
   if (band <= 0) return null
   const cp = directorCp(state, f)
-  return cp > 0 ? cp * band * (kind === 'boss' ? anchorFeel(f) : 1) : null
+  return cp > 0 ? cp * band * kindFeel(f, kind) : null
 }
 
 /** The budget a floor of `kind` is built to: the static curve × kind, capped by the

@@ -103,8 +103,9 @@ export interface FeelOptions {
   scout?: boolean
   /** Fight the Skull counterfactual on floors that offer one. */
   skull?: boolean
-  /** Called with the state just before each committed attempt (party set, time ticked). */
-  onAttempt?: (pre: GameState) => void
+  /** Called with the state just before each attempt (party set, time ticked): every
+   *  committed attempt, and (`counterfactual`) every Skull fought on the side. */
+  onAttempt?: (pre: GameState, counterfactual: boolean) => void
 }
 
 const REAL_EPOCH = Date.UTC(2026, 0, 5)
@@ -244,6 +245,7 @@ export function playFeelRun(seed: number, variant: Variant, opts: FeelOptions = 
       const e0: GameState = { ...s, tower: { ...s.tower, kind: 'elite', doors: null } }
       const e = reduce(e0, { type: 'SET_PARTY', ...suggestParty(e0) }, toWorldTime(now))
       const report = scout ? scoutFloor(e) : null
+      opts.onAttempt?.(e, true)
       const r = resolve(e, variant)
       fights.push(sample(seed, floor, 'elite', true, true, report?.threat ?? null, r.plain.result, r.kept.result, r.protectedOrder))
     }
@@ -264,7 +266,7 @@ export function playFeelRun(seed: number, variant: Variant, opts: FeelOptions = 
     const pre = reduce(s, { type: 'TICK' }, toWorldTime(now))
     const kind = pre.tower.kind ?? floorKindBase(floor)
     const report = scout ? scoutFloor(pre) : null
-    opts.onAttempt?.(pre)
+    opts.onAttempt?.(pre, false)
     const n = tries.get(floor) ?? 0
     tries.set(floor, n + 1)
     let r

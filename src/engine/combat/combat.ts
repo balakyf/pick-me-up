@@ -478,6 +478,73 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
       .reduce((n, e) => n + Math.max(0, e.currentHP), 0)
     return ours < theirs
   }
+  /** The damage one free action of `a` is expected to deal `d` (its strongest no-SP skill):
+   *  the same multipliers `resolveHit` applies — attacker-level mitigation, element,
+   *  expected crit, enrage/frenzy/bane, immune/resist/vulnerable/guard — at mean variance.
+   *  An estimate for the rout check only: no RNG, no orders or Boons. */
+  const expectedHit = (a: MutUnit, d: MutUnit): number => {
+    let skill: SkillEffect = BASIC_ATTACK
+    let best = 0
+    for (const sk of a.ref.skills) {
+      if (sk.spCost === 0 && sk.skillMult > best) {
+        skill = sk
+        best = sk.skillMult
+      }
+    }
+    const st = a.ref.stats
+    const physical = skill.damageType === 'physical'
+    const k = C.defenseKFlat + C.defenseKPerLevel * a.ref.level
+    const el: Element = skill.element ?? a.ref.element
+    const crit = 1 + (Math.min(100, Math.max(0, st.critPct)) / 100) * (C.critMult - 1)
+    let dmg = (physical ? st.pAtk : st.mAtk) * skill.skillMult * elementMult(el, d.ref.element) * crit * (k / (k + (physical ? d.ref.stats.pDef : d.ref.stats.mDef)))
+    for (const kw of a.ref.keywords) {
+      if (kw.kind === 'enrage' && tick >= kw.afterTick) dmg *= kw.multiplier
+      else if (kw.kind === 'frenzy' && a.currentHP * 100 < st.maxHP * kw.belowHpPct) dmg *= kw.multiplier
+      else if (kw.kind === 'bane' && d.ref.family === kw.family) dmg *= kw.multiplier
+    }
+    let guardMult = 1
+    const ranged = a.ref.unitClass === 'archer' || a.ref.unitClass === 'mage'
+    for (const kw of d.ref.keywords) {
+      if (kw.kind === 'immune' && kw.damageType === skill.damageType) return 0
+      if (kw.kind === 'resist' && kw.damageType === skill.damageType) guardMult *= 1 - kw.reduction
+      else if (kw.kind === 'vulnerable' && kw.element === el) dmg *= C.vulnerableMult
+      else if (kw.kind === 'guard' && (kw.vs === undefined || (kw.vs === 'ranged' ? ranged : kw.vs === el))) guardMult *= 1 - kw.reduction
+    }
+    return dmg * Math.max(MIN_GUARD_MULT, guardMult)
+  }
+  /** Ticks for `attackers` to cut down every one of `defenders` at their expected pace,
+   *  one target at a time (each defender's HP over the attackers' combined damage per
+   *  tick against it; an ATB unit acts spd / actionGaugeMax times a tick). Infinity when
+   *  some defender cannot be hurt at all (immune to everything thrown at it). */
+  const ticksToKill = (attackers: readonly MutUnit[], defenders: readonly MutUnit[]): number => {
+    let t = 0
+    for (const d of defenders) {
+      let perTick = 0
+      for (const a of attackers) perTick += (expectedHit(a, d) * a.ref.stats.spd) / C.actionGaugeMax
+      if (!(perTick > 0)) return Infinity
+      t += Math.max(0, d.currentHP) / perTick
+    }
+    return t
+  }
+  /** Is the fight projected to be lost: at the pace each side is hurting the other, would
+   *  the enemies of the wave in front of the party cut down its living heroes before the
+   *  heroes cut them down (× `climb.routProjection.margin`), or a survival timer run out?
+   *  A fast single killer (F41's Versace) or one the party cannot hurt (an immune elite)
+   *  bleeds a party that is still ahead on HP: the HP check alone misses both. */
+  const projectedLoss = (): boolean => {
+    const margin = TUNING.climb.routProjection.margin
+    if (!(margin > 0)) return false
+    const ours = livingHeroes().filter((h) => !isWithdrawn(h))
+    const theirs = livingEnemiesInWave(currentWave).filter((e) => !isLooming(e))
+    if (ours.length === 0 || theirs.length === 0) return false
+    const tLose = ticksToKill(theirs, ours)
+    if (tLose === Infinity) return false
+    let tWin = ticksToKill(ours, theirs)
+    // Survival is won by outlasting the clock, not by killing.
+    const survive = encounter.mission.objectives.find((o) => o.kind === 'survive')
+    if (survive !== undefined && survive.kind === 'survive') tWin = Math.min(tWin, Math.max(0, survive.ticks - tick))
+    return tLose < tWin * margin
+  }
   /** A protect objective whose NPC has fallen loses the mission outright. */
   const protectFailed = (): boolean =>
     encounter.mission.objectives.some((o) => o.kind === 'protect' && !allyAlive(o.targetTag))
@@ -500,9 +567,11 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
     }
     // ROUT (spec 2026-10-12 S19): once enough heroes have fallen and the fight is being
     // lost — the living party has less HP left than the living (non-looming) enemies of the
-    // wave in front of it — the survivors break and flee. Only tower floors set this.
+    // wave in front of it, or (2026-10-21) at the pace each side is dealing damage the
+    // party would fall first (`projectedLoss`) — the survivors break and flee. Only tower
+    // floors set this.
     const routAt = encounter.routAfterDeaths
-    if (routAt !== undefined && heroDeaths() >= routAt && losing()) {
+    if (routAt !== undefined && heroDeaths() >= routAt && (losing() || projectedLoss())) {
       emit({ kind: 'mission', note: ROUT_NOTE })
       outcome = 'retreat'
     }

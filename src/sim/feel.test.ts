@@ -5,14 +5,16 @@
  * floor, always `doors[0]`, the first Boon, no summons, no promotions (src/sim/feel.ts) —
  * measured with the honest scout's bands and the real fights:
  *
- *   - Path: mostly Safe/Fair, a would-be death in at most 10% of fights;
+ *   - Path: mostly Safe/Fair, a would-be death in at most 10% of fights; Act I's Paths
+ *     (F3-F9) a gentle sawtooth too, not a flat Safe (2026-10-21: `climb.pathFeel`);
  *   - the Breather after a boss: at least 90% Safe;
  *   - the Act I-II bosses: a real peak — a would-be death in 25-50% of first attempts over
  *     F5/F10/F15, and F5 and F10 each rarely Safe and never a death trap; the Decisive
  *     Moment's Protect halves the deaths at least;
  *   - the Skull: mostly Risky — at most 30% Safe, a would-be death in 30-60% of fights;
  *   - no death spiral: losses are routs, and at least 80% of the runs end with 5 or more
- *     living heroes.
+ *     living heroes; the rout rule (2026-10-21: the projected loss) keeps ≥ 97% of losses
+ *     to ≤ 2 dead while turning ≤ 2% of would-be wins into retreats.
  *
  * …and with no CLIFF for a TYPICAL player (`typical` in feel.ts: it also summons with spare
  * gold, takes the Skull when the scout calls it Safe or Fair, and takes the Decisive
@@ -31,10 +33,16 @@
  * almost never fired. 24 seeds × 3 variants, ~12 s.
  */
 import { describe, it, expect } from 'vitest'
-import { bossRows, feelReport, formatFeel, type FeelFight, type FeelReport, type KindRow } from './feel'
+import { bossRows, feelReport, formatFeel, kindRows, type FeelFight, type FeelReport, type KindRow } from './feel'
+import { attemptFloorWithResult } from '../engine/store'
+import { TUNING } from '../engine/tuning'
+import type { GameState } from '../engine/types'
 
 const SEEDS = 24
-const naive = feelReport('naive', SEEDS)
+/** Every attempt the naive player made or weighed (its committed fights and the Skulls it
+ *  walked past), as the state just before it: the rout rule is re-judged on these. */
+const naivePres: GameState[] = []
+const naive = feelReport('naive', SEEDS, { onAttempt: (pre) => naivePres.push(pre) })
 const decisive = feelReport('decisive', SEEDS)
 const typical = feelReport('typical', SEEDS)
 const table = formatFeel(naive, decisive, typical)
@@ -72,6 +80,22 @@ describe(`the climb's feel: a naive player, F1-F25 (${SEEDS} seeds)`, () => {
     expect(safe(p), table).toBeLessThanOrEqual(0.85)
     expect((p.band.safe + p.band.fair) / banded(p), table).toBeGreaterThanOrEqual(0.8)
     expect(p.wouldDie, table).toBeLessThanOrEqual(0.1)
+  })
+
+  it('Act I Paths (F3-F9) are a gentle sawtooth, not flat Safe: mostly Safe, some Fair, a would-be death in at most 5%', () => {
+    // Before 2026-10-21 these were 97-100% Safe for the naive player (static curve ~0.75× the
+    // roster, under every cap); `climb.pathFeel` lifts them (×1.2-1.5) toward each Act I boss.
+    const p = kindRows(committed(naive).filter((f) => f.floor <= 9)).path
+    expect(p.fights, table).toBeGreaterThanOrEqual(SEEDS * 4)
+    expect(safe(p), table).toBeGreaterThanOrEqual(0.6)
+    expect(safe(p), table).toBeLessThanOrEqual(0.85)
+    expect(p.band.fair / banded(p), table).toBeGreaterThanOrEqual(0.1)
+    expect(p.wouldDie, table).toBeLessThanOrEqual(0.05)
+    // …for the typical player too (its stronger roster meets the lifted static curve).
+    // Review 2026-10-21: ≤ 6% (was 8%; 1.4% on these seeds, 3.3% over 112 seeds).
+    const t = kindRows(committed(typical).filter((f) => f.floor <= 9)).path
+    expect(safe(t), table).toBeLessThanOrEqual(0.9)
+    expect(t.wouldDie, table).toBeLessThanOrEqual(0.06)
   })
 
   it('the Breather after a boss is a breath: at least 90% Safe', () => {
@@ -125,13 +149,58 @@ describe(`the climb's feel: a naive player, F1-F25 (${SEEDS} seeds)`, () => {
     // rare in absolute terms; the share of losses is noisy because nearly every loss is a
     // Skull fought on the side (the counterfactual), so both are bounded.
     const all = naive.runs.flatMap((r) => r.fights)
-    expect(naive.routShare, table).toBeGreaterThanOrEqual(0.85)
-    expect(all.filter((f) => !f.keptWon && f.deaths > 2).length / all.length, table).toBeLessThanOrEqual(0.01)
+    // 2026-10-21: was ≥ 85% and ≤ 1% (88% and ~0.6% measured) under the HP-only rout rule.
+    expect(naive.routShare, table).toBeGreaterThanOrEqual(0.97)
+    expect(all.filter((f) => !f.keptWon && f.deaths > 2).length / all.length, table).toBeLessThanOrEqual(0.003)
     expect(naive.living5, table).toBeGreaterThanOrEqual(0.8)
     expect(naive.deathsPer10, table).toBeLessThanOrEqual(2)
     // Taking the Decisive Moment is worth it: far fewer deaths for the same climb.
     expect(decisive.deathsPer10, table).toBeLessThanOrEqual(naive.deathsPer10 / 2)
     expect(decisive.living5, table).toBeGreaterThanOrEqual(naive.living5)
+  })
+})
+
+describe(`the rout rule, re-judged on every fight the naive player weighed (${SEEDS} seeds)`, () => {
+  /** Resolve every attempt with the climb's rout thresholds and projection margin set as given. */
+  const resolveAll = (rout: 'none' | 'hp' | 'projected') => {
+    const savedRout = { ...TUNING.climb.rout }
+    const savedMargin = TUNING.climb.routProjection.margin
+    try {
+      if (rout === 'none') for (const k of Object.keys(TUNING.climb.rout)) TUNING.climb.rout[k] = 0
+      if (rout === 'hp') (TUNING.climb.routProjection as { margin: number }).margin = 0
+      return naivePres.map((pre) => {
+        const r = attemptFloorWithResult(pre).result
+        return { won: r.cleared, dead: r.fallenHeroIds.length }
+      })
+    } finally {
+      Object.assign(TUNING.climb.rout, savedRout)
+      ;(TUNING.climb.routProjection as { margin: number }).margin = savedMargin
+    }
+  }
+  const none = resolveAll('none')
+  const hp = resolveAll('hp')
+  const projected = resolveAll('projected')
+  const stats = (xs: typeof none) => {
+    const losses = xs.filter((x) => !x.won)
+    const wins = none.map((x, i) => ({ would: x.won, now: xs[i]!.won })).filter((x) => x.would)
+    return {
+      cheapLosses: losses.filter((x) => x.dead <= 2).length / Math.max(1, losses.length),
+      winsLost: wins.filter((x) => !x.now).length / Math.max(1, wins.length),
+      text: `${losses.length} losses, ${losses.filter((x) => x.dead > 2).length} cost 3+; ${wins.filter((x) => !x.now).length} of ${wins.length} would-be wins retreated`,
+    }
+  }
+
+  it('≥ 97% of losses cost at most 2 heroes, and ≤ 2% of would-be wins become retreats', () => {
+    expect(naivePres.length).toBeGreaterThan(SEEDS * 25)
+    const p = stats(projected)
+    const h = stats(hp)
+    const msg = `projected: ${p.text}\nHP only: ${h.text}`
+    expect(p.cheapLosses, msg).toBeGreaterThanOrEqual(0.97)
+    expect(p.winsLost, msg).toBeLessThanOrEqual(0.02)
+    // The projection only ever adds routs to the HP check: it never makes a loss bloodier.
+    for (let i = 0; i < naivePres.length; i++) if (!projected[i]!.won && !hp[i]!.won) expect(projected[i]!.dead, msg).toBeLessThanOrEqual(hp[i]!.dead)
+    // …and it is what fixed the leak (HP only: ~90% of these losses were cheap).
+    expect(p.cheapLosses, msg).toBeGreaterThanOrEqual(h.cheapLosses)
   })
 })
 

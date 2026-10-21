@@ -5,9 +5,9 @@
 import { describe, it, expect } from 'vitest'
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
-import { floorKindBase, floorBudget, lastStandPct, climbExtraPct } from './kinds'
+import { floorKindBase, floorBudget, lastStandPct, climbExtraPct, mercyCap, isMercyCapped, tempoMult, directorSpd } from './kinds'
 import { chooseDoor, rollDoors } from './doors'
-import { buildEncounter, buildFillerEncounter, playFloor, nemesisUnitId, floorPower } from '../tower'
+import { buildEncounter, buildFillerEncounter, playFloor, nemesisUnitId, floorPower, isTempoEased } from '../tower'
 import { scoutFloor, THREAT_REASONS } from '../scout'
 import { buildCombatUnit, buildEnemyUnit } from '../unit'
 import { ENEMY_TEMPLATES, SKILLS } from '../content'
@@ -90,6 +90,79 @@ describe('the encounter carries its kind and rout threshold', () => {
     expect(result.routed).toBe(true)
     expect(result.fallenHeroIds.length).toBeGreaterThanOrEqual(CL.rout.path)
     expect(result.fallenHeroIds.length).toBeLessThan(5)
+  })
+})
+
+describe('the mercy cap prices a fast boss by its tempo (F41, Versace of Silver Lightning)', () => {
+  const plainCp = (enc: ReturnType<typeof buildEncounter>) => enc.waves.reduce((n, w) => n + w.units.reduce((m, u) => m + u.cp, 0), 0)
+  const tempoCp = (s: GameState, enc: ReturnType<typeof buildEncounter>) =>
+    enc.waves.reduce((n, w) => n + w.units.reduce((m, u) => m + u.cp * tempoMult(u.stats.spd, directorSpd(s)), 0), 0)
+  /** The same build with the tempo check switched off (no enemy is ever past the grace). */
+  const plainFit = (s: GameState, f: number) => {
+    const saved = CL.tempo.grace
+    ;(CL.tempo as { grace: number }).grace = Infinity
+    try {
+      return buildEncounter(s, f)
+    } finally {
+      ;(CL.tempo as { grace: number }).grace = saved
+    }
+  }
+
+  it('Versace, several times the party’s pace, is sized to the cap by his tempo-weighted CP, not his plain CP', () => {
+    for (const seed of [3, 11, 29]) {
+      // A roster that has climbed to F41: Lv30 (a fresh Lv1 party sits on the anchor's clamp).
+      const r = roster(seed, 8)
+      const heroes: Record<HeroId, OwnedHero> = {}
+      for (const h of Object.values(r.heroes)) heroes[h.id] = { ...h, xp: { ...h.xp, level: 30 } }
+      const s = at({ ...r, heroes }, 41)
+      const cap = mercyCap(s, 41, 'boss')!
+      expect(isMercyCapped(s, 41, 'boss'), `seed ${seed}`).toBe(true)
+      const enc = buildEncounter(s, 41)
+      const versace = enc.waves.flatMap((w) => w.units).find((u) => u.targetTag === 'versace')!
+      expect(versace.stats.spd / directorSpd(s), `seed ${seed}`).toBeGreaterThan(CL.tempo.grace)
+      // Big enough by tempo; lighter than the old plain-CP fit (whole elitePowerSteps down).
+      expect(tempoCp(s, enc), `seed ${seed}`).toBeGreaterThanOrEqual(cap)
+      const old = plainFit(s, 41)
+      expect(plainCp(old), `seed ${seed}`).toBeGreaterThanOrEqual(cap)
+      expect(plainCp(enc), `seed ${seed}`).toBeLessThan(plainCp(old))
+      expect(versace.stats.spd, `seed ${seed}`).toBeLessThan(old.waves.flatMap((w) => w.units).find((u) => u.targetTag === 'versace')!.stats.spd)
+    }
+  })
+
+  it('a boss at the party’s pace is built exactly as before (F40, F42, the Act I-II anchors)', () => {
+    const s = roster(3, 8)
+    for (const f of [5, 10, 15, 20, 40, 42]) expect(buildEncounter(at(s, f), f), `F${f}`).toEqual(plainFit(at(s, f), f))
+  })
+
+  it('the static curve still binds a strong roster (tempo only lightens the mercy cap)', () => {
+    const s = at(gods(), 41)
+    expect(isMercyCapped(s, 41, 'boss')).toBe(false)
+    expect(buildEncounter(s, 41)).toEqual(plainFit(s, 41))
+    expect(isTempoEased(s, 41, buildEncounter(s, 41))).toBe(false)
+  })
+
+  it('a roster whose plain cap clears the static curve but whose tempo cap does not: Versace is eased, and the scout says so', () => {
+    // Between static / band and static × tempoMult / band the plain cap no longer binds
+    // (isMercyCapped is false) but the tempo-weighted fit still builds Versace lighter.
+    let found = 0
+    for (const seed of [3, 11]) {
+      const r = roster(seed, 8)
+      for (let level = 20; level <= 150; level += 2) {
+        const heroes: Record<HeroId, OwnedHero> = {}
+        for (const h of Object.values(r.heroes)) heroes[h.id] = { ...h, xp: { ...h.xp, level } }
+        const s = at({ ...r, heroes }, 41)
+        if (isMercyCapped(s, 41, 'boss')) continue
+        const enc = buildEncounter(s, 41)
+        if (plainCp(enc) >= floorBudget(s, 41, 'boss')) break
+        found++
+        expect(isTempoEased(s, 41, enc), `seed ${seed} Lv${level}`).toBe(true)
+        expect(scoutFloor(s)!.mercyCapped, `seed ${seed} Lv${level}`).toBe(true)
+      }
+    }
+    expect(found).toBeGreaterThan(0)
+    // Never on a boss at the party's pace.
+    const s = roster(3, 8)
+    for (const f of [5, 10, 40, 42]) expect(isTempoEased(at(s, f), f, buildEncounter(at(s, f), f)), `F${f}`).toBe(false)
   })
 })
 

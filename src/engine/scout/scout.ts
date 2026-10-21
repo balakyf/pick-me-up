@@ -18,7 +18,7 @@ import { TUNING } from '../tuning'
 import { combatPowerForHero } from '../stats'
 import { skillCp } from '../skills'
 import { engravingCp } from '../engravings'
-import { attemptEncounter, buildEncounter, nemesesOnFloor, nemesisUnitId } from '../tower'
+import { attemptEncounter, buildEncounter, isTempoEased, nemesesOnFloor, nemesisUnitId } from '../tower'
 import { ELEMENT_ADVANTAGE } from '../tuning'
 import { SKILLS } from '../content'
 import { buildCombatUnit } from '../unit'
@@ -97,7 +97,8 @@ export interface ScoutReport {
   rout: number | null
   /** Last Stand bonus to every stat (fraction; 0 = none). */
   lastStandPct: number
-  /** The director's mercy cap lowered this floor's budget. */
+  /** The director's mercy cap lowered this floor's budget (or its tempo check built a fast
+   *  authored boss lighter than the budget: `isTempoEased`). */
   mercyCapped: boolean
   /** A Nemesis waiting here (`revenantName`: "Mira's Bane"), or null. */
   nemesis: string | null
@@ -474,7 +475,7 @@ function scoutUncached(state: GameState, heroes: OwnedHero[]): ScoutReport | nul
     threats: namedThreats(all, units, new Set(nemeses.map(nemesisUnitId))),
     rout: routAt !== undefined && heroes.length > routAt ? routAt : null,
     lastStandPct: lastStandPct(state, floor),
-    mercyCapped: isMercyCapped(state, floor, kind),
+    mercyCapped: isMercyCapped(state, floor, kind) || isTempoEased(state, floor, enc),
     nemesis: nemeses[0] !== undefined ? revenantName(nemeses[0]) : null,
   }
 }

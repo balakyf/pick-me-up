@@ -12,6 +12,10 @@ import {
   mercyBand,
   mercyCap,
   anchorFeel,
+  pathFeel,
+  kindFeel,
+  tempoMult,
+  directorSpd,
   directorCp,
   levelLagMult,
   isMercyCapped,
@@ -80,13 +84,13 @@ describe('static budget (the sawtooth)', () => {
     }
   })
 
-  it('Path is the step-capped Path curve; the other kinds scale it by kindMult relative to Path', () => {
+  it('Path is the step-capped Path curve × its pathFeel; the other kinds scale the curve by kindMult relative to Path', () => {
     for (let f = 3; f <= 60; f++) {
       if (floorKindBase(f) === 'boss') continue
       const path = staticBudget(s, f, 'path')
-      expect(path).toBeCloseTo(pathBudget(f, wm), 6)
-      expect(staticBudget(s, f, 'elite')).toBeCloseTo((path * CL.kindMult.elite!) / CL.kindMult.path!, 6)
-      expect(staticBudget(s, f, 'breather')).toBeCloseTo((path * CL.kindMult.breather!) / CL.kindMult.path!, 6)
+      expect(path).toBeCloseTo(pathBudget(f, wm) * pathFeel(f), 6)
+      expect(staticBudget(s, f, 'elite')).toBeCloseTo((pathBudget(f, wm) * CL.kindMult.elite!) / CL.kindMult.path!, 6)
+      expect(staticBudget(s, f, 'breather')).toBeCloseTo((pathBudget(f, wm) * CL.kindMult.breather!) / CL.kindMult.path!, 6)
       expect(staticBudget(s, f, 'rest')).toBe(0)
       expect(staticBudget(s, f, 'cache')).toBe(0)
     }
@@ -124,6 +128,24 @@ describe('static budget (the sawtooth)', () => {
   it('anchorFeel reads climb.anchorFeel and is 1 for an anchor it does not list (the late tower is untouched)', () => {
     for (const [f, v] of Object.entries(CL.anchorFeel)) expect(anchorFeel(Number(f))).toBe(v)
     for (const f of [30, 41, 42, 50, 90, 100]) expect(anchorFeel(f), `F${f}`).toBe(1)
+  })
+
+  it('pathFeel reads climb.pathFeel: an Act I sawtooth (F3-F9) under the Skull, 1 everywhere else', () => {
+    for (const [f, v] of Object.entries(CL.pathFeel)) {
+      expect(pathFeel(Number(f))).toBe(v)
+      expect(Number(f), 'only Act I Paths').toBeGreaterThanOrEqual(CL.directorFromFloor)
+      expect(Number(f), 'only Act I Paths').toBeLessThan(10)
+      expect(v).toBeGreaterThan(1)
+      // The Skull still asks more than the lifted Path.
+      expect(v).toBeLessThan(kindRel('elite'))
+    }
+    for (const f of [1, 2, 5, 10, 11, 12, 24, 41, 90]) expect(pathFeel(f), `F${f}`).toBe(1)
+    // A Path's feel never leaks into the step-capped curve the floors after it climb from.
+    expect(pathBudget(11, wm)).toBeCloseTo(staticBudget(s, 11, 'path'), 6)
+    // kindFeel: a Boss's anchorFeel, a Path's pathFeel, 1 for the rest.
+    expect(kindFeel(5, 'boss')).toBe(anchorFeel(5))
+    expect(kindFeel(4, 'path')).toBe(pathFeel(4))
+    for (const k of ['elite', 'breather', 'tutorial'] as FloorKind[]) expect(kindFeel(4, k)).toBe(1)
   })
 
   it('consecutive Path floors step up by at most maxStepPct (anchors skipped), never down, never past the target', () => {
@@ -213,6 +235,23 @@ describe('the mercy director', () => {
     expect(directorCp(r, 24)).toBeLessThan(rosterCp(r))
     expect(directorCp(r, L.untilFloor + 1)).toBeCloseTo(rosterCp(r), 6)
     expect(mercyCap(r, 24, 'path')).toBeCloseTo(directorCp(r, 24) * mercyBand('path'), 6)
+    // An Act I Path's cap carries its pathFeel (static curve and cap alike, like anchorFeel).
+    expect(mercyCap(r, 4, 'path')).toBeCloseTo(directorCp(r, 4) * mercyBand('path') * pathFeel(4), 6)
+  })
+
+  it('tempoMult: an enemy past climb.tempo.grace × the party pace counts more than its CP, by a square root', () => {
+    const { grace, exp } = CL.tempo
+    expect(tempoMult(100, 100)).toBe(1)
+    expect(tempoMult(100 * grace, 100)).toBe(1)
+    expect(tempoMult(50, 100)).toBe(1)
+    expect(tempoMult(300, 100)).toBeCloseTo((300 / (100 * grace)) ** exp, 9)
+    expect(tempoMult(300, 100)).toBeGreaterThan(tempoMult(200, 100))
+    // No party to compare with: plain CP.
+    expect(tempoMult(300, 0)).toBe(1)
+    // directorSpd is the mean speed of the five heroes the director reads.
+    const r = roster(4, 8, 3)
+    expect(directorSpd(r)).toBeGreaterThan(0)
+    expect(directorSpd(empty())).toBe(0)
   })
 })
 

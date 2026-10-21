@@ -1056,7 +1056,7 @@ Each module has an `index.ts` barrel. `store.ts` gets cases for the five new com
 
 ## 6. As built (2026-10-16)
 
-All 28 changes shipped on `claude/amazing-shannon-682s6p`, built as planned: WP0 first, then WP1–WP8 in parallel worktrees, each followed by an independent review. After that came integration, a real-browser playtest, a five-lens adversarial review (21 confirmed findings, all fixed), a polish pass and a tension-tuning pass. `npm run typecheck`, `npm test` and `npm run build` are green: 129 files and 1,616 tests, up from 40 and 842.
+All 28 changes shipped on `claude/amazing-shannon-682s6p`, built as planned: WP0 first, then WP1–WP8 in parallel worktrees, each followed by an independent review. After that came integration, a real-browser playtest, a five-lens adversarial review (21 confirmed findings, all fixed), a polish pass and a tension-tuning pass. `npm run typecheck`, `npm test` and `npm run build` are green: 133 files and 1,643 tests, up from 40 and 842 (as of the 2026-10-21 follow-up below).
 
 ### What changed from the plan
 
@@ -1097,11 +1097,11 @@ All 28 changes shipped on `claude/amazing-shannon-682s6p`, built as planned: WP0
 | Floor replay at default speed | 10–20 s (at 1×) | ≤ 15 s | about 6 s at 2×; Safe floors are swept in about 2.4 s |
 | Deaths on floors scouted Safe | ratings were cosmetic (fresh rosters: 31 of 32) | 0 | 0 in every probe (thousands of fights) |
 | Fair floors that cost a hero | n/a | ≤ 5% | about 1.4–2.9% |
-| Losses that are full wipes | 22 of 24 | ≤ 10% | about 0.3%; 88–96% of losses are routs with ≤ 2 dead |
+| Losses that are full wipes | 22 of 24 | ≤ 10% | about 0.3%; after the 2026-10-21 rout projection, ≥ 97% of losses cost ≤ 2 heroes (98.7% on fresh seeds) |
 | Early bosses (F5, F10) as peaks | 0% at risk (all Safe) | a real peak | 30–50% of first tries put a hero at risk; Protect saves ≥ 75% |
 | First Decisive lesson (Isel's coaching) | F3, on a 1–3% scratch | on a real threat | F5 or F10, the first boss |
 | A welcome-back screen with ≥ 1 positive item after ≥ 8 h away | none | 100% | 100% |
-| Bot progress over 14 days (8 seeds, median) | casual F40, engaged F84.5 | about the same | casual F49.5, engaged F83, with fewer deaths (65 vs 74 and 146 vs 186) |
+| Bot progress over 14 days (8 seeds, median) | casual F40, engaged F84.5 | about the same | casual F74.5, engaged F85 after the 2026-10-21 balance follow-up (F41 is a fair gate now; casual deaths 74 → 49) |
 
 ### Where the evidence lives
 
@@ -1110,11 +1110,23 @@ All 28 changes shipped on `claude/amazing-shannon-682s6p`, built as planned: WP0
 - **The tuning:** `docs/superpowers/plans/2026-10-16-fun-tension-tuning.md`.
 - **The research:** `docs/research/fun-{juice,retention,loop,art}.md`.
 
-### Still open
+### Still open (2026-10-16), and the 2026-10-21 follow-up
 
-- **F41 (Versace) is still the hardest early wall.** It is now honestly scouted Deadly. Making it fairer needs a tempo-aware CP or a lighter roster, which is a balance call.
-- **Act I Path floors (F3–F9) read Safe** for a player who never takes the Skull door. The early tension comes from the F5 and F10 bosses and the Skull offered on every floor.
-- **A few losses still cost 3 or more heroes.** A stricter rout rule turns about 10% of wins into retreats.
+- ~~**F41 (Versace) is still the hardest early wall.**~~ **Done (2026-10-21).** The mercy cap now sizes a boss by its tempo-weighted CP (`climb.tempo`). Effect at F41:
+  - Engaged bots clear it in 1–3 attempts (16 of 16 seeds; it took 11 of 16 before).
+  - A failed attempt costs 2 heroes, down from 2.8.
+  - The scout calls it Risky, never Safe.
+  - The typical player clears it on the first try in 24 of 24 runs; before, 8 of 24 runs walled there.
+  - Re-measured in review on 16 fresh seeds: engaged 16 of 16 within 2 attempts (10 of 16 before), 2.00 dead per failed attempt (3.13 before), never Safe.
+
+  **What remains:** for the casual bot, F41 is only a softer wall now. It is still the casual bot's top wall by attempts, but on fresh seeds 11 of 16 casual bots clear it on the first try, so the brief's "casual still needs promotions or summons" is not met. Under the mercy cap, F41 cannot tell a casual roster from an engaged one, so the casual 14-day median floor rises from 49.5 to 74.5. Slowing casual past F41, if that is wanted, is a job for the Act VI+ gates. Details: the tuning plan's "Rest of the balance" section.
+- ~~**Act I Path floors (F3–F9) read Safe.**~~ **Done (2026-10-21).** `climb.pathFeel` gives Act I Paths a sawtooth.
+  - Naive player, F3–F9 Paths (112 seeds, values retuned in review): 97% Safe before; now 81% Safe and 15% Fair, with a would-be death in 2.9% of fights (typical player: 80% Safe, 3.3%).
+  - Unchanged: F1–F2, and F11–F25 (11.0% would-be deaths against 11.7% without `pathFeel`, 64 seeds; the first values had pushed it to 14.1%).
+- ~~**A few losses still cost 3 or more heroes.**~~ **Done (2026-10-21).** The party now also routs on a projected loss: the enemies would kill it before it kills them, judged on pace (speed, attack, mitigation, keywords).
+  - Losses that cost ≤ 2 heroes: 47% → 97% across 3,714 bot and feel fights (100% for the naive player).
+  - Would-be wins turned into retreats: 0.7%. Each of those wins would have cost 3.3 heroes.
+  - Re-measured in review on 3,075 fresh fights: 64% → 98.7% of losses cost ≤ 2 heroes; 0.7% of would-be wins retreat (almost all of them Skulls the naive player walks past).
 - **French hero wording no longer assumes the masculine** (fixed). Heroes have no gender in the engine, so 136 French entries were rephrased to not agree with the hero ("La mort de {b} est vengée", "{a} a gagné en force", "je l’attends de pied ferme"), and trait and favor-tier tags became epicene or nouns ("Calme", "Dévouement"). `frGender.test.ts` guards this: it flags 71 entries in the pre-fix files and 0 now. Still masculine: job and tier nouns ("fermier", "Apprenti", in "{job} {tier}") and generic role nouns ("un héritier", "un cuisinier"). Fixing those needs either a gender field or a rename of every job to a form without gender.
 - ~~**Technical leftovers:** the build warns about a chunk over 500 kB, and `facilityPanels.tsx` and `legacy/MemorialPanel.tsx` import each other.~~ **Fixed (2026-10-21).** The 908 kB bundle is now split with `manualChunks` into vendor (142 kB), engine (202 kB), i18n (143 kB), art (94 kB) and the UI entry (326 kB). The `?gallery` sprite sheet is lazy-loaded (3 kB, never downloaded by a player). `chunkSizeWarningLimit` is untouched and the build no longer warns. `UpgradeControl` moved to `src/ui/UpgradeControl.tsx`, and `src/ui/importCycles.test.ts` fails on any runtime import cycle in `src/ui` or `src/engine` (read with the TypeScript parser). That cycle was the only one, and `src/engine` has none.
 - ~~**Phone layout:** the one-time "Back up your save?" nudge overlaps the goal tracker until it is dismissed.~~ **Fixed (2026-10-21).** On phones the nudge is a bottom sheet just above the HUD bar. On wide screens it sits in the right-hand column under the top-right bar. "Rest for now" used to cover the Daily button on phones, and it now sits above the bar too. Both read the bar's measured height (`return/hudClearance.ts`). Checked in Chromium from 360×640 (French) to 1280×800. Nothing overlaps, and the nudge still waits while the fanfare, the Menu or a window is up.

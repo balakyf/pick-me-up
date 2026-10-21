@@ -860,6 +860,15 @@ export const TUNING = {
      *  would-be death for the typical player, Protect saving a third) kept low; 25 at 1.4 keeps it a peak (~30% for the typical player). Was
      *  { 5: 1.76, 10: 1.34, 15: 1.43, 20: 1.22, 25: 1.55 }. */
     anchorFeel: { 5: 1.72, 10: 1.34, 15: 1.2, 20: 1.1, 25: 1.4 } as Record<number, number>,
+    /** Per-floor Path feel (2026-10-21): × a Path floor's static budget and its mercy cap
+     *  alike (missing = 1), outside the step-capped curve. Act I's Paths sat at ~0.75× the
+     *  roster, under every cap: 100% Safe for a naive player. A gentle sawtooth instead,
+     *  rising to each Act I boss. F1-F2 are tutorial floors (never a Path). Knife-edge: F4 at
+     *  1.42 → 1.45 → 1.48 takes its would-be deaths 3% → 5% → 10% (naive, 112 seeds).
+     *  Review (2026-10-21): was { 3: 1.5, 4: 1.5, 6: 1.2, 7: 1.2, 8: 1.22, 9: 1.28 }, tuned
+     *  on the 24 feel.test seeds; on 112 it gave 5.0% naive / 9.3% typical would-be deaths
+     *  on F3-F9 and lifted F11-F25's from 11.4% to 14.1% (64 seeds). */
+    pathFeel: { 3: 1.45, 4: 1.42, 6: 1.2, 7: 1.2, 8: 1.22, 9: 1.25 } as Record<number, number>,
     /** The early climb's lift over floorPower on a Path floor: ×earlyLift at the foot of the
      *  tower, fading quadratically to ×1 at the inflection floor (`tower.inflectionFloor`).
      *  It can't go into `tower.earlyBudgetBoost`: above ~4.2 that breaks floorPower's
@@ -879,6 +888,13 @@ export const TUNING = {
      *  `untilFloor`: the free roster's 1★/2★ heroes hit their level caps (Lv10/Lv20) in the
      *  first acts; past it the late climb keeps its plain-CP director (the act gates). */
     levelLag: { grace: 3, perLevel: 0.04, min: 0.5, untilFloor: 25 },
+    /** Tempo (2026-10-21): the mercy cap judges an authored Boss by its TEMPO-weighted CP
+     *  (climb/kinds.ts tempoMult): an enemy faster than `grace` × the party's mean speed
+     *  counts × (spd / (party spd × grace)) ^ exp. CP prices speed like any stat, but an
+     *  ATB unit acts in proportion to it, so F41's Versace (~2.5-3.3× the party) was sized
+     *  as if he were a third as dangerous as he is. Only Versace gets past the grace in
+     *  practice (bot parties: every other floor's fastest enemy p90 ≈ 1.2× the party). */
+    tempo: { grace: 1.25, exp: 0.5 },
     /** Rested: Sanity at or above this. `suggestParty` sends only rested heroes, and the
      *  director reads rested heroes plus whoever is actually in the party, so it never
      *  sizes a floor for tired heroes the game would leave on the bench (climb/kinds.ts). */
@@ -915,6 +931,12 @@ export const TUNING = {
     },
     /** Rout (S19): survivors flee after this many heroes fall while losing, by kind. */
     rout: { tutorial: 2, breather: 1, path: 2, elite: 2, boss: 2 } as Record<string, number>,
+    /** Rout projection (2026-10-21): past the rout threshold the party also breaks when, at
+     *  the pace each side is dealing damage (combat.ts `projectedLoss`: speed, attack,
+     *  level-scaled mitigation, crit), the enemies would cut it down before it cuts them
+     *  down (× margin). The HP check alone let a fast single killer bleed a party still
+     *  ahead on HP. 0 turns it off (the HP check only). */
+    routProjection: { margin: 1.25 },
     /** Last Stand (S20): all-stat bonus with few living, fightable heroes on the roster. */
     lastStand: {
       rosterAtMost: 3,

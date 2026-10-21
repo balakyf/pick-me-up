@@ -67,6 +67,9 @@ import {
   sortieBoons,
   sortieAfterFloor,
   isFightable,
+  mercyCap,
+  directorSpd,
+  tempoMult,
 } from '../climb'
 import { revenantName } from '../legacy/records'
 import { consumeRested } from '../return/rested' // the leaf, not the barrel: return/away → daily → tower would cycle
@@ -275,13 +278,19 @@ function buildScaledAnchor(
   worldMult: number,
   extraLevels: number,
   target: number,
+  tempo: AnchorTempo | null = null,
 ): { waves: EnemyWave[]; mission: Mission; allies: CombatUnit[] } {
   const cpOf = (b: { waves: EnemyWave[] }) => b.waves.reduce((n, w) => n + w.units.reduce((m, u) => m + (isLoomingUnit(u) ? 0 : u.cp), 0), 0)
+  const tempoCpOf = (b: { waves: EnemyWave[] }, t: AnchorTempo) =>
+    b.waves.reduce((n, w) => n + w.units.reduce((m, u) => m + (isLoomingUnit(u) ? 0 : u.cp * tempoMult(u.stats.spd, t.refSpd)), 0), 0)
+  // Big enough: the plain CP meets the budget, or (under the mercy cap) the tempo-weighted
+  // CP meets the cap. Without a fast enemy the two coincide, so this is the old fit.
+  const reached = (b: { waves: EnemyWave[] }) => cpOf(b) >= target || (tempo !== null && tempoCpOf(b, tempo) >= tempo.cap)
   let built = buildAnchorEncounter(anchor, floor, worldMult, extraLevels)
   if (!(target > 0)) return built
   let mult = 1
-  if (cpOf(built) < target) {
-    for (let i = 0; i < 400 && cpOf(built) < target; i++) {
+  if (!reached(built)) {
+    for (let i = 0; i < 400 && !reached(built); i++) {
       mult *= T.elitePowerStep
       built = buildAnchorEncounter(anchor, floor, worldMult, extraLevels, mult)
     }
@@ -289,11 +298,38 @@ function buildScaledAnchor(
   }
   for (let i = 0; i < ANCHOR_MIN_STEPS; i++) {
     const lower = buildAnchorEncounter(anchor, floor, worldMult, extraLevels, mult / T.elitePowerStep)
-    if (cpOf(lower) < target) break
+    if (!reached(lower)) break
     mult /= T.elitePowerStep
     built = lower
   }
   return built
+}
+
+/** The mercy director's view of an anchor's tempo: its cap (× the loop scars' lift) and the
+ *  party pace an enemy's speed is judged against (`tempoMult`). */
+interface AnchorTempo {
+  cap: number
+  refSpd: number
+}
+
+/** The tempo check for an anchor fought as `kind` on `floor`, or null when the director
+ *  does not cap it (tutorial floors, nobody fit to fight). */
+function anchorTempo(state: GameState, floor: number, kind: FloorKind): AnchorTempo | null {
+  const cap = mercyCap(state, floor, kind)
+  const refSpd = directorSpd(state)
+  if (cap === null || !(refSpd > 0)) return null
+  return { cap: cap * loopScarBudgetMult(floor, state.tower.loop), refSpd }
+}
+
+/** Did the tempo check build this authored anchor lighter than its budget? A roster whose
+ *  plain mercy cap sits above the static curve (so `isMercyCapped` is false) can still meet
+ *  a fast boss (F41's Versace) sized down to its tempo-weighted cap: the tower eased off
+ *  for it all the same, and the scout says so. False for every other floor. */
+export function isTempoEased(state: GameState, floor: number, enc: Encounter): boolean {
+  const kind = enc.kind ?? kindForFloor(state, floor)
+  if (ANCHORS[floor] === undefined || anchorTempo(state, floor, kind) === null) return false
+  const cp = enc.waves.reduce((n, w) => n + w.units.reduce((m, u) => m + (isLoomingUnit(u) ? 0 : u.cp), 0), 0)
+  return cp < encounterBudget(state, floor, kind)
 }
 
 /** The anchor clamp: at most this many `elitePowerStep` steps down (1.08^-30 ≈ ×0.10). */
@@ -460,7 +496,7 @@ export function buildEncounter(state: GameState, floor: number, focus?: FocusDir
   const anchor = ANCHORS[floor]
   let built: { waves: EnemyWave[]; mission: Mission; allies?: CombatUnit[] }
   if (anchor !== undefined) {
-    built = buildScaledAnchor(anchor, floor, worldMult, scar, budget)
+    built = buildScaledAnchor(anchor, floor, worldMult, scar, budget, anchorTempo(state, floor, kind))
   } else {
     const revenants = nemesisUnits(state, floor, mobLevel(floor, worldMult) + scar)
     const theirCp = revenants.reduce((n, u) => n + u.cp, 0)

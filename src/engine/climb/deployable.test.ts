@@ -140,9 +140,12 @@ describe('the director reads the heroes the game would send (#3: tired heroes)',
   })
 
   it('the Suggest-only climb meets no F20 wall: the boss is built for the party that fights it', () => {
-    // Review repro (seed 2): before F20 Suggest benched four tired heroes, yet the director
-    // built Halgiraf for them (rosterCp 2125 against a 1098 party: a 3-death rout).
-    let s: GameState = reduce(null, { type: 'NEW_ACCOUNT', seed: 2, now: 0 })
+    // Review repro (first found on seed 2): before F20 Suggest benched four tired heroes, yet
+    // the director built Halgiraf for them (rosterCp 2125 against a 1098 party: a 3-death
+    // rout). Seed 1 since 2026-10-21: with Act I's `pathFeel` this never-resting climb on
+    // seed 2 loses different heroes early and stalls on F18 before it ever meets F20; seed 1
+    // meets the same trap (four tired heroes benched, ~1.5× the party's CP) on every tuning.
+    let s: GameState = reduce(null, { type: 'NEW_ACCOUNT', seed: 1, now: 0 })
     s = reduce(s, { type: 'SUMMON', count: 10 })
     let real = 0
     const step = () => {
@@ -161,6 +164,8 @@ describe('the director reads the heroes the game would send (#3: tired heroes)',
     const benchedTired = Object.values(s.heroes).filter((h) => isFightable(h) && !isRested(h) && !partyIds(s).includes(h.id))
     expect(benchedTired.length).toBeGreaterThan(0)
     const partyCp = partyIds(s).reduce((n, id) => n + unitCp(s, s.heroes[id]!), 0)
+    // The trap is live: a director reading every fightable hero would size F20 well past this party.
+    expect(top5(s, Object.values(s.heroes).filter(isFightable)) / partyCp).toBeGreaterThan(1.3)
     expect(partyCp / rosterCp(s)).toBeGreaterThan(0.95)
     expect(attemptFloorWithResult(s).result.result.fallenHeroIds.length).toBeLessThan(TUNING.climb.rout.boss!)
   })
