@@ -32,24 +32,26 @@ export function hallRate(level: number): number {
 }
 
 /**
- * The PI change across a world-time gap: the Hall of Magic's generation, then — if the
- * Master was away longer than `idleDays` — a fade of `decay` per further idle world-day.
+ * The PI change across a world-time gap: the Hall of Magic's generation, then — for a
+ * Hardcore Master away longer than `idleDays` — a fade of `decay` per further idle
+ * world-day. Without `hardcore`, PI never decays (spec 2026-10-12 S24).
  */
-export function piAfterGap(pi: number, gapMs: number, hallLevel: number): number {
+export function piAfterGap(pi: number, gapMs: number, hallLevel: number, hardcore = false): number {
   let next = pi + hallRate(hallLevel) * (gapMs / WORLD_HOUR_MS)
-  const idle = Math.floor(gapMs / WORLD_DAY_MS) - PI.idleDays
+  const idle = hardcore ? Math.floor(gapMs / WORLD_DAY_MS) - PI.idleDays : 0
   for (let i = 0; i < idle; i++) next *= 1 - PI.decay
   return Math.round(next * 100) / 100
 }
 
 /**
  * When, within a gap, PI first fell below `zero` (ms after the gap began), or null if it
- * never did. Mirrors piAfterGap's day-by-day fade (the Hall's hum is added up front).
+ * never did. Mirrors piAfterGap's day-by-day fade (the Hall's hum is added up front; the
+ * fade only runs for a Hardcore Master).
  */
-export function piZeroCrossing(pi: number, gapMs: number, hallLevel: number, zero: number): number | null {
+export function piZeroCrossing(pi: number, gapMs: number, hallLevel: number, zero: number, hardcore = false): number | null {
   let v = pi + hallRate(hallLevel) * (gapMs / WORLD_HOUR_MS)
   if (v < zero) return 0
-  const idle = Math.floor(gapMs / WORLD_DAY_MS) - PI.idleDays
+  const idle = hardcore ? Math.floor(gapMs / WORLD_DAY_MS) - PI.idleDays : 0
   for (let i = 0; i < idle; i++) {
     v *= 1 - PI.decay
     if (v < zero) return (PI.idleDays + i + 1) * WORLD_DAY_MS

@@ -7,7 +7,6 @@ import { INTERVENTIONS, INTERVENTION_LABEL, interventionCost, interventionRefusa
 import {
   frustrationDeal,
   loginClaimed,
-  nextStreak,
   packagePrice,
   packageRefusal,
   todayOffer,
@@ -18,7 +17,10 @@ import { hallRate } from '../engine/interference'
 import { crackRefusal, dispatchRefusal } from '../engine/rift'
 import { Portrait } from './bits'
 import { PvpPanel } from './pvpPanels'
-import { t } from './i18n/i18n'
+import { t, fmt } from './i18n/i18n'
+import { stampReady } from '../engine/return'
+import { StampCard, newcomerName } from './return/StampCard'
+import { sfx } from './audio/sound'
 
 const SHOP = TUNING.shop
 const PI = TUNING.interference
@@ -214,26 +216,38 @@ export function ShopPanel({ state, store }: { state: GameState; store: Store }) 
   const claimed = loginClaimed(state, nowWorld)
   const m = state.meta.monthly
   const ids = Object.keys(SHOP.packages).filter((id) => id !== 'so_close' || frustrationDeal(state))
+  const [stampFx, setStampFx] = useState<{ fresh: boolean; completed: boolean; newcomer: string | null }>({ fresh: false, completed: false, newcomer: null })
+  // The daily login: +gems, and a stamp on the card that never resets (spec 2026-10-12 S28).
+  function claim() {
+    const prev = store.getState()
+    const before = state.meta.stamps.count
+    if (!run({ type: 'CLAIM_LOGIN' })) return
+    const next = store.getState()
+    const after = next?.meta.stamps.count ?? before
+    const fresh = after > before
+    const completed = fresh && after % TUNING.return.stamps.perCard === 0
+    setStampFx({ fresh, completed, newcomer: completed ? newcomerName(prev, next) : null })
+    sfx(fresh ? 'stamp' : 'coin')
+  }
   return (
     <div className="lr-action shop-panel">
       <div className="shop-note">{t('Isel smiles. “Everything here is for your own good, Master.” — money here is simulated; nothing is ever charged.')}</div>
 
       <div className="ta-row">
-        <span>{t('Daily login · streak {streak}', { streak: state.meta.login.streak })}</span>
-        <button className="btn sm gem" disabled={claimed} onClick={() => run({ type: 'CLAIM_LOGIN' })}>
-          {claimed ? t('Claimed today') : `${t('Claim')} +${SHOP.loginGems}${nextStreak(state, nowWorld) % 7 === 0 ? ` +${SHOP.streakBonusGems}` : ''} ♦`}
+        <span>
+          {t('Daily login')}
+          {stampReady(state, nowWorld) && !claimed && <span className="muted"> · {t('today’s stamp is waiting')}</span>}
+        </span>
+        <button className="btn sm gem" disabled={claimed} onClick={claim}>
+          {claimed ? t('Claimed today') : `${t('Claim')} +${SHOP.loginGems} ♦`}
         </button>
       </div>
-      {nextStreak(state, nowWorld) === 1 && state.meta.login.streak > 1 && !claimed && (
-        <div className="muted" style={{ color: 'var(--warn)', fontSize: 13 }}>
-          {t('You missed a day — your {streak}-day streak is gone.', { streak: state.meta.login.streak })}
-        </div>
-      )}
+      <StampCard state={state} fresh={stampFx.fresh} justCompleted={stampFx.completed} newcomer={stampFx.newcomer} />
       {m && (
         <div className="ta-row">
           <span>{t('Monthly Package · {daysLeft} days left', { daysLeft: m.daysLeft })}</span>
           <button className="btn sm gem" disabled={m.lastClaimDay === day} onClick={() => run({ type: 'CLAIM_MONTHLY' })}>
-            {m.lastClaimDay === day ? t('Claimed today') : `${t('Claim')} +${SHOP.monthlyGems} ♦ +${SHOP.monthlyGold.toLocaleString()} ◆`}
+            {m.lastClaimDay === day ? t('Claimed today') : `${t('Claim')} +${SHOP.monthlyGems} ♦ +${fmt(SHOP.monthlyGold)} ◆`}
           </button>
         </div>
       )}
@@ -251,8 +265,8 @@ export function ShopPanel({ state, store }: { state: GameState; store: Store }) 
               <span className="skill-grade">{discounted ? '%' : '♦'}</span>
               <span className="drill-name">
                 {t(pkg.label)}
-                {pkg.gems > 0 && ` · ${pkg.gems.toLocaleString()} ♦`}
-                {pkg.gold > 0 && ` · ${pkg.gold.toLocaleString()} ◆`}
+                {pkg.gems > 0 && ` · ${fmt(pkg.gems)} ♦`}
+                {pkg.gold > 0 && ` · ${fmt(pkg.gold)} ◆`}
                 {discounted && <b className="today-tag"> {t('TODAY ONLY')}</b>}
               </span>
               <span className="muted">
@@ -283,14 +297,14 @@ export function HallOfMagicInfo({ state }: { state: GameState }) {
     <div className="lr-action">
       <div className="ta-row">
         <span>{t('Probability Interference')}</span>
-        <span className="ta-val">{state.meta.pi.toFixed(1)}</span>
+        <span className="ta-val">{fmt(state.meta.pi, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</span>
       </div>
       <div className="ta-row">
         <span>{t('Hall generation')}</span>
         <span className="ta-val">{t('+{n}/world-hour', { n: hallRate(level) })}</span>
       </div>
       <div className="lr-action-note">
-        {t('The world grows steadier while you play and fades while you are away. Thresholds: Hall of Magic {hallOfMagic} · Crack of Time {crack}.', { hallOfMagic: PI.unlock.hallOfMagic, crack: PI.unlock.crack })}
+        {t('The world grows steadier while you play, and it keeps what it gained while you are away. Thresholds: Hall of Magic {hallOfMagic} · Crack of Time {crack}.', { hallOfMagic: PI.unlock.hallOfMagic, crack: PI.unlock.crack })}
       </div>
     </div>
   )
@@ -307,7 +321,7 @@ export function RiftPanel({ state, store }: { state: GameState; store: Store }) 
     return (
       <div className="lr-action">
         <div className="lr-action-note">
-          {t('A hairline crack in the air. Opening it needs Master Lv {masterLevel}, a {mageStar}★ mage to hold it, {gold} gold and {stones} Promotion Stones. Once open, the Ruins beyond pay in gems — and other Masters can come through.', { masterLevel: RIFT.masterLevel, mageStar: RIFT.mageStar, gold: RIFT.gold.toLocaleString(), stones: RIFT.stones })}
+          {t('A hairline crack in the air. Opening it needs Master Lv {masterLevel}, a {mageStar}★ mage to hold it, {gold} gold and {stones} Promotion Stones. Once open, the Ruins beyond pay in gems — and other Masters can come through.', { masterLevel: RIFT.masterLevel, mageStar: RIFT.mageStar, gold: fmt(RIFT.gold), stones: RIFT.stones })}
         </div>
         <button className="btn primary" disabled={why !== null} onClick={() => run({ type: 'OPEN_CRACK' })} title={why ? t(why) : undefined}>
           {t('Open the Crack of Time and Space')}

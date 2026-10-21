@@ -475,6 +475,13 @@ describe('buildEnemyUnit', () => {
     expect(unit.keywords).toEqual([{ kind: 'phased' }, extra])
   })
 
+  it('drops an opts keyword that repeats a template keyword (no double enrage)', () => {
+    const lv = ENEMY_TEMPLATES.lv999_creature
+    const unit = buildEnemyUnit(lv, 10, 'e_lv999', { keywords: [...(lv.keywords ?? [])] })
+    expect(unit.keywords).toEqual(lv.keywords)
+    expect(unit.keywords.filter((k) => k.kind === 'enrage')).toHaveLength(1)
+  })
+
   it('applies levelBonus to the effective level (tougher boss)', () => {
     const base = buildEnemyUnit(ENEMY_TEMPLATES.ogre_brute, 10, 'e_ogre_0')
     const buffed = buildEnemyUnit(ENEMY_TEMPLATES.ogre_brute, 10, 'e_ogre_1', { levelBonus: 5 })

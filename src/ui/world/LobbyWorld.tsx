@@ -39,17 +39,23 @@ import { iselLines } from './lines'
 import { activityKey, isOffsite, spotFor, type Spot } from './heroAgent'
 import { accountDay, conversation, pairLines, speak, statusLine } from '../life/speech'
 import { HeroProfile, HeroTracker, LetterWindow, letterReady } from '../life/lifeWindows'
-import { FirstSteps } from '../life/FirstSteps'
+import { GoalTracker } from '../shell/GoalTracker'
+import { UnlockBanner } from '../shell/UnlockBanner'
+import { MENU_ORDER, unseenUnlocks } from '../shell/unlocks'
+import { isPlaceOpen } from '../../engine/unlocks'
+import { drawLockSign, signTileFor, SIGN_H, SIGN_W } from '../shell/lockSign'
+import type { GoalTarget } from '../shell/goals'
 import { PlacePanel, type PanelPlace } from '../facilityPanels'
 import { DialogBox, Gauge, PixelWindow, type DialogScript } from '../kit'
 import { canvasAvailable, cachedCanvas } from '../pixel/render'
 import { renderLobbyBase, drawSummonCircle } from '../pixel/tiles'
 import { PROP_FRAMES, drawEmote, drawProp, type EmoteKind } from '../pixel/props'
 import { ROOF_LIFT, blanket, drawRoof, smoke } from '../pixel/campusProps'
-import { heroBustUrl, heroFrameCanvas, iselBustUrl, masterBustUrl, masterFrameCanvas } from '../pixel/sprites'
+import { heroBustUrl, heroFrameCanvas, heroPoseCanvas, iselBustUrl, masterBustUrl, masterFrameCanvas } from '../pixel/sprites'
 import type { Dir, WalkFrame } from '../pixel/heroSprite'
 import { hashString } from '../pixel/rand'
-import { t, t as tr } from '../i18n/i18n'
+import { t, t as tr, fmt } from '../i18n/i18n'
+import { drawAmbience } from './ambience'
 
 /**
  * The waiting room as a walkable campus (Living Lobby spec §3). The Master walks with
@@ -138,33 +144,11 @@ export const PLACE_ICON: Record<PlaceId, string> = {
   watchtower: '🔭',
   market: '⚖',
 }
-/** Order of the fast-travel menu. */
-export const MENU_PLACES: PlaceId[] = [
-  'tower',
-  'summon',
-  'party',
-  'roster',
-  'kitchen',
-  'tavern',
-  'dormitory',
-  'tacticalCenter',
-  'promotionChamber',
-  'trainingCenter',
-  'armory',
-  'transferStation',
-  'synthesis',
-  'library',
-  'infirmary',
-  'garden',
-  'market',
-  'watchtower',
-  'memorial',
-  'daily',
-  'hallOfMagic',
-  'rift',
-  'guild',
-  'shop',
-]
+/** Order of the fast-travel menu (the progressive campus groups it: shell/unlocks). */
+export const MENU_PLACES: PlaceId[] = [...MENU_ORDER]
+
+/** Places with an unlock schedule: they get a boarded sign until they open. */
+const LOCKABLE_PLACES: PlaceId[] = MENU_ORDER.filter((p) => !['tower', 'summon', 'party', 'roster'].includes(p))
 
 interface Walker {
   x: number
@@ -367,6 +351,8 @@ export function LobbyWorld({
   onNavigate,
   onMenu,
   travelRequest,
+  paused = false,
+  onModalChange,
 }: {
   state: GameState
   store: Store
@@ -374,6 +360,12 @@ export function LobbyWorld({
   onMenu: () => void
   /** Fast-travel request from the app menu; a new nonce re-triggers it. */
   travelRequest?: { place: PlaceId; nonce: number } | null
+  /** Something app-level (the Menu, a battle replay, a return-layer window) covers the
+   *  lobby: hold the fanfare and every lobby input (keys, pointer, walking). */
+  paused?: boolean
+  /** A lobby window (a place, a dialogue, the unlock fanfare…) opened or closed: the App
+   *  keeps its own small prompts (the backup nudge) from stacking on top of it. */
+  onModalChange?: (up: boolean) => void
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const miniRef = useRef<HTMLCanvasElement>(null)
@@ -390,6 +382,8 @@ export function LobbyWorld({
   const [showMap, setShowMap] = useState(() => typeof window === 'undefined' || window.innerWidth >= 720)
   const [clock, setClock] = useState(() => toWorldTime(Date.now()))
   const [following, setFollowing] = useState<string | null>(null)
+  /** The "New facility!" fanfare on screen (newly open places; the first is featured). */
+  const [fanfare, setFanfare] = useState<PlaceId[] | null>(null)
 
   // Live world state for the game loop (never React state: 60 fps mutation).
   const world = useRef({
@@ -406,7 +400,37 @@ export function LobbyWorld({
   const stateRef = useRef(state)
   stateRef.current = state
   const modalRef = useRef(false)
-  modalRef.current = openPlace !== null || dialog !== null || profile !== null || tracker || letter
+  const modalUp = openPlace !== null || dialog !== null || profile !== null || tracker || letter || fanfare !== null
+  // An app-level window (`paused`) is as modal as the lobby's own: without it, the lobby's
+  // window keydown listener ate Enter/Space on the window's buttons, walked the Master
+  // behind it, and opened the Menu on the same Escape that closed it. (onModalChange still
+  // reports only the lobby's own windows, so it never feeds back into `paused`.)
+  modalRef.current = paused || modalUp
+  const modalCb = useRef(onModalChange)
+  modalCb.current = onModalChange
+  useEffect(() => {
+    modalCb.current?.(modalUp)
+  }, [modalUp])
+  useEffect(() => () => modalCb.current?.(false), [])
+  // A key held as a window opens must not keep walking once it closes (its keyup is lost).
+  useEffect(() => {
+    if (paused) world.current.held = []
+  }, [paused])
+
+  // The unlock fanfare (spec 2026-10-12 S3): when a place has opened and its fanfare has
+  // not been seen, play it once the Master is free (no window or dialog open). It is
+  // recorded as seen right away, so it plays once per place. Fresh accounts have nothing
+  // open; veterans were backfilled by the v11 migration; so this only fires on a real
+  // unlock (or on arrival, for one earned while away from the lobby).
+  const unseen = unseenUnlocks(state)
+  const unseenKey = unseen.join(',')
+  const busy = paused || openPlace !== null || dialog !== null || profile !== null || tracker || letter
+  useEffect(() => {
+    if (fanfare !== null || busy || unseen.length === 0) return
+    setFanfare(unseen)
+    for (const p of unseen) store.dispatch({ type: 'SEE_UNLOCK', place: p })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [unseenKey, busy, fanfare])
 
   // Pump the world clock (timers finish, heroes live, Sanity regenerates) while in the lobby.
   useEffect(() => {
@@ -523,7 +547,9 @@ export function LobbyWorld({
   function labelFor(tg: Target | null): string | null {
     if (!tg) return null
     if (tg.kind === 'hero') return stateRef.current.heroes[tg.id as OwnedHero['id']]?.name.split(/\s+/)[0] ?? null
-    return tg.prop.place ? tr(PLACE_LABEL[tg.prop.place]) : null
+    const place = tg.prop.place
+    if (!place) return null
+    return isPlaceOpen(stateRef.current, place) ? tr(PLACE_LABEL[place]) : `🔒 ${tr(PLACE_LABEL[place])}`
   }
 
   /** Walk next to `target` then use it. */
@@ -766,6 +792,22 @@ export function LobbyWorld({
         ctx.fillStyle = 'rgba(8,4,16,0.55)'
         ctx.fillRect(r.x * TILE - camX, r.y * TILE - camY, r.w * TILE, r.h * TILE)
       }
+      // places the campus has not opened yet: a boarded sign outside (spec S3)
+      const sign = cachedCanvas('shell|lock-sign', drawLockSign)
+      if (sign) {
+        const drawn = new Set<string>()
+        for (const place of LOCKABLE_PLACES) {
+          if (isPlaceOpen(st, place)) continue
+          const at = signTileFor(place)
+          const key = `${at.x},${at.y}`
+          if (drawn.has(key)) continue
+          drawn.add(key)
+          const sx = at.x * TILE + (TILE - SIGN_W) / 2 - camX
+          const sy = (at.y + 1) * TILE - SIGN_H - camY
+          if (sx < -SIGN_W || sy < -SIGN_H || sx > VW || sy > VH) continue
+          ctx.drawImage(sign, Math.round(sx), Math.round(sy))
+        }
+      }
 
       // y-sorted props, graves, characters and roofs
       type Drawable = { y: number; draw: () => void }
@@ -798,6 +840,8 @@ export function LobbyWorld({
         ctx.fillRect(px - 6 - camX, py - 1 - camY, 12, 3)
         ctx.fillRect(px - 5 - camX, py - 2 - camY, 10, 5)
       }
+      // The grey Re-interference (S25, the return layer's body.greyed): the campus dozes.
+      const dozing = typeof document !== 'undefined' && document.body.classList.contains('greyed')
       for (const hw of w.heroes.values()) {
         if (hw.hidden) continue
         const h = st.heroes[hw.id as OwnedHero['id']]
@@ -807,9 +851,15 @@ export function LobbyWorld({
         const d = activityOf(h)
         const busy = hw.arrived ? d.kind : null
         const sparring = busy === 'train' || busy === 'drilling' || (busy === 'work' && (h.life?.job === 'blacksmith' || h.life?.job === 'instructor'))
-        const frame = sparring ? (((Math.floor(w.time * 5) % 2) + 1) as WalkFrame) : walkFrame(hw)
-        const img = heroFrameCanvas(h, hw.lying ? 'down' : hw.dir, hw.lying ? 0 : frame)
-        const emote = busy ? ACTIVITY_EMOTE[busy] : null
+        const frame = dozing ? 0 : sparring ? (((Math.floor(w.time * 5) % 2) + 1) as WalkFrame) : walkFrame(hw)
+        // Sparring side-on trades real blows (WP8's battle poses: wind-up, then the strike).
+        // The battle frames face left; a hero facing right is drawn mirrored.
+        const spar = !dozing && sparring && !hw.lying && (hw.dir === 'left' || hw.dir === 'right')
+        const img = spar
+          ? heroPoseCanvas(h, (Math.floor(w.time * 2.5 + (hashString(hw.id) % 7)) % 2 === 0 ? 'windup' : 'attack'))
+          : heroFrameCanvas(h, hw.lying ? 'down' : hw.dir, hw.lying ? 0 : frame)
+        const mirror = spar && hw.dir === 'right'
+        const emote = dozing && !hw.lying ? ('zz' as EmoteKind) : busy ? ACTIVITY_EMOTE[busy] : null
         const isFollowed = w.follow === hw.id
         list.push({
           y: hw.lying ? py + 14 : py,
@@ -823,7 +873,12 @@ export function LobbyWorld({
               if (bl) ctx.drawImage(bl, bx + 1, by + 11)
             } else {
               drawShadow(px, py)
-              if (img) ctx.drawImage(img, Math.round(px - 12 - camX), Math.round(py - 30 - camY))
+              if (img && mirror) {
+                ctx.save()
+                ctx.scale(-1, 1)
+                ctx.drawImage(img, -Math.round(px + 12 - camX), Math.round(py - 30 - camY))
+                ctx.restore()
+              } else if (img) ctx.drawImage(img, Math.round(px - 12 - camX), Math.round(py - 30 - camY))
             }
             if (isFollowed) {
               ctx.strokeStyle = '#f2c75c'
@@ -914,6 +969,10 @@ export function LobbyWorld({
         ctx.globalCompositeOperation = 'source-over'
       }
 
+      // ambient tint and particles (world/ambience.ts) — outdoors only: no leaves or
+      // fireflies drifting through an interior.
+      if (insideBuilding(m.x, m.y) === null) drawAmbience(ctx, { nowReal: Date.now(), view: { camX, camY, w: VW, h: VH }, zoom: vpRef.current.zoom })
+
       // warm vignette
       const g = ctx.createRadialGradient(VW / 2, VH / 2, Math.min(VW, VH) * 0.45, VW / 2, VH / 2, Math.max(VW, VH) * 0.7)
       g.addColorStop(0, 'rgba(0,0,0,0)')
@@ -1003,6 +1062,39 @@ export function LobbyWorld({
     setFollowing(id)
   }
 
+  /** "Show me": walk the Master to a place and open it on arrival (or jump if no path).
+   *  A long way is shortened: the Master appears a couple of seconds' walk out and walks
+   *  in, so the player sees the building and its door without a long wait. */
+  function showPlace(place: PlaceId) {
+    const prop = propForPlace(place)
+    const m = world.current.master
+    let path = findPath({ x: m.x, y: m.y }, (x, y) => isAdjacentTo(prop, x, y))
+    if (!path || path.length === 0) return travel(place)
+    const WALK_IN = 12
+    if (path.length > WALK_IN + 2) {
+      const from = path[path.length - WALK_IN - 1]!
+      Object.assign(m, newWalker(from, dirBetween(from, path[path.length - WALK_IN]!)))
+      path = path.slice(path.length - WALK_IN)
+    }
+    setFollowing(null)
+    m.path = path
+    world.current.pending = { kind: 'prop', prop }
+  }
+
+  /** A click on the goal tracker: travel to the place, or go and see the hero. */
+  function followGoal(target: GoalTarget) {
+    if (target.kind === 'hero') {
+      if (target.action === 'profile') return setProfile(target.heroId)
+      const hw = world.current.heroes.get(target.heroId)
+      if (hw && !hw.hidden) goTo({ kind: 'hero', id: target.heroId })
+      else talkTo(target.heroId)
+      return
+    }
+    const place = target.place
+    if (place === 'tower' || place === 'summon' || place === 'party' || place === 'roster') onNavigate(place)
+    else travel(place)
+  }
+
   const ml = state.meta.masterLevel
   const xpPct = (state.meta.masterXp / masterXpToNext(ml)) * 100
   const living = Object.values(state.heroes).filter((h) => h.alive).length
@@ -1019,7 +1111,7 @@ export function LobbyWorld({
         height={vp.h}
         style={{ width: vp.w * vp.zoom, height: vp.h * vp.zoom }}
         onPointerDown={onPointerDown}
-        aria-label="The waiting room"
+        aria-label={t('The waiting room')}
       />
 
       <div className="hud hud-tl">
@@ -1047,21 +1139,21 @@ export function LobbyWorld({
           </button>
         )}
         {!loginClaimed(state, toWorldTime(Date.now())) && (
-          <button className="pbtn gem" onClick={() => store.dispatch({ type: 'CLAIM_LOGIN' }, Date.now())} title="Daily login reward">
+          <button className="pbtn gem" onClick={() => store.dispatch({ type: 'CLAIM_LOGIN' }, Date.now())} title={t('Daily login reward')}>
             🎁 {t('Daily')}
           </button>
         )}
         <button className="pbtn" onClick={() => setTracker(true)} title={t('Where is everyone? (H)')}>
           👥 {t('Heroes')}
         </button>
-        <span className="coin gold">◆ {state.gold.toLocaleString()}</span>
-        <span className="coin gem">♦ {state.gems.toLocaleString()}</span>
+        <span className="coin gold">◆ {fmt(state.gold)}</span>
+        <span className="coin gem">♦ {fmt(state.gems)}</span>
         <button className="pbtn" onClick={onMenu}>
           ☰ {t('Menu')}
         </button>
       </div>
 
-      <FirstSteps state={state} store={store} />
+      <GoalTracker state={state} store={store} variant="hud" onGo={followGoal} />
 
       {showMap && (
         <div className="hud hud-mini">
@@ -1118,6 +1210,19 @@ export function LobbyWorld({
         />
       )}
       {dialog && <DialogBox script={dialog} onDone={() => setDialog(null)} />}
+      {/* Held (already recorded as seen) while the App is busy: the Menu, a replay, or the
+          return layer's welcome-back, so the two never stack. */}
+      {fanfare && !paused && (
+        <UnlockBanner
+          places={fanfare}
+          icons={PLACE_ICON}
+          onClose={() => setFanfare(null)}
+          onShow={(place) => {
+            setFanfare(null)
+            showPlace(place)
+          }}
+        />
+      )}
     </div>
   )
 }

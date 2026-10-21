@@ -11,11 +11,9 @@
  * PURE and DETERMINISTIC: the return roll is rngFor(seed, 'ruins', heroId, completesAt).
  */
 
-import type { GameState, HeroId, MaterialId, OwnedHero } from '../types'
+import type { GameState, HeroId, OwnedHero } from '../types'
 import { TUNING } from '../tuning'
 import { piUnlocked } from '../interference'
-import { rngFor, chance } from '../rng'
-import { combatPowerForHero } from '../stats'
 import { worldDayIndex } from '../daily'
 
 const R = TUNING.rift
@@ -79,11 +77,6 @@ export function dispatchRuins(state: GameState, heroIds: readonly HeroId[], nowW
   return { ...state, heroes }
 }
 
-/** What a returning hero brings back (deterministic in seed, hero, return time). */
-export function expeditionHaul(hero: OwnedHero, seed: GameState['seed']): { gems: number; materials: Record<MaterialId, number> } {
-  const at = hero.expedition?.completesAtWorld ?? 0
-  const cp = combatPowerForHero(hero, hero.xp.level)
-  const gems = R.gemsBase + Math.round((cp / 1000) * R.gemsPerKCp)
-  const rare = chance(rngFor(seed, 'ruins', hero.id, at), R.rareChance).value
-  return { gems, materials: rare ? { promotionStone: R.rareStones } : {} }
-}
+// The haul roll lives in a leaf module so return/away and time can use it without
+// importing the rift (rift → daily → tower → return → rift was an import cycle).
+export { expeditionHaul } from './haul'

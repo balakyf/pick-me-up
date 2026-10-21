@@ -10,6 +10,8 @@ import {
   isWallFloor,
 } from './tower'
 import { createAccount } from '../account'
+import { anchorFeel, floorBudget, isMercyCapped, kindRel, pathTarget } from '../climb'
+import { resolveEvent } from '../events'
 import { ACTS, ANCHORS, ENEMY_TEMPLATES, ALLY_TEMPLATES, HIDDEN_OBJECTIVES, actForFloor } from '../content'
 import { TUNING } from '../tuning'
 import type { BattleResult, GameState, HeroId, OwnedHero, TowerState } from '../types'
@@ -87,7 +89,8 @@ describe('acts and bands', () => {
 
   it('never fields more than the unit cap; late enemies grow elite instead', () => {
     for (const f of [61, 79, 89, 99]) {
-      const units = buildEncounter(onFloor(f), f).waves[0]!.units
+      // A roster of gods: the mercy director stays out of it and the static curve shows.
+      const units = buildEncounter(both(f), f).waves[0]!.units
       expect(units.length).toBeLessThanOrEqual(T.fillerMaxUnits)
       expect(units.reduce((n, u) => n + u.cp, 0)).toBeGreaterThan(floorPower(f, 1) * (1 - T.budgetTolerance) * 0.9)
     }
@@ -116,9 +119,16 @@ describe('anchors F25–F100', () => {
       const a = ANCHORS[f]!
       for (const w of a.waves) for (const g of w) expect(ENEMY_TEMPLATES[g.templateId], `F${f} ${g.templateId}`).toBeDefined()
       for (const al of a.allies ?? []) expect(ALLY_TEMPLATES[al.templateId]).toBeDefined()
-      const enc = buildEncounter(onFloor(f), f)
-      const cp = enc.waves.reduce((n, w) => n + w.units.reduce((m, u) => m + u.cp, 0), 0)
-      expect(cp, `F${f}`).toBeGreaterThanOrEqual(floorPower(f, 1) * T.anchorBudgetMult * 0.99)
+      // Scaled to the Boss budget (both ways now, spec 2026-10-12 S13); looming units are
+      // outlasted, not fought, so they never count toward it.
+      const s = both(f)
+      const enc = buildEncounter(s, f)
+      const cp = enc.waves.reduce((n, w) => n + w.units.reduce((m, u) => m + (u.keywords.some((k) => k.kind === 'looming') ? 0 : u.cp), 0), 0)
+      const target = floorBudget(s, f, 'boss')
+      expect(target).toBeCloseTo(pathTarget(f, 1) * kindRel('boss') * T.anchorBudgetMult * anchorFeel(f), 6)
+      expect(cp, `F${f}`).toBeGreaterThanOrEqual(target * 0.99)
+      // …and the smallest whole elite step that reaches it.
+      expect(cp, `F${f}`).toBeLessThan(target * T.elitePowerStep * 1.02)
     }
   })
 
@@ -144,7 +154,7 @@ describe('anchors F25–F100', () => {
 })
 
 describe('the F36–40 loop', () => {
-  const base: TowerState = { currentFloor: 35, highestCleared: 34, attemptIndex: 0, event: null, loop: null, hiddenFound: [], worldEnded: false, worldSaved: false }
+  const base: TowerState = { currentFloor: 35, highestCleared: 34, attemptIndex: 0, event: null, loop: null, hiddenFound: [], worldEnded: false, worldSaved: false, kind: 'path', doors: null, sortie: null }
 
   it('opens on reaching F36 and closes when F40 falls', () => {
     const at36 = nextTowerState(base, 35, true).state
@@ -180,6 +190,45 @@ describe('the F36–40 loop', () => {
     expect(result.loopRollback).toBe(true)
     expect(state.tower.currentFloor).toBe(31)
   })
+
+  it('every scar hardens F36–40 — the mercy cap and the anchor fit cannot take it back', () => {
+    // Review finding #5: the anchor shrank to its (scar-blind, mercy-capped) budget, so the
+    // scars' extra levels were fitted away and the F40 gate stayed flat (5289/5354/5360/5195).
+    const loop = (scars: number) => ({ loop: { attemptsLeft: 5, scars } })
+    const cp = (s: GameState, f: number) => buildEncounter(s, f).waves.reduce((n, w) => n + w.units.reduce((m, u) => m + u.cp, 0), 0)
+    const lv = (level: number) => ({ xp: { level, xpIntoLevel: 0, heldXp: 0, atCap: false } })
+    const god: Partial<OwnedHero> = { ...lv(150), star: 7, baseAttrs: { str: 400, agi: 400, vit: 400, int: 400, wil: 400 } }
+    const rosters = {
+      capped: (scars: number) => onFloor(40, lv(40), 11, loop(scars), lv(40)),
+      uncapped: (scars: number) => onFloor(40, god, 11, loop(scars), god),
+    }
+    expect(isMercyCapped(rosters.capped(0), 40, 'boss')).toBe(true)
+    expect(isMercyCapped(rosters.uncapped(0), 40, 'boss')).toBe(false)
+    for (const [name, at] of Object.entries(rosters)) {
+      for (const f of [36, 38, 40]) {
+        const onF = (scars: number) => ({ ...at(scars), tower: { ...at(scars).tower, currentFloor: f, highestCleared: f - 1 } })
+        const cps = [0, 1, 3, 6].map((s) => cp(onF(s), f))
+        for (let i = 1; i < cps.length; i++) expect(cps[i], `${name} F${f} scars: ${cps.join('/')}`).toBeGreaterThan(cps[i - 1]!)
+        // Each scar lifts the floor's budget by scarBudgetPct, on top of the mercy cap.
+        expect(cps[3]! / cps[0]!, `${name} F${f}`).toBeGreaterThan((1 + T.loop.scarBudgetPct) ** 6 * 0.85)
+      }
+    }
+    // Outside the loop nothing moves.
+    expect(cp(onFloor(41, lv(40), 11, loop(3), lv(40)), 41)).toBe(cp(onFloor(41, lv(40), 11, loop(0), lv(40)), 41))
+  })
+
+  it('a party that clears an unscarred F40 gate loses it once the loop is deeply scarred', () => {
+    const lv = { xp: { level: 30, xpIntoLevel: 0, heldXp: 0, atCap: false } }
+    const wins = (scars: number) => {
+      let n = 0
+      for (let seed = 1; seed <= 10; seed++) if (playFloor(onFloor(40, lv, seed, { loop: { attemptsLeft: 5, scars } }, lv)).result.cleared) n++
+      return n
+    }
+    const fresh = wins(0)
+    expect(fresh).toBeGreaterThanOrEqual(8)
+    // Before the fix the scars were fitted away: 10/10 at every scar count.
+    expect(wins(6)).toBeLessThanOrEqual(fresh - 5)
+  })
 })
 
 describe('events, hidden objectives, the end of the world', () => {
@@ -196,9 +245,25 @@ describe('events, hidden objectives, the end of the world', () => {
     expect(result.event?.options).toContain('deathmatch')
   })
 
-  it('a filler first clear opens nothing; a repeat anchor clear opens nothing', () => {
-    expect(playFloor(both(23)).result.event).toBeNull()
-    expect(playFloor(both(25, 11, { highestCleared: 30 })).result.event).toBeNull()
+  it('a filler first clear opens Doors, not an event; a repeat Boss clear opens a Boon choice', () => {
+    const filler = playFloor(both(23)).result
+    expect(filler.event).toBeNull()
+    expect(filler.doors?.map((d) => d.kind)).toHaveLength(TUNING.climb.doors.offered)
+    expect(filler.doors?.[0]?.kind).toBe('path')
+    const repeat = playFloor(both(25, 11, { highestCleared: 30 })).result
+    expect(repeat.event?.kind).toBe('boon')
+    expect(repeat.event?.options).toHaveLength(TUNING.climb.boons.offer)
+  })
+
+  it('a Boss’s first clear opens its bonus, and the Boon choice follows it', () => {
+    const { state } = playFloor(both(25))
+    expect(state.tower.event?.kind).toBe('bonus')
+    const after = resolveEvent(state, 'treasure').state
+    expect(after.tower.event?.kind).toBe('boon')
+    const picked = after.tower.event!.options[0]!
+    const done = resolveEvent(after, picked).state
+    expect(done.tower.event).toBeNull()
+    expect(done.tower.sortie?.boons).toEqual([picked])
   })
 
   it('hidden objectives are found once, pay out, and are recorded', () => {

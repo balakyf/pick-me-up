@@ -75,7 +75,8 @@ export const ANCHORS: Record<number, AnchorDef> = {
           templateId: 'lv999_creature',
           count: 1,
           levelBonus: 50,
-          keywords: [{ kind: 'enrage', afterTick: 300, multiplier: 5 }, { kind: 'looming' }],
+          // Enrage + looming come from the template (listing them here too stacked
+          // enrage to x25).
         },
         // The Priest's acolyte shields him (he is phased until it falls).
         { templateId: 'skeleton', count: 1 },
@@ -84,7 +85,7 @@ export const ANCHORS: Record<number, AnchorDef> = {
           count: 1,
           levelBonus: 10,
           targetTag: 'black_priest',
-          keywords: [{ kind: 'phased' }],
+          // phased comes from the template.
         },
       ],
     ],

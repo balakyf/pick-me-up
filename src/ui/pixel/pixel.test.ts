@@ -9,6 +9,8 @@ import { drawSummonCircle } from './summonFx'
 import { INK, CLASS_CLOTH, tame } from './palette'
 import { hashString } from './rand'
 import { ENEMY_TEMPLATES } from '../../engine/content'
+import { drawHeroPose, HERO_POSES } from './heroSprite'
+import { drawEnemyPose } from './enemySprite'
 
 const hero = (over: Partial<LookSource> = {}): LookSource => ({
   id: 'h_000001',
@@ -163,5 +165,129 @@ describe('tower exterior & summon circle', () => {
 
   it('draws a summoning circle in the rarity colour', () => {
     expect(opaqueCount(drawSummonCircle('#f2c75c'))).toBeGreaterThan(200)
+  })
+})
+
+// ── WP8 (spec 2026-10-12 S10): battle poses ─────────────────────────────────
+
+/** A spread that covers every outfit, weapon, headgear, hair style, cape and trim. */
+function poseSpread(): LookSource[] {
+  const classes = [null, 'warrior', 'spearman', 'thief', 'archer', 'mage'] as const
+  const els = ['fire', 'water', 'wind', 'earth', 'light', 'dark', 'physical'] as const
+  const out: LookSource[] = []
+  for (let i = 0; i < 84; i++) {
+    const heroClass = classes[i % classes.length]!
+    const star = (heroClass === null ? 1 + (i % 2) : 3 + (i % 5)) as LookSource['star']
+    const token = i % 3 === 0 ? '#' + (hashString(`pose${i}`) & 0xffffff).toString(16).padStart(6, '0') : undefined
+    out.push({ id: `h_${String(i).padStart(6, '0')}`, name: `Pose ${i}`, star, heroClass, element: els[i % els.length]!, portraitToken: token })
+  }
+  return out
+}
+
+describe('battle poses (WP8)', () => {
+  it('the idle pose is pixel-identical to the existing left frame 0 for every kind of hero', () => {
+    const looks = [...poseSpread().map(lookForHero), lookForMaster('46631913'), lookForMaster('7')]
+    for (const l of looks) {
+      expect(Array.from(drawHeroPose(l, 'idle').px)).toEqual(Array.from(drawHeroFrame(l, 'left', 0).px))
+    }
+  })
+
+  it('every pose frame is 24×32, solid, deterministic and differs from frame 0', () => {
+    for (const src of poseSpread()) {
+      const l = lookForHero(src)
+      const stand = Array.from(drawHeroFrame(l, 'left', 0).px)
+      for (const p of HERO_POSES) {
+        const b = drawHeroPose(l, p)
+        expect(b.w).toBe(FRAME_W)
+        expect(b.h).toBe(FRAME_H)
+        expect(opaqueCount(b), `${src.id} ${p}`).toBeGreaterThan(150)
+        expect(Array.from(drawHeroPose(l, p).px)).toEqual(Array.from(b.px))
+        if (p !== 'idle') expect(Array.from(b.px), `${src.id} ${p}`).not.toEqual(stand)
+      }
+    }
+  })
+
+  it('poses are distinct from one another', () => {
+    const l = lookForHero(hero())
+    const seen = new Set(HERO_POSES.map((p) => Array.from(drawHeroPose(l, p).px).join(',')))
+    expect(seen.size).toBe(HERO_POSES.length)
+  })
+
+  it('a blink only shuts the eyes (a handful of face pixels change)', () => {
+    for (const src of poseSpread().slice(0, 12)) {
+      const l = lookForHero(src)
+      const a = drawHeroPose(l, 'idle')
+      const b = drawHeroPose(l, 'blink')
+      let diff = 0
+      for (let i = 0; i < a.px.length; i++) if (a.px[i] !== b.px[i]) {
+        diff++
+        const y = Math.floor(i / FRAME_W)
+        expect(y).toBeGreaterThanOrEqual(9)
+        expect(y).toBeLessThanOrEqual(12)
+      }
+      expect(diff).toBeGreaterThan(0)
+      expect(diff).toBeLessThanOrEqual(4)
+    }
+  })
+
+  it('the KO slump stays on the ground line (nothing below row 30)', () => {
+    for (const src of poseSpread()) {
+      const b = drawHeroPose(lookForHero(src), 'ko')
+      for (let x = 0; x < FRAME_W; x++) expect(get(b, x, 31), src.id).toBe(CLEAR)
+    }
+  })
+
+  it('posing never touches the existing hero looks or walk frames', () => {
+    const l = lookForHero(hero())
+    const before = Array.from(drawHeroFrame(l, 'down', 1).px)
+    for (const p of HERO_POSES) drawHeroPose(l, p)
+    expect(lookForHero(hero())).toEqual(l)
+    expect(Array.from(drawHeroFrame(l, 'down', 1).px)).toEqual(before)
+  })
+})
+
+describe('enemy poses (WP8)', () => {
+  const poses = ['windup', 'attack', 'cast', 'hurt', 'ko'] as const
+
+  it('idle is exactly the existing enemy art', () => {
+    for (const t of Object.values(ENEMY_TEMPLATES)) expect(drawEnemyPose(t.id, t.element, 'idle')).toBe(drawEnemy(t.id, t.element))
+  })
+
+  it('every template has every pose: same size as idle, solid, and visibly different', () => {
+    for (const t of Object.values(ENEMY_TEMPLATES)) {
+      const idle = drawEnemy(t.id, t.element)
+      const idlePx = Array.from(idle.px)
+      for (const p of poses) {
+        const b = drawEnemyPose(t.id, t.element, p)
+        expect(b.w, `${t.id} ${p}`).toBe(idle.w)
+        expect(b.h, `${t.id} ${p}`).toBe(idle.h)
+        expect(opaqueCount(b), `${t.id} ${p}`).toBeGreaterThan(60)
+        expect(Array.from(b.px), `${t.id} ${p}`).not.toEqual(idlePx)
+      }
+      // posing must not mutate the cached idle bitmap
+      expect(Array.from(drawEnemy(t.id, t.element).px)).toEqual(idlePx)
+    }
+  })
+
+  it('humanoid foes wear the hero rig, mirrored to face the party', () => {
+    const b = drawEnemyPose('soldier', 'physical', 'attack')
+    expect(b.w).toBe(FRAME_W)
+    // the posed soldier is a mirrored hero frame: its trail/weapon reaches the RIGHT edge region
+    let rightHalf = 0
+    let leftHalf = 0
+    for (let y = 14; y < 24; y++) for (let x = 0; x < FRAME_W; x++) if (get(b, x, y) !== CLEAR) (x >= 12 ? rightHalf++ : leftHalf++)
+    expect(rightHalf).toBeGreaterThan(leftHalf)
+  })
+
+  it('goblin ears follow the head when it moves (KO)', () => {
+    const idle = drawEnemyPose('goblin', 'earth', 'idle')
+    const ko = drawEnemyPose('goblin', 'earth', 'ko')
+    expect(get(idle, 21, 6)).not.toBe(CLEAR)
+    // the KO head drops 7 rows: the ear tip comes with it
+    expect(get(ko, 22, 13)).not.toBe(CLEAR)
+  })
+
+  it('unknown templates still pose (the fallback figure)', () => {
+    expect(opaqueCount(drawEnemyPose('does_not_exist', 'water', 'hurt'))).toBeGreaterThan(100)
   })
 })

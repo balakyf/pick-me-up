@@ -636,7 +636,7 @@ function dailyReadyState(seed = 5): GameState {
     ...acct,
     heroes: { [hero.id]: hero },
     party: { slots: [hero.id, null, null, null, null], lines: ['front', 'front', 'mid', 'back', 'back'] },
-    tower: { currentFloor: 2, highestCleared: 1, attemptIndex: 0, event: null, loop: null, hiddenFound: [], worldEnded: false, worldSaved: false },
+    tower: { currentFloor: 2, highestCleared: 1, attemptIndex: 0, event: null, loop: null, hiddenFound: [], worldEnded: false, worldSaved: false, kind: 'path', doors: null, sortie: null },
   }
 }
 

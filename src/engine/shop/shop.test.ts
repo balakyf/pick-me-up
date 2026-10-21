@@ -33,13 +33,15 @@ describe('the predatory layer (simulated money)', () => {
     expect(() => claimMonthly(s, 40 * DAY)).toThrow(/no Monthly/)
   })
 
-  it('the login streak builds to a 7th-day bonus and resets after a missed day', () => {
+  it('the daily login pays every world-day and never resets after a missed day (S28)', () => {
     let s: GameState = createAccount(1)
     for (let d = 0; d < 7; d++) s = claimLogin(s, d * DAY)
     expect(s.meta.login.streak).toBe(7)
-    expect(s.gems).toBe(7 * S.loginGems + S.streakBonusGems)
+    expect(s.gems).toBe(7 * S.loginGems)
     expect(() => claimLogin(s, 6 * DAY)).toThrow(/already/)
-    expect(nextStreak(s, 9 * DAY)).toBe(1)
+    // A missed day costs nothing: the count keeps climbing.
+    expect(nextStreak(s, 9 * DAY)).toBe(8)
+    expect(claimLogin(s, 9 * DAY).meta.login.streak).toBe(8)
     expect(s.meta.pi).toBe(7 * TUNING.interference.perLogin)
   })
 

@@ -34,13 +34,17 @@ function summonMany(state: GameState, n: number): GameState {
   return s
 }
 
-/** Play the current floor, then close any event floor it opened (Rest) so the climb continues. */
+/** Play the current floor, then close any event floors it opened (Rest, else the first
+ *  option — a Boon choice can follow a boss's bonus) so the climb continues. */
 function playAndRest(s: GameState): ReturnType<typeof playFloor> {
   const out = playFloor(s)
-  const ev = out.state.tower.event
-  if (ev === null) return out
-  const option = ev.options.includes('rest') ? 'rest' : ev.options[0]!
-  return { ...out, state: resolveEvent(out.state, option).state }
+  let state = out.state
+  for (let guard = 0; state.tower.event !== null && guard < 4; guard++) {
+    const ev = state.tower.event
+    const option = ev.options.includes('rest') ? 'rest' : ev.options[0]!
+    state = resolveEvent(state, option).state
+  }
+  return { ...out, state }
 }
 
 describe('core loop — end to end', () => {

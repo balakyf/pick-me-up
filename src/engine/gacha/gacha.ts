@@ -39,7 +39,7 @@ import type {
   EquipmentItem,
   SummonPool,
 } from '../types'
-import { envelopeForStar } from '../stats'
+import { combatPowerForHero, envelopeForStar } from '../stats'
 import { CAMEO_HEROES, CLASS_SKILL, NAME_POOLS, SKILLS } from '../content'
 import { heroSkillsFromIds, learnableSkillIds } from '../skills'
 import { rollEngraving } from '../engravings'
@@ -84,6 +84,7 @@ export function rollStar(rng: Rng, pity: number): Draw<Star> {
 }
 
 const ADV = TUNING.gacha.advanced
+const FTUE = TUNING.ftue
 
 /**
  * Roll an Advanced-pool star (3★ 80 / 4★ 18 / 5★ 2), then apply its two Rising
@@ -535,15 +536,9 @@ export function summonMany(
   count: number = 1,
 ): { state: GameState; heroes: OwnedHero[] } {
   if (!Number.isInteger(count) || count < 1) throw new Error(`summon: invalid count ${count}`)
-  // The canon tutorial draw: a new Master's first Normal ten-pull is free.
-  if (pool === 'normal' && count === 10 && tutorialPullAvailable(state)) {
-    const funded: GameState = {
-      ...state,
-      gold: state.gold + summonCost('normal', 10).gold,
-      life: { ...state.life, guide: { ...state.life.guide, tutorialPull: true } },
-    }
-    return summonMany(funded, 'normal', 10)
-  }
+  // The canon tutorial draw: a new Master's first Normal ten-pull is free, and it is
+  // guaranteed (spec 2026-10-12 S1) — see tutorialTenPull.
+  if (pool === 'normal' && count === 10 && tutorialPullAvailable(state)) return tutorialTenPull(state)
   // The Mobius crystal holds a limited charge of Advanced pulls per world-day.
   if (pool === 'advanced') {
     const left = crystalChargeLeft(state)
@@ -578,6 +573,95 @@ export function summonMany(
   return { state: cur, heroes }
 }
 
+/**
+ * The minimum star the i-th pull (0-based) of the tutorial ten-pull must reach, given
+ * what the earlier pulls produced (spec 2026-10-12 S1). PURE.
+ *
+ * - **2★+ by deficit:** when the 2★+ heroes so far plus the pulls left after this one
+ *   could no longer reach `min2Plus`, this pull is lifted to 2★.
+ * - **The top star on the last pull:** if no hero of `minTopStar` has appeared by the
+ *   final pull, that pull is lifted to it.
+ *
+ * Returns undefined when the pull may land wherever the rates put it, so most pulls
+ * keep the underdog flavour.
+ */
+export function tutorialMinStar(
+  i: number,
+  count: number,
+  pulledStars: readonly Star[],
+  minTopStar: number = FTUE.tutorialMinTopStar,
+  min2Plus: number = FTUE.tutorialMin2Plus,
+): Star | undefined {
+  let min = 0
+  const twoPlus = pulledStars.filter((s) => s >= 2).length
+  const leftAfter = count - i - 1
+  if (twoPlus + leftAfter < min2Plus) min = 2
+  if (i === count - 1 && !pulledStars.some((s) => s >= minTopStar)) min = Math.max(min, minTopStar)
+  return min > 0 ? (min as Star) : undefined
+}
+
+/**
+ * Which tutorial hero is "the best" (highest true star, then highest base combat power,
+ * then the lowest id for a stable tie-break). PURE.
+ */
+export function bestOfPull(heroes: readonly OwnedHero[]): OwnedHero | undefined {
+  let best: OwnedHero | undefined
+  let bestCp = -1
+  for (const h of heroes) {
+    const cp = combatPowerForHero(h, h.xp.level)
+    if (
+      best === undefined ||
+      h.star > best.star ||
+      (h.star === best.star && (cp > bestCp || (cp === bestCp && h.id < best.id)))
+    ) {
+      best = h
+      bestCp = cp
+    }
+  }
+  return best
+}
+
+/**
+ * The free tutorial ten-pull (spec 2026-10-12 S1): ten ordinary Normal pulls, paid for by
+ * the crystal, with two honest guarantees — at least one `ftue.tutorialMinTopStar` hero
+ * and at least `ftue.tutorialMin2Plus` heroes of 2★+. The guarantees LIFT the star the
+ * pull already drew (exactly like pity), so no draw is added and the gacha stream stays
+ * aligned. Then the best 3★+ arrives knowing its class's signature skill at Lv1, so the
+ * first peak has something to show. PURE.
+ */
+function tutorialTenPull(state: GameState): { state: GameState; heroes: OwnedHero[] } {
+  const count = 10
+  let cur: GameState = {
+    ...state,
+    gold: state.gold + summonCost('normal', count).gold,
+    life: { ...state.life, guide: { ...state.life.guide, tutorialPull: true } },
+  }
+  const heroes: OwnedHero[] = []
+  for (let i = 0; i < count; i++) {
+    const minStar = tutorialMinStar(
+      i,
+      count,
+      heroes.map((h) => h.star),
+    )
+    const res = summon(cur, minStar !== undefined ? { minStar } : undefined)
+    heroes.push(res.hero)
+    cur = res.state
+  }
+  if (!FTUE.tutorialSignatureSkill) return { state: cur, heroes }
+
+  const best = bestOfPull(heroes.filter((h) => h.star >= 3 && h.heroClass !== null))
+  if (best === undefined || best.heroClass === null) return { state: cur, heroes }
+  const signature = CLASS_SKILL[best.heroClass]
+  if (signature === undefined || SKILLS[signature] === undefined || best.skills.some((s) => s.id === signature)) {
+    return { state: cur, heroes }
+  }
+  const taught: OwnedHero = { ...best, skills: [...best.skills.map((s) => ({ ...s })), { id: signature, level: 1, xp: 0 }] }
+  return {
+    state: { ...cur, heroes: { ...cur.heroes, [taught.id]: taught } },
+    heroes: heroes.map((h) => (h.id === taught.id ? taught : h)),
+  }
+}
+
 /** The free tutorial ten-pull is still waiting. */
 export function tutorialPullAvailable(state: GameState): boolean {
   return TUNING.gacha.tutorialTenPull && !state.life.guide.tutorialPull
@@ -594,6 +678,12 @@ export function crystalChargeLeft(state: GameState): number {
   return c.day === worldDayOf(state) ? Math.max(0, cap - c.advancedPulls) : cap
 }
 
+/** Options for one Normal summon (spec 2026-10-12 WP0). */
+export interface SummonOpts {
+  /** Lift the drawn star to at least this (the tutorial guarantee, a New Arrival). */
+  minStar?: Star
+}
+
 /**
  * Perform one Normal Mobius Summon. PURE: never mutates `state`; returns a fresh
  * GameState plus the new hero.
@@ -606,8 +696,12 @@ export function crystalChargeLeft(state: GameState): number {
  *   - consumedHeroIds + (consumedTemplateIds | usedNames) appended, kept SORTED
  *   - pity         = star >= 3 ? 0 : pity + 1   (Rising Quality Floor payout)
  *   - pullCount   += 1                          (advances the gacha sub-stream)
+ *
+ * `opts.minStar` (spec 2026-10-12 WP0) lifts the drawn star to at least that star, the
+ * way pity does: the SAME star draw is lifted, no extra draw is taken, so the stream
+ * stays aligned. Without opts the pull is byte-identical to before.
  */
-export function summon(state: GameState): { state: GameState; hero: OwnedHero } {
+export function summon(state: GameState, opts?: SummonOpts): { state: GameState; hero: OwnedHero } {
   const cost = TUNING.gacha.normalCostGold
   if (state.gold < cost) {
     throw new Error(
@@ -626,6 +720,7 @@ export function summon(state: GameState): { state: GameState; hero: OwnedHero } 
     const alt = rollStar(rngFor(state.seed, 'gacha-nudge', state.gacha.pullCount), state.gacha.pity).value
     if (alt > star) star = alt
   }
+  if (opts?.minStar !== undefined && star < opts.minStar) star = opts.minStar
   const { value: roll } = rollHeroOfStar(first.rng, star, state.consumedHeroIds, state.consumedTemplateIds, state.usedNames)
 
   const admitted = admit({ ...state, gold: state.gold - cost }, roll)

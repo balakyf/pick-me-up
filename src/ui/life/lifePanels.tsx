@@ -1,7 +1,8 @@
 /**
  * Living Lobby building panels: who is here right now, who works here (and who else
- * could), the Forge's standing order, and the Memorial's graves. Each building's rules
- * live in the engine; these only read state and dispatch Commands.
+ * could), and the Forge's standing order. Each building's rules live in the engine;
+ * these only read state and dispatch Commands. (The Memorial's graves live in
+ * ui/legacy/MemorialPanel.tsx.)
  */
 import { useState } from 'react'
 import type { ForgeOrder, GameState, JobId, LifePlace, OwnedHero } from '../../engine/types'
@@ -22,9 +23,10 @@ import {
 } from '../../engine/life'
 import { forgeCost, forgeGrade, smithyUnlocked } from '../../engine/equipment'
 import { heroBustUrl } from '../pixel/sprites'
-import { JOB_NAME, accountDay, lastWords, shortName, statusLine } from './speech'
+import { JOB_NAME, shortName, statusLine } from './speech'
 import { JOB_BLURB, JOB_ICON } from './lifeWindows'
-import { t } from '../i18n/i18n'
+import { t, fmt } from '../i18n/i18n'
+import { latching } from './FirstSteps'
 
 const first = (n: string) => n.split(/\s+/)[0] ?? n
 
@@ -56,7 +58,7 @@ export function StaffSection({ state, store, job, onProfile }: { state: GameStat
   const dispatch = (heroId: OwnedHero['id'], j: JobId | null) => {
     setErr(null)
     try {
-      store.dispatch({ type: 'ASSIGN_JOB', heroId, job: j }, Date.now())
+      latching(store, 'job', () => store.dispatch({ type: 'ASSIGN_JOB', heroId, job: j }, Date.now()))
       setPick('')
     } catch (e) {
       setErr(t(e instanceof Error ? e.message.replace(/^\w+: /, '') : 'That failed'))
@@ -85,7 +87,7 @@ export function StaffSection({ state, store, job, onProfile }: { state: GameStat
             </button>
             <span className="chip">{t(TIER_NAMES[tier]!)}</span>
             <span className="muted small">
-              {t('aptitude {a}', { a: aptitude(h, job).toFixed(2) })}
+              {t('aptitude {a}', { a: fmt(aptitude(h, job), { minimumFractionDigits: 2, maximumFractionDigits: 2 }) })}
               {next !== undefined && ` · ${xp}/${next}`}
             </span>
             {feel !== 'neutral' && <span className={`chip ${feel}`}>{feel === 'likes' ? t('♥ enjoys it') : t('✗ resents it')}</span>}
@@ -104,7 +106,7 @@ export function StaffSection({ state, store, job, onProfile }: { state: GameStat
               const cur = lifeOf(h).job
               return (
                 <option key={h.id} value={h.id}>
-                  {`${h.name} · ${aptitude(h, job).toFixed(2)}${feel === 'likes' ? ' ♥' : feel === 'dislikes' ? ' ✗' : ''}${cur ? ` (${t(JOB_NAME[cur])})` : ''}`}
+                  {`${h.name} · ${fmt(aptitude(h, job), { minimumFractionDigits: 2, maximumFractionDigits: 2 })}${feel === 'likes' ? ' ♥' : feel === 'dislikes' ? ' ✗' : ''}${cur ? ` (${t(JOB_NAME[cur])})` : ''}`}
                 </option>
               )
             })}
@@ -151,7 +153,7 @@ export function ForgeOrderSection({ state, store }: { state: GameState; store: S
         ))}
       </div>
       <div className="muted small">
-        {t('Each piece: {grade}-grade · {gold} ◆ + {stones} Promotion Stones.', { grade, gold: cost.gold.toLocaleString(), stones: cost.promotionStone })}
+        {t('Each piece: {grade}-grade · {gold} ◆ + {stones} Promotion Stones.', { grade, gold: fmt(cost.gold), stones: cost.promotionStone })}
         {order === 'auto' && (auto ? ` ${t('Next: {slot}.', { slot: t(auto) })}` : ` ${t('The party is fully equipped — the smiths rest.')}`)}
       </div>
       {wip && (
@@ -162,31 +164,6 @@ export function ForgeOrderSection({ state, store }: { state: GameState; store: S
           </span>
         </div>
       )}
-    </div>
-  )
-}
-
-/** The Memorial: every grave, with the words each hero left behind. */
-export function MemorialPanel({ state }: { state: GameState }) {
-  const graves = [...state.life.memorial].reverse()
-  if (graves.length === 0) return <div className="lr-empty">{t('The lawn is empty. Keep it that way, Master.')}</div>
-  const cause = (c: string, floor: number) =>
-    c === 'synthesis' ? t('lost to the Synthesis Chamber') : c === 'captor' ? t('never ransomed') : t('fell on floor {n}', { n: floor })
-  return (
-    <div className="memorial">
-      <p className="muted">{t('{n} names on the obelisk.', { n: graves.length })}</p>
-      {graves.map((g) => (
-        <div key={g.heroId} className="grave-row">
-          <div className="grave-name">
-            <b>{g.name}</b> <span className="muted small">{g.star}★ Lv{g.level}</span>
-          </div>
-          <div className="muted small">
-            {cause(g.cause, g.floor)} · {t('day {n}', { n: accountDay(state, g.day) })} · {t('served {n} days', { n: g.daysServed })}
-            {g.mourners.length > 0 && ` · ${t('mourned by {names}', { names: g.mourners.map((m) => shortName(state, m)).join(', ') })}`}
-          </div>
-          <div className="last-words">“{lastWords(state, g)}”</div>
-        </div>
-      ))}
     </div>
   )
 }

@@ -18,7 +18,7 @@ import {
 } from '../engine/pvp'
 import { BattleScene } from './battle/BattleScene'
 import { Portrait } from './bits'
-import { t } from './i18n/i18n'
+import { t, fmt } from './i18n/i18n'
 
 const P = TUNING.pvp
 
@@ -88,7 +88,7 @@ export function PvpPanel({ state, store }: { state: GameState; store: Store }) {
         out.outcome.won
           ? t('You raided {rival}: +{gold} gold, +{stones} stones', {
               rival: out.outcome.rival.name,
-              gold: out.outcome.gold.toLocaleString(),
+              gold: fmt(out.outcome.gold),
               stones: out.outcome.stones,
             }) + (out.outcome.captive ? t(', and took {name} captive.', { name: out.outcome.captive.name }) : '.')
           : t("{rival}'s defense drove you back.", { rival: out.outcome.rival.name }),
@@ -107,7 +107,7 @@ export function PvpPanel({ state, store }: { state: GameState; store: Store }) {
       <div className="ta-row">
         <span>{t('Sector {n} · rating {rating}', { n: sectorOf(state), rating: state.pvp.rating })}</span>
         <span className="ta-val">
-          {t('#{n} of {sectorSize} · server #{n2}', { n: sectorRank(state), sectorSize: P.sectorSize, n2: serverRank(state).toLocaleString() })}
+          {t('#{n} of {sectorSize} · server #{n2}', { n: sectorRank(state), sectorSize: P.sectorSize, n2: fmt(serverRank(state)) })}
         </span>
       </div>
       <div className="ta-row">
@@ -140,7 +140,7 @@ export function PvpPanel({ state, store }: { state: GameState; store: Store }) {
               <div key={rv.id} className={`drill-row ${why ? 'off' : ''}`} title={why ? t(why) : undefined}>
                 <span className="skill-grade">{rv.whale ? '🐋' : 'F'}</span>
                 <span className="drill-name">
-                  {rv.name} · F{rv.floor} · {g ? t(g.name) : '—'} · {t('defense')} ×{rv.cpRatio.toFixed(2)}
+                  {rv.name} · F{rv.floor} · {g ? t(g.name) : '—'} · {t('defense')} ×{fmt(rv.cpRatio, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   {rv.whale && <b className="today-tag"> {t('WHALE')}</b>}
                 </span>
                 <span className="muted">{rv.rating}</span>
@@ -210,7 +210,7 @@ export function PvpPanel({ state, store }: { state: GameState; store: Store }) {
                   disabled={state.gold < hold.ransomGold || state.gems < hold.ransomGems}
                   onClick={() => r.run({ type: 'RANSOM_HERO', heroId: h.id })}
                 >
-                  {t('Ransom {ransomGold} ◆ {ransomGems} ♦', { ransomGold: hold.ransomGold.toLocaleString(), ransomGems: hold.ransomGems })}
+                  {t('Ransom {ransomGold} ◆ {ransomGems} ♦', { ransomGold: fmt(hold.ransomGold), ransomGems: hold.ransomGems })}
                 </button>
                 <button className="btn sm" onClick={() => r.run({ type: 'COUNTER_RAID', heroId: h.id })}>
                   {t('Counter-raid')}
@@ -237,7 +237,7 @@ export function PvpPanel({ state, store }: { state: GameState; store: Store }) {
                   ? t('Day {d}: {rival} {note}', { d: l.worldDay, rival: l.rival, note: logNote(l.note) })
                   : t('Day {d}: you {note} ({rival})', { d: l.worldDay, rival: l.rival, note: logNote(l.note) })}
               </span>
-              <span className="muted">{l.goldDelta !== 0 ? `${l.goldDelta > 0 ? '+' : ''}${l.goldDelta.toLocaleString()} ◆` : ''}</span>
+              <span className="muted">{l.goldDelta !== 0 ? `${l.goldDelta > 0 ? '+' : ''}${fmt(l.goldDelta)} ◆` : ''}</span>
             </div>
           ))}
         </div>
@@ -268,7 +268,7 @@ function CaptiveRow({
         {t('{name} · Lv{level}', { name: captive.name, level: captive.level })}
       </span>
       <button className="btn sm" onClick={() => run({ type: 'RELEASE_CAPTIVE', captiveId: captive.id })}>
-        {t('Ransom back +{ransomGold} ◆', { ransomGold: captive.ransomGold.toLocaleString() })}
+        {t('Ransom back +{ransomGold} ◆', { ransomGold: fmt(captive.ransomGold) })}
       </button>
       <select className="captive-select" value={into ?? ''} onChange={(e) => setInto((e.target.value || null) as HeroId | null)}>
         <option value="">{t('synthesize into…')}</option>
@@ -303,12 +303,12 @@ export function GuildPanel({ state, store }: { state: GameState; store: Store })
         const o = out.outcome
         r.setNote(
           o.felled
-            ? t('The Guild Colossus falls! +{gold} gold, +{gems} gems', { gold: o.gold.toLocaleString(), gems: o.gems }) +
+            ? t('The Guild Colossus falls! +{gold} gold, +{gems} gems', { gold: fmt(o.gold), gems: o.gems }) +
                 (o.book ? t(' — and a Book of Reverse Heaven!') : '.')
             : t('You dealt {dealt} and your guildmates {mates} of {hp} — it survives. +{gold} gold.', {
-                dealt: o.dealt.toLocaleString(),
-                mates: o.mates.toLocaleString(),
-                hp: o.bossHp.toLocaleString(),
+                dealt: fmt(o.dealt),
+                mates: fmt(o.mates),
+                hp: fmt(o.bossHp),
                 gold: o.gold,
               }),
         )

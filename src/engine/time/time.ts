@@ -12,8 +12,9 @@ import { worldDayIndex } from '../daily'
 import { addMasterXp } from '../master'
 import { completeTraining } from '../training'
 import { piAfterGap, piZeroCrossing } from '../interference'
-import { expeditionHaul } from '../rift'
+import { expeditionHaul } from '../rift/haul'
 import { resolveInvasions } from '../pvp'
+import { accrueRested } from '../return/rested'
 import { stepLife } from '../life/life'
 import type { GameState, OwnedHero, HeroId, DailiesState, FacilityId } from '../types'
 
@@ -98,30 +99,47 @@ export function advanceTime(state: GameState, nowWorld: number): GameState {
       : state.dailies
 
   // Completed promotions, facility upgrades and training drills feed the Master-Level spine.
-  // Probability Interference: the Hall of Magic hums; a long absence lets the world fade.
-  const pi = piAfterGap(state.meta.pi ?? 0, nowWorld - state.meta.lastSeenAtWorld, state.facilities.hallOfMagic?.level ?? 0)
+  // Probability Interference: the Hall of Magic hums. Only a Hardcore Master's world fades
+  // while they are away (spec 2026-10-12 S24); for everyone else absence gives instead:
+  // time builds Interference charges (Pent-up Interference, `engine/return/rested`).
+  const hardcore = state.meta.hardcore === true
+  const gap = nowWorld - state.meta.lastSeenAtWorld
+  const hallLevel = state.facilities.hallOfMagic?.level ?? 0
+  const pi = piAfterGap(state.meta.pi ?? 0, gap, hallLevel, hardcore)
   let meta = { ...state.meta, lastSeenAtWorld: nowWorld, pi }
+  // An account that was never seen on a real clock (lastSeenAtWorld 0) has no absence yet.
+  if (state.meta.lastSeenAtWorld > 0) meta = accrueRested(meta, gap)
   const masterGain =
     promotionsCompleted * TUNING.lobby.master.xpPerPromotion +
     facilitiesCompleted * TUNING.lobby.master.xpPerFacilityUpgrade +
     drillsCompleted * TUNING.lobby.master.xpPerTrainingDrill
   if (masterGain > 0) meta = addMasterXp(meta, masterGain)
 
-  // The account lifecycle (Layer 4 §5.2): a world at zero Probability Interference greys,
-  // and after six months (real) it is deleted — the canon grey towers.
-  const L = TUNING.lifecycle
-  const gap = nowWorld - state.meta.lastSeenAtWorld
-  const crossing = piZeroCrossing(state.meta.pi ?? 0, gap, state.facilities.hallOfMagic?.level ?? 0, L.piZero)
-  // The zero clock starts when PI FALLS to zero — a world that never had any isn't fading.
-  const wasAlive = (state.meta.pi ?? 0) >= L.piZero
-  const since =
-    meta.pi < L.piZero
-      ? (state.meta.piZeroSince ?? (wasAlive ? state.meta.lastSeenAtWorld + (crossing ?? 0) : null))
-      : null
-  meta = { ...meta, piZeroSince: since, deleted: state.meta.deleted || (since !== null && nowWorld - since >= L.deleteMs) }
+  // The account lifecycle (Layer 4 §5.2), for Hardcore Masters only: a world at zero
+  // Probability Interference greys, and after six months (real) it is deleted — the canon
+  // grey towers. Everyone else keeps their world: the grey is cosmetic (the UI's return
+  // ceremony), and an account already marked deleted stays deleted (honoured, never set).
+  if (hardcore) {
+    const L = TUNING.lifecycle
+    const crossing = piZeroCrossing(state.meta.pi ?? 0, gap, hallLevel, L.piZero, true)
+    // The zero clock starts when PI FALLS to zero — a world that never had any isn't fading.
+    const wasAlive = (state.meta.pi ?? 0) >= L.piZero
+    const since =
+      meta.pi < L.piZero
+        ? (state.meta.piZeroSince ?? (wasAlive ? state.meta.lastSeenAtWorld + (crossing ?? 0) : null))
+        : null
+    meta = { ...meta, piZeroSince: since, deleted: state.meta.deleted || (since !== null && nowWorld - since >= L.deleteMs) }
+  } else {
+    meta = { ...meta, piZeroSince: null, deleted: state.meta.deleted }
+  }
 
-  // Offline invasions through the open crack, and captive deadlines (Layer 4 §2).
-  const invaded = resolveInvasions({ ...state, gems, materials, heroes: nextHeroes, facilities: nextFacilities, dailies, meta }, nowWorld)
+  // Offline invasions through the open crack, and captive deadlines (Layer 4 §2). The time
+  // spent away pauses the captives' clocks (no permanent loss while away, S28).
+  const invaded = resolveInvasions(
+    { ...state, gems, materials, heroes: nextHeroes, facilities: nextFacilities, dailies, meta },
+    nowWorld,
+    state.meta.lastSeenAtWorld,
+  )
   // Quanton Life: the heroes live through the elapsed slots (needs, jobs, friendships).
   return stepLife(invaded, nowWorld)
 }

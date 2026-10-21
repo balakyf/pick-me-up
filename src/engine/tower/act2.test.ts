@@ -16,7 +16,7 @@ function onFloor(floor: number, hero: Partial<OwnedHero>, seed = 11): GameState 
     ...acct,
     heroes: { [id]: h },
     party: { slots: [id, null, null, null, null], lines: ['front', 'front', 'mid', 'back', 'back'] },
-    tower: { currentFloor: floor, highestCleared: floor - 1, attemptIndex: 0, event: null, loop: null, hiddenFound: [], worldEnded: false, worldSaved: false },
+    tower: { currentFloor: floor, highestCleared: floor - 1, attemptIndex: 0, event: null, loop: null, hiddenFound: [], worldEnded: false, worldSaved: false, kind: 'path', doors: null, sortie: null },
   }
 }
 
@@ -100,7 +100,8 @@ describe('F15 — Escort Princess Priasis', () => {
 
 describe('F20 — Halgiraf, the half black dragon', () => {
   it('guards first, then the light-vulnerable, enraging dragon as the Defeat target', () => {
-    const enc = buildEncounter(onFloor(20, {}), 20)
+    // A strong roster keeps the mercy director out, so the authored statlines show.
+    const enc = buildEncounter(onFloor(20, crusher), 20)
     expect(enc.mission.objectives).toEqual([{ kind: 'defeat', targetTag: 'halgiraf' }])
     expect(enc.waves).toHaveLength(2)
     const dragon = enc.waves[1]!.units.find((u) => u.targetTag === 'halgiraf')!
@@ -169,7 +170,7 @@ describe('F20 — raid rewards (Layer 1 completion)', () => {
   })
 
   it('a repeat clear drops no second Book', () => {
-    const repeat = { ...onFloor(20, crusher), tower: { currentFloor: 20, highestCleared: 20, attemptIndex: 0, event: null, loop: null, hiddenFound: [], worldEnded: false, worldSaved: false } }
+    const repeat = { ...onFloor(20, crusher), tower: { currentFloor: 20, highestCleared: 20, attemptIndex: 0, event: null, loop: null, hiddenFound: [], worldEnded: false, worldSaved: false, kind: 'path' as const, doors: null, sortie: null } }
     const { result } = playFloor(repeat)
     expect(result.cleared).toBe(true)
     expect(result.materialsAwarded.bookOfReverseHeaven).toBeUndefined()

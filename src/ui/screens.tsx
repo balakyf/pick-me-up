@@ -1,22 +1,27 @@
-import { useEffect, useState } from 'react'
-import { sfx } from './audio/sound'
-import { drawSummonCircle } from './pixel/summonFx'
-import { shownStar } from '../engine/shop'
+import { useState } from 'react'
 import { crystalChargeLeft, mercySummonAvailable, tutorialPullAvailable } from '../engine/gacha'
-import type { GameState, HeroId, Line, OwnedHero, FloorResult } from '../engine/types'
+import type { GameState, HeroId, Line, OwnedHero } from '../engine/types'
 import type { Store } from '../engine/store'
 import { TUNING } from '../engine/tuning'
 import { HeroCard } from './HeroCard'
 import { HeroBond } from './metaPanels'
-import { cpOf, Stars, Portrait, STAR_COLOR } from './bits'
-import { freshSeed } from './useGame'
+import { cpOf, Stars, Portrait } from './bits'
+import { BROKEN_SAVE_KEY, bootLoadFailed, freshSeed, keepBrokenCopy } from './useGame'
+import { downloadText } from './return/saveTransfer'
+import { DEFAULT_SAVE_KEY } from '../engine/account'
+import { RevealSequence } from './summon/RevealSequence'
+import { revealOrder } from './summon/reveal'
 import { heroFrameUrl } from './pixel/sprites'
 import { cachedDataUrl } from './pixel/render'
 import { drawProp } from './pixel/props'
 import { scale } from './pixel/bitmap'
-import type { Element, HeroClass, SkillProgress, Star, SummonPool } from '../engine/types'
-import { HIDDEN_OBJECTIVES, SKILLS } from '../engine/content'
-import { t } from './i18n/i18n'
+import type { Element, HeroClass, Star, SummonPool } from '../engine/types'
+import { t, fmt } from './i18n/i18n'
+import { latching } from './life/FirstSteps'
+import './summon/summon.css'
+
+/** Moved to ./ResultsScreen (WP0); re-exported for compatibility. */
+export { ResultsScreen, skillProgressLine } from './ResultsScreen'
 
 export const PARTY_LINES: Line[] = ['front', 'front', 'mid', 'back', 'back']
 const SUMMON_COST = TUNING.gacha.normalCostGold
@@ -37,7 +42,63 @@ const PARADE: { heroClass: HeroClass | null; star: Star; element: Element }[] = 
   { heroClass: null, star: 2, element: 'physical' },
 ]
 
+/**
+ * Is the save on disk the one that already failed to load? useGame copies an unreadable
+ * save to BROKEN_SAVE_KEY and leaves the original in place, so the two match exactly
+ * until a new game overwrites the save. Storage errors read as "not broken".
+ */
+export function saveLooksBroken(): boolean {
+  try {
+    if (typeof window === 'undefined') return false
+    const broken = window.localStorage.getItem(BROKEN_SAVE_KEY)
+    return broken !== null && broken === window.localStorage.getItem(DEFAULT_SAVE_KEY)
+  } catch {
+    return false
+  }
+}
+
 export function TitleScreen({ store, hasSave }: { store: Store; hasSave: boolean }) {
+  // A save that could not be read gets no dead Continue button: say so, keep New Game.
+  // App passes hasSave=false for it (continuableSave()), so the title checks the kept copy
+  // itself: the broken save is still on disk, and a new game will overwrite it.
+  const [broken, setBroken] = useState(() => saveLooksBroken() || bootLoadFailed())
+  /** The unreadable save is safe under BROKEN_SAVE_KEY. Only then may the title say so, and
+   *  only then does New Game overwrite the save without asking. */
+  const [copyKept, setCopyKept] = useState(() => saveLooksBroken())
+  const [confirmNew, setConfirmNew] = useState(false)
+  /** Canon rules (S25): opt in to Interference decaying while away. */
+  const [hardcore, setHardcore] = useState(false)
+  const canContinue = hasSave && !broken
+  function resume() {
+    try {
+      store.load()
+    } catch (err) {
+      const kept = keepBrokenCopy()
+      console.error(kept ? 'Could not load the save; a copy was kept.' : 'Could not load the save, and no copy of it could be kept.', err)
+      setCopyKept(kept)
+      setBroken(true)
+    }
+  }
+  function newGame(confirmed = false) {
+    // The only copy of an unreadable save is never overwritten silently: try once more to
+    // keep it (storage may have room now), else ask first.
+    if (broken && !copyKept && !confirmed) {
+      if (keepBrokenCopy()) setCopyKept(true)
+      else {
+        setConfirmNew(true)
+        return
+      }
+    }
+    store.dispatch({ type: 'NEW_ACCOUNT', seed: freshSeed(), now: Date.now(), ...(hardcore ? { hardcore: true } : {}) })
+  }
+  function downloadBroken() {
+    try {
+      const raw = window.localStorage.getItem(DEFAULT_SAVE_KEY)
+      if (raw !== null) downloadText(raw, 'pick-me-up-unreadable-save.json')
+    } catch {
+      /* storage may be unavailable */
+    }
+  }
   return (
     <div className="title-wrap">
       <div className="subtitle">{t('Infinite Gacha')}</div>
@@ -60,19 +121,47 @@ export function TitleScreen({ store, hasSave }: { store: Store; hasSave: boolean
         {t('Summon unique heroes from the Mobius gacha, build a party of five, and climb the permadeath tower. Every hero is one of a kind. Every death is forever.')}
       </div>
       <div className="btns">
-        {hasSave && (
-          <button className="btn big" onClick={() => store.load()}>
+        {canContinue && (
+          <button className="btn big" onClick={resume}>
             {t('Continue')}
           </button>
         )}
-        <button
-          className="btn primary big"
-          onClick={() => store.dispatch({ type: 'NEW_ACCOUNT', seed: freshSeed(), now: Date.now() })}
-        >
-          {hasSave ? t('New Game') : t('Begin')}
+        <button className="btn primary big" onClick={() => newGame()}>
+          {hasSave || broken ? t('New Game') : t('Begin')}
         </button>
       </div>
-      {hasSave && <div className="muted" style={{ marginTop: 14 }}>{t('Starting a new game overwrites your save.')}</div>}
+      <label className="title-hardcore" title={t('Interference fades while you are away, and six months away greys the world for good. Off by default.')}>
+        <input type="checkbox" checked={hardcore} onChange={(e) => setHardcore(e.target.checked)} /> {t('Canon rules (Hardcore)')}
+      </label>
+      {broken && copyKept && (
+        <div className="save-broken" role="alert">
+          {t('This save could not be read. A copy was kept.')}
+        </div>
+      )}
+      {broken && !copyKept && (
+        <div className="save-broken" role="alert">
+          <div>{t('This save could not be read, and no copy could be kept (the browser’s storage is full or blocked). Download it before starting over.')}</div>
+          <div className="btns">
+            <button className="btn" onClick={downloadBroken}>
+              ⬇ {t('Download the unreadable save')}
+            </button>
+          </div>
+          {confirmNew && (
+            <div>
+              <div>{t('A new game permanently replaces the unreadable save.')}</div>
+              <div className="btns">
+                <button className="btn" onClick={() => setConfirmNew(false)}>
+                  {t('Keep it')}
+                </button>
+                <button className="btn primary" onClick={() => newGame(true)}>
+                  {t('Start over anyway')}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+      {canContinue && <div className="muted" style={{ marginTop: 14 }}>{t('Starting a new game overwrites your save.')}</div>}
     </div>
   )
 }
@@ -80,51 +169,11 @@ export function TitleScreen({ store, hasSave }: { store: Store; hasSave: boolean
 // ── Summon ───────────────────────────────────────────────────────────────────
 const ADV = TUNING.gacha.advanced
 
-/** The summoning ritual: the circle wakes, a pillar of light in the (shown) rarity's colour, a flash. */
-function SummonRitual({ heroes, masterLevel, onDone }: { heroes: OwnedHero[]; masterLevel: number; onDone: () => void }) {
-  const best = Math.max(...heroes.map((h) => shownStar(h, masterLevel))) as Star
-  const tint = STAR_COLOR[best]
-  useEffect(() => {
-    sfx('summon')
-    // The build-up: white light first, then each pillar takes its colour — the best last.
-    const reveal = setTimeout(() => sfx(best >= 5 ? 'legend' : best >= 4 ? 'rare' : 'levelup'), 1900)
-    const done = setTimeout(onDone, 2900)
-    return () => {
-      clearTimeout(reveal)
-      clearTimeout(done)
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-  const circle = cachedDataUrl(`circle|${tint}`, () => scale(drawSummonCircle(tint), 3))
-  return (
-    <div className="ritual" onClick={onDone} style={{ ['--beam' as string]: tint }} title={t('Click to skip')}>
-      <div className="ritual-beams">
-        {heroes.map((h, i) => {
-          const star = shownStar(h, masterLevel)
-          const isBest = star === best
-          return (
-            <span
-              key={h.id}
-              className={`ritual-beam ${isBest && best >= 4 ? 'rare' : ''}`}
-              style={{
-                ['--final' as string]: STAR_COLOR[star as Star],
-                animationDelay: `${0.5 + i * 0.05}s, ${1.2 + (isBest ? 0.5 : i * 0.04)}s`,
-              }}
-            />
-          )
-        })}
-      </div>
-      {circle && <img className="px ritual-circle" src={circle} width={288} height={168} alt="" />}
-      <div className="ritual-flash" />
-      <div className="ritual-stars" style={{ color: tint }}>
-        {Array.from({ length: best }, (_, i) => (
-          <span key={i} className="ritual-star" style={{ animationDelay: `${1.9 + i * 0.12}s` }}>
-            ★
-          </span>
-        ))}
-      </div>
-    </div>
-  )
+/** The summary grid after the theatre: the best of the pull first (the theatre's order, reversed). */
+function summaryOrder(heroes: OwnedHero[], masterLevel: number): OwnedHero[] {
+  return revealOrder(heroes, masterLevel)
+    .reverse()
+    .map((c) => c.hero)
 }
 
 export function SummonScreen({ state, store }: { state: GameState; store: Store }) {
@@ -168,17 +217,17 @@ export function SummonScreen({ state, store }: { state: GameState; store: Store 
       </div>
       <p className="sub">
         {pool === 'normal'
-          ? t('Normal pool · {gold} Gold per pull · every hero is unique, no duplicates.', { gold: SUMMON_COST.toLocaleString() })
+          ? t('Normal pool · {gold} Gold per pull · every hero is unique, no duplicates.', { gold: fmt(SUMMON_COST) })
           : t('Advanced pool · {gems} gems per pull ({ten} for ten) · 4★+ arrive with an exclusive weapon and an engraving.', {
               gems: ADV.costGems,
-              ten: ADV.tenPullGems.toLocaleString(),
+              ten: fmt(ADV.tenPullGems),
             })}
       </p>
 
       <div className="summon-stage">
         {revealed.length > 0 ? (
           <div className={`reveal ${revealed.length > 1 ? 'reveal-many' : ''}`}>
-            {revealed.map((h, i) => (
+            {summaryOrder(revealed, state.meta.masterLevel).map((h, i) => (
               <div key={h.id} className="flip-in" style={{ animationDelay: `${i * 0.12}s` }}>
                 <HeroCard hero={h} showStats={revealed.length === 1} masterLevel={state.meta.masterLevel} />
               </div>
@@ -204,13 +253,14 @@ export function SummonScreen({ state, store }: { state: GameState; store: Store 
         <div className="summon-buttons">
           {pool === 'normal' ? (
             <>
-              <button className="btn gold big" onClick={() => pull(1)} disabled={!canOne}>
-                {mercy ? t('Summon · free (the crystal takes pity)') : t('Summon · {SUMMON_COST} Gold', { SUMMON_COST: SUMMON_COST.toLocaleString() })}
+              {/* One gold CTA per screen (V7): the ×10 while it is affordable, else the ×1. */}
+              <button className={`btn big ${!canTenNormal && canOne ? 'cta' : ''}`} onClick={() => pull(1)} disabled={!canOne}>
+                {mercy ? t('Summon · free (the crystal takes pity)') : t('Summon · {SUMMON_COST} Gold', { SUMMON_COST: fmt(SUMMON_COST) })}
               </button>
-              <button className={`btn gold big ${tutorial ? 'pulse' : ''}`} onClick={() => pull(10)} disabled={!canTenNormal}>
+              <button className={`btn big ${canTenNormal ? 'cta' : ''} ${tutorial ? 'pulse' : ''}`} onClick={() => pull(10)} disabled={!canTenNormal}>
                 {tutorial
                   ? t('Summon ×10 · free (your first summon)')
-                  : t('Summon ×10 · {gold} Gold', { gold: (SUMMON_COST * 10).toLocaleString() })}
+                  : t('Summon ×10 · {gold} Gold', { gold: fmt(SUMMON_COST * 10) })}
               </button>
             </>
           ) : (
@@ -219,7 +269,7 @@ export function SummonScreen({ state, store }: { state: GameState; store: Store 
                 {t('Summon · {costGems} ♦', { costGems: ADV.costGems })}
               </button>
               <button className="btn gem big" onClick={() => pull(10)} disabled={!canTen}>
-                {t('Summon ×10 · {tenPullGems} ♦', { tenPullGems: ADV.tenPullGems.toLocaleString() })}
+                {t('Summon ×10 · {tenPullGems} ♦', { tenPullGems: fmt(ADV.tenPullGems) })}
               </button>
             </>
           )}
@@ -234,7 +284,7 @@ export function SummonScreen({ state, store }: { state: GameState; store: Store 
         {err && <div className="muted" style={{ color: 'var(--bad)' }}>{err}</div>}
       </div>
       {ritual && (
-        <SummonRitual
+        <RevealSequence
           heroes={ritual}
           masterLevel={state.meta.masterLevel}
           onDone={() => {
@@ -285,42 +335,46 @@ export function RosterScreen({ state, store }: { state: GameState; store?: Store
 
 // ── Party builder ─────────────────────────────────────────────────────────────
 export function PartyScreen({ state, store }: { state: GameState; store: Store }) {
-  const [draft, setDraft] = useState<(HeroId | null)[]>(() => [...state.party.slots])
+  // Every tap saves (playtest 2026-10-13): a draft that only a small "Save Party" button
+  // kept was lost the moment a new Master followed the goal tracker away, and the tracker
+  // went on asking for a party they thought they had set.
+  const draft = state.party.slots
   const [saved, setSaved] = useState(false)
 
   const living = roster(state).filter((h) => h.alive)
   const inParty = (id: HeroId) => draft.includes(id)
 
+  function commit(next: (HeroId | null)[]) {
+    try {
+      latching(store, 'party', () => store.dispatch({ type: 'SET_PARTY', slots: next, lines: PARTY_LINES }))
+      setSaved(true)
+    } catch {
+      /* the store refused it; the board shows what is saved */
+    }
+  }
   function addHero(id: HeroId) {
     if (inParty(id)) return
     const i = draft.indexOf(null)
     if (i === -1) return
     const next = [...draft]
     next[i] = id
-    setDraft(next)
-    setSaved(false)
+    commit(next)
   }
   function clearSlot(i: number) {
     const next = [...draft]
     next[i] = null
-    setDraft(next)
-    setSaved(false)
-  }
-  function save() {
-    store.dispatch({ type: 'SET_PARTY', slots: draft, lines: PARTY_LINES })
-    setSaved(true)
+    commit(next)
   }
 
   const partyCP = draft.reduce((sum, id) => {
     const h = id ? state.heroes[id] : undefined
     return sum + (h && h.alive ? cpOf(h) : 0)
   }, 0)
-  const dirty = JSON.stringify(draft) !== JSON.stringify(state.party.slots)
 
   return (
     <div className="screen">
       <h2>{t('Party')}</h2>
-      <p className="sub">{t('Up to five heroes. Slots 1–2 stand front, 3 mid, 4–5 back. Total CP {partyCP}.', { partyCP: partyCP.toLocaleString() })}</p>
+      <p className="sub">{t('Up to five heroes. Slots 1–2 stand front, 3 mid, 4–5 back. Total CP {partyCP}.', { partyCP: fmt(partyCP) })}</p>
 
       <div className="party-slots">
         {draft.map((id, i) => {
@@ -351,10 +405,10 @@ export function PartyScreen({ state, store }: { state: GameState; store: Store }
       </div>
 
       <div className="row" style={{ margin: '8px 0 20px' }}>
-        <button className="btn primary" onClick={save} disabled={!dirty}>
-          {saved && !dirty ? t('✓ Saved') : t('Save Party')}
-        </button>
         <span className="muted">{t('{n}/5 deployed', { n: draft.filter(Boolean).length })}</span>
+        <span className="muted small" role="status">
+          {saved ? t('✓ Saved') : t('Tap a hero to add them; tap a slot to remove. Changes save at once.')}
+        </span>
       </div>
 
       <h3 style={{ margin: '0 0 10px' }}>{t('Available heroes')}</h3>
@@ -363,139 +417,6 @@ export function PartyScreen({ state, store }: { state: GameState; store: Store }
           <HeroCard key={h.id} hero={h} selected={inParty(h.id)} onClick={() => addHero(h.id)} />
         ))}
         {living.length === 0 && <div className="empty">{t('No living heroes. Summon to recruit.')}</div>}
-      </div>
-    </div>
-  )
-}
-
-// ── Results ──────────────────────────────────────────────────────────────────
-/** One line of skill news for the results screen. */
-export function skillProgressLine(p: SkillProgress, state: GameState): string {
-  const who = state.heroes[p.heroId]?.name.split(/\s+/)[0] ?? t('A hero')
-  const name = (id: string) => t(SKILLS[id]?.name ?? id)
-  switch (p.kind) {
-    case 'level-up':
-      return t("▲ {who}'s {skill} reached Lv {n}", { who, skill: name(p.skillId), n: p.level })
-    case 'merge':
-      return t('✦ {who} fused {a} + {b} into {skill}!', { who, a: name(p.from[0]), b: name(p.from[1]), skill: name(p.skillId) })
-    case 'unlock':
-      return t('✧ {who} awakened a new skill: {skill}', { who, skill: name(p.skillId) })
-    case 'achievement':
-      return t('🏆 {who} earned {skill}!', { who, skill: name(p.skillId) })
-  }
-}
-
-export function ResultsScreen({
-  result,
-  state,
-  onContinue,
-}: {
-  result: FloorResult
-  state: GameState
-  onContinue: () => void
-}) {
-  const win = result.cleared
-  const failed = result.result.outcome === 'failed'
-  const retreated = result.result.outcome === 'retreat'
-  const fallen = result.fallenHeroIds.map((id) => state.heroes[id]).filter(Boolean) as OwnedHero[]
-  return (
-    <div className="overlay">
-      <div className="result-card">
-        <div className={`big-outcome ${win ? 'win' : 'lose'}`}>{win ? t('FLOOR CLEARED') : failed ? t('MISSION FAILED') : retreated ? t('RETREATED') : t('DEFEATED')}</div>
-        <div className="muted">
-          {t('Floor {floor}', { floor: result.floor })}
-          {result.firstClear && win ? ' · ' + t('first clear bonus!') : ''}
-          {failed ? ' · ' + t('the escort fell — the floor must be retried') : ''}
-          {retreated ? ' · ' + t('you pulled them out — everyone standing came home') : ''}
-        </div>
-
-        <div className="reward-row">
-          <div className="r">
-            <div className="n" style={{ color: 'var(--gold)' }}>+{result.goldAwarded.toLocaleString()}</div>
-            <div className="l">{t('Gold')}</div>
-          </div>
-          <div className="r">
-            <div className="n" style={{ color: 'var(--accent-2)' }}>+{result.xpAwarded}</div>
-            <div className="l">{t('XP each')}</div>
-          </div>
-        </div>
-
-        {result.skillProgress.length > 0 && (
-          <div className="skill-progress">
-            {result.skillProgress.map((p, i) => (
-              <div key={i} className={`sp-row ${p.kind}`}>{skillProgressLine(p, state)}</div>
-            ))}
-          </div>
-        )}
-
-        {result.hiddenFound.length > 0 && (
-          <div className="skill-progress">
-            {result.hiddenFound.map((id) => {
-              const h = HIDDEN_OBJECTIVES.find((x) => x.id === id)
-              return (
-                <div key={id} className="sp-row achievement">
-                  ✧ {t('Hidden objective:')} {t(h?.name ?? id)}
-                  {h?.reward.gems ? ` · ${t('+{n} gems', { n: h.reward.gems })}` : ''}
-                </div>
-              )
-            })}
-          </div>
-        )}
-
-        {result.refusedHeroIds.length > 0 && (
-          <div className="fallen">
-            <div className="ft">{t('✋ Refused to fight')}</div>
-            {result.refusedHeroIds.map((id) => (
-              <div key={id}>
-                {state.heroes[id]?.name ?? id} <span className="muted">{t('(Wary and broken — win back their trust)')}</span>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {result.worldSaved && (
-          <div className="world-ended pframe" style={{ borderColor: 'var(--good)', color: '#c8f0d0' }}>
-            {t('You refused the win condition. The Herald falls, and the world beneath the tower is still there.')}
-          </div>
-        )}
-
-        {result.worldEnded && (
-          <div className="world-ended pframe">
-            {t('The ninetieth floor falls — and with it, the world beneath the tower. No one on its surface survives.')}
-          </div>
-        )}
-
-        {result.loopRollback && (
-          <div className="fallen">
-            <div className="ft">{t('↺ The loop resets')}</div>
-            <div>{t('The gate held. The waiting room drops back to floor {fallbackTo}.', { fallbackTo: TUNING.tower.loop.fallbackTo })}</div>
-          </div>
-        )}
-
-        {result.event && (
-          <div className="muted" style={{ marginBottom: 10 }}>
-            {result.event.kind === 'tournament'
-              ? t('🏆 A tournament gathers between the floors.')
-              : result.event.kind === 'recovery'
-                ? t('✚ The tower offers a recovery floor.')
-                : t('✦ An event floor opens before the next climb.')}
-          </div>
-        )}
-
-        {fallen.length > 0 && (
-          <div className="fallen">
-            <div className="ft">{t('☠ Permanently lost')}</div>
-            {fallen.map((h) => (
-              <div key={h.id}>
-                {h.name} <span className="muted">{t('({star}★ Lv{level})', { star: h.star, level: h.xp.level })}</span>
-              </div>
-            ))}
-          </div>
-        )}
-
-        <button className="btn primary big" onClick={onContinue} style={{ marginTop: 8 }}>
-          {win ? t('Onward ▸') : t('Regroup')}
-        </button>
       </div>
     </div>
   )

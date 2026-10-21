@@ -63,6 +63,8 @@ import { startTraining, skipTraining } from '../training'
 import { attemptDaily, type DailyResult } from '../daily'
 import { advanceTime, toWorldTime } from '../time'
 import { assignJob, lifeOf, lifeReact } from '../life'
+import { chooseDoor, returnToCampus } from '../climb'
+import { bequeathEcho, claimRecruit } from '../legacy'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Guards
@@ -117,7 +119,7 @@ function validateParty(slots: readonly unknown[], lines: readonly unknown[]): vo
  */
 export function reduce(state: GameState | null, cmd: Command, nowWorld: number = 0): GameState {
   if (cmd.type === 'NEW_ACCOUNT') {
-    return createAccount(cmd.seed, { now: cmd.now })
+    return createAccount(cmd.seed, { now: cmd.now, ...(cmd.hardcore === true ? { hardcore: true } : {}) })
   }
   // Quanton Life: the waiting room reacts to what changed (graves, grief, memories).
   if (cmd.type === 'ATTEMPT_FLOOR') {
@@ -130,7 +132,7 @@ export function reduce(state: GameState | null, cmd: Command, nowWorld: number =
 }
 
 function reduceCore(state: GameState | null, cmd: Command, nowWorld: number): GameState {
-  if (cmd.type === 'NEW_ACCOUNT') return createAccount(cmd.seed, { now: cmd.now })
+  if (cmd.type === 'NEW_ACCOUNT') return createAccount(cmd.seed, { now: cmd.now, ...(cmd.hardcore === true ? { hardcore: true } : {}) })
 
   // Every other command acts on an existing account, with world-time advanced first.
   const current = advanceTime(requireState(state, cmd.type), nowWorld)
@@ -274,6 +276,23 @@ function reduceCore(state: GameState | null, cmd: Command, nowWorld: number): Ga
       return current.life.guide.done.includes(cmd.step)
         ? current
         : { ...current, life: { ...current.life, guide: { ...current.life.guide, done: [...current.life.guide.done, cmd.step].sort() } } }
+
+    case 'CHOOSE_DOOR':
+      return chooseDoor(current, cmd.index, nowWorld)
+
+    case 'RETURN_TO_CAMPUS':
+      return returnToCampus(current, nowWorld)
+
+    case 'BEQUEATH_ECHO':
+      return bequeathEcho(current, cmd.fallenId, cmd.heirId, nowWorld)
+
+    case 'CLAIM_RECRUIT':
+      return claimRecruit(current, nowWorld)
+
+    case 'SEE_UNLOCK':
+      return current.life.unlocks.includes(cmd.place)
+        ? current
+        : { ...current, life: { ...current.life, unlocks: [...current.life.unlocks, cmd.place].sort() } }
 
     case 'ADD_GOLD':
       // Testing-only cheat: grant free gold. Not part of the real economy.

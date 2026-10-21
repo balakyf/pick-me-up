@@ -1,0 +1,130 @@
+/*
+ * Tower screen: Doors, Boons, the Sortie bar, the scout card's climb notes, notices
+ * (spec 2026-10-12 S12-S15, WP4). Reads the shared tokens from ui.css; owns no tokens.
+ * Stepped animations to match the pixel kit; all motion is off under reduced motion.
+ */
+
+/* The battle mounts inside a wrapper the auto-advance watches; it adds no box. */
+.battle-host { display: contents; }
+
+/* The decision zone (Sortie, Doors or Boon, scout) scrolls into view below the sticky scene bar. */
+.tower-decision { scroll-margin-top: 76px; }
+
+/* ── Floor-kind badge ─────────────────────────────────────────────────────── */
+.kind-badge {
+  display: inline-flex; align-items: center; gap: 3px; margin-left: 6px; padding: 0 6px;
+  font-size: 12px; font-weight: 600; letter-spacing: 0.5px; vertical-align: middle;
+  border: 1px solid var(--line); background: #1c1640; color: var(--ink-dim);
+}
+.kind-badge.kind-elite { border-color: var(--bad); color: #ffc0c6; background: #2a0e18; }
+.kind-badge.kind-boss { border-color: var(--gold); color: var(--gold); }
+.kind-badge.kind-breather, .kind-badge.kind-rest { border-color: var(--good); color: #bff0c8; }
+.kind-badge.kind-cache { border-color: var(--gold-deep); color: var(--gold); }
+
+/* ── Scout card: climb notes ──────────────────────────────────────────────── */
+.scout.kind-elite { border-color: var(--bad); }
+.scout-nemesis {
+  margin: 6px 0 2px; padding: 4px 8px; border: 2px solid var(--bad); background: #2a0e18;
+  color: #ffc0c6; font-weight: 600; animation: nemesisPulse 1.6s steps(2) infinite;
+}
+@keyframes nemesisPulse { 50% { border-color: #8a2a36; } }
+.scout-threats { margin: 6px 0 2px; padding-left: 18px; font-size: 14px; }
+.scout-threats li { margin: 1px 0; }
+.scout-threats li::marker { content: '⚠ '; color: var(--warn); }
+.scout-notes-row { display: flex; flex-wrap: wrap; gap: 4px 12px; margin: 4px 0 0; }
+.scout-note { font-size: 13px; color: var(--warn); }
+.scout-note.good { color: var(--good); }
+.scout-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.scout-fight { margin-right: auto; }
+
+/* ── Doors ────────────────────────────────────────────────────────────────── */
+.door-picker { max-width: 720px; margin: 0 auto 14px; padding: 10px 14px; }
+.door-picker.compact { padding: 0; margin: 10px 0 0; text-align: left; }
+/* Inside the results card: tighter doors, so the choice sits above the fold. */
+.door-picker.compact .door-row { margin: 6px 0 2px; gap: 8px; }
+.door-picker.compact .door-card { padding: 8px 8px 7px; gap: 2px; }
+.door-picker.compact .door-arch { font-size: 24px; }
+.door-picker.compact .door-title { font-size: 17px; }
+.door-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; margin: 8px 0 6px; }
+.door-card {
+  position: relative; display: flex; flex-direction: column; align-items: center; gap: 3px;
+  padding: 12px 10px 10px; font: inherit; color: var(--ink); text-align: center; cursor: pointer;
+  background: linear-gradient(180deg, #221a4a, #120e2c);
+  border: 2px solid var(--line);
+  box-shadow: inset 0 0 0 2px #0a0714, 3px 3px 0 1px rgba(0, 0, 0, 0.45);
+  /* a stepped arch: the top corners are notched */
+  clip-path: polygon(0 10px, 10px 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 0 100%);
+  /* backwards, not both: a held end-frame transform would cancel the hover lift */
+  animation: doorIn 0.24s steps(3) backwards;
+}
+.door-card:nth-child(2) { animation-delay: 0.08s; }
+.door-card:nth-child(3) { animation-delay: 0.16s; }
+@keyframes doorIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+.door-card:hover, .door-card:focus-visible { border-color: var(--gold); outline: none; transform: translateY(-2px); }
+.door-card:active { transform: translateY(1px); }
+.door-arch { font-size: 30px; line-height: 1; filter: drop-shadow(2px 2px 0 #0a0714); }
+.door-title { font-size: 19px; font-weight: 600; letter-spacing: 1px; }
+.door-reward { font-size: 13px; color: var(--gold); }
+.door-blurb { font-size: 13px; color: var(--ink-dim); }
+.door-scout { font-size: 13px; margin-top: 2px; }
+.door-nemesis { color: var(--bad); }
+.door-safe { color: var(--good); }
+.door-card.door-elite { border-color: #8a2a36; background: linear-gradient(180deg, #3a1424, #1a0a16); }
+.door-card.door-elite .door-title { color: #ffc0c6; }
+.door-card.door-elite:hover, .door-card.door-elite:focus-visible { border-color: var(--bad); }
+.door-card.door-rest, .door-card.door-breather { background: linear-gradient(180deg, #16302a, #0e1a1c); }
+.door-card.door-cache { background: linear-gradient(180deg, #3a2a10, #1a1208); }
+.door-default { margin-top: 2px; }
+
+/* Isel's one-time explanation */
+.isel-tip { display: flex; gap: 8px; align-items: flex-start; margin: 6px 0; padding: 6px 8px; background: #1c1640; border: 2px solid var(--accent); }
+.isel-tip img { flex: none; image-rendering: pixelated; }
+.isel-tip-body { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; font-size: 14px; }
+.isel-tip-body b { color: var(--accent-2); }
+
+/* ── Boons ────────────────────────────────────────────────────────────────── */
+.boon-panel { border-color: var(--gold); }
+.boon-options { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
+.boon-option { align-items: center !important; text-align: center !important; padding: 12px 8px !important; animation: doorIn 0.24s steps(3) backwards; }
+.boon-option:nth-child(2) { animation-delay: 0.08s; }
+.boon-option:nth-child(3) { animation-delay: 0.16s; }
+.boon-glyph { font-size: 28px; line-height: 1.1; }
+.boon-held { margin-top: 8px; }
+.boon-icons { display: inline-flex; gap: 3px; vertical-align: middle; }
+.boon-icon { display: inline-grid; place-items: center; width: 22px; height: 22px; font-size: 14px; background: #120e2c; border: 1px solid var(--gold-deep); cursor: help; }
+
+/* ── Sortie bar ───────────────────────────────────────────────────────────── */
+.sortie-bar { max-width: 720px; margin: 0 auto 12px; padding: 8px 12px; border-color: var(--gold-deep); }
+.sortie-main { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; }
+.sortie-title { font-weight: 600; color: var(--gold); }
+.sortie-stat { font-size: 14px; }
+.sortie-purse { font-size: 18px; }
+
+/* ── Notices ──────────────────────────────────────────────────────────────── */
+.tower-notice {
+  max-width: 520px; margin: 0 auto 12px; padding: 6px 12px; text-align: center;
+  background: #1c1640; border: 2px solid var(--gold); color: var(--ink);
+  animation: noticeIn 0.2s steps(3) both, noticeOut 0.4s steps(3) 3.2s forwards;
+}
+.tower-notice.with-go { animation: noticeIn 0.2s steps(3) both, noticeOut 0.4s steps(3) 8.6s forwards; }
+.tower-notice .summon-cta { margin-left: 6px; vertical-align: middle; }
+@keyframes noticeIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+@keyframes noticeOut { to { opacity: 0; } }
+
+@media (max-width: 640px) {
+  /* The phone scene bar wraps to three rows (title, purse + Menu, the goal chip): ~160px. */
+  .tower-decision { scroll-margin-top: 172px; }
+  .door-row { grid-template-columns: 1fr 1fr; }
+  .door-title { font-size: 17px; }
+  .sortie-purse { font-size: 16px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .door-card, .boon-option, .tower-notice, .scout-nemesis { animation: none; }
+}
+/* The in-game "reduced motion" preference (prefs.reducedMotion) does the same. */
+.motion-off .door-card, .motion-off .boon-option, .motion-off .tower-notice, .motion-off .scout-nemesis,
+.motion-off .summon-cta, .motion-off .avenged-title { animation: none; }
+.motion-off .door-card:hover, .motion-off .door-card:focus-visible, .motion-off .door-card:active { transform: none; }
+.motion-off .summon-bar .sb-gauge > span { transition: none; }
+.motion-off .coin-fx { display: none; }

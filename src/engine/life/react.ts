@@ -7,16 +7,33 @@
  * - a floor attempt becomes a memory for each survivor (cleared, lost, nearly died), and
  *   fighting side by side draws the party together;
  * - a gift, a promotion, a newcomer (the veterans welcome them — canon Jenna) all leave
- *   their mark.
+ *   their mark;
+ * - the legacy of the fallen (spec 2026-10-12 S21-S23): a death leaves an Echo waiting for
+ *   an heir, the enemy that struck the blow becomes that hero's Bane (a Nemesis waiting a
+ *   few floors up), the Memorial learns the killer's family, and a thinned roster hears a
+ *   new face at the bell. When the Bane falls, the friends of the fallen remember it.
  * PURE.
  */
 import { TUNING } from '../tuning'
-import type { Command, DeathCause, FallenRecord, FloorResult, GameState, HeroId, HeroLife, OwnedHero, Relation } from '../types'
+import type { Command, DeathCause, FloorResult, GameState, HeroId, HeroLife, LegacyState, OwnedHero, Relation } from '../types'
 import { addMemory, dayOfSlot, lifeOf, relationKey, slotOf, newHeroLife } from './life'
 import { personalityOf } from './personality'
+import {
+  fallenKiller,
+  killingBlow,
+  leavesEcho,
+  livingCount,
+  nemesisFor,
+  pendingEchoFor,
+  type FallenKiller,
+  type MemorialRecord,
+} from '../legacy/records'
 
 const R = TUNING.life.relation
 const G = TUNING.life.grief
+const LG = TUNING.legacy
+/** Avenging a fallen friend eases the grief this much (0..100 scale). */
+const AVENGED_GRIEF_RELIEF = 30
 
 function causeFor(cmd: Command): DeathCause {
   if (cmd.type === 'ATTEMPT_FLOOR') return 'battle'
@@ -55,6 +72,7 @@ export function lifeReact(before: GameState | null, after: GameState, cmd: Comma
       const h = after.heroes[id]!
       const src = h.life ?? newHeroLife(day)
       l = { ...src, needs: { ...src.needs }, jobXp: { ...src.jobXp }, doing: { ...src.doing }, memories: [...src.memories] }
+      if (src.echoes) l.echoes = [...src.echoes]
       lives.set(id, l)
     }
     return l
@@ -71,11 +89,22 @@ export function lifeReact(before: GameState | null, after: GameState, cmd: Comma
   const push = (e: GameState['life']['chronicle'][number]) => {
     chronicle = [...chronicle, e].slice(-TUNING.life.chronicleMax)
   }
+  // The legacy ledger, copied on first write.
+  let legacy: LegacyState = after.life.legacy
+  const ledger = (): LegacyState => {
+    if (legacy === after.life.legacy) {
+      legacy = { pending: [...legacy.pending], nemeses: [...legacy.nemeses], recruitTokens: legacy.recruitTokens, lessons: [...legacy.lessons] }
+    }
+    return legacy
+  }
 
   const deployed = cmd.type === 'ATTEMPT_FLOOR' ? (before.party.slots.filter((id) => id && before.heroes[id]?.alive) as HeroId[]) : []
 
   // ── Deaths
   const living = (Object.keys(after.heroes) as HeroId[]).filter((id) => after.heroes[id]!.alive)
+  const battleLog = floor && cmd.type === 'ATTEMPT_FLOOR' ? floor.result.log : null
+  const banedBy = new Set<string>()
+  let bellRings = false
   for (const id of Object.keys(before.heroes) as HeroId[]) {
     const was = before.heroes[id]!
     const now = after.heroes[id]
@@ -83,7 +112,10 @@ export function lifeReact(before: GameState | null, after: GameState, cmd: Comma
     const life = lifeOf(was)
     const cause = causeFor(cmd)
     const mourners = living.filter((o) => affinity(id, o) >= R.friend)
-    const rec: FallenRecord = {
+    // Who struck the blow (tower deaths only: the log names the killer).
+    const blow = cause === 'battle' && battleLog ? killingBlow(battleLog, id) : null
+    const killer: FallenKiller | null = blow ? fallenKiller(blow, legacy.nemeses) : null
+    const rec: MemorialRecord = {
       heroId: id,
       name: was.name,
       star: was.star,
@@ -97,9 +129,30 @@ export function lifeReact(before: GameState | null, after: GameState, cmd: Comma
       daysServed: Math.max(0, day - life.arrivedDay),
       bestFloor: Math.max(life.bestFloor, cause === 'battle' ? before.tower.currentFloor : 0),
       mourners,
+      ...(killer ? { killer } : {}),
     }
     memorial = [...memorial, rec]
     push({ at, kind: 'death', heroIds: [id], floor: rec.floor, detail: cause })
+
+    // ── Legacy: the Echo, the Bane, the lesson, the bell
+    if (leavesEcho(was, cause) && !legacy.pending.some((p) => p.fallenId === id)) {
+      ledger().pending.push(pendingEchoFor(after, was, rec.floor))
+    }
+    if (killer && blow && !banedBy.has(blow.id)) {
+      const waiting = legacy.nemeses.filter((n) => n.status === 'waiting').length
+      if (waiting < LG.nemesis.maxActive && !legacy.nemeses.some((n) => n.heroId === id)) {
+        const nem = nemesisFor(after.seed, was, killer, rec.floor)
+        if (nem) {
+          ledger().nemeses.push(nem)
+          banedBy.add(blow.id)
+        }
+      }
+    }
+    if (killer?.family !== undefined && !legacy.lessons.includes(killer.family)) {
+      const l = ledger()
+      l.lessons = [...l.lessons, killer.family].sort()
+    }
+    if (cause !== 'synthesis') bellRings = true
     for (const o of living) {
       const aff = affinity(id, o)
       const oh = after.heroes[o]!
@@ -113,6 +166,11 @@ export function lifeReact(before: GameState | null, after: GameState, cmd: Comma
         addMemory(lifeFor(o), { kind: 'comradeDied', day, other: id, floor: rec.floor, weight: 60 })
       }
     }
+  }
+
+  // A death that thins the roster below five: a new face answers the bell (S23).
+  if (bellRings && livingCount(after) < LG.recruit.rosterBelow && legacy.recruitTokens < LG.recruit.maxTokens) {
+    ledger().recruitTokens = Math.min(LG.recruit.maxTokens, legacy.recruitTokens + 1)
   }
 
   // ── A floor attempt: memories and brothers-in-arms
@@ -134,6 +192,27 @@ export function lifeReact(before: GameState | null, after: GameState, cmd: Comma
         r.shared += 1
         r.affinity = Math.min(100, r.affinity + R.sharedBattle)
       }
+    }
+  }
+
+  // ── Revenge: a Bane fell. The friends of the fallen, and those who struck it down, remember.
+  if (floor && cmd.type === 'ATTEMPT_FLOOR' && (floor.nemesisDefeated?.length ?? 0) > 0) {
+    const survivors = floor.result.survivorHeroIds.filter((id) => after.heroes[id]?.alive)
+    for (const nid of floor.nemesisDefeated!) {
+      // Once only: a Bane already avenged before this attempt is not avenged again.
+      if (before.life.legacy.nemeses.find((n) => n.id === nid)?.status !== 'waiting') continue
+      const idx = legacy.nemeses.findIndex((n) => n.id === nid)
+      if (idx < 0) continue
+      const nem = legacy.nemeses[idx]!
+      if (nem.status !== 'avenged') ledger().nemeses[idx] = { ...nem, status: 'avenged' }
+      const friends = living.filter((o) => affinity(nem.heroId, o) >= R.friend)
+      for (const o of [...new Set([...friends, ...survivors])]) {
+        const friend = friends.includes(o)
+        const l = lifeFor(o)
+        addMemory(l, { kind: 'avenged', day, other: nem.heroId, floor: floor.floor, weight: friend ? 75 : 50 })
+        if (friend) l.grief = Math.max(0, l.grief - AVENGED_GRIEF_RELIEF)
+      }
+      push({ at, kind: 'revenge', heroIds: survivors.length > 0 ? survivors : friends, floor: floor.floor, detail: nem.id })
     }
   }
 
@@ -168,12 +247,13 @@ export function lifeReact(before: GameState | null, after: GameState, cmd: Comma
     }
   }
 
-  if (lives.size === 0 && relations === null && chronicle === after.life.chronicle && memorial === after.life.memorial) return after
+  if (lives.size === 0 && relations === null && chronicle === after.life.chronicle && memorial === after.life.memorial && legacy === after.life.legacy)
+    return after
   heroes = { ...after.heroes }
   for (const [id, l] of lives) {
     const h = heroes[id]!
     const s = Math.max(0, Math.min(TUNING.lobby.sanityMax, h.sanity + (sanityDelta.get(id) ?? 0)))
     heroes[id] = { ...h, life: l, sanity: Math.round(s * 100) / 100 }
   }
-  return { ...after, heroes, life: { ...after.life, relations: relations ?? after.life.relations, chronicle, memorial } }
+  return { ...after, heroes, life: { ...after.life, relations: relations ?? after.life.relations, chronicle, memorial, legacy } }
 }

@@ -42,6 +42,7 @@ import { passiveBonuses, resolveSkillEffect, skillCp } from '../skills'
 import { engravingCp, engravingEffect } from '../engravings'
 import { favorStatMult, isDefiant } from '../favor'
 import { TUNING } from '../tuning'
+import { echoesOf, echoPct, echoSkills } from '../legacy/echo'
 
 /** Apply relative % bonuses to a stat block (rounded; CRIT re-capped). */
 function applyStatPct(stats: DerivedStats, pct: Partial<Record<keyof DerivedStats, number>>): DerivedStats {
@@ -113,17 +114,30 @@ export function resolveHeroSkills(skills: readonly HeroSkill[], registry: SkillR
  * attack followed by the hero's leveled skills. CP is the display CP of the
  * derived stats plus the skills' CP term. sourceHeroId links back to the OwnedHero for XP and
  * permadeath bookkeeping after the battle.
+ *
+ * `extraPct` (spec 2026-10-12 WP0) is an extra relative stat bonus merged into the same
+ * percentage map as passives, engraving and favor (e.g. the Memorial plaques via
+ * `legacyExtraPct(state)`, Last Stand). The default `{}` leaves the unit byte-identical.
+ *
+ * The hero's own Echoes (`hero.life.echoes`, spec S21) are applied here, always: a stat
+ * Echo joins the same percentage map, a skill fragment adds a level to a known skill. Never
+ * pass `echoPct(hero)` through `extraPct` as well, or the Echo counts twice.
  */
 export function buildCombatUnit(
   hero: OwnedHero,
   line: Line,
   registry: SkillRegistry = {},
   inventory: readonly EquipmentItem[] = [],
+  extraPct: Partial<Record<keyof DerivedStats, number>> = {},
 ): CombatUnit {
   const level = hero.xp.level
+  // Echoes of the fallen (spec 2026-10-12 S21): a skill fragment lifts a skill the hero
+  // knows by one level. Without echoes this is `hero.skills` itself (byte-identical unit).
+  const echoes = echoesOf(hero)
+  const skills = echoSkills(hero.skills, echoes)
   // Engraving + passive skills: keyword tags and relative stat bonuses (Layer 1 §2/§5.4).
   const engraving = engravingEffect(hero.engraving)
-  const passives = passiveBonuses(hero.skills, registry)
+  const passives = passiveBonuses(skills, registry)
   const pct: Partial<Record<keyof DerivedStats, number>> = { ...passives.statPct }
   for (const [k, v] of Object.entries(engraving?.statPct ?? {}) as [keyof DerivedStats, number][]) {
     pct[k] = (pct[k] ?? 0) + v
@@ -132,6 +146,13 @@ export function buildCombatUnit(
   const favorMult = favorStatMult(hero.favor ?? TUNING.favor.start)
   if (favorMult !== 1) {
     for (const k of ['maxHP', 'pAtk', 'mAtk', 'pDef', 'mDef', 'spd'] as const) pct[k] = (pct[k] ?? 0) + (favorMult - 1)
+  }
+  for (const [k, v] of Object.entries(extraPct) as [keyof DerivedStats, number][]) {
+    if (v !== undefined && v !== 0) pct[k] = (pct[k] ?? 0) + v
+  }
+  // …and an Echo lifts one stat of the heir (+10% of the fallen's best stat each).
+  if (echoes.length > 0) {
+    for (const [k, v] of Object.entries(echoPct(hero)) as [keyof DerivedStats, number][]) pct[k] = (pct[k] ?? 0) + v
   }
   // Low Sanity weakens the hero BEFORE the snapshot freezes (combat never recomputes).
   const base = applyStatPct(applySanityPenalty(deriveStatsForHero(hero, level), hero.sanity), pct)
@@ -162,7 +183,7 @@ export function buildCombatUnit(
     currentSP: maxSP,
     actionGauge: 0,
     alive: true,
-    skills: [basicAttackFor(hero, element), ...resolveHeroSkills(hero.skills, registry)],
+    skills: [basicAttackFor(hero, element), ...resolveHeroSkills(skills, registry)],
     keywords: [
       ...gear.keywords,
       ...(engraving?.keywords ?? []),
@@ -171,7 +192,7 @@ export function buildCombatUnit(
       ...(hero.blessed ? [{ kind: 'opener' as const, multiplier: TUNING.intervention.guaranteeMult }] : []),
     ],
     // Skills add a CP term (Layer 1 §2.5): Σ gradeValue × level, weighted; an engraving adds its own.
-    cp: combatPower(stats, skillCp(hero.skills, registry) + engravingCp(hero.engraving)),
+    cp: combatPower(stats, skillCp(skills, registry) + engravingCp(hero.engraving)),
     sourceHeroId: hero.id,
     // Carried for the combat panic check; enemies have no Sanity (field absent).
     sanity: hero.sanity,
@@ -195,6 +216,23 @@ function enemyBasicAttack(template: EnemyTemplate): SkillEffect {
     target: 'single',
     spCost: 0,
   }
+}
+
+/**
+ * Template keywords, then per-group extras, with exact repeats dropped: keywords
+ * stack in combat (two identical enrages would multiply twice), so a group that
+ * re-lists its template's keyword must not double it.
+ */
+function mergeKeywords(base: readonly KeywordTag[], extra: readonly KeywordTag[]): KeywordTag[] {
+  const out: KeywordTag[] = []
+  const seen = new Set<string>()
+  for (const kw of [...base, ...extra]) {
+    const key = JSON.stringify(kw)
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push(kw)
+  }
+  return out
 }
 
 /**
@@ -249,9 +287,10 @@ export function buildEnemyUnit(
     actionGauge: 0,
     alive: true,
     skills: [enemyBasicAttack(template)],
-    keywords: [...(template.keywords ?? []), ...(opts?.keywords ?? [])],
+    keywords: mergeKeywords(template.keywords ?? [], opts?.keywords ?? []),
     cp: combatPower(stats),
     targetTag: opts?.targetTag ?? template.id,
+    templateId: template.id,
     ...(template.family !== undefined ? { family: template.family } : {}),
   }
 }

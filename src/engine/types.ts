@@ -336,6 +336,8 @@ export interface OwnedHero extends Omit<Hero, 'skillIds'> {
   /** Quanton Life (schema v10): needs, job, current activity, memories. Absent until the
    *  life clock first sees the hero (a fresh summon) — read through life.lifeOf(). */
   life?: HeroLife
+  /** A name the Master gave the hero (reserved, schema v11; unused this round). */
+  nickname?: string
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -401,6 +403,10 @@ export type MemoryKind =
   | 'jobTier'
   | 'mourned'
   | 'retreated'
+  /** Received a fallen friend's Echo (schema v11). `other` = the fallen. */
+  | 'inherited'
+  /** Was there when a fallen friend's Nemesis fell (schema v11). `other` = the fallen. */
+  | 'avenged'
 
 export interface Memory {
   kind: MemoryKind
@@ -439,6 +445,8 @@ export interface HeroLife {
   arrivedDay: number
   /** Deepest floor the hero has fought on. */
   bestFloor: number
+  /** Echoes inherited from the fallen (schema v11). Optional: read with `?? []`. */
+  echoes?: Echo[]
 }
 
 /** A pair of heroes' history ("a|b", ids sorted). */
@@ -462,6 +470,10 @@ export type ChronicleKind =
   | 'research'
   | 'stalled'
   | 'arrival'
+  /** A fallen hero's Echo passed to an heir (schema v11). heroIds = [heir, fallen]. */
+  | 'bequest'
+  /** A Nemesis was defeated (schema v11). heroIds = the avengers; detail = the Bane's name. */
+  | 'revenge'
 
 export interface ChronicleEntry {
   /** World-time ms. */
@@ -491,6 +503,19 @@ export interface FallenRecord {
   bestFloor: number
   /** Ids of the friends left behind (affinity ≥ friend threshold at death). */
   mourners: HeroId[]
+  /** Who struck them down (tower deaths only; old graves and other causes have none). */
+  killer?: FallenKiller
+}
+
+/** Who struck a hero down: the enemy template, as the Memorial remembers it (S22, S23). */
+export interface FallenKiller {
+  /** Enemy template id (`ENEMY_TEMPLATES` key). */
+  templateId: string
+  name: string
+  element: Element
+  level: number
+  /** The template's enemy family, when it has one (the lesson). */
+  family?: string
 }
 
 /** Running totals since the Master last read Isel's letter. */
@@ -529,6 +554,66 @@ export interface LifeState {
   guide: { tutorialPull: boolean; done: string[] }
   /** Advanced pulls taken today (the crystal's charge), and which world-day. */
   crystal: { day: number; advancedPulls: number }
+  /** What the fallen left behind: Echoes, Nemeses, recruit tokens, lessons (schema v11). */
+  legacy: LegacyState
+  /** Places whose unlock fanfare the Master has seen (sorted, schema v11). */
+  unlocks: string[]
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Legacy of the fallen (schema v11; spec 2026-10-12 S21-S23)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** The stats an Echo can lift. */
+export type EchoStat = keyof Pick<DerivedStats, 'maxHP' | 'pAtk' | 'mAtk' | 'pDef' | 'mDef' | 'spd'>
+
+/** A fallen hero's gift carried by an heir: +pct of one stat, or a skill fragment. */
+export interface Echo {
+  fromHeroId: HeroId
+  fromName: string
+  stat: EchoStat
+  /** Fraction, e.g. 0.10 = +10%. */
+  pct: number
+  /** A skill fragment: +1 level if the heir knows this skill. */
+  skillId?: string
+  /** World-time ms it was bequeathed. */
+  at: number
+}
+
+/** An Echo waiting in the Memorial for the Master to choose an heir. Never expires. */
+export interface PendingEcho {
+  fallenId: HeroId
+  fallenName: string
+  floor: number
+  stat: EchoStat
+  pct: number
+  skillId?: string
+  /** Suggested heirs (closest friends first). */
+  candidates: HeroId[]
+}
+
+/** The enemy that killed a hero, waiting on a later floor ("Mira's Bane"). */
+export interface Nemesis {
+  id: string
+  /** The enemy template id (its targetTag). */
+  templateId: string
+  name: string
+  element: Element
+  level: number
+  heroId: HeroId
+  heroName: string
+  diedFloor: number
+  revengeFloor: number
+  status: 'waiting' | 'avenged'
+}
+
+export interface LegacyState {
+  pending: PendingEcho[]
+  nemeses: Nemesis[]
+  /** New Arrival tokens: free Normal pulls at minStar 2. */
+  recruitTokens: number
+  /** Enemy families whose weakness a death taught (sorted). */
+  lessons: string[]
 }
 
 /** Where a captured hero is held and what it costs to get them back. */
@@ -623,6 +708,41 @@ export interface TowerState {
   worldEnded: boolean
   /** F90 was cleared by subverting the win condition: the world was spared (Layer 4 §5.3). */
   worldSaved: boolean
+  /** The kind of `currentFloor` (schema v11; spec 2026-10-12 S13). */
+  kind: FloorKind
+  /** Doors offered for `currentFloor`; null = no choice pending. */
+  doors: Door[] | null
+  /** The running Sortie (press on or bank it); null on campus. */
+  sortie: Sortie | null
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// The climb: floor kinds, Doors, Boons, Sorties (schema v11; spec 2026-10-12 S13-S15)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** What a floor asks of the party. Rest and Cache have no fight. */
+export type FloorKind = 'tutorial' | 'breather' | 'path' | 'elite' | 'rest' | 'cache' | 'boss'
+
+/** The reward icon shown on a Door. */
+export type DoorReward = 'gold' | 'stones' | 'boon' | 'sanity' | 'xp'
+
+/** One choice for the next floor. */
+export interface Door {
+  kind: FloorKind
+  reward: DoorReward
+}
+
+/** A Boon id (see climb/boons.ts BOONS). */
+export type BoonId = string
+
+/** A run of consecutive floors from campus: the at-risk streak purse and its boons. */
+export interface Sortie {
+  startFloor: number
+  /** Floors cleared in this sortie. */
+  floors: number
+  /** Banked on Return to campus; only `keepOnRout` of it survives a rout or wipe. */
+  purse: number
+  boons: BoonId[]
 }
 
 /** The looped mission (canon F36–40: 5 attempts; failing F40 drops the room to F31). */
@@ -632,13 +752,16 @@ export interface LoopState {
   scars: number
 }
 
-export type TowerEventKind = 'bonus' | 'recovery' | 'tournament'
+export type TowerEventKind = 'bonus' | 'recovery' | 'tournament' | 'boon'
 
 /** An event floor between regular floors (Layer 2 §5.1). `floor` = the floor it follows. */
 export interface TowerEvent {
   kind: TowerEventKind
   floor: number
   options: string[]
+  /** An Elite or Boss clear that opened another event first (a recovery after 3+ deaths)
+   *  still owes its Boon choice: it follows once this event is resolved (spec S14). */
+  boonAfter?: true
 }
 
 /** Hidden objective condition (Layer 2 §5.3). */
@@ -692,7 +815,8 @@ export interface MetaState {
   lastSeenAtWorld: number
   /** Probability Interference — passive, account-wide, never spent (Layer 3 §D1; schema v8). */
   pi: number
-  /** Daily login streak (FOMO: a missed world-day resets it). */
+  /** Daily login: `lastDay` claimed, and `streak` = days the login was claimed (never
+   *  resets, S28 — the name is kept for save compatibility). */
   login: { lastDay: number; streak: number }
   /** Monthly package: days of the daily claim left, and the last day claimed. */
   monthly: { daysLeft: number; lastClaimDay: number } | null
@@ -712,6 +836,13 @@ export interface MetaState {
   piZeroSince: number | null
   /** Six months at zero: the account is deleted (canon grey towers). */
   deleted: boolean
+  /** Pent-up Interference (schema v11): each charge doubles one floor clear's gold.
+   *  `carryWorld` is the world-ms of absence not yet turned into a charge. */
+  rested: { charges: number; carryWorld: number }
+  /** Canon rules (opt-in): PI decays and a long absence deletes the account. */
+  hardcore: boolean
+  /** The login stamp card (never resets); `lastRealDay` = the last real day stamped. */
+  stamps: { count: number; lastRealDay: number }
 }
 
 export interface DailiesState {
@@ -825,6 +956,8 @@ export interface CombatUnit {
   defiant?: boolean
   /** Stable enemy template id for Defeat(target) missions; absent for heroes. */
   targetTag?: string
+  /** The template this unit was built from (enemies and NPC allies); absent for heroes. */
+  templateId?: string
   /** A mission NPC on the hero side: targetable, never acts, not part of the party. */
   isNpc?: boolean
   /** Enemy family for `bane` keywords; absent for heroes. */
@@ -882,6 +1015,11 @@ export interface Encounter {
   /** The Master's mid-battle orders, each applied at the start of its tick. Combat is
    *  deterministic, so re-resolving with an order replays the fight exactly up to it. */
   orders?: BattleOrder[]
+  /** Rout (spec 2026-10-12 S19): the survivors flee after this many heroes fall while
+   *  losing. Set only by the tower's buildEncounter; absent = fight to the last. */
+  routAfterDeaths?: number
+  /** The floor's kind (spec 2026-10-12 S13); absent outside the tower climb. */
+  kind?: FloorKind
 }
 
 /** A mid-battle order (Living Lobby spec §6). */
@@ -892,6 +1030,11 @@ export type BattleOrder =
   | { tick: number; kind: 'focus'; enemyId: string }
   /** Enemies avoid this hero while anyone else stands. */
   | { tick: number; kind: 'protect'; allyId: string }
+  /** Pull this hero back behind the line for a few ticks (TUNING.combat.withdrawTicks): they
+   *  sit out their turns, foes cannot single them out while anyone else on their side
+   *  stands, and what still reaches them is reduced. Costs no order, but a hero pulled back
+   *  comes home shaken: TUNING.combat.withdrawSanityCost Sanity after the fight. */
+  | { tick: number; kind: 'withdraw'; allyId: string }
 
 // ── Combat log (one schema; the producer's; UI replays it) ───────────────────
 
@@ -908,6 +1051,9 @@ export interface CombatUnitInit {
   cp: number
   /** Present (true) for mission NPC allies. */
   isNpc?: boolean
+  /** The enemy/ally template the unit was built from (absent for heroes). Identifies a
+   *  killer without matching display names (a Bane carries a hero's name, S22). */
+  templateId?: string
 }
 
 /** `failed` = the mission was lost without a wipe (e.g. the escort target fell). */
@@ -997,6 +1143,24 @@ export interface FloorResult {
   /** F90 was cleared by subversion: the world was saved. */
   worldSaved: boolean
   result: BattleResult
+  /** The kind of floor fought (schema v11). */
+  kind?: FloorKind
+  /** The party broke and fled (a rout, outcome 'retreat'). */
+  routed?: boolean
+  /** Last Stand bonus applied to every stat (fraction). */
+  lastStandPct?: number
+  /** Streak bonus added to the Sortie purse by this clear. */
+  sortieBonus?: number
+  /** Extra gold from a Pent-up Interference charge. */
+  restedBonus?: number
+  /** Nemesis ids defeated on this attempt. */
+  nemesisDefeated?: string[]
+  /** Doors offered for the next floor after this attempt. */
+  doors?: Door[] | null
+  /** Heroes pulled back mid-fight (a 'withdraw' order) who came home shaken, and the
+   *  Sanity each lost to it on top of the floor's drain (TUNING.combat.withdrawSanityCost).
+   *  Absent when nobody was pulled back. */
+  shaken?: { heroId: HeroId; sanity: number }[]
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1088,7 +1252,7 @@ export type InterventionId = 'reveal' | 'peek' | 'nudge' | 'guarantee'
 export type RescueChoice = { kind: 'skill'; skillId: string } | { kind: 'grade'; attr: AttrKey }
 
 export type Command =
-  | { type: 'NEW_ACCOUNT'; seed: number; now?: number }
+  | { type: 'NEW_ACCOUNT'; seed: number; now?: number; /** Canon rules (S25). */ hardcore?: boolean }
   /** Mobius Summon: Normal (gold) or Advanced (gems); a 10-pull is discounted on Advanced. */
   | { type: 'SUMMON'; pool?: SummonPool; count?: 1 | 10 }
   | { type: 'SET_PARTY'; slots: (HeroId | null)[]; lines: Line[] }
@@ -1162,5 +1326,15 @@ export type Command =
   | { type: 'READ_LETTER' }
   /** Onboarding: mark a first-steps item the engine cannot see (e.g. talking to a hero). */
   | { type: 'GUIDE_STEP'; step: string }
+  /** The climb: take the `index`-th Door offered for the current floor. */
+  | { type: 'CHOOSE_DOOR'; index: number }
+  /** The climb: end the Sortie and bank its purse. */
+  | { type: 'RETURN_TO_CAMPUS' }
+  /** Legacy: pass a fallen hero's pending Echo to a living heir. */
+  | { type: 'BEQUEATH_ECHO'; fallenId: HeroId; heirId: HeroId }
+  /** Legacy: spend a New Arrival token on a free Normal pull (minStar 2). */
+  | { type: 'CLAIM_RECRUIT' }
+  /** Shell: the Master has seen a place's unlock fanfare. */
+  | { type: 'SEE_UNLOCK'; place: string }
   /** Testing-only: grant free gold. Not part of the real economy. */
   | { type: 'ADD_GOLD'; amount: number }

@@ -82,6 +82,26 @@ function byId(a: MutUnit, b: MutUnit): number {
 /** Guard reductions only ever shave off this much in total (never full immunity). */
 const MIN_GUARD_MULT = 0.25
 
+/**
+ * In-battle Boon effects (spec 2026-10-12 S14), passed by the tower for the running
+ * Sortie. None of them draws RNG, so a battle without them replays byte-identically.
+ */
+export interface BattleMods {
+  /** Iron Vow: a Protected hero (overlooked by the enemy) takes ×(1 − this) damage. */
+  protectedReduction?: number
+  /** Hunter's Mark: the Focus target takes ×(1 + this) damage from heroes. */
+  focusVulnerability?: number
+  /** Second Wind: the first hero to drop below `below` of max HP (and live) heals `heal`
+   *  of it, once a battle. */
+  secondWind?: { below: number; heal: number }
+}
+
+/** The battle-log note (and caption) of a rout (spec 2026-10-12 S19). */
+export const ROUT_NOTE = 'The line breaks! The party retreats.'
+
+/** The battle-log note (and caption) of a Second Wind. */
+export const SECOND_WIND_NOTE = 'Second Wind!'
+
 /** elementMult per Layer 0 §2.5. */
 function elementMult(attackEl: Element, defEl: Element): number {
   if (ELEMENT_ADVANTAGE[attackEl] === defEl) return C.elementAdvantage
@@ -95,8 +115,9 @@ function elementMult(attackEl: Element, defEl: Element): number {
  * @param heroUnits already-built hero CombatUnits (read-only; never mutated)
  * @param encounter the wave/mission/focus definition
  * @param seed combat seed (folded into the Rng via createRng(makeSeed(seed)))
+ * @param mods in-battle Boon effects (none by default)
  */
-export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: number): BattleResult {
+export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: number, mods: BattleMods = {}): BattleResult {
   let rng: Rng = createRng(makeSeed(seed))
   let rngDraws = 0
 
@@ -123,6 +144,7 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
       maxSP: u.maxSP,
       cp: u.cp,
       ...(u.isNpc ? { isNpc: true } : {}),
+      ...(u.templateId !== undefined ? { templateId: u.templateId } : {}),
     })
   }
   const allyUnits = encounter.allies ?? []
@@ -156,9 +178,13 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
   const hasReach = encounter.mission.objectives.some((o) => o.kind === 'reach')
   let reachProgress = 0
   let outcome: CombatOutcome | null = null
+  let secondWindUsed = false
   // Focus / overlook start from the pre-battle directive; mid-battle orders may change them.
   let focusEnemyId: string | undefined = encounter.focus?.focusEnemyId
   let overlooked: string[] = encounter.focus?.overlookedAllyIds ?? []
+  /** Heroes pulled back behind the line (a withdraw order) and the tick they return on. */
+  const withdrawnUntil: Record<string, number> = {}
+  const isWithdrawn = (u: MutUnit): boolean => (withdrawnUntil[u.id] ?? 0) > tick
 
   // ── Helpers over the live rosters ─────────────────────────────────────────
   /** Everyone alive on the hero side, NPC allies included (what enemies can target). */
@@ -185,8 +211,11 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
 
   /** Living, targetable units on the side OPPOSITE the actor. */
   const targetableFoes = (actor: MutUnit): MutUnit[] => {
-    const foes = actor.side === 'hero' ? livingEnemies() : livingHeroSide()
-    return foes.filter(isTargetable)
+    if (actor.side === 'hero') return livingEnemies().filter(isTargetable)
+    // A withdrawn hero is behind the line: out of reach while anyone else on its side stands.
+    const side = livingHeroSide()
+    const open = side.filter((h) => !isWithdrawn(h))
+    return open.length > 0 ? open : side
   }
 
   // ── Damage resolution against ONE target (pins crit→variance draw order) ──
@@ -226,6 +255,15 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
     ) {
       damage *= 1 + encounter.focusBonus
     }
+    // HUNTER'S MARK (Boon): the Focus target takes more damage from the party.
+    if (actor.side === 'hero' && mods.focusVulnerability !== undefined && focusEnemyId === target.id) {
+      damage *= 1 + mods.focusVulnerability
+    }
+    // IRON VOW (Boon): a Protected hero takes less damage.
+    if (target.side === 'hero' && mods.protectedReduction !== undefined && overlooked.includes(target.id)) {
+      damage *= 1 - mods.protectedReduction
+    }
+    if (target.side === 'hero' && isWithdrawn(target)) damage *= 1 - C.withdrawReduction
 
     // Actor keywords: ENRAGE past its timer, FRENZY while low, OPENER on the first
     // action, BANE against a family. None draws RNG.
@@ -286,6 +324,24 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
           actor.currentHP += heal
           emit({ kind: 'heal', unitId: actor.id, amount: heal, hpAfter: actor.currentHP })
         }
+      }
+    }
+
+    // SECOND WIND (Boon): the first hero knocked below the line (and still standing) rallies.
+    if (
+      mods.secondWind !== undefined &&
+      !secondWindUsed &&
+      target.side === 'hero' &&
+      !target.ref.isNpc &&
+      target.currentHP > 0 &&
+      target.currentHP < target.ref.stats.maxHP * mods.secondWind.below
+    ) {
+      secondWindUsed = true
+      const heal = Math.min(Math.round(target.ref.stats.maxHP * mods.secondWind.heal), target.ref.stats.maxHP - target.currentHP)
+      if (heal > 0) {
+        target.currentHP += heal
+        emit({ kind: 'mission', note: SECOND_WIND_NOTE })
+        emit({ kind: 'heal', unitId: target.id, amount: heal, hpAfter: target.currentHP })
       }
     }
 
@@ -412,6 +468,83 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
         return defeatedTargetTags.includes(obj.targetTag)
     }
   }
+  /** Party heroes (not NPC allies) fallen so far. */
+  const heroDeaths = (): number => heroes.filter((h) => !h.alive && !h.ref.isNpc).length
+  /** Is the party losing: less HP left than the living, non-looming enemies of the current wave? */
+  const losing = (): boolean => {
+    const ours = livingHeroes().reduce((n, h) => n + Math.max(0, h.currentHP), 0)
+    const theirs = livingEnemiesInWave(currentWave)
+      .filter((e) => !isLooming(e))
+      .reduce((n, e) => n + Math.max(0, e.currentHP), 0)
+    return ours < theirs
+  }
+  /** The damage one free action of `a` is expected to deal `d` (its strongest no-SP skill):
+   *  the same multipliers `resolveHit` applies — attacker-level mitigation, element,
+   *  expected crit, enrage/frenzy/bane, immune/resist/vulnerable/guard — at mean variance.
+   *  An estimate for the rout check only: no RNG, no orders or Boons. */
+  const expectedHit = (a: MutUnit, d: MutUnit): number => {
+    let skill: SkillEffect = BASIC_ATTACK
+    let best = 0
+    for (const sk of a.ref.skills) {
+      if (sk.spCost === 0 && sk.skillMult > best) {
+        skill = sk
+        best = sk.skillMult
+      }
+    }
+    const st = a.ref.stats
+    const physical = skill.damageType === 'physical'
+    const k = C.defenseKFlat + C.defenseKPerLevel * a.ref.level
+    const el: Element = skill.element ?? a.ref.element
+    const crit = 1 + (Math.min(100, Math.max(0, st.critPct)) / 100) * (C.critMult - 1)
+    let dmg = (physical ? st.pAtk : st.mAtk) * skill.skillMult * elementMult(el, d.ref.element) * crit * (k / (k + (physical ? d.ref.stats.pDef : d.ref.stats.mDef)))
+    for (const kw of a.ref.keywords) {
+      if (kw.kind === 'enrage' && tick >= kw.afterTick) dmg *= kw.multiplier
+      else if (kw.kind === 'frenzy' && a.currentHP * 100 < st.maxHP * kw.belowHpPct) dmg *= kw.multiplier
+      else if (kw.kind === 'bane' && d.ref.family === kw.family) dmg *= kw.multiplier
+    }
+    let guardMult = 1
+    const ranged = a.ref.unitClass === 'archer' || a.ref.unitClass === 'mage'
+    for (const kw of d.ref.keywords) {
+      if (kw.kind === 'immune' && kw.damageType === skill.damageType) return 0
+      if (kw.kind === 'resist' && kw.damageType === skill.damageType) guardMult *= 1 - kw.reduction
+      else if (kw.kind === 'vulnerable' && kw.element === el) dmg *= C.vulnerableMult
+      else if (kw.kind === 'guard' && (kw.vs === undefined || (kw.vs === 'ranged' ? ranged : kw.vs === el))) guardMult *= 1 - kw.reduction
+    }
+    return dmg * Math.max(MIN_GUARD_MULT, guardMult)
+  }
+  /** Ticks for `attackers` to cut down every one of `defenders` at their expected pace,
+   *  one target at a time (each defender's HP over the attackers' combined damage per
+   *  tick against it; an ATB unit acts spd / actionGaugeMax times a tick). Infinity when
+   *  some defender cannot be hurt at all (immune to everything thrown at it). */
+  const ticksToKill = (attackers: readonly MutUnit[], defenders: readonly MutUnit[]): number => {
+    let t = 0
+    for (const d of defenders) {
+      let perTick = 0
+      for (const a of attackers) perTick += (expectedHit(a, d) * a.ref.stats.spd) / C.actionGaugeMax
+      if (!(perTick > 0)) return Infinity
+      t += Math.max(0, d.currentHP) / perTick
+    }
+    return t
+  }
+  /** Is the fight projected to be lost: at the pace each side is hurting the other, would
+   *  the enemies of the wave in front of the party cut down its living heroes before the
+   *  heroes cut them down (× `climb.routProjection.margin`), or a survival timer run out?
+   *  A fast single killer (F41's Versace) or one the party cannot hurt (an immune elite)
+   *  bleeds a party that is still ahead on HP: the HP check alone misses both. */
+  const projectedLoss = (): boolean => {
+    const margin = TUNING.climb.routProjection.margin
+    if (!(margin > 0)) return false
+    const ours = livingHeroes().filter((h) => !isWithdrawn(h))
+    const theirs = livingEnemiesInWave(currentWave).filter((e) => !isLooming(e))
+    if (ours.length === 0 || theirs.length === 0) return false
+    const tLose = ticksToKill(theirs, ours)
+    if (tLose === Infinity) return false
+    let tWin = ticksToKill(ours, theirs)
+    // Survival is won by outlasting the clock, not by killing.
+    const survive = encounter.mission.objectives.find((o) => o.kind === 'survive')
+    if (survive !== undefined && survive.kind === 'survive') tWin = Math.min(tWin, Math.max(0, survive.ticks - tick))
+    return tLose < tWin * margin
+  }
   /** A protect objective whose NPC has fallen loses the mission outright. */
   const protectFailed = (): boolean =>
     encounter.mission.objectives.some((o) => o.kind === 'protect' && !allyAlive(o.targetTag))
@@ -430,6 +563,17 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
     }
     if (missionWon()) {
       outcome = 'win'
+      return
+    }
+    // ROUT (spec 2026-10-12 S19): once enough heroes have fallen and the fight is being
+    // lost — the living party has less HP left than the living (non-looming) enemies of the
+    // wave in front of it, or (2026-10-21) at the pace each side is dealing damage the
+    // party would fall first (`projectedLoss`) — the survivors break and flee. Only tower
+    // floors set this.
+    const routAt = encounter.routAfterDeaths
+    if (routAt !== undefined && heroDeaths() >= routAt && (losing() || projectedLoss())) {
+      emit({ kind: 'mission', note: ROUT_NOTE })
+      outcome = 'retreat'
     }
   }
 
@@ -452,6 +596,8 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
     if (!actor.alive || outcome !== null) return
     // Mission NPCs (escort targets) never act — they only need protecting.
     if (actor.ref.isNpc) return
+    // A withdrawn hero sits its turns out behind the line.
+    if (isWithdrawn(actor)) return
     // A looming unit sleeps until its enrage tick: it wakes, and then it is too late.
     if (isLooming(actor)) {
       const wake = actor.ref.keywords.find((k) => k.kind === 'enrage')
@@ -525,6 +671,7 @@ export function runBattle(heroUnits: CombatUnit[], encounter: Encounter, seed: n
       if (o.kind === 'retreat') outcome = 'retreat'
       else if (o.kind === 'focus') focusEnemyId = o.enemyId
       else if (o.kind === 'protect' && !overlooked.includes(o.allyId)) overlooked = [...overlooked, o.allyId]
+      else if (o.kind === 'withdraw') withdrawnUntil[o.allyId] = tick + C.withdrawTicks
     }
     if (outcome !== null) break
 

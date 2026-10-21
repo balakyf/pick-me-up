@@ -549,6 +549,10 @@ describe('migrate — v6 → v7 (the full climb)', () => {
       hiddenFound: [],
       worldEnded: false,
       worldSaved: false,
+      // v11 climb fields, filled by the v10 → v11 step of the chain.
+      kind: 'path',
+      doors: null,
+      sortie: null,
     })
   })
 })
@@ -602,9 +606,99 @@ describe('migrate — v9 → v10 (Quanton Life)', () => {
     const { dormitory, tavern, infirmary, garden, memorial, forge, library, watchtower, market, ...facV9 } = v10.facilities
     const v9Json = JSON.stringify({ schemaVersion: 9, savedAt: 0, state: { ...rest, schemaVersion: 9, facilities: facV9 } })
     const restored = loadState(v9Json)
-    expect(restored.schemaVersion).toBe(10)
+    expect(restored.schemaVersion).toBe(TUNING.account.schemaVersion)
     expect(restored.facilities.dormitory.level).toBe(TUNING.lobby.facilityStartLevels.dormitory)
     expect(restored.facilities.forge).toEqual({ level: 0, build: null })
     expect(restored.life).toEqual(life)
+  })
+})
+
+describe('migrate — v10 → v11 (fun and return)', () => {
+  /** A v10 save built from a current account: strip every v11 field. */
+  function asV10(s: ReturnType<typeof createAccount>): string {
+    const { rested, hardcore, stamps, ...metaV10 } = s.meta
+    const { kind, doors, sortie, ...towerV10 } = s.tower
+    const { legacy, unlocks, ...lifeV10 } = s.life
+    return JSON.stringify({ schemaVersion: 10, savedAt: 0, state: { ...s, schemaVersion: 10, meta: metaV10, tower: towerV10, life: lifeV10 } })
+  }
+
+  it('fills the v11 defaults on a fresh v10 save', () => {
+    const v11 = createAccount(565, { now: 1000 })
+    const restored = loadState(asV10(v11))
+    expect(restored.schemaVersion).toBe(11)
+    expect(TUNING.account.schemaVersion).toBe(11)
+    expect(restored.meta.rested).toEqual({ charges: 0, carryWorld: 0 })
+    expect(restored.meta.hardcore).toBe(false)
+    expect(restored.meta.stamps).toEqual({ count: 2, lastRealDay: -1 })
+    expect([restored.tower.kind, restored.tower.doors, restored.tower.sortie]).toEqual(['path', null, null])
+    expect(restored.life.legacy).toEqual({ pending: [], nemeses: [], recruitTokens: 0, lessons: [] })
+    expect(restored.life.unlocks).toEqual([])
+    // A fresh account migrated from v10 equals the fresh v11 account.
+    expect(restored).toEqual(v11)
+  })
+
+  it('createAccount carries the same defaults, with no unlocks seen', () => {
+    const s = createAccount(9, { now: 0 })
+    expect(s.meta.rested).toEqual({ charges: 0, carryWorld: 0 })
+    expect(s.meta.hardcore).toBe(false)
+    expect(s.meta.stamps).toEqual({ count: TUNING.return.stamps.endowed, lastRealDay: -1 })
+    expect(s.tower).toMatchObject({ kind: 'path', doors: null, sortie: null })
+    expect(s.life.legacy).toEqual({ pending: [], nemeses: [], recruitTokens: 0, lessons: [] })
+    expect(s.life.unlocks).toEqual([])
+  })
+
+  it('backfills life.unlocks for a veteran with every place already open (no fanfare storm)', () => {
+    const base = createAccount(566, { now: 1000 })
+    const vet = { ...base, tower: { ...base.tower, currentFloor: 6, highestCleared: 5 } }
+    const restored = loadState(asV10(vet))
+    expect(restored.life.unlocks).toEqual(
+      ['armory', 'daily', 'dormitory', 'garden', 'infirmary', 'kitchen', 'market', 'memorial', 'tacticalCenter', 'tavern', 'trainingCenter'],
+    )
+  })
+
+  it('is idempotent: a v10 envelope that already has v11 fields keeps them; a v11 save is untouched', () => {
+    const base = createAccount(567, { now: 1000 })
+    const custom = {
+      ...base,
+      schemaVersion: 10,
+      meta: { ...base.meta, rested: { charges: 4, carryWorld: 77 }, hardcore: true, stamps: { count: 7, lastRealDay: 12 } },
+      tower: { ...base.tower, kind: 'elite' as const, doors: [{ kind: 'path' as const, reward: 'gold' as const }], sortie: { startFloor: 3, floors: 2, purse: 90, boons: ['volley'] } },
+      life: { ...base.life, legacy: { pending: [], nemeses: [], recruitTokens: 1, lessons: ['beast'] }, unlocks: ['zzz'] },
+    }
+    const env = { schemaVersion: 10, savedAt: 0, state: custom }
+    const once = migrate(env, 10)
+    expect(once.state.meta.rested).toEqual({ charges: 4, carryWorld: 77 })
+    expect(once.state.meta.hardcore).toBe(true)
+    expect(once.state.meta.stamps).toEqual({ count: 7, lastRealDay: 12 })
+    expect(once.state.tower.kind).toBe('elite')
+    expect(once.state.tower.sortie).toEqual({ startFloor: 3, floors: 2, purse: 90, boons: ['volley'] })
+    expect(once.state.life.legacy.recruitTokens).toBe(1)
+    expect(once.state.life.unlocks).toEqual(['zzz'])
+    // Running the step again on its own output changes nothing.
+    const twice = migrate({ ...once, schemaVersion: 10, state: { ...once.state, schemaVersion: 10 } }, 10)
+    expect(twice).toEqual(once)
+    // A v11 save round-trips unchanged.
+    const v11 = loadState(saveState({ ...once.state }))
+    expect(loadState(saveState(v11))).toEqual(v11)
+  })
+
+  it('a v9 save runs the whole chain to v11 and gets its unlocks backfilled', () => {
+    const v11 = createAccount(568, { now: 1000 })
+    const { life, ...rest } = v11
+    const { rested, hardcore, stamps, ...metaV9 } = v11.meta
+    const { kind, doors, sortie, ...towerV9 } = v11.tower
+    const { dormitory, tavern, infirmary, garden, memorial, forge, library, watchtower, market, ...facV9 } = v11.facilities
+    const v9Json = JSON.stringify({
+      schemaVersion: 9,
+      savedAt: 0,
+      state: { ...rest, schemaVersion: 9, facilities: facV9, meta: metaV9, tower: { ...towerV9, currentFloor: 3, highestCleared: 2 } },
+    })
+    const restored = loadState(v9Json)
+    expect(restored.schemaVersion).toBe(TUNING.account.schemaVersion)
+    expect(restored.meta.rested).toEqual({ charges: 0, carryWorld: 0 })
+    expect(restored.meta.stamps).toEqual({ count: 2, lastRealDay: -1 })
+    expect(restored.tower).toMatchObject({ currentFloor: 3, highestCleared: 2, kind: 'path', doors: null, sortie: null })
+    expect(restored.life.legacy).toEqual(life.legacy)
+    expect(restored.life.unlocks).toEqual(['daily', 'dormitory', 'kitchen', 'memorial', 'tacticalCenter', 'tavern'])
   })
 })

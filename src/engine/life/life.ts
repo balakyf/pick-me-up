@@ -31,6 +31,7 @@ import type {
   HeroLife,
   LifePlace,
   LifeState,
+  LegacyState,
   Memory,
   NeedKey,
   OwnedHero,
@@ -81,7 +82,14 @@ export function defaultLifeState(nowWorld: number): LifeState {
     letterReadAt: nowWorld,
     guide: { tutorialPull: false, done: [] },
     crystal: { day: -1, advancedPulls: 0 },
+    legacy: defaultLegacyState(),
+    unlocks: [],
   }
+}
+
+/** The legacy ledger of a fresh (or v10-migrated) account (schema v11). */
+export function defaultLegacyState(): LegacyState {
+  return { pending: [], nemeses: [], recruitTokens: 0, lessons: [] }
 }
 
 export function newHeroLife(day: number): HeroLife {
@@ -179,6 +187,20 @@ export function addMemory(life: HeroLife, m: Memory): void {
 function pushChronicle(list: ChronicleEntry[], e: ChronicleEntry): void {
   list.push(e)
   if (list.length > L.chronicleMax) list.splice(0, list.length - L.chronicleMax)
+}
+
+/**
+ * A quarrel is one piece of news per pair: a pair that shouts again replaces its
+ * older entry (in either order) instead of adding a second "A and B had a shouting
+ * match" beside "B and A had…".
+ */
+function chronicleQuarrel(list: ChronicleEntry[], e: ChronicleEntry): void {
+  const pair = relationKey(e.heroIds[0]!, e.heroIds[1]!)
+  for (let i = list.length - 1; i >= 0; i--) {
+    const o = list[i]!
+    if (o.kind === e.kind && o.heroIds.length === 2 && relationKey(o.heroIds[0]!, o.heroIds[1]!) === pair) list.splice(i, 1)
+  }
+  pushChronicle(list, e)
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -410,7 +432,14 @@ interface Working {
 const clamp = (v: number, lo = 0, hi = 100) => (v < lo ? lo : v > hi ? hi : v)
 
 function cloneLife(l: HeroLife): HeroLife {
-  return { ...l, needs: { ...l.needs }, jobXp: { ...l.jobXp }, doing: { ...l.doing }, memories: [...l.memories] }
+  return {
+    ...l,
+    needs: { ...l.needs },
+    jobXp: { ...l.jobXp },
+    doing: { ...l.doing },
+    memories: [...l.memories],
+    ...(l.echoes ? { echoes: [...l.echoes] } : {}),
+  }
 }
 
 /**
@@ -728,7 +757,7 @@ export function stepLife(state: GameState, nowWorld: number): GameState {
           delta = -R.argueLoss * (0.5 + (a.p.temper + b.p.temper) / 2)
           addMemory(a.life, { kind: 'argued', day, other: b.hero.id, weight: 18 })
           addMemory(b.life, { kind: 'argued', day, other: a.hero.id, weight: 18 })
-          if (a.p.temper > 0.6 && b.p.temper > 0.6) pushChronicle(chronicle, { at: atWorld, kind: 'argument', heroIds: [a.hero.id, b.hero.id] })
+          if (a.p.temper > 0.6 && b.p.temper > 0.6) chronicleQuarrel(chronicle, { at: atWorld, kind: 'argument', heroIds: [a.hero.id, b.hero.id] })
         }
         const after = clamp(Math.round((before + delta) * 10) / 10, -100, 100)
         relations[key] = { ...rel, affinity: after }

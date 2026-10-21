@@ -10,7 +10,7 @@
  *   anchors: F30 the statue's valley · F50 the Egg's vault · F90 the world's end
  *   other  the tower's stone depths (tournaments)
  */
-import { createBitmap, ellipse, hex, hline, mix, rect, set, vline, type Bitmap, type RGBA } from './bitmap'
+import { capSaturation, createBitmap, ellipse, grade, hex, hline, mix, rect, set, vignette, vline, type Bitmap, type RGBA } from './bitmap'
 import { hashString, seededRand } from './rand'
 
 export const BG_W = 384
@@ -332,7 +332,56 @@ function worldsEnd(): Bitmap {
   return b
 }
 
-export function drawBattleBg(floor: number): Bitmap {
+// ── the light layer (spec 2026-10-12 V8) ─────────────────────────────────────
+
+/** Per-act colour grade: a tint re-lit to each pixel's luma, kept subtle. */
+export interface ActGrade {
+  tint: string
+  amt: number
+}
+
+/** The grade for a floor's act, matching the backdrop bands above. */
+export function actGrade(floor: number): ActGrade {
+  if (floor >= 1 && floor <= 9) return { tint: '#ffe2a8', amt: 0.06 } // a warm morning
+  if (floor === 10) return { tint: '#ff8048', amt: 0.1 } // the city burns
+  if (floor === 20) return { tint: '#ff6038', amt: 0.1 }
+  if (floor === 30) return { tint: '#d8c8a0', amt: 0.08 }
+  if (floor === 50) return { tint: '#ff7088', amt: 0.1 }
+  if (floor === 90) return { tint: '#ff6040', amt: 0.1 }
+  if (floor >= 11 && floor <= 19) return { tint: '#d8b894', amt: 0.08 } // dust
+  if (floor >= 21 && floor <= 30) return { tint: '#a8c878', amt: 0.1 } // swamp haze
+  if (floor >= 31 && floor <= 35) return { tint: '#80c0d8', amt: 0.08 } // sea air
+  if (floor >= 36 && floor <= 69) return { tint: '#b0b4c8', amt: 0.08 } // steel and smoke
+  if (floor >= 70 && floor <= 79) return { tint: '#ff5060', amt: 0.1 }
+  if (floor >= 80 && floor <= 89) return { tint: '#a890ff', amt: 0.1 }
+  if (floor === 100) return { tint: '#ffe890', amt: 0.08 }
+  if (floor >= 90 && floor <= 99) return { tint: '#c878ff', amt: 0.1 }
+  return { tint: '#8898c8', amt: 0.08 } // the depths
+}
+
+/** Saturation ceiling for every backdrop: rich, never neon (the Octopath warning). */
+export const BG_MAX_CHROMA = 0.82
+/** How dark the corner vignette gets, 0..1. */
+export const BG_VIGNETTE = 0.36
+const VIGNETTE_INK = hex('#06020e')
+
+export interface BattleBgOptions {
+  /** the act grade, saturation cap and vignette (default true) */
+  light?: boolean
+}
+
+/**
+ * A floor's battle backdrop. By default it gets the light pass: the act's colour
+ * grade, a saturation cap and a stepped vignette that pulls the eye to the fighters.
+ */
+export function drawBattleBg(floor: number, opts: BattleBgOptions = {}): Bitmap {
+  const raw = drawBattleTheme(floor)
+  if (opts.light === false) return raw
+  const g = actGrade(floor)
+  return vignette(capSaturation(grade(raw, hex(g.tint), g.amt), BG_MAX_CHROMA), BG_VIGNETTE, VIGNETTE_INK, 0.6)
+}
+
+function drawBattleTheme(floor: number): Bitmap {
   if (floor >= 1 && floor <= 9) return prairie()
   if (floor === 10) return fallingCity()
   if (floor === 20) return lair()

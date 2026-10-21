@@ -69,6 +69,21 @@ export const TUNING = {
     maxTicks: 5000,
     /** Damage multiplier a `vulnerable` keyword applies to hits of its element. */
     vulnerableMult: 1.5,
+    /** Pull back (the Decisive Moment's 'withdraw' order): for this many ticks the hero
+     *  stands behind the line, sits out its turns, and foes cannot reach it while anyone
+     *  else on its side stands. */
+    withdrawTicks: 8,
+    /** Damage a withdrawn hero still takes is ×(1 − this) (when no one else is left). */
+    withdrawReduction: 0.5,
+    /** Pull back's lasting cost: a hero pulled back comes home shaken and loses this much
+     *  Sanity after the fight, on top of the floor's drain (tower.playFloor). Measured on
+     *  the fights Pull back saves (sim casual + engaged, 40 seeds each, F1-30; the saved
+     *  hero averages 85 Sanity going in, 76 after the drain): at 20, 15 of 24 come home
+     *  under `lobby.combat.minorThreshold` (60, −5% to every stat until they rest; 4 of 24
+     *  without it) and 4 of 24 under `climb.restedSanity` (40: Suggest benches them); 1
+     *  under the panic line. The shake alone never breaks a hero (it stops at 1 Sanity).
+     *  Protect costs an order instead; Retreat costs the floor. */
+    withdrawSanityCost: 20,
   },
 
   cp: {
@@ -181,8 +196,11 @@ export const TUNING = {
     f45DeliveryDistance: 60,
     f65SurviveTicks: 1000,
     f95SurviveTicks: 1200,
-    /** The looped mission (canon F36–40, 5 attempts; failing F40 drops the room to F31). */
-    loop: { start: 36, gate: 40, fallbackTo: 31, attempts: 5, scarLevels: 4 },
+    /** The looped mission (canon F36–40, 5 attempts; failing F40 drops the room to F31).
+     *  Each scar (5 failed gates) adds `scarLevels` enemy levels and lifts F36–40's budget
+     *  by `scarBudgetPct`, applied AFTER the mercy director's cap and the anchor fit, so
+     *  the fit cannot take the scar back off. */
+    loop: { start: 36, gate: 40, fallbackTo: 31, attempts: 5, scarLevels: 4, scarBudgetPct: 0.1 },
     /** F15 Escort anchor: canon 15-minute assassination window → tick budget. */
     f15SurviveTicks: 900,
     /** Ruins filler (F11–19): chance a floor rolls a Survival mission instead of Subjugation. */
@@ -308,8 +326,6 @@ export const TUNING = {
     monthlyGems: 150,
     monthlyGold: 10000,
     loginGems: 50,
-    /** The 7th consecutive day pays this bonus on top. */
-    streakBonusGems: 150,
     /** Today-only offer: one package, this discount on its price. */
     todayOnly: ['satchel', 'chest', 'vault'] as readonly string[],
     todayDiscount: 0.4,
@@ -810,8 +826,271 @@ export const TUNING = {
     },
   },
 
+  // ⚠ BALANCE PASS PENDING — every section from `ftue` to `unlocks` is FIRST-PASS (spec
+  // 2026-10-12 "fun and return", §3). The lead's integration pass (§4.10) tunes `climb.*`
+  // against the sim metrics; the rest are the values the spec gives.
+
+  /** First-time user experience (spec 2026-10-12 S1). First-pass. */
+  ftue: {
+    /** The free tutorial ten-pull holds at least one hero of this star. */
+    tutorialMinTopStar: 3,
+    /** …and at least this many heroes of 2★ or higher. */
+    tutorialMin2Plus: 3,
+    /** The best tutorial 3★ gets its class's signature skill at Lv1. */
+    tutorialSignatureSkill: true,
+  },
+
+  /** The climb: floor kinds, the mercy director, Doors, rout, Last Stand, Boons, Sorties
+   *  (spec 2026-10-12 S13-S15, S19, S20). Kinds, bands, anchorFeel, levelLag and rout tuned
+   *  for a sawtooth over F1-F25 (docs/superpowers/plans/2026-10-16-fun-tension-tuning.md,
+   *  asserted in src/sim/feel.test.ts). */
+  climb: {
+    /** Budget multiplier by floor kind: budget = staticBudget(f) × kindMult[kind].
+     *  Rest and Cache have no fight (0). The Skull is 1.6× the Path (was 1.45): a strong
+     *  roster, which the director never caps, still finds it a real step up. */
+    kindMult: { tutorial: 1.0, breather: 0.6, path: 1.0, elite: 1.6, rest: 0, cache: 0, boss: 1.0 } as Record<string, number>,
+    /** Per-anchor Boss feel: × the Boss's static budget and its mercy cap alike (missing =
+     *  1, so F30+ is untouched). Authored bosses hit very differently for their CP (F5's
+     *  Survive is soft, Halgiraf on F20 hard); these even them out so each early Boss is the
+     *  sawtooth's peak: mostly Fair/Risky, a would-be death in ~1 first attempt of 3.
+     *  Steep: F5 goes from ~10% to ~65% would-be deaths between 1.55 and 1.76. A stronger
+     *  (summoning) roster meets the static curve where the naive one meets its mercy cap, so
+     *  these are tuned for both (feel.test.ts `typical`): 5/10 a peak for both, 15 (an
+     *  escort: more budget kills Priasis, not the party) and 20 (Halgiraf: at 1.22 a 78-80%
+     *  would-be death for the typical player, Protect saving a third) kept low; 25 at 1.4 keeps it a peak (~30% for the typical player). Was
+     *  { 5: 1.76, 10: 1.34, 15: 1.43, 20: 1.22, 25: 1.55 }. */
+    anchorFeel: { 5: 1.72, 10: 1.34, 15: 1.2, 20: 1.1, 25: 1.4 } as Record<number, number>,
+    /** Per-floor Path feel (2026-10-21): × a Path floor's static budget and its mercy cap
+     *  alike (missing = 1), outside the step-capped curve. Act I's Paths sat at ~0.75× the
+     *  roster, under every cap: 100% Safe for a naive player. A gentle sawtooth instead,
+     *  rising to each Act I boss. F1-F2 are tutorial floors (never a Path). Knife-edge: F4 at
+     *  1.42 → 1.45 → 1.48 takes its would-be deaths 3% → 5% → 10% (naive, 112 seeds).
+     *  Review (2026-10-21): was { 3: 1.5, 4: 1.5, 6: 1.2, 7: 1.2, 8: 1.22, 9: 1.28 }, tuned
+     *  on the 24 feel.test seeds; on 112 it gave 5.0% naive / 9.3% typical would-be deaths
+     *  on F3-F9 and lifted F11-F25's from 11.4% to 14.1% (64 seeds). */
+    pathFeel: { 3: 1.45, 4: 1.42, 6: 1.2, 7: 1.2, 8: 1.22, 9: 1.25 } as Record<number, number>,
+    /** The early climb's lift over floorPower on a Path floor: ×earlyLift at the foot of the
+     *  tower, fading quadratically to ×1 at the inflection floor (`tower.inflectionFloor`).
+     *  It can't go into `tower.earlyBudgetBoost`: above ~4.2 that breaks floorPower's
+     *  monotonicity near F69, and it would also move F1-F2 and the dailies (WP3 notes). */
+    earlyLift: 2.42,
+    /** The director is a mercy cap ONLY: budget = min(staticBudget, directorCp × mercyBand[kind])
+     *  (× anchorFeel on a Boss), directorCp = the top 5 unit CP among rested heroes and the
+     *  party's fightable ones, under-levelled heroes discounted (levelLag). It never raises a
+     *  floor above its static curve. The bands are relative to the roster: the Path a little
+     *  under it (mostly Safe, sometimes Fair), the Skull above it (mostly Risky: it pays
+     *  more, so it hurts more), the Breather well under it. Was path 0.72 / elite 0.9 /
+     *  boss 0.85 / breather 0.5, which capped every kind below the roster: a flat climb. */
+    mercyBand: { tutorial: 1.0, breather: 0.42, path: 0.72, elite: 1.17, rest: 0, cache: 0, boss: 0.85 } as Record<string, number>,
+    /** The director reads a hero far under the floor's mob level at less than its CP
+     *  (combat mitigation is level-scaled; CP is not): past `grace` levels under, each level
+     *  counts `perLevel` less, down to `min` (climb/kinds.ts levelLagMult). Only up to
+     *  `untilFloor`: the free roster's 1★/2★ heroes hit their level caps (Lv10/Lv20) in the
+     *  first acts; past it the late climb keeps its plain-CP director (the act gates). */
+    levelLag: { grace: 3, perLevel: 0.04, min: 0.5, untilFloor: 25 },
+    /** Tempo (2026-10-21): the mercy cap judges an authored Boss by its TEMPO-weighted CP
+     *  (climb/kinds.ts tempoMult): an enemy faster than `grace` × the party's mean speed
+     *  counts × (spd / (party spd × grace)) ^ exp. CP prices speed like any stat, but an
+     *  ATB unit acts in proportion to it, so F41's Versace (~2.5-3.3× the party) was sized
+     *  as if he were a third as dangerous as he is. Only Versace gets past the grace in
+     *  practice (bot parties: every other floor's fastest enemy p90 ≈ 1.2× the party). */
+    tempo: { grace: 1.25, exp: 0.5 },
+    /** Rested: Sanity at or above this. `suggestParty` sends only rested heroes, and the
+     *  director reads rested heroes plus whoever is actually in the party, so it never
+     *  sizes a floor for tired heroes the game would leave on the bench (climb/kinds.ts). */
+    restedSanity: 40,
+    /** Max budget step between consecutive Path floors (fraction; +12%). */
+    maxStepPct: 0.12,
+    /** The director and Doors start on this floor (F1-F2 are tutorial floors, unchanged). */
+    directorFromFloor: 3,
+    doors: {
+      /** Doors offered after each clear. */
+      offered: 2,
+      /** Chance the second Door before a boss floor is a Rest. */
+      restBeforeBoss: 0.5,
+      /** Chance a Door is a Cache (treasure, no fight). */
+      treasureChance: 0.15,
+      /** A Breather Door is offered right after a boss. */
+      breatherAfterBoss: true,
+    },
+    reward: {
+      /** Elite (Skull) floors: gold multiplier on the floor's gold. */
+      eliteGoldMult: 2,
+      /** Elite floors: guaranteed Promotion Stones. */
+      eliteStones: 1,
+      /** Elite floors open a Boon choice on a clear. */
+      eliteBoon: true,
+      /** Rest Door: Sanity restored to the living party. */
+      restSanity: 30,
+      /** Rest Door: cooked meals added to the pantry. */
+      restMeals: 1,
+      /** Cache Door: gold per floor number (gold = perFloor × floor). */
+      cacheGoldPerFloor: 120,
+      /** Cache Door: Promotion Stones. */
+      cacheStones: 1,
+    },
+    /** Rout (S19): survivors flee after this many heroes fall while losing, by kind. */
+    rout: { tutorial: 2, breather: 1, path: 2, elite: 2, boss: 2 } as Record<string, number>,
+    /** Rout projection (2026-10-21): past the rout threshold the party also breaks when, at
+     *  the pace each side is dealing damage (combat.ts `projectedLoss`: speed, attack,
+     *  level-scaled mitigation, crit), the enemies would cut it down before it cuts them
+     *  down (× margin). The HP check alone let a fast single killer bleed a party still
+     *  ahead on HP. 0 turns it off (the HP check only). */
+    routProjection: { margin: 1.25 },
+    /** Last Stand (S20): all-stat bonus with few living, fightable heroes on the roster. */
+    lastStand: {
+      rosterAtMost: 3,
+      /** Fraction by living-hero count. */
+      pctByCount: { 3: 0.1, 2: 0.15, 1: 0.2 } as Record<number, number>,
+    },
+    /** Boons (S14): pick 1 of `offer` after an Elite or Boss clear; hold at most `max`. */
+    boons: { offer: 3, max: 4 },
+    /** Per-boon values (fractions unless noted). */
+    boonValues: {
+      /** Iron Vow: a Protected hero takes this much less damage. */
+      ironVow: 0.2,
+      /** Hunter's Mark: the Focus target takes this much more damage. */
+      huntersMark: 0.15,
+      /** Second Wind: the first hero below `below` HP heals `heal` of max HP, once a battle. */
+      secondWind: { below: 0.25, heal: 0.3 },
+      /** Quartermaster: extra orders per battle (count). */
+      quartermaster: 1,
+      /** War Chest: gold. */
+      warChest: 0.25,
+      /** Scholar's Lamp: XP. */
+      scholarsLamp: 0.25,
+      /** Shieldwall: warriors' pDef/mDef. */
+      shieldwall: 0.1,
+      /** Volley: archers' spd. */
+      volley: 0.1,
+      /** Arcane Tide: mages' mAtk. */
+      arcaneTide: 0.1,
+      /** Sanctuary: healers' heals. */
+      sanctuary: 0.15,
+      /** Underdog: 1-2★ heroes' every stat. */
+      underdog: 0.12,
+      /** Calm Mind: Sanity drain reduction. */
+      calmMind: 0.4,
+    },
+    /** Sorties (S15): the at-risk streak purse. */
+    sortie: {
+      /** Each consecutive clear adds this fraction of the floor's gold per floor in the streak… */
+      streakPctPerFloor: 0.1,
+      /** …capped at this fraction. */
+      streakCap: 0.5,
+      /** A rout or wipe banks only this fraction of the purse. */
+      keepOnRout: 0.5,
+    },
+  },
+
+  /** Legacy of the fallen (spec 2026-10-12 S21-S23). First-pass. */
+  legacy: {
+    /** An Echo lifts one stat by this fraction. */
+    echoPct: 0.1,
+    /** Echoes one heir can carry. */
+    echoMaxPerHeir: 3,
+    /** An Echo may carry a skill fragment (+1 level if the heir knows the skill). */
+    skillEcho: true,
+    /** Suggested heirs per pending Echo (closest friends first). */
+    heirCandidates: 3,
+    nemesis: {
+      /** The revenant returns this many floors after the death, [min, max] inclusive. */
+      revengeAfter: [3, 7] as readonly number[],
+      /** The revenant's power multiplier. */
+      powerMult: 1.25,
+      /** At most this many Nemeses wait at once. */
+      maxActive: 3,
+      /** Revenge gold per floor number. */
+      rewardGoldPerFloor: 150,
+      /** Promotion Stones for avenging. */
+      rewardStones: 1,
+    },
+    recruit: {
+      /** A battle that leaves fewer living heroes than this grants a New Arrival token. */
+      rosterBelow: 5,
+      /** The token's free pull is at least this star. */
+      minStar: 2,
+      maxTokens: 2,
+    },
+    memorial: {
+      /** Each plaque adds this fraction to every stat… */
+      pctPerPlaque: 0.005,
+      /** …capped at this fraction. */
+      capPct: 0.05,
+    },
+  },
+
+  /** Reasons to return (spec 2026-10-12 S24-S28). First-pass. */
+  return: {
+    /** Pent-up Interference (S24). */
+    rested: {
+      /** One charge per this many REAL hours away. */
+      perRealHours: 8,
+      maxCharges: 6,
+      /** A charge multiplies one floor clear's gold by this. */
+      goldMult: 2,
+    },
+    /** The welcome-back ledger (S26) and Lights Out (S27). */
+    welcome: {
+      /** Shown when away at least this many real hours. */
+      minAwayRealHours: 2,
+      maxVignettes: 5,
+      /** The lobby opens desaturated after this many real days away (cosmetic). */
+      greyAfterRealDays: 30,
+      /** "Rest for now" shows after this many real minutes of play. */
+      lightsOutAfterRealMinutes: 60,
+    },
+    /** The login stamp card (S28): never resets. */
+    stamps: {
+      perCard: 10,
+      /** The card starts pre-stamped. */
+      endowed: 2,
+      /** Every full card pays this many gems… */
+      cardGems: 300,
+      /** …and this many free Normal pulls. */
+      cardPulls: 1,
+    },
+    /** No permanent loss while away (S28). */
+    offline: {
+      /** Storeroom theft per invasion is capped at this fraction. */
+      theftCapPct: 0.02,
+      /** The longest gap between two clock ticks still counted as live play, in REAL
+       *  seconds (the lobby ticks once a second; a hidden tab's throttled ticks count as
+       *  away). Offline-only clocks (a captive's deadline) pause beyond it. */
+      liveGapRealSeconds: 30,
+    },
+  },
+
+  /** Progressive campus (spec 2026-10-12 S3): when each place opens — the first of its
+   *  floor (highestCleared ≥ floor), Master Level, or event. Places not listed are always
+   *  open (tower, summon, party, roster). Keys are UI PlaceIds. Events: 'firstDeath'
+   *  (a grave in the Memorial), 'firstGrief' (any hero grieving), 'levelCap' (any living
+   *  hero at its level cap), 'crackOpen' (the crack is open). */
+  unlocks: {
+    kitchen: { floor: 1 },
+    memorial: { floor: 1, event: 'firstDeath' },
+    daily: { floor: 1 },
+    tacticalCenter: { floor: 2 },
+    dormitory: { floor: 2 },
+    tavern: { floor: 2 },
+    trainingCenter: { floor: 3 },
+    garden: { floor: 3 },
+    armory: { floor: 5 },
+    infirmary: { floor: 5, event: 'firstGrief' },
+    market: { floor: 5 },
+    promotionChamber: { floor: 7, event: 'levelCap' },
+    synthesis: { floor: 7 },
+    shop: { floor: 8 },
+    library: { floor: 10 },
+    transferStation: { floor: 10 },
+    watchtower: { floor: 10 },
+    guild: { floor: 15 },
+    hallOfMagic: { floor: 20 },
+    rift: { masterLevel: 20, event: 'crackOpen' },
+  } as Record<string, { floor?: number; masterLevel?: number; event?: string }>,
+
   account: {
-    schemaVersion: 10,
+    schemaVersion: 11,
     /** Canon protagonist account id (display only). */
     defaultAccountId: '46631913',
     partySize: 5,

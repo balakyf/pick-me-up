@@ -64,7 +64,7 @@ function dailyState(opts: {
     ...acct,
     heroes: { [hero.id]: hero },
     party: { slots: [hero.id, null, null, null, null], lines: ['front', 'front', 'mid', 'back', 'back'] },
-    tower: { currentFloor: highestCleared + 1, highestCleared, attemptIndex: 0, event: null, loop: null, hiddenFound: [], worldEnded: false, worldSaved: false },
+    tower: { currentFloor: highestCleared + 1, highestCleared, attemptIndex: 0, event: null, loop: null, hiddenFound: [], worldEnded: false, worldSaved: false, kind: 'path', doors: null, sortie: null },
     dailies: { attemptsUsed: opts.attemptsUsed ?? 0, lastResetWorldDay: 0 },
     gems: opts.gems ?? 0,
     materials: {},
@@ -124,6 +124,11 @@ describe('dailyUnlocked / dailyAttemptsLeft', () => {
 describe('attemptDaily', () => {
   it('throws when dailies are still locked', () => {
     expect(() => attemptDaily(dailyState({ highestCleared: 0 }), inDay(0))).toThrow(/lock/i)
+  })
+
+  it('a hero mid-promotion sits out, as in the tower (one deployability predicate)', () => {
+    const promoting = { ...strongHero(), promotion: { completesAtWorld: 9e15 } }
+    expect(() => attemptDaily(dailyState({ hero: promoting }), inDay(0))).toThrow(/no deployable heroes/)
   })
 
   it('grants the weekday reward and increments attemptsUsed on a win', () => {

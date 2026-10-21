@@ -1,4 +1,4 @@
-import { runBattle } from './combat'
+import { runBattle, ROUT_NOTE } from './combat'
 import { TUNING } from '../tuning'
 import type {
   CombatUnit,
@@ -1062,5 +1062,106 @@ describe('reach and acquire objectives', () => {
     const e = enemy({ id: 'e1', stats: { maxHP: 10, spd: 1 } })
     const res = runBattle([h], encounter([[e]], mission(annihilate), { allies: [npc] }), 3)
     expect(res.allyHpPct).toEqual({ vip: 100 })
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Rout (spec 2026-10-12 S19)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('rout', () => {
+  /** Five heroes against a wall that kills one a blow. */
+  const five = () => ['a', 'b', 'c', 'd', 'e'].map((id, i) => hero({ id, stats: { maxHP: 100, pDef: 0, spd: 40 + i, pAtk: 5 } }))
+  const wall = (extra: Partial<Encounter> = {}) =>
+    encounter([[enemy({ id: 'wall', stats: { maxHP: 1e6, pAtk: 9999, spd: 90, pDef: 0 } })]], mission(annihilate), extra)
+
+  it('a losing 5-hero party breaks after routAfterDeaths fall: retreat, the rest live', () => {
+    for (const n of [1, 2, 3]) {
+      const res = runBattle(five(), wall({ routAfterDeaths: n }), 5)
+      expect(res.outcome, `rout at ${n}`).toBe('retreat')
+      expect(res.fallenHeroIds).toHaveLength(n)
+      expect(res.survivorHeroIds).toHaveLength(5 - n)
+      expect(res.log.events.filter((e) => e.kind === 'mission' && e.note === ROUT_NOTE)).toHaveLength(1)
+    }
+  })
+
+  it('without routAfterDeaths (dailies, PvP, hand-built fights) the party fights to the last', () => {
+    const res = runBattle(five(), wall(), 5)
+    expect(res.outcome).toBe('wipe')
+    expect(res.fallenHeroIds).toHaveLength(5)
+    expect(res.log.events.some((e) => e.kind === 'mission' && e.note === ROUT_NOTE)).toBe(false)
+  })
+
+  it('a party of routAfterDeaths or fewer can still be wiped', () => {
+    expect(runBattle(five().slice(0, 2), wall({ routAfterDeaths: 2 }), 5).outcome).toBe('wipe')
+  })
+
+  it('a party that is winning does not break, however many fall', () => {
+    // Glass heroes fall to a quick rogue; the tank still wins the fight.
+    const party = [
+      hero({ id: 'g1', stats: { maxHP: 1, pDef: 0, spd: 10, pAtk: 0 } }),
+      hero({ id: 'g2', stats: { maxHP: 1, pDef: 0, spd: 10, pAtk: 0 } }),
+      hero({ id: 'g3', stats: { maxHP: 1, pDef: 0, spd: 10, pAtk: 0 } }),
+      hero({ id: 'tank', stats: { maxHP: 1e6, pDef: 999, spd: 20, pAtk: 400 } }),
+    ]
+    const enc = encounter([[enemy({ id: 'rogue', unitClass: 'thief', stats: { maxHP: 3000, pAtk: 50, spd: 200, pDef: 0 } })]], mission(annihilate), {
+      routAfterDeaths: 1,
+    })
+    const res = runBattle(party, enc, 9)
+    expect(res.fallenHeroIds.length).toBeGreaterThanOrEqual(1)
+    expect(res.outcome).toBe('win')
+  })
+
+  it('stays deterministic', () => {
+    expect(runBattle(five(), wall({ routAfterDeaths: 2 }), 8)).toEqual(runBattle(five(), wall({ routAfterDeaths: 2 }), 8))
+  })
+
+  // The projected-loss rule (2026-10-21): the HP check alone let a killer the party could
+  // not outpace bleed it while it was still ahead on HP.
+  /** Five sturdy heroes who barely scratch the foe: 5,000 HP between them. */
+  const sturdy = () => ['a', 'b', 'c', 'd', 'e'].map((id, i) => hero({ id, stats: { maxHP: 1000, pDef: 0, spd: 40 + i, pAtk: 5 } }))
+  /** A fast blade with far less HP than the party that kills a hero a blow. */
+  const blade = (extra: Partial<Encounter> = {}) =>
+    encounter([[enemy({ id: 'blade', unitClass: 'thief', stats: { maxHP: 1500, pAtk: 9999, spd: 400, pDef: 0 } })]], mission(annihilate), extra)
+  /** A slow brute the party's blades cannot touch at all. */
+  const golem = (extra: Partial<Encounter> = {}) =>
+    encounter([[enemy({ id: 'golem', keywords: [{ kind: 'immune', damageType: 'physical' }], stats: { maxHP: 100, pAtk: 9999, spd: 60, pDef: 0 } })]], mission(annihilate), extra)
+  const withMargin = <T,>(margin: number, f: () => T): T => {
+    const saved = TUNING.climb.routProjection.margin
+    ;(TUNING.climb.routProjection as { margin: number }).margin = margin
+    try {
+      return f()
+    } finally {
+      ;(TUNING.climb.routProjection as { margin: number }).margin = saved
+    }
+  }
+
+  it('a fast killer the party is still ahead of on HP: the line breaks at the threshold, not the 4th death', () => {
+    const res = runBattle(sturdy(), blade({ routAfterDeaths: 2 }), 5)
+    expect(res.outcome).toBe('retreat')
+    expect(res.fallenHeroIds).toHaveLength(2)
+    // The HP check alone (projection off) fought on while 5,000 HP > 1,500: four fell.
+    const old = withMargin(0, () => runBattle(sturdy(), blade({ routAfterDeaths: 2 }), 5))
+    expect(old.outcome).toBe('retreat')
+    expect(old.fallenHeroIds.length).toBeGreaterThanOrEqual(4)
+  })
+
+  it('a foe the party cannot hurt (immune to its blows) is a projected loss: rout, not a wipe', () => {
+    const res = runBattle(sturdy(), golem({ routAfterDeaths: 2 }), 5)
+    expect(res.outcome).toBe('retreat')
+    expect(res.fallenHeroIds).toHaveLength(2)
+    expect(withMargin(0, () => runBattle(sturdy(), golem({ routAfterDeaths: 2 }), 5)).outcome).toBe('wipe')
+  })
+
+  it('the projection never breaks a line that is winning on pace (the quick-rogue fight above still wins)', () => {
+    const party = [
+      hero({ id: 'g1', stats: { maxHP: 1, pDef: 0, spd: 10, pAtk: 0 } }),
+      hero({ id: 'g2', stats: { maxHP: 1, pDef: 0, spd: 10, pAtk: 0 } }),
+      hero({ id: 'tank', stats: { maxHP: 1e6, pDef: 999, spd: 20, pAtk: 400 } }),
+    ]
+    const enc = encounter([[enemy({ id: 'rogue', unitClass: 'thief', stats: { maxHP: 3000, pAtk: 50, spd: 200, pDef: 0 } })]], mission(annihilate), { routAfterDeaths: 1 })
+    const res = runBattle(party, enc, 9)
+    expect(res.fallenHeroIds).toHaveLength(2)
+    expect(res.outcome).toBe('win')
   })
 })
